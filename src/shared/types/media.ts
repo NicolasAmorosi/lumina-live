@@ -1,0 +1,25 @@
+import type { AssetKind } from "../constants";
+
+export type MediaAsset = {
+  id: number;
+  kind: AssetKind;
+  name: string;
+  ext: string;
+  path: string;
+  sizeBytes: number | null;
+  durationMs: number | null;
+  linkedAudioPath: string | null;
+  inLibrary: boolean;
+  missingSince: number | null;
+  createdAt: number;
+  updatedAt: number;
+};
+
+export type FileProbe = {
+  path: string;
+  name: string;
+  ext: string;
+  dir: string;
+  hasAudio: boolean;
+  audioPath: string | null;
+};

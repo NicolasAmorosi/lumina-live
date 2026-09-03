@@ -1,5 +1,9 @@
 node_modules/
+out/
 dist/
+release/
+.scratch/
 .env
 *.log
+*.tsbuildinfo
 package-lock.json

@@ -1,32 +1,45 @@
 # WorshipApp
 
-Aplicación de proyección para iglesias, desarrollada con Electron.
+Aplicación de proyección para iglesias — Electron + TypeScript + React + Vite + Tailwind, con
+SQLite embebido. Ver `CLAUDE.md` para la guía técnica completa y `docs/knowledge/` para el
+detalle de cada capa.
 
 ## Funcionalidades
-- Presentación de PowerPoint (.pps, .ppsx, .ppt, .pptx) con vista previa de diapositivas
+- Presentación de PowerPoint (.ppt, .pptx) con vista previa de diapositivas (Windows, vía COM)
 - Reproducción de video e imagen en segunda pantalla
 - Reproducción de audio (con audio vinculado a PowerPoint)
-- Biblia integrada (RV1960) con proyección de versículos
-- Lista de reproducción con drag & drop
-- Biblioteca de medios persistente (videos, imágenes, audios)
+- Biblia integrada (RV1960) con búsqueda por texto sin acentos (FTS5) y proyección de versículos
+- Playlists guardadas como servicios reutilizables (abrir/duplicar un culto anterior)
+- Biblioteca de medios persistente (videos, imágenes, audios) con detección de archivos movidos/borrados
 - Controles de negro/logo con toggle
+- Tema claro/oscuro
 - Sincronización minimizar/restaurar con pantalla de proyección
 
 ## Requisitos
-- Windows 10/11
-- Node.js 18+
-- Microsoft PowerPoint (para presentaciones)
+- Node.js 22+
+- Microsoft PowerPoint en Windows (para presentaciones — el resto de la app es multiplataforma
+  para desarrollo, aunque el target de distribución es Windows)
 
-## Instalación
+## Instalación y desarrollo
 ```bash
-npm install
+npm install         # better-sqlite3 trae binarios precompilados, no compila nada
+npm run dev          # electron-vite dev
+npm run typecheck     # verificación de tipos
+npm run db:smoke       # smoke test de la capa de datos, sin levantar Electron
 ```
 
-## Uso
-Ejecutar `Iniciar WorshipApp.bat` o:
+## Empaquetado
 ```bash
-npx electron .
+npm run package:win    # instalador NSIS
+npm run package:mac     # dmg
+npm run package:linux    # AppImage
 ```
 
 ## Paleta de colores
-Basada en la identidad visual de la Iglesia Adventista del Séptimo Día (azul + blanco).
+Basada en la identidad visual de la Iglesia Adventista del Séptimo Día (azul + blanco), con
+tema oscuro por defecto (pensado para operarse en una cabina a oscuras) y tema claro alternativo.
+
+## `legacy/`
+Contiene la versión previa de la app (Electron vanilla JS, sin bundler). Se conserva solo como
+referencia hasta validar la paridad funcional en Windows con PowerPoint real — ver
+`docs/knowledge/07-roadmap-and-debt.md`.

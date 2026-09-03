@@ -1,0 +1,153 @@
+@import "tailwindcss";
+
+@utility scrollbar-hidden {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+@keyframes toast-enter {
+  from { opacity: 0; transform: translate3d(0, 0.75rem, 0) scale(0.96); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes toast-exit {
+  from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  to   { opacity: 0; transform: translate3d(0.75rem, 0.5rem, 0) scale(0.94); }
+}
+@keyframes linear-loader-slide {
+  0% { transform: translateX(-120%); }
+  60%  { transform: translateX(320%); }
+  100% { transform: translateX(320%); }
+}
+.wa-linear-loader-slide { animation: linear-loader-slide 1.15s ease-in-out infinite; will-change: transform; }
+
+@keyframes button-loading-shimmer {
+  0%   { transform: translateX(-120%); }
+  100% { transform: translateX(220%); }
+}
+.wa-button-loading-shimmer { animation: button-loading-shimmer 1.1s ease-in-out infinite; will-change: transform; }
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes toast-enter { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes toast-exit  { from { opacity: 1; } to { opacity: 0; } }
+  @keyframes linear-loader-slide { from { opacity: 0.45; } to { opacity: 0.8; } }
+  .wa-linear-loader-slide { animation: linear-loader-slide 1.4s ease-in-out infinite alternate; will-change: opacity; }
+  @keyframes button-loading-shimmer { from { opacity: 0.45; } to { opacity: 0.8; } }
+  .wa-button-loading-shimmer { animation: button-loading-shimmer 1.4s ease-in-out infinite alternate; will-change: opacity; }
+}
+
+/*
+ * Two physical palettes (dark = default, light = alternate), mapped onto ONE
+ * semantic token set consumed by @theme inline below. Components only ever
+ * reference the semantic names (bg-background, text-foreground, bg-primary,
+ * ...) — never --wa-* directly — so the theme toggle (settings 'ui.theme',
+ * `data-theme` on <html>) needs no per-component changes.
+ */
+:root, [data-theme="dark"] {
+  --wa-bg-primary: #0b1929;
+  --wa-bg-secondary: #0f2236;
+  --wa-bg-tertiary: #132d48;
+  --wa-bg-card: #163356;
+  --wa-bg-hover: #1c3f6a;
+  --wa-bg-active: #22507f;
+  --wa-text-primary: #e4eaf2;
+  --wa-text-secondary: #8ba3bc;
+  --wa-text-muted: #5a7a9a;
+  --wa-accent-primary: #2b6cb5;
+  --wa-accent-hover: #3580cc;
+  --wa-accent-light: #a8ccee;
+  --wa-danger: #c0392b;
+  --wa-success: #27ae60;
+  --wa-border: #1a3350;
+  --wa-border-light: #234568;
+  --wa-badge-ppt: #6a9fd8;
+  --wa-badge-video: #9080d0;
+  --wa-badge-image: #60b890;
+  --wa-badge-audio: #60a0e0;
+  --wa-badge-bible: #80b8d0;
+}
+
+[data-theme="light"] {
+  --wa-bg-primary: #f4f7fb;
+  --wa-bg-secondary: #ffffff;
+  --wa-bg-tertiary: #e9eff7;
+  --wa-bg-card: #ffffff;
+  --wa-bg-hover: #e3ecf7;
+  --wa-bg-active: #d3e3f5;
+  --wa-text-primary: #0f2236;
+  --wa-text-secondary: #3f5872;
+  --wa-text-muted: #6d84a0;
+  --wa-accent-primary: #2b6cb5;
+  --wa-accent-hover: #1f5695;
+  --wa-accent-light: #dcebfa;
+  --wa-danger: #c0392b;
+  --wa-success: #1e8449;
+  --wa-border: #d3dfec;
+  --wa-border-light: #c1d1e3;
+  --wa-badge-ppt: #3f6fb0;
+  --wa-badge-video: #6d5cb8;
+  --wa-badge-image: #2f8f66;
+  --wa-badge-audio: #2f78b8;
+  --wa-badge-bible: #3d8aa3;
+}
+
+@theme inline {
+  --color-background: var(--wa-bg-primary);
+  --color-foreground: var(--wa-text-primary);
+  --color-surface: var(--wa-bg-secondary);
+  --color-surface-foreground: var(--wa-text-primary);
+  --color-card: var(--wa-bg-card);
+  --color-card-foreground: var(--wa-text-primary);
+  --color-muted: var(--wa-bg-tertiary);
+  --color-muted-foreground: var(--wa-text-secondary);
+  --color-hover: var(--wa-bg-hover);
+  --color-active: var(--wa-bg-active);
+  --color-subtle: var(--wa-text-muted);
+  --color-primary: var(--wa-accent-primary);
+  --color-primary-hover: var(--wa-accent-hover);
+  --color-primary-foreground: #ffffff;
+  --color-secondary: var(--wa-bg-hover);
+  --color-secondary-foreground: var(--wa-text-primary);
+  --color-border: var(--wa-border);
+  --color-border-light: var(--wa-border-light);
+  --color-ring: var(--wa-accent-light);
+  --color-danger: var(--wa-danger);
+  --color-danger-foreground: #ffffff;
+  --color-success: var(--wa-success);
+
+  --color-badge-ppt: var(--wa-badge-ppt);
+  --color-badge-video: var(--wa-badge-video);
+  --color-badge-image: var(--wa-badge-image);
+  --color-badge-audio: var(--wa-badge-audio);
+  --color-badge-bible: var(--wa-badge-bible);
+
+  --font-sans: "InterVariable", "Segoe UI", system-ui, sans-serif;
+
+  /*
+   * Elevation scale — 3 levels only. surface = resting cards/panels,
+   * raised = non-blocking floating panels (dropdown/tooltip/date-picker),
+   * overlay = blocking modals/toasts.
+   */
+  --shadow-surface: 0 1px 2px 0 rgb(0 0 0 / 0.25), 0 1px 3px 0 rgb(0 0 0 / 0.2);
+  --shadow-raised: 0 2px 4px -2px rgb(0 0 0 / 0.3), 0 4px 12px -2px rgb(0 0 0 / 0.25);
+  --shadow-overlay: 0 8px 16px -8px rgb(0 0 0 / 0.4), 0 20px 40px -8px rgb(0 0 0 / 0.5);
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  overflow: hidden;
+  user-select: none;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-border-light); }

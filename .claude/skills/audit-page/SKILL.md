@@ -1,0 +1,229 @@
+---
+name: audit-page
+description: Full end-to-end auditor for one WorshipApp feature (IPC contract → main handlers → React/Zustand renderer → design-system usage). Checks correctness, unhandled states (loading/empty/error), projection-output coverage, PowerPoint overlay correctness, and style/token uniformity. Writes a severity-rated report to auditorias/reports/ and updates the status index. Report-only — never fixes unless asked. Use when asked to audit, review in depth, or QA a complete feature (playlist, library, bible, ppt, black/logo controls, services).
+user-invocable: true
+tools: Read, Write, Edit, Bash, Glob, Grep
+---
+
+# /audit-page — Full-stack Feature Auditor (WorshipApp)
+
+You audit **one feature end-to-end** across all WorshipApp layers and produce a single,
+severity-rated report under `auditorias/reports/`, then update the status table in
+`auditorias/README.md`. `npm run typecheck` already catches missing/mis-typed IPC handlers and
+non-exhaustive `selectOutput` switches — don't re-derive what the compiler already guarantees.
+Focus your manual tracing on what TypeScript can't see: runtime behavior, error handling, UX
+states, PowerShell safety, and design-system consistency. Run `npm run typecheck && npm run lint`
+first and fold any failures into the report as Critical findings.
+
+Arguments: `$ARGUMENTS` — the feature to audit (`playlist`, `library`, `bible`, `ppt`,
+`black-logo`, `display`). If empty, ask which feature to audit before proceeding.
+
+**You report findings; do not fix anything** unless the user explicitly asks after reading the
+report. The deliverable is the report + the updated index.
+
+---
+
+## Phase 0 — Read project knowledge first
+
+1. Read `CLAUDE.md` and the relevant `docs/knowledge/` entries for the target feature:
+   `01-architecture.md` (windows/processes), `02-ipc-contract.md` (channels), `03-powerpoint-com.md`
+   (if the feature touches PPT), `04-renderer-state.md` (state/flags), `05-data-and-persistence.md`
+   (if it touches settings/library/bible data), `06-ui-and-theme.md` (styling).
+2. Scan `.claude/knowledge/INDEX.md` for prior findings on this feature — don't re-report a known
+   issue as new; instead confirm it's still present and reference the existing entry.
+3. Re-read the non-negotiable rules in `CLAUDE.md`: the typed IPC contract, `contextIsolation:
+   true`/`nodeIntegration: false`/`sandbox: true`/`webSecurity: true`, `selectOutput` as the single
+   arbiter of what's projected, no hardcoded design-system values outside `components/ui`. These
+   are what you audit compliance against.
+
+---
+
+## Phase 1 — Map the feature surface
+
+Locate every file that belongs to the feature:
+
+| Layer | Where to look |
+|-------|----------------|
+| IPC contract | `src/shared/ipc/contract.ts` — the channels this feature owns |
+| IPC handlers | `src/main/ipc/handlers/<domain>.ts` |
+| Data layer | `src/main/db/repositories/<domain>.repo.ts` if the feature persists anything |
+| Renderer state | `src/renderer/src/stores/<domain>.store.ts` |
+| Renderer UI | `src/renderer/src/components/pages/<feature>/` |
+| Shared primitives used | cross-check against `src/renderer/src/components/ui/index.ts` |
+| Projection rendering | `src/renderer/src/projection/ProjectionApp.tsx` if the feature pushes content to the projection window |
+
+Build a **surface inventory** (every file + function/handler found). List every IPC channel this
+feature owns and confirm each has a handler in `main/ipc/index.ts`'s assembled `Handlers` object
+— `npm run typecheck` already proves this is complete, so just note the channel list, don't
+re-verify by hand.
+
+---
+
+## Phase 2 — Backend audit (main/ipc/handlers, db/repositories)
+
+For every handler this feature owns:
+
+- **Error handling.** Does a failure (missing file, PowerShell timeout, malformed JSON, a FK
+  constraint from `service_items.media_asset_id` restrict) surface as a clear `IpcError` the
+  renderer can show, or does it throw something opaque? Empty `catch {}` blocks are only
+  acceptable for genuinely best-effort operations (e.g. `preOpenPowerPoint`) — flag any that hide
+  a failure the user should see.
+- **Path/string safety.** Any file path passed to PowerShell must go through
+  `src/main/powerpoint/powershell.ts`'s `-EncodedCommand` + environment-variable pattern — flag
+  any new string interpolation into a script (see `docs/knowledge/03-powerpoint-com.md`).
+- **Window lifecycle.** If the handler touches the projection window, confirm it goes through
+  `projectionState` (`src/main/services/projection-state.ts`) rather than a raw `BrowserWindow`
+  reference that could be stale/destroyed.
+- **Persistence correctness.** If the handler touches `media_assets`, confirm it never treats a
+  missing file as a reason to delete the row (see `05-data-and-persistence.md` on
+  `missing_since`). If it touches `service_items`, confirm the `CHECK` constraint's shape
+  (exactly one of media/bible/text fields populated per kind) is respected.
+
+## Phase 3 — Renderer audit (stores, components/pages)
+
+- **Store consistency.** Does every store action that changes one field also update every other
+  field that should move with it (e.g. `service.store.ts`'s `selectedIndex` after `removeAt`)? A
+  stale field here is the most common bug class.
+- **`selectOutput` coverage.** If this feature introduces a new `BaseContent`/`ProjectionOutput`
+  variant, `npm run typecheck` already forces a branch in `selectOutput`
+  (`stores/projection.store.ts`) — confirm the branch's *behavior* is correct, not just present.
+- **Design-system compliance.** Every color/shadow/radius in the feature's `components/pages/**`
+  files must come from a `components/ui` primitive or a semantic token (`bg-primary`,
+  `shadow-surface`, …) — `grep -n "bg-\[#\|#[0-9a-fA-F]\{3,6\}\"" <feature-dir>` should return
+  nothing. Flag any raw hex/rgb.
+- **Orphaned IPC calls.** Every method on `src/renderer/src/lib/api.ts`'s domain object this
+  feature could plausibly need should have a caller somewhere in `components/pages/<feature>/`.
+- **Event wiring.** Every interactive element renders through a `components/ui` primitive
+  (`Button`, `IconButton`, …) with its handler actually wired — not a raw `<div onClick>` bypass.
+
+## Phase 4 — State coverage (loading / empty / error)
+
+For each user-facing action in the feature, confirm:
+- **Loading:** slow operations (PPT export, PPT open, file dialogs) show *some* feedback
+  (`ppt-status` text, disabled button, etc.) rather than a frozen UI with no indication anything
+  is happening.
+- **Empty:** lists (playlist, library, bible search results) render an explicit empty state
+  (`playlist-empty`, the `Sin archivos`/`No se encontraron versículos` messages) rather than a
+  blank area.
+- **Error:** a failed PPT open/export, a missing file, or a malformed Bible import degrades to a
+  visible message, not a silently broken feature.
+
+## Phase 5 — Style & UI consistency
+
+- No hardcoded colors/shadows/radii that duplicate an existing semantic token from
+  `src/renderer/src/styles/globals.css` — flag any value that should reuse `bg-primary`,
+  `shadow-surface`, `rounded-lg`, etc. (see the token table in `CLAUDE.md`).
+- New buttons/panels/inputs reuse an existing `components/ui` primitive instead of ad-hoc markup
+  — if a genuinely new primitive is needed, confirm it was added to `components/ui/` (not
+  inlined in the feature) and exported from `components/ui/index.ts`.
+- All UI copy goes through `useT()` against `lib/i18n/messages/es.ts` — flag any hardcoded
+  Spanish string in a `.tsx` file. Spanish copy is consistent in tone/casing with the rest of the
+  UI (e.g. `EN VIVO`, `NEGRO`, `LOGO` are all-caps action verbs; labels are sentence case).
+- Both themes render correctly — spot-check the feature with `data-theme="light"` and
+  `data-theme="dark"` on `<html>` (devtools), since a semantic-token violation often only shows
+  in one theme.
+
+---
+
+## Phase 6 — Cross-cutting
+
+- **Windows-only assumptions.** If the feature touches PowerPoint, confirm it degrades gracefully
+  (no uncaught exception) when `powershell` isn't available, per
+  `docs/knowledge/03-powerpoint-com.md`.
+- **Dead/duplicate code.** Any handler, method, or render function this feature made redundant.
+
+---
+
+## Phase 7 — Manual verification checklist (no Playwright — Electron doesn't apply)
+
+There is no browser automation for this desktop app. Instead, hand the user (or run yourself if
+`npm start` is available and the platform allows it) a concrete manual checklist for the audited
+feature — concrete steps, not generic advice. Example shape for the `bible` feature:
+
+1. Open the app, go to the Biblia tab, pick a version — confirm the book dropdown shows real
+   names, not the literal `Libro` (known bug, see `docs/knowledge/07-roadmap-and-debt.md`).
+2. Search a chapter with 1 verse and one with 30+ — confirm both render without layout breakage.
+3. Double-click a verse with the projection window closed — confirm it auto-opens the screen.
+4. Toggle NEGRO then LOGO then click Detener — confirm the live preview panel matches what the
+   projection window actually shows at each step.
+
+Mark this phase **"Not run"** in the report if you didn't actually execute it, with why (e.g. "PPT
+features require Windows; audited on macOS").
+
+---
+
+## Phase 8 — Write the report + update the index
+
+1. Get today's date: `date +%F`.
+2. Write a single markdown file to **`auditorias/reports/AUDIT-<feature>-<YYYY-MM-DD>.md`** using
+   the structure below. Every finding gets a **severity**, a **`file:line`** anchor, and a
+   concrete **recommendation**.
+3. **Update the row** for this feature in `auditorias/README.md`: set Estado (🔵 en progreso /
+   🟡 hallazgos abiertos / 🟢 limpia), the Hallazgos counts, the date, and a relative link to the
+   report. Refresh the "última actualización" footer line.
+4. If you found something durable enough to matter next session (a real bug, a gotcha), also add
+   or update an entry in `.claude/knowledge/` per the format in `CLAUDE.md` — don't duplicate
+   what the report already covers verbatim, capture the *lesson*, not the finding itself.
+
+```markdown
+# Audit — <Feature> (<YYYY-MM-DD>)
+
+## Summary
+- Scope: <files/functions/IPC channels audited>
+- Verdict: <one line>
+- Findings: 🔴 <n> Critical · 🟠 <n> High · 🟡 <n> Medium · 🔵 <n> Low · ⚪ <n> Info
+- Manual verification: <done / not run — why>
+
+## Surface inventory
+<files grouped by layer>
+
+## Findings
+
+### 🔴 Critical
+#### [MAIN/PRELOAD/RENDERER/UI] <short title>
+- **Where:** `path/to/file.js:42`
+- **Issue:** <what's wrong / which case fails>
+- **Impact:** <crash, silent data loss, broken projection state, …>
+- **Fix:** <concrete, minimal change>
+
+### 🟠 High
+…
+### 🟡 Medium
+…
+### 🔵 Low
+…
+### ⚪ Info / Nice-to-have
+…
+
+## Coverage matrix
+| Case | Main | Renderer |
+|------|------|----------|
+| IPC channel parity (main ↔ preload) | … | n/a |
+| Orphaned `window.api.*` methods | n/a | … |
+| Flag consistency (black/logo/ppt/video) | n/a | … |
+| `restorePrevious()` branch coverage | n/a | … |
+| `els` id parity | n/a | … |
+| Loading / empty / error states | … | … |
+| PowerShell path escaping | … | n/a |
+| Style token reuse | n/a | … |
+
+## Not verified / assumptions
+<anything you couldn't check and why — Windows-only feature audited on macOS, etc.>
+```
+
+Severity rubric:
+- 🔴 **Critical** — crash, data loss (settings/library/bible overwritten badly), the projection
+  window ends up out of sync with what the operator thinks is live.
+- 🟠 **High** — missing error/empty/loading feedback on a real path, a stale flag that breaks a
+  later action, an orphaned IPC method that should be wired, `restorePrevious()` missing a branch.
+- 🟡 **Medium** — hardcoded color duplicating a token, inconsistent copy/casing, minor UI drift.
+- 🔵 **Low** — naming, ordering, small inconsistencies.
+- ⚪ **Info** — suggestions, refactors that aren't bugs.
+
+---
+
+## Output to the user (in Spanish)
+
+After writing the file and updating the index, give a short Spanish summary: the verdict, the
+finding counts by severity, the 2–3 most important issues, and the report path. Do not paste the
+whole report into chat.
