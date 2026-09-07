@@ -5,7 +5,7 @@
 WorshipApp es una app Electron 36 con **TypeScript + React 19 + Vite**, empaquetada con
 `electron-vite` (no vite+tsc a mano — ver "Por qué electron-vite" abajo). Tres procesos:
 
-- **Main** (`src/main/`) — ventanas, DB SQLite, IPC, integración COM con PowerPoint.
+- **Main** (`src/main/`) — ventanas, DB SQLite, IPC, conversión de diapositivas con LibreOffice.
 - **Preload** (`src/preload/index.ts`) — puente `contextBridge` genérico (`invoke`/`on` por
   string de canal), ~25 líneas que no cambian nunca al agregar funcionalidad.
 - **Renderer de control** (`src/renderer/index.html` + `src/renderer/src/`) — toda la UI de la

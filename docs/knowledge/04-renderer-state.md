@@ -33,13 +33,28 @@ lo último elegido. Agregar un tipo de contenido nuevo a `BaseContent`
 (`shared/types/projection.ts`) sin manejarlo en el `switch` es un **error de compilación**, no un
 bug de "se quedó mostrando el logo" descubierto en producción.
 
-## La capa de efectos — lo que no es puramente declarativo
+## La capa de efectos
 
-`src/renderer/src/effects/projection-effects.ts` es el único lugar con lógica de "orden
-importa": la danza del overlay de PowerPoint (mostrar/ocultar la ventana de proyección
-alrededor de un cambio hacia/desde `{kind:'ppt'}`) y pausar/reanudar el audio vinculado durante
-NEGRO/LOGO. Se suscribe a `selectOutput` con `subscribeWithSelector` de Zustand y diffea
-`previous` vs. `next` — todo lo demás sobre "qué se ve" es la función pura de arriba.
+`src/renderer/src/effects/projection-sync.ts` conecta el store con main: se suscribe a
+`selectOutputMemo` y manda cada output por `projection:show`, y enchufa los eventos entrantes
+(`media-status`, `deck-progress`). La danza del overlay de PowerPoint que vivía acá **ya no
+existe** — las diapositivas son imágenes, la ventana de proyección nunca se esconde.
+
+`selectOutput` devuelve un objeto nuevo en cada llamada y `preload` lo hace anidado, así que
+`selectOutputMemo` memoiza la identidad en **un solo lugar**; sin eso, cada consumidor necesitaba
+su propio parche para el mismo problema (un `equalityFn` con `JSON.stringify` acá, un `useShallow`
+en `LiveMonitorPanel` allá).
+
+`src/renderer/src/effects/deck-autoplay.ts` es lo único con lógica temporal. Dos modos:
+
+- **synced**: mientras hay soundtrack y nadie tocó nada, el índice de diapositiva es una función
+  del tiempo del `<audio>`. Cada `media-status` re-deriva qué slide corresponde y re-arma un único
+  `setTimeout` — el timer es una optimización de latencia, no el reloj, así que una pista de diez
+  minutos no puede acumular deriva.
+- **detached**: apenas el operador navega a mano, la música **sigue donde estaba** (decisión de
+  producto) y el auto-avance continúa con una cadena de deadlines monotónica desde la diapositiva
+  elegida. Un `navEpoch` incremental descarta cualquier `media-status` en vuelo para que una
+  respuesta tardía no pise la diapositiva recién elegida.
 
 ## Sincronización entre ventanas
 
@@ -49,5 +64,6 @@ compartido entre ventanas — son dos procesos de renderer distintos, la única 
 
 ## Teclado
 
-Pendiente (ver `07-roadmap-and-debt.md`): la legacy solo bindeaba Delete/Backspace. Se dejó como
-mejora futura agregar flechas para avanzar slide/versículo — no bloqueaba la paridad funcional.
+`use-global-shortcuts.ts`: Delete/Backspace (quitar), ←/→ (versículo o diapositiva según la
+pestaña), **Espacio** (pausar/reanudar un deck que se pasa solo — el atajo que hace falta para
+poder frenar en seco un PPT con auto-avance), B/L (NEGRO/LOGO) y Enter (EN VIVO).

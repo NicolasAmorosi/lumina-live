@@ -8,6 +8,7 @@ export { Select, type SelectOption } from "./select";
 export { Switch } from "./checkbox";
 export { EmptyState } from "./empty-state";
 export { LinearLoader, Skeleton } from "./linear-loader";
+export { ProgressBar } from "./progress-bar";
 export { Title, Label } from "./title";
 export { Dialog, DialogHeader, DialogContent, DialogFooter } from "./dialog";
 export { Tabs, TabPanel, type TabItem } from "./tabs";

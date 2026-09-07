@@ -2,6 +2,7 @@ import type { DragEvent } from "react";
 import { cn } from "@renderer/lib/utils";
 import { Badge, Icon, type BadgeVariant, type IconName } from "@renderer/components/ui";
 import { useMediaAsset } from "@renderer/lib/hooks/use-media-asset";
+import { useDeckThumb } from "@renderer/lib/hooks/use-deck-thumb";
 import type { ServiceItemDTO } from "@shared/types/service";
 
 const ICON_BY_KIND: Record<ServiceItemDTO["kind"], IconName> = {
@@ -48,6 +49,9 @@ type PlaylistRowProps = {
 export function PlaylistRow({ active, dragOver, index, item, onClick, onDragStart, selected }: PlaylistRowProps) {
   const label = useItemLabel(item);
   const { icon, badge } = useItemIconAndBadge(item);
+  // Real first-slide thumbnail once the deck is converted; the static badge
+  // stays as the fallback until then.
+  const thumb = useDeckThumb(item.kind === "ppt" ? item.mediaAssetId : null);
 
   return (
     <li
@@ -62,9 +66,13 @@ export function PlaylistRow({ active, dragOver, index, item, onClick, onDragStar
       onClick={onClick}
       onDragStart={onDragStart}
     >
-      <Badge className="shrink-0 px-1.5" variant={badge}>
-        <Icon className="size-3" name={icon} />
-      </Badge>
+      {thumb ? (
+        <img alt="" className="h-5 w-8 shrink-0 rounded object-cover" src={thumb} />
+      ) : (
+        <Badge className="shrink-0 px-1.5" variant={badge}>
+          <Icon className="size-3" name={icon} />
+        </Badge>
+      )}
       <span className="truncate">{label}</span>
       {active ? <span className="ml-auto size-1.5 shrink-0 rounded-full bg-success" /> : null}
     </li>

@@ -20,6 +20,21 @@ export const biblesDir = app.isPackaged
 export const userDataDir = app.getPath("userData");
 export const dbPath = path.join(userDataDir, "worship.db");
 export const dbBackupDir = path.join(userDataDir, "backups");
-export const thumbsDir = path.join(userDataDir, "thumbs");
 export const legacySettingsPath = path.join(userDataDir, "settings.json");
 export const legacyMediaLibraryPath = path.join(userDataDir, "media_library.json");
+
+/** Persistent, content-addressed cache of converted PowerPoint/Impress decks
+ *  (rasterized slide images + extracted audio) — see src/main/slides/. Never
+ *  os.tmpdir(): that's what the COM-era exporter used and why its cache was
+ *  lost on every restart. */
+export const slidesCacheDir = path.join(userDataDir, "slides-cache");
+/** Conversions in progress land here first; only fs.renameSync'd into their
+ *  final deckCacheDir() once every file is written. Swept clean on startup. */
+export const slidesTempDir = path.join(slidesCacheDir, ".tmp");
+/** Dedicated LibreOffice UserInstallation — isolates our headless soffice
+ *  from any copy the user runs as a normal GUI app. */
+export const sofficeProfileDir = path.join(userDataDir, "soffice-profile");
+
+export function deckCacheDir(contentHash: string, renderWidth: number, imageFormat: string): string {
+  return path.join(slidesCacheDir, `${contentHash.slice(0, 16)}-${renderWidth}-${imageFormat}`);
+}

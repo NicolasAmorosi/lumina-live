@@ -18,13 +18,27 @@ function resolveKey(messages: Messages, key: string): string {
   return typeof node === "string" ? node : key;
 }
 
-type I18nContextValue = { locale: Locale; t: (key: string) => string };
+export type TParams = Record<string, string | number>;
+
+/** `{name}` placeholders, filled only when params are passed — the ~40
+ *  existing call sites that pass none are unaffected. */
+function interpolate(template: string, params?: TParams): string {
+  if (!params) return template;
+  return template.replace(/\{(\w+)\}/g, (match, key: string) =>
+    key in params ? String(params[key]) : match,
+  );
+}
+
+type I18nContextValue = { locale: Locale; t: (key: string, params?: TParams) => string };
 const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function I18nProvider({ children, locale }: { children: ReactNode; locale: Locale }) {
   const value = useMemo<I18nContextValue>(() => {
     const messages = dictionaries[locale] ?? es;
-    return { locale, t: (key: string) => resolveKey(messages, key) };
+    return {
+      locale,
+      t: (key: string, params?: TParams) => interpolate(resolveKey(messages, key), params),
+    };
   }, [locale]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
 }
@@ -35,6 +49,6 @@ export function useI18n(): I18nContextValue {
   return ctx;
 }
 
-export function useT(): (key: string) => string {
+export function useT(): (key: string, params?: TParams) => string {
   return useI18n().t;
 }

@@ -3,30 +3,32 @@
 export const ASSET_KINDS = ["video", "image", "audio", "ppt"] as const;
 export type AssetKind = (typeof ASSET_KINDS)[number];
 
+/** `pptm`/`ppsx`/`ppsm` are the same OOXML zip as `pptx`; `pps` is the legacy
+ *  binary format like `ppt` (the v1 vanilla app accepted both and the TS
+ *  migration dropped them). `odp` works now that LibreOffice is the engine. */
 export const ASSET_EXTENSIONS: Record<AssetKind, readonly string[]> = {
   video: ["mp4", "mov", "mkv", "avi", "webm"],
   image: ["jpg", "jpeg", "png", "gif", "webp", "bmp"],
   audio: ["mp3", "wav", "ogg", "m4a", "flac"],
-  ppt: ["ppt", "pptx"],
+  ppt: ["ppt", "pptx", "pptm", "pps", "ppsx", "ppsm", "odp"],
 };
-
-export const PROJECTION_KINDS = [
-  "black",
-  "logo",
-  "image",
-  "video",
-  "bible",
-  "text",
-  "ppt",
-] as const;
-export type ProjectionKind = (typeof PROJECTION_KINDS)[number];
 
 export const SERVICE_ITEM_KINDS = ["media", "ppt", "bible", "text"] as const;
 export type ServiceItemKind = (typeof SERVICE_ITEM_KINDS)[number];
 
-export const PPT_POLL_INTERVAL_MS = 800;
-export const PPT_OPEN_TIMEOUT_MS = 15_000;
-export const PPT_EXPORT_TIMEOUT_MS = 30_000;
+/** Bump to invalidate every cached deck at once when the conversion pipeline
+ *  itself changes (different rasterizer settings, fixed OOXML parsing, …). */
+export const SLIDES_CONVERTER_VERSION = 1;
+export const SLIDES_THUMB_WIDTH = 320;
+export const SLIDES_DEFAULT_RENDER_WIDTH = 1920;
+export const SLIDES_MIN_RENDER_WIDTH = 1280;
+export const SLIDES_MAX_RENDER_WIDTH = 2560;
+export const SLIDES_DEFAULT_CACHE_MB = 4096;
+/** PowerPoint permits a 0 ms auto-advance; without a floor a whole deck would
+ *  fly past in a single frame. */
+export const SLIDES_MIN_ADVANCE_MS = 250;
+export const SOFFICE_PROBE_TIMEOUT_MS = 10_000;
+export const SLIDES_RASTER_PAGE_TIMEOUT_MS = 30_000;
 
 export const DEFAULT_MEDIA_VOLUME = 0.5;
 

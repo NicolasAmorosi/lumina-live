@@ -1,15 +1,15 @@
-import { useShallow } from "zustand/react/shallow";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { PanelBody, PanelHeader } from "@renderer/components/shared/panel";
-import { selectOutput, useProjectionStore } from "@renderer/stores/projection.store";
+import { selectOutputMemo, useProjectionStore } from "@renderer/stores/projection.store";
 import { cn } from "@renderer/lib/utils";
 
 export function LiveMonitorPanel() {
   const t = useT();
-  // selectOutput returns a fresh object every call — without a shallow
-  // comparator, useSyncExternalStore sees a "new" snapshot on every render
-  // and re-renders forever ("Maximum update depth exceeded").
-  const output = useProjectionStore(useShallow(selectOutput));
+  // selectOutputMemo keeps object identity stable across unrelated store
+  // updates, so the default comparator is enough here — without it,
+  // useSyncExternalStore sees a "new" snapshot every render and loops
+  // ("Maximum update depth exceeded").
+  const output = useProjectionStore(selectOutputMemo);
   const presentationOpen = useProjectionStore((s) => s.presentationOpen);
 
   return (
@@ -29,9 +29,14 @@ export function LiveMonitorPanel() {
           </div>
         ) : output.kind === "text" ? (
           <p className="text-center text-sm text-white">{output.body}</p>
-        ) : (
-          <p className="text-xs text-white/50">PPT</p>
-        )}
+        ) : output.kind === "slide" ? (
+          <div className="flex size-full flex-col items-center justify-center gap-1">
+            <img alt="" className="max-h-full max-w-full object-contain" src={output.url} />
+            <span className="shrink-0 text-xs text-white/70">
+              {t("deck.slideCounter", { current: output.index, total: output.total })}
+            </span>
+          </div>
+        ) : null}
       </PanelBody>
       <span
         className={cn(

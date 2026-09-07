@@ -5,8 +5,8 @@ Guía de trabajo para Claude Code en este repositorio. Léela antes de tocar có
 WorshipApp es una aplicación de proyección de escritorio para iglesias, desarrollada en
 **Electron + TypeScript + React + Vite + Tailwind**, con **SQLite embebido** como backend,
 pensada como reemplazo de EasyWorship. Controla dos ventanas — control y proyección — para
-mostrar diapositivas de PowerPoint, video, imagen, audio y versículos bíblicos (RV1960) durante
-un culto. Identidad visual: azul + blanco de la Iglesia Adventista del Séptimo Día, con tema
+mostrar diapositivas de PowerPoint (convertidas con LibreOffice headless), video, imagen, audio y
+versículos bíblicos (RV1960) durante un culto. Identidad visual: azul + blanco de la Iglesia Adventista del Séptimo Día, con tema
 claro/oscuro conmutable (oscuro por defecto, pensado para operarse en una cabina a oscuras).
 
 Es el sucesor directo de la versión vanilla JS de este mismo repo (conservada temporalmente en
@@ -56,14 +56,15 @@ src/
 │   │   ├── client.ts             # apertura + pragmas de SQLite
 │   │   ├── migrate.ts            # backup + migrate() al arrancar
 │   │   ├── seed/                 # parseo defensivo + seed de la Biblia (FTS5 rebuild)
-│   │   └── repositories/         # un repo por agregado (settings, media, bible, services, history)
+│   │   └── repositories/         # un repo por agregado (settings, media, bible, services, history, slides)
 │   ├── ipc/
 │   │   ├── register.ts           # registerHandlers<Handlers> — exhaustividad forzada por TS
 │   │   ├── index.ts               # ensambla todos los *.ts de handlers/
 │   │   └── handlers/              # un archivo por dominio, mismo agrupamiento que el contrato
 │   ├── protocol/worship-protocol.ts   # worship:// — sirve archivos por id, nunca por ruta
-│   ├── powerpoint/                # com.ts (COM real) + powershell.ts (-EncodedCommand)
-│   └── services/                  # repos.ts (registro), projection-state.ts, file-sweeper (sweep en MediaRepo)
+│   ├── slides/                    # libreoffice.ts (discovery+soffice), pptx-metadata.ts (OOXML),
+│   │                              # rasterizer.ts (ventana oculta+pdfjs), deck-service.ts (cola+cache)
+│   └── services/                  # repos.ts (registro), projection-state.ts, broadcast.ts
 ├── preload/
 │   ├── index.ts                  # puente GENÉRICO invoke/on — nunca se edita al agregar canales
 │   └── index.d.ts                # declare global { interface Window { worship: WorshipBridge } }
@@ -131,7 +132,7 @@ componentes nunca necesitan saber en qué tema están.
 |---|---|
 | [`docs/knowledge/01-architecture.md`](docs/knowledge/01-architecture.md) | electron-vite, las dos ventanas, dev vs. empaquetado, `paths.ts` |
 | [`docs/knowledge/02-ipc-contract.md`](docs/knowledge/02-ipc-contract.md) | `IpcContract`, cómo agregar un canal, por qué el preload no cambia nunca |
-| [`docs/knowledge/03-powerpoint-com.md`](docs/knowledge/03-powerpoint-com.md) | COM/PowerShell, `-EncodedCommand`, overlay, cache de slides |
+| [`docs/knowledge/03-slides-libreoffice.md`](docs/knowledge/03-slides-libreoffice.md) | LibreOffice headless, parseo OOXML (timings/audio), rasterizado, cache de decks |
 | [`docs/knowledge/04-renderer-state.md`](docs/knowledge/04-renderer-state.md) | Zustand, `selectOutput`, la capa de efectos |
 | [`docs/knowledge/05-data-and-persistence.md`](docs/knowledge/05-data-and-persistence.md) | esquema SQLite, FTS5, migración de datos legacy, archivos faltantes |
 | [`docs/knowledge/06-ui-and-theme.md`](docs/knowledge/06-ui-and-theme.md) | design system, tokens, layout de paneles |
@@ -149,6 +150,7 @@ npm run typecheck          # tsc --noEmit sobre node (main+preload+shared) y web
 npm run lint                # eslint .
 npm run db:generate          # drizzle-kit generate — nueva migración tras editar db/schema.ts
 npm run db:smoke              # smoke test de la capa de datos SIN Electron (migraciones+seed+FTS5+CRUD)
+npm run slides:smoke -- x.pptx # conversión + parseo OOXML (timings/audio) SIN Electron
 npm run build                 # electron-vite build
 npm run package:win|mac|linux  # build + electron-builder para esa plataforma
 ```
@@ -171,8 +173,11 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   proyecta.** Es un `switch` exhaustivo sobre `BaseContent` — agregar un tipo de contenido nuevo
   sin manejarlo ahí es un error de compilación, no un bug de runtime como el `restorePrevious()`
   legacy.
-- **PowerPoint solo funciona en Windows.** Todo handler de `ppt:*` llama `assertWindows()`
-  primero — falla inmediato en macOS/Linux en vez de esperar el timeout completo.
+- **Las diapositivas son imágenes pre-rasterizadas, no un slideshow controlado.** Un `.pptx` se
+  convierte una sola vez (LibreOffice → PDF → WebP por slide) y se cachea en
+  `userData/slides-cache` + SQLite, direccionado por **hash de contenido**. La ventana de
+  proyección nunca se esconde: NEGRO/LOGO son resultados normales de `selectOutput`. No
+  reintroduzcas COM, PowerShell ni `assertWindows()`.
 - **Nunca escribas datos de usuario dentro del bundle de la app.** La DB vive en
   `app.getPath('userData')/worship.db`; los recursos empaquetados (`resources/bibles/*.json`,
   `drizzle/*.sql`) son de solo lectura en producción — accedelos siempre vía `src/main/paths.ts`.
@@ -186,8 +191,9 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
 runtime** — es solo referencia mientras se valida la paridad funcional. Se elimina por completo
 una vez que:
 
-1. Se validó en Windows con PowerPoint real: abrir/cerrar slideshow, avanzar/retroceder,
-   miniaturas, audio `.mp3` hermano, la danza del overlay NEGRO/LOGO sobre el slideshow.
+1. ~~Validación en Windows con PowerPoint real.~~ **Ya no aplica**: el COM se eliminó y el
+   pipeline de LibreOffice se verificó en macOS contra decks reales (incluido un `.ppt` binario
+   de 52 diapositivas) más un fixture con auto-avance y audio embebido.
 2. Se confirmó que los datos de `settings.json`/`media_library.json` (si existían) migraron
    correctamente a SQLite — esto ya corre automáticamente al primer arranque
    (`src/main/services/migrate-legacy-data.ts`).
@@ -197,7 +203,9 @@ no reimplementando desde cero.
 
 ## Notas operativas
 
-- Se desarrolla en macOS; las features de PowerPoint solo se pueden **verificar** en Windows.
+- Se desarrolla y se verifica en macOS: ya no hay features exclusivas de Windows.
+- Requiere **LibreOffice instalado** para convertir presentaciones (`brew install --cask libreoffice`).
+  No se empaqueta; la app lo detecta y guía la instalación si falta.
 - `git` está activo; commitea/pushea solo si el usuario lo pide.
 - No hay CI configurado. `npm run typecheck && npm run lint && npm run db:smoke` es la barra
   mínima antes de dar por buena una tarea.

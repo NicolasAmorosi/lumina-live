@@ -7,7 +7,13 @@ import type {
   BibleVerseDTO,
   BibleVersionDTO,
 } from "../types/bible";
-import type { ProjectionOutput, VideoCommand, VideoStatus } from "../types/projection";
+import type {
+  DeckSoundtrackPush,
+  MediaCommand,
+  MediaStatus,
+  ProjectionOutput,
+} from "../types/projection";
+import type { DeckDTO, DeckEnvironment, DeckProgress } from "../types/deck";
 import type { ServiceDTO, ServiceSummary, ServiceUpsert } from "../types/service";
 import type { SettingsMap } from "../types/settings";
 
@@ -23,20 +29,27 @@ export type IpcContract = {
   "projection:open": { req: { displayId: number }; res: void };
   "projection:close": { req: void; res: void };
   "projection:show": { req: ProjectionOutput; res: void };
-  "projection:setOverlayVisible": { req: { visible: boolean }; res: void };
-  "projection:videoCommand": { req: VideoCommand; res: void };
+  "projection:mediaCommand": { req: MediaCommand; res: void };
+  "projection:setSoundtrack": { req: DeckSoundtrackPush; res: void };
+  /** Projection window -> main -> control window. The projection window is
+   *  describing its own <video>/<audio> element, not making a decision. */
+  "projection:reportMediaStatus": { req: MediaStatus; res: void };
 
   "files:pick": { req: { kind: AssetKind; multiple: boolean }; res: string[] };
   "files:probe": { req: { path: string }; res: FileProbe };
   "files:setLogo": { req: void; res: string | null };
 
-  "ppt:open": { req: { assetId: number }; res: { success: boolean; totalSlides: number } };
-  "ppt:next": { req: void; res: void };
-  "ppt:prev": { req: void; res: void };
-  "ppt:goto": { req: { slide: number }; res: void };
-  "ppt:currentSlide": { req: void; res: number };
-  "ppt:close": { req: void; res: void };
-  "ppt:exportSlides": { req: { assetId: number }; res: { sessionId: string; urls: string[] } };
+  /** Cache lookup only — never triggers a conversion, so it is safe to call
+   *  while merely rendering a list or selecting an item. */
+  "deck:get": { req: { assetId: number }; res: DeckDTO | null };
+  /** Converts if needed. Idempotent per assetId: a second call while a
+   *  conversion is in flight joins the same job instead of queuing another. */
+  "deck:ensure": { req: { assetId: number; force?: boolean }; res: DeckDTO };
+  "deck:cancel": { req: { assetId: number }; res: void };
+  "deck:progress": { req: { assetId: number }; res: DeckProgress | null };
+  "deck:environment": { req: void; res: DeckEnvironment };
+  /** Opens a native file picker so the user can point at soffice by hand. */
+  "deck:locateSoffice": { req: void; res: DeckEnvironment };
 
   "bible:versions": { req: void; res: BibleVersionDTO[] };
   "bible:books": { req: { versionId: number }; res: BibleBookDTO[] };
@@ -68,11 +81,14 @@ export type Res<K extends IpcChannel> = IpcContract[K]["res"];
 
 /** Push events: main -> renderer, never invoked by the renderer. */
 export type IpcEvents = {
+  /** -> projection window */
   "display-content": ProjectionOutput;
-  "video-command": VideoCommand;
-  "video-status": VideoStatus;
+  "media-command": MediaCommand;
+  "deck-soundtrack": DeckSoundtrackPush;
+  /** -> control window */
+  "media-status": MediaStatus;
+  "deck-progress": DeckProgress;
   "library-changed": { kind: AssetKind };
-  "ppt-slide-changed": { slide: number };
 };
 
 export type IpcEventName = keyof IpcEvents;

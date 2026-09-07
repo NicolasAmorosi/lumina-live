@@ -1,6 +1,10 @@
 import { invoke } from "./ipc";
 import type { AssetKind } from "@shared/constants";
-import type { ProjectionOutput, VideoCommand } from "@shared/types/projection";
+import type {
+  DeckSoundtrackPush,
+  MediaCommand,
+  ProjectionOutput,
+} from "@shared/types/projection";
 import type { ServiceUpsert } from "@shared/types/service";
 import type { SettingsMap } from "@shared/types/settings";
 
@@ -15,22 +19,23 @@ export const api = {
     open: (displayId: number) => invoke("projection:open", { displayId }),
     close: () => invoke("projection:close", undefined),
     show: (output: ProjectionOutput) => invoke("projection:show", output),
-    setOverlayVisible: (visible: boolean) => invoke("projection:setOverlayVisible", { visible }),
-    videoCommand: (command: VideoCommand) => invoke("projection:videoCommand", command),
+    mediaCommand: (command: MediaCommand) => invoke("projection:mediaCommand", command),
+    setSoundtrack: (soundtrack: DeckSoundtrackPush) =>
+      invoke("projection:setSoundtrack", soundtrack),
   },
   files: {
     pick: (kind: AssetKind, multiple: boolean) => invoke("files:pick", { kind, multiple }),
     probe: (path: string) => invoke("files:probe", { path }),
     setLogo: () => invoke("files:setLogo", undefined),
   },
-  ppt: {
-    open: (assetId: number) => invoke("ppt:open", { assetId }),
-    next: () => invoke("ppt:next", undefined),
-    prev: () => invoke("ppt:prev", undefined),
-    goto: (slide: number) => invoke("ppt:goto", { slide }),
-    currentSlide: () => invoke("ppt:currentSlide", undefined),
-    close: () => invoke("ppt:close", undefined),
-    exportSlides: (assetId: number) => invoke("ppt:exportSlides", { assetId }),
+  deck: {
+    get: (assetId: number) => invoke("deck:get", { assetId }),
+    ensure: (assetId: number, force?: boolean) =>
+      invoke("deck:ensure", { assetId, ...(force !== undefined ? { force } : {}) }),
+    cancel: (assetId: number) => invoke("deck:cancel", { assetId }),
+    progress: (assetId: number) => invoke("deck:progress", { assetId }),
+    environment: () => invoke("deck:environment", undefined),
+    locateSoffice: () => invoke("deck:locateSoffice", undefined),
   },
   bible: {
     versions: () => invoke("bible:versions", undefined),

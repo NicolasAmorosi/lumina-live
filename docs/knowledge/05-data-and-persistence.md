@@ -19,7 +19,8 @@ empaquetado: `asarUnpack: ["**/node_modules/better-sqlite3/**"]` en `package.jso
 comparten el mismo problema de "el usuario movió el archivo"), `services`+`service_items`
 (playlists guardadas, polimórfico con `CHECK`), `bible_versions`+`bible_books`+`bible_verses`+
 `bible_verses_fts` (FTS5 external-content), `bible_favorites`, `projection_history`,
-`ppt_slide_cache` (reservada, el cache de slides v1 vive en memoria — ver `03-powerpoint-com.md`).
+`slide_decks`+`deck_slides`+`deck_audio` (cache persistente de presentaciones convertidas,
+direccionado por hash de contenido — ver `03-slides-libreoffice.md`).
 
 ## FTS5 sin acentos
 

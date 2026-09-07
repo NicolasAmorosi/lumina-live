@@ -11,23 +11,52 @@ export type ProjectionOutput =
   | { kind: "video"; url: string; epoch: number }
   | { kind: "bible"; text: string; reference: string }
   | { kind: "text"; body: string }
-  | { kind: "ppt" };
+  | {
+      kind: "slide";
+      /** media_assets.id of the source deck — lets HistoryRepo coalesce a whole
+       *  deck into one row instead of one per slide change. */
+      deckAssetId: number;
+      url: string;
+      /** 1-based. */
+      index: number;
+      total: number;
+      /** Neighbour full-res urls the projection window should warm up so a
+       *  slide change never waits on a decode. Computed here (domain logic
+       *  belongs in the control window), materialized there. */
+      preload: string[];
+    };
 
-export type VideoCommand =
-  | { action: "play" }
-  | { action: "pause" }
-  | { action: "seek"; timeSeconds: number }
-  | { action: "restart" };
+export type MediaTarget = "video" | "audio";
 
-export type VideoStatus = {
+export type MediaCommand =
+  | { target: MediaTarget; action: "play" }
+  | { target: MediaTarget; action: "pause" }
+  | { target: MediaTarget; action: "seek"; timeSeconds: number }
+  | { target: MediaTarget; action: "restart" }
+  | { target: MediaTarget; action: "setVolume"; volume: number };
+
+/** Reported by whichever media element is playing in the projection window.
+ *  Generalizes the never-implemented `video-status`: it now drives both the
+ *  deck autoplay scheduler and the preview progress bar. */
+export type MediaStatus = {
+  target: MediaTarget;
+  epoch: number;
   currentTimeSeconds: number;
   durationSeconds: number;
   paused: boolean;
+  ended: boolean;
 };
+
+/**
+ * Which audio element should exist in the projection window. Deliberately NOT
+ * part of `ProjectionOutput`: a deck's soundtrack has to survive NEGRO/LOGO and
+ * every slide change, so it cannot be keyed off `output`.
+ */
+export type DeckSoundtrackPush = { url: string; epoch: number } | null;
 
 /** What the control window has selected as "base" content (before black/logo overlay). */
 export type BaseContent =
-  | { kind: "ppt"; assetId: number }
+  | { kind: "deck"; assetId: number; slideIndex: number }
   | { kind: "video"; assetId: number; epoch: number }
   | { kind: "image"; assetId: number }
   | { kind: "bible"; text: string; reference: string }

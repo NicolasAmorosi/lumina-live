@@ -9,12 +9,15 @@ import { api } from "@renderer/lib/api";
 import { readOsFilesDrag, setMediaAssetDrag } from "@renderer/lib/dnd";
 import type { AssetKind } from "@shared/constants";
 
-const TABS: AssetKind[] = ["video", "image", "audio"];
+// A slide is just an image now, so a deck is a previewable, thumbnailable
+// asset like any other — no reason to keep PPTs second-class (addable only
+// through the playlist's button).
+const TABS: AssetKind[] = ["video", "image", "audio", "ppt"];
 const TAB_LABEL_KEY: Record<AssetKind, string> = {
   video: "library.videos",
   image: "library.images",
   audio: "library.audios",
-  ppt: "library.videos",
+  ppt: "library.ppts",
 };
 
 export function MediaLibraryPanel() {

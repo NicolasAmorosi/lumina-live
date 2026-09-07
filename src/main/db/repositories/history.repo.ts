@@ -8,8 +8,36 @@ const MAX_ROWS = 5000;
 export class HistoryRepo {
   constructor(private readonly db: Db) {}
 
+  /** Last deck recorded, so a 60-slide auto-advancing deck writes one row
+   *  instead of 60 and doesn't burn through MAX_ROWS in a few services. */
+  private lastDeckAssetId: number | null = null;
+
   record(output: ProjectionOutput, serviceId: number | null): void {
     if (output.kind === "black") return; // not worth remembering
+
+    if (output.kind === "slide") {
+      if (this.lastDeckAssetId === output.deckAssetId) return;
+      this.lastDeckAssetId = output.deckAssetId;
+      this.db
+        .insert(projectionHistory)
+        .values({
+          projectedAt: Date.now(),
+          kind: "slide",
+          mediaAssetId: output.deckAssetId,
+          serviceId,
+          reference: null,
+          // `preload` is a transient rendering detail, not history.
+          snapshotJson: JSON.stringify({
+            kind: "slide",
+            deckAssetId: output.deckAssetId,
+            total: output.total,
+          }),
+        })
+        .run();
+      return;
+    }
+
+    this.lastDeckAssetId = null;
     this.db
       .insert(projectionHistory)
       .values({

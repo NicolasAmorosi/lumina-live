@@ -13,6 +13,7 @@
     "lint": "eslint .",
     "db:generate": "drizzle-kit generate",
     "db:smoke": "TSX_TSCONFIG_PATH=tsconfig.node.json tsx scripts/db-smoke.ts",
+    "slides:smoke": "TSX_TSCONFIG_PATH=tsconfig.node.json tsx scripts/convert-smoke.ts",
     "package": "npm run build && electron-builder",
     "package:win": "npm run build && electron-builder --win",
     "package:mac": "npm run build && electron-builder --mac",
@@ -24,7 +25,10 @@
     "better-sqlite3": "^13.0.3",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
+    "fast-xml-parser": "^5.11.1",
+    "fflate": "^0.8.3",
     "lucide-react": "^0.511.0",
+    "pdfjs-dist": "^6.3.289",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "tailwind-merge": "^3.3.0",
@@ -58,9 +62,12 @@
     "asarUnpack": [
       "**/node_modules/better-sqlite3/**"
     ],
+    "npmRebuild": false,
     "files": [
       "out/**",
-      "package.json"
+      "package.json",
+      "!**/node_modules/@napi-rs/**",
+      "!**/node_modules/pdfjs-dist/{build,web,image_decoders}/**"
     ],
     "extraResources": [
       {
@@ -76,9 +83,13 @@
       "output": "release"
     },
     "win": {
-      "target": "nsis",
-      "arch": [
-        "x64"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     },
     "mac": {

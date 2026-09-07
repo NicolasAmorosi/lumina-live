@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useProjectionStore } from "@renderer/stores/projection.store";
-import { advancePptSlide, presentSelected, toggleOverlay } from "@renderer/lib/actions/playback";
+import { advanceSlide, presentSelected, toggleOverlay } from "@renderer/lib/actions/playback";
+import { toggleAutoplay } from "@renderer/effects/deck-autoplay";
 import { advanceVerse } from "@renderer/lib/actions/bible";
 import { removeSelected } from "@renderer/lib/actions/remove-selected";
 
@@ -17,7 +18,9 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
  * App-wide keyboard shortcuts, mounted once from App.tsx:
  * - Delete/Backspace: remove the selected library or playlist item (removeSelected).
  * - ←/→: contextual — Bible tab active advances the current verse, otherwise
- *   advances the open PPT slideshow if one is presenting.
+ *   advances the deck being projected.
+ * - Space: pause/resume a self-advancing deck. The one shortcut a PPT that
+ *   plays by itself really needs: the operator has to be able to freeze it.
  * - B/L: toggle NEGRO/LOGO overlay.
  * - Enter: present the selected playlist item ("En vivo").
  *
@@ -45,10 +48,17 @@ export function useGlobalShortcuts(centerTab: "preview" | "bible", suspended: bo
           if (centerTab === "bible") {
             e.preventDefault();
             advanceVerse(direction);
-          } else if (useProjectionStore.getState().base?.kind === "ppt") {
+          } else if (useProjectionStore.getState().base?.kind === "deck") {
             e.preventDefault();
-            void advancePptSlide(direction);
+            advanceSlide(direction);
           }
+          return;
+        }
+        case " ": {
+          const { base, liveDeck } = useProjectionStore.getState();
+          if (base?.kind !== "deck" || !liveDeck?.autoAdvance) return;
+          e.preventDefault();
+          toggleAutoplay();
           return;
         }
         case "b":

@@ -166,13 +166,99 @@ export const projectionHistory = sqliteTable(
   (t) => [index("ix_history_time").on(t.projectedAt)],
 );
 
-export const pptSlideCache = sqliteTable("ppt_slide_cache", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  sourcePath: text("source_path").notNull(),
-  mtimeMs: integer("mtime_ms").notNull(),
-  slideIndex: integer("slide_index").notNull(),
-  imagePath: text("image_path").notNull(),
-});
+/**
+ * A converted PowerPoint/Impress deck, cached on disk. Identity is the SOURCE
+ * FILE'S CONTENT HASH, not the media_assets row — two library entries pointing
+ * at copies of the same file share one conversion, and a mtime-only touch
+ * (a cloud-sync re-write) is a hash hit instead of a multi-minute reconvert.
+ * `mediaAssetId` is a SET NULL fast-path FK (deliberately not RESTRICT like
+ * `service_items` — a cache row must never block deleting a library asset).
+ */
+export const slideDecks = sqliteTable(
+  "slide_decks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    contentHash: text("content_hash").notNull(),
+    renderWidth: integer("render_width").notNull(),
+    imageFormat: text("image_format", { enum: ["webp", "png"] }).notNull(),
+    converterVersion: integer("converter_version").notNull(),
+    mediaAssetId: integer("media_asset_id").references(() => mediaAssets.id, {
+      onDelete: "set null",
+    }),
+    sourcePath: text("source_path").notNull(),
+    sourceSizeBytes: integer("source_size_bytes").notNull(),
+    sourceMtimeMs: integer("source_mtime_ms").notNull(),
+    cacheDir: text("cache_dir").notNull(),
+    slideCount: integer("slide_count").notNull().default(0),
+    aspectRatio: text("aspect_ratio"),
+    status: text("status", { enum: ["pending", "converting", "ready", "error"] }).notNull(),
+    errorCode: text("error_code"),
+    errorMessage: text("error_message"),
+    timingsSource: text("timings_source", { enum: ["ooxml", "ooxml-converted", "none"] })
+      .notNull()
+      .default("none"),
+    bytesOnDisk: integer("bytes_on_disk").notNull().default(0),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+    lastUsedAt: integer("last_used_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("ux_deck_identity").on(t.contentHash, t.renderWidth, t.imageFormat),
+    index("ix_decks_lru").on(t.lastUsedAt),
+    index("ix_decks_asset").on(t.mediaAssetId),
+  ],
+);
+
+/** One rasterized page. `imageFile`/`thumbFile` are basenames only (never an
+ *  absolute path) so relocating the whole `userData` directory never
+ *  invalidates a row. `slideIndex` is 1-based, in PRESENTATION order
+ *  (`p:sldIdLst`), not filename order. */
+export const deckSlides = sqliteTable(
+  "deck_slides",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    deckId: integer("deck_id")
+      .notNull()
+      .references(() => slideDecks.id, { onDelete: "cascade" }),
+    slideIndex: integer("slide_index").notNull(),
+    imageFile: text("image_file").notNull(),
+    thumbFile: text("thumb_file").notNull(),
+    widthPx: integer("width_px").notNull(),
+    heightPx: integer("height_px").notNull(),
+    bytes: integer("bytes").notNull(),
+    advanceMs: integer("advance_ms"),
+    advanceOnClick: integer("advance_on_click").notNull().default(1),
+    transitionMs: integer("transition_ms"),
+    hidden: integer("hidden").notNull().default(0),
+    title: text("title"),
+    notes: text("notes"),
+  },
+  (t) => [uniqueIndex("ux_deck_slide").on(t.deckId, t.slideIndex)],
+);
+
+/** Audio extracted from the .pptx (embedded media, transition sounds) or the
+ *  legacy sibling-`.mp3` convention (`origin: "linked-sibling"`), folded into
+ *  the same list so the renderer has one audio source to reason about. */
+export const deckAudio = sqliteTable(
+  "deck_audio",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    deckId: integer("deck_id")
+      .notNull()
+      .references(() => slideDecks.id, { onDelete: "cascade" }),
+    audioFile: text("audio_file").notNull(),
+    ext: text("ext").notNull(),
+    bytes: integer("bytes").notNull(),
+    origin: text("origin", { enum: ["embedded", "transition", "linked-sibling"] }).notNull(),
+    scope: text("scope", { enum: ["deck", "slide"] }).notNull(),
+    startSlideIndex: integer("start_slide_index"),
+    stopSlideIndex: integer("stop_slide_index"),
+    loop: integer("loop").notNull().default(0),
+    volume: integer("volume"),
+    playable: integer("playable").notNull().default(1),
+  },
+  (t) => [index("ix_deck_audio").on(t.deckId, t.startSlideIndex)],
+);
 
 // bible_verses_fts (FTS5 virtual table + sync triggers) is NOT declared here — drizzle-kit's
 // schema builder has no FTS5 primitive. It is added by hand in drizzle/0000_init.sql, right

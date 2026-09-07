@@ -45,6 +45,6 @@ Igual estructura de 3 paneles que la legacy (`src/renderer/src/app/App.tsx`):
 ## `presentation.html` → `ProjectionApp.tsx`
 
 Los mismos 6 tipos de contenido relevantes de la legacy (`black`, `logo`, `image`, `video`,
-`bible`, `text`) más `ppt` (la ventana se oculta y PowerPoint controla la pantalla). El tipo
+`bible`, `text`) más `slide` (una imagen ya rasterizada del deck). El tipo
 `text` legacy no tenía ningún caller — acá sí lo tiene (`ServiceItemDTO` con `kind:'text'`), así
 que dejó de ser una feature muerta.

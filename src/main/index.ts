@@ -12,8 +12,7 @@ import { registerAllIpcHandlers } from "./ipc";
 import { createControlWindow } from "./windows/control-window";
 import { projectionState } from "./services/projection-state";
 import { dbBackupDir, dbPath, biblesDir, migrationsDir, userDataDir } from "./paths";
-import { preOpenPowerPoint, quitPowerPoint } from "./powerpoint/com";
-import { cleanupSlideTempDirs } from "./ipc/handlers/ppt";
+import { initSlidesSubsystem, shutdownSlides } from "./slides/deck-service";
 
 // Must run before app.whenReady().
 registerWorshipScheme();
@@ -81,7 +80,12 @@ if (gotSingleInstanceLock) {
     registerWorshipProtocolHandler(getMediaRepo());
     registerAllIpcHandlers();
 
-    void preOpenPowerPoint();
+    // Non-blocking: creates the cache dirs, sweeps anything a crash left
+    // half-converted, locates LibreOffice and warms its profile. A failure
+    // here must never keep the app from starting.
+    void initSlidesSubsystem().catch((error: unknown) => {
+      console.warn("[slides] init failed", error);
+    });
 
     mainControlWindow = createControlWindow();
     wireMinimizeRestoreSync(mainControlWindow);
@@ -96,9 +100,10 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
+// Cancels in-flight jobs and kills soffice/the rasterizer. The deck cache is
+// deliberately NOT deleted — persisting it is the point of the pipeline.
 app.on("before-quit", () => {
-  cleanupSlideTempDirs();
-  void quitPowerPoint();
+  shutdownSlides();
 });
 
 // Surface crashes as a dialog instead of a silent blank window — the health

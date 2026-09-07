@@ -2,6 +2,7 @@ import type { Handlers } from "../register";
 import { projectionState } from "../../services/projection-state";
 import { createProjectionWindow } from "../../windows/projection-window";
 import { getHistoryRepo } from "../../services/repos";
+import { broadcast } from "../../services/broadcast";
 
 let currentServiceId: number | null = null;
 
@@ -14,8 +15,9 @@ export const projectionHandlers: Pick<
   | "projection:open"
   | "projection:close"
   | "projection:show"
-  | "projection:setOverlayVisible"
-  | "projection:videoCommand"
+  | "projection:mediaCommand"
+  | "projection:setSoundtrack"
+  | "projection:reportMediaStatus"
 > = {
   "projection:open": ({ displayId }) => {
     const existing = projectionState.getWindow();
@@ -36,19 +38,18 @@ export const projectionHandlers: Pick<
     getHistoryRepo().record(output, currentServiceId);
   },
 
-  "projection:setOverlayVisible": ({ visible }) => {
+  "projection:mediaCommand": (command) => {
     const win = projectionState.getWindow();
-    if (!win) return;
-    if (visible) {
-      win.show();
-      win.setAlwaysOnTop(true, "screen-saver");
-    } else {
-      win.hide();
-    }
+    win?.webContents.send("media-command", command);
   },
 
-  "projection:videoCommand": (command) => {
-    const win = projectionState.getWindow();
-    win?.webContents.send("video-command", command);
+  "projection:setSoundtrack": (soundtrack) => {
+    projectionState.setSoundtrack(soundtrack);
+  },
+
+  /** The projection window describing its own media element; forwarded to the
+   *  control window, which owns the autoplay clock. */
+  "projection:reportMediaStatus": (status) => {
+    broadcast("media-status", status);
   },
 };

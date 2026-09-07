@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Offscreen worker window: no UI, no user input, no remote content.
+         It only ever fetches worship:// URLs handed to it by main. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; connect-src worship:; img-src worship: data: blob:;"
+    />
+    <title>WorshipApp Rasterizer</title>
+  </head>
+  <body>
+    <script type="module" src="/src/rasterizer.tsx"></script>
+  </body>
+</html>

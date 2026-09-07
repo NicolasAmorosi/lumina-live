@@ -5,6 +5,7 @@ import { MediaRepo } from "../db/repositories/media.repo";
 import { BibleRepo } from "../db/repositories/bible.repo";
 import { ServicesRepo } from "../db/repositories/services.repo";
 import { HistoryRepo } from "../db/repositories/history.repo";
+import { SlidesRepo } from "../db/repositories/slides.repo";
 
 /**
  * Small process-wide registry so modules that can't easily receive constructor
@@ -17,6 +18,7 @@ let mediaRepo: MediaRepo | null = null;
 let bibleRepo: BibleRepo | null = null;
 let servicesRepo: ServicesRepo | null = null;
 let historyRepo: HistoryRepo | null = null;
+let slidesRepo: SlidesRepo | null = null;
 let dbHandle: { db: Db; sqlite: Database.Database } | null = null;
 
 export function initRepos(db: Db, sqlite: Database.Database): void {
@@ -25,6 +27,7 @@ export function initRepos(db: Db, sqlite: Database.Database): void {
   bibleRepo = new BibleRepo(db, sqlite);
   servicesRepo = new ServicesRepo(db, sqlite);
   historyRepo = new HistoryRepo(db);
+  slidesRepo = new SlidesRepo(db, sqlite);
   dbHandle = { db, sqlite };
 }
 
@@ -40,3 +43,4 @@ export const getMediaRepo = () => assertInit(mediaRepo, "MediaRepo");
 export const getBibleRepo = () => assertInit(bibleRepo, "BibleRepo");
 export const getServicesRepo = () => assertInit(servicesRepo, "ServicesRepo");
 export const getHistoryRepo = () => assertInit(historyRepo, "HistoryRepo");
+export const getSlidesRepo = () => assertInit(slidesRepo, "SlidesRepo");

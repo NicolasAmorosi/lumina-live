@@ -2,7 +2,7 @@ import { registerHandlers, type Handlers } from "./register";
 import { displaysHandlers } from "./handlers/displays";
 import { projectionHandlers } from "./handlers/projection";
 import { filesHandlers } from "./handlers/files";
-import { pptHandlers } from "./handlers/ppt";
+import { slidesHandlers } from "./handlers/slides";
 import { bibleHandlers } from "./handlers/bible";
 import { libraryHandlers } from "./handlers/library";
 import { servicesHandlers } from "./handlers/services";
@@ -18,7 +18,7 @@ export function registerAllIpcHandlers(): void {
     ...displaysHandlers,
     ...projectionHandlers,
     ...filesHandlers,
-    ...pptHandlers,
+    ...slidesHandlers,
     ...bibleHandlers,
     ...libraryHandlers,
     ...servicesHandlers,

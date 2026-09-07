@@ -12,7 +12,8 @@ import { useProjectionStore } from "@renderer/stores/projection.store";
 import { useSettingsStore } from "@renderer/stores/settings.store";
 import { api } from "@renderer/lib/api";
 import type { DisplayInfo } from "@shared/types/display";
-import { startProjectionEffects } from "@renderer/effects/projection-effects";
+import { startProjectionEffects } from "@renderer/effects/projection-sync";
+import { useDeckStore } from "@renderer/stores/deck.store";
 import { toggleOverlay } from "@renderer/lib/actions/playback";
 import { useGlobalShortcuts } from "@renderer/lib/hooks/use-global-shortcuts";
 
@@ -31,6 +32,7 @@ export function App() {
 
   useEffect(() => {
     void loadSettings();
+    void useDeckStore.getState().loadEnvironment();
     void api.displays.list().then((list) => {
       setDisplays(list);
       const nonPrimary = list.find((d) => !d.primary);
