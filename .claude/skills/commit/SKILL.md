@@ -29,7 +29,8 @@ Arguments: `$ARGUMENTS`
 ```
 
 - **Types:** `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `chore`
-- **Scopes:** `main`, `preload`, `renderer`, `ui`, `bible`, `ppt`, `build`
+- **Scopes:** `main`, `preload`, `renderer`, `ui`, `ipc`, `db`, `bible`, `slides`, `projection`,
+  `protocol`, `build`
 - **Subject:** imperative mood, no trailing period, ≤50 chars preferred, never >72
 - **Language:** English only
 
@@ -40,9 +41,9 @@ Arguments: `$ARGUMENTS`
 Return exactly this structure — nothing else:
 
 ```
-Option 1: fix(ppt): escape backslashes in exported slide paths
-Option 2: fix(main): normalize PowerShell path escaping for slide export
-Option 3: refactor(ppt): centralize path escaping for PowerShell scripts
+Option 1: fix(protocol): honor Range requests when serving media files
+Option 2: fix(main): return 206 with Accept-Ranges from serveFile
+Option 3: fix(protocol): restore video seeking by handling partial requests
 ```
 
 Do not explain the options. Do not add context. Do not commit anything — only generate the messages.

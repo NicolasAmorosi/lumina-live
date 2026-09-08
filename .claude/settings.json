@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Read",
+      "Bash(npm run typecheck)",
+      "Bash(npm run lint)",
+      "Bash(npm run db:smoke)",
+      "Bash(npm run slides:smoke*)",
+      "Bash(npm run build)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git blame*)",
+      "Bash(git ls-files*)",
+      "Bash(git branch --show-current)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Edit(legacy/**)",
+      "Write(legacy/**)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PROJECT_DIR}/.claude/hooks/session-start-context.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PROJECT_DIR}/.claude/hooks/stop-knowledge-reminder.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

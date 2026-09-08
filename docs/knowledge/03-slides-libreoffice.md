@@ -91,8 +91,15 @@ desapareció. El audio del deck sigue sonando durante NEGRO — verificado.
 `worship://deck/<deckId>/<n>[/thumb]` resuelve contra `deck_slides` y se sirve con
 `Cache-Control: public, max-age=31536000, immutable` — el par `(deckId, slideIndex)` es inmutable
 por construcción (otro contenido ⇒ otro hash ⇒ otro deckId). Sin ese header Chromium releería cada
-imagen en cada cambio de diapositiva, en vivo. El audio (`worship://deck-audio/<id>`) conserva la
-respuesta cruda de `net.fetch` para no perder Range/seek.
+imagen en cada cambio de diapositiva, en vivo. El audio (`worship://deck-audio/<id>`) va sin ese
+header porque se recorre con seek, no se reemplaza.
+
+Todo lo que sirve `worship://` pasa por `serveFile()`, que implementa **semántica real de
+`Range`** (206 + `Content-Range`, `Accept-Ranges: bytes`, 416, streaming con
+`fs.createReadStream({start,end})`). Antes delegaba en `net.fetch(file://…)` sin reenviar los
+headers, lo que dejaba a todo video/audio **sin seek** y rompía la reproducción con
+`PIPELINE_ERROR_DECODE (-12909)` por datos desalineados — ver
+[`.claude/knowledge/worship-protocol-range-and-video-lifecycle.md`](../../.claude/knowledge/worship-protocol-range-and-video-lifecycle.md).
 
 ## Verificación sin levantar la app
 

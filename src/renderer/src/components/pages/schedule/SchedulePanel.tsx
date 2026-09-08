@@ -1,35 +1,38 @@
 import { useState, type DragEvent } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { Button, EmptyState, Icon, IconButton } from "@renderer/components/ui";
-import { PanelBody, PanelHeader } from "@renderer/components/shared/panel";
+import { PanelBody, PanelFooter, PanelHeader } from "@renderer/components/shared/panel";
 import { useServiceStore } from "@renderer/stores/service.store";
 import { useLibraryStore } from "@renderer/stores/library.store";
 import { api } from "@renderer/lib/api";
-import { PLAYLIST_INDEX_MIME, readMediaAssetDrag, readOsFilesDrag } from "@renderer/lib/dnd";
-import { PlaylistRow } from "./playlist-row";
+import { SCHEDULE_INDEX_MIME, readMediaAssetDrag, readOsFilesDrag } from "@renderer/lib/dnd";
+import { previewScheduleItem } from "@renderer/lib/actions/preview";
+import { goLive } from "@renderer/lib/actions/playback";
+import { ScheduleRow } from "./schedule-row";
 import type { AssetKind } from "@shared/constants";
 
 const ADD_KINDS: { kind: AssetKind; labelKey: string }[] = [
-  { kind: "ppt", labelKey: "playlist.addPpt" },
-  { kind: "video", labelKey: "playlist.addVideo" },
-  { kind: "image", labelKey: "playlist.addImage" },
-  { kind: "audio", labelKey: "playlist.addAudio" },
+  { kind: "ppt", labelKey: "schedule.addPpt" },
+  { kind: "video", labelKey: "schedule.addVideo" },
+  { kind: "image", labelKey: "schedule.addImage" },
+  { kind: "audio", labelKey: "schedule.addAudio" },
 ];
 
-export function PlaylistPanel() {
+/** The service running order — EasyWorship's "Schedule", top-left. */
+export function SchedulePanel() {
   const t = useT();
-  const { activeIndex, items, moveDown, moveUp, removeAt, reorder, select, selectedIndex } = useServiceStore();
+  const { activeIndex, items, moveDown, moveUp, removeAt, reorder, selectedIndex } = useServiceStore();
   const addItem = useServiceStore((s) => s.addItem);
   const clear = useServiceStore((s) => s.clear);
   const refreshLibrary = useLibraryStore((s) => s.refresh);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   function addAssetItem(assetId: number, kind: AssetKind) {
-    if (kind === "ppt") {
-      addItem({ kind: "ppt", mediaAssetId: assetId, title: null });
-    } else {
-      addItem({ kind: "media", mediaAssetId: assetId, title: null });
-    }
+    addItem(
+      kind === "ppt"
+        ? { kind: "ppt", mediaAssetId: assetId, title: null }
+        : { kind: "media", mediaAssetId: assetId, title: null },
+    );
   }
 
   async function handleAdd(kind: AssetKind) {
@@ -52,7 +55,7 @@ export function PlaylistPanel() {
 
   async function handleDrop(e: DragEvent<HTMLDivElement>) {
     e.preventDefault();
-    const reorderFrom = e.dataTransfer.getData(PLAYLIST_INDEX_MIME);
+    const reorderFrom = e.dataTransfer.getData(SCHEDULE_INDEX_MIME);
     const draggedAsset = readMediaAssetDrag(e);
     const osFiles = readOsFilesDrag(e);
     const targetIndex = dropTargetIndex(e);
@@ -87,29 +90,33 @@ export function PlaylistPanel() {
             ))}
           </div>
         }
-        title={t("playlist.title")}
+        title={t("schedule.title")}
       />
       <PanelBody
-        className="p-2"
+        className="p-1.5"
         onDragLeave={() => setDragOverIndex(null)}
         onDragOver={handleDragOver}
         onDrop={(e) => void handleDrop(e)}
       >
         {items.length === 0 ? (
-          <EmptyState description={t("playlist.emptyHint")} icon="layers" title={t("playlist.empty")} />
+          <EmptyState description={t("schedule.emptyHint")} icon="layers" title={t("schedule.empty")} />
         ) : (
-          <ul className="flex flex-col gap-1">
+          <ul className="flex flex-col gap-0.5">
             {items.map((item, index) => (
-              <PlaylistRow
+              <ScheduleRow
                 active={activeIndex === index}
                 dragOver={dragOverIndex === index}
                 index={index}
                 item={item}
                 key={item.id}
-                onClick={() => select(index)}
+                onClick={() => previewScheduleItem(index)}
+                onDoubleClick={() => {
+                  previewScheduleItem(index);
+                  void goLive();
+                }}
                 onDragStart={(e) => {
                   e.dataTransfer.effectAllowed = "move";
-                  e.dataTransfer.setData(PLAYLIST_INDEX_MIME, String(index));
+                  e.dataTransfer.setData(SCHEDULE_INDEX_MIME, String(index));
                 }}
                 selected={selectedIndex === index}
               />
@@ -117,20 +124,20 @@ export function PlaylistPanel() {
           </ul>
         )}
       </PanelBody>
-      <div className="flex shrink-0 items-center gap-1 border-t border-border px-2 py-1.5">
+      <PanelFooter>
         <IconButton
           disabled={selectedIndex === null || selectedIndex === 0}
           onClick={() => selectedIndex !== null && moveUp(selectedIndex)}
-          size="sm"
-          title={t("playlist.moveUp")}
+          size="xs"
+          title={t("schedule.moveUp")}
         >
           <Icon name="chevronUp" />
         </IconButton>
         <IconButton
           disabled={selectedIndex === null || selectedIndex === items.length - 1}
           onClick={() => selectedIndex !== null && moveDown(selectedIndex)}
-          size="sm"
-          title={t("playlist.moveDown")}
+          size="xs"
+          title={t("schedule.moveDown")}
         >
           <Icon name="chevronDown" />
         </IconButton>
@@ -140,12 +147,12 @@ export function PlaylistPanel() {
           size="xs"
           variant="danger"
         >
-          <Icon name="remove" /> {t("playlist.remove")}
+          <Icon name="remove" /> {t("schedule.remove")}
         </Button>
-        <Button className="ml-auto" onClick={clear} size="xs" variant="ghost">
-          {t("playlist.clear")}
+        <Button className="ml-auto" disabled={items.length === 0} onClick={clear} size="xs" variant="ghost">
+          {t("schedule.clear")}
         </Button>
-      </div>
+      </PanelFooter>
     </>
   );
 }

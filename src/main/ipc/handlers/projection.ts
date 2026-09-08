@@ -18,6 +18,7 @@ export const projectionHandlers: Pick<
   | "projection:mediaCommand"
   | "projection:setSoundtrack"
   | "projection:reportMediaStatus"
+  | "projection:getSnapshot"
 > = {
   "projection:open": ({ displayId }) => {
     const existing = projectionState.getWindow();
@@ -37,6 +38,8 @@ export const projectionHandlers: Pick<
     projectionState.send(output);
     getHistoryRepo().record(output, currentServiceId);
   },
+
+  "projection:getSnapshot": () => projectionState.getSnapshot(),
 
   "projection:mediaCommand": (command) => {
     const win = projectionState.getWindow();

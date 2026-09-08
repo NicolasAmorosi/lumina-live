@@ -4,7 +4,17 @@
  * `selectOutput` switch (renderer/stores/projection.store.ts) is a compile error,
  * not a runtime "stuck on logo" bug like the old `restorePrevious()`.
  */
-export type ProjectionOutput =
+/** Which video (if any) is the current *base* content, independent of NEGRO/
+ *  LOGO. Present on every `ProjectionOutput` variant (including "black" and
+ *  "logo" themselves) so the projection window can keep a video's element —
+ *  and therefore its OS-level hardware decoder session — alive and playing
+ *  underneath an overlay instead of tearing it down and recreating it on every
+ *  toggle. Repeatedly destroying/recreating a `<video>` element is what
+ *  produces `PIPELINE_ERROR_DECODE` crashes in Chromium's hardware video
+ *  decoder on macOS after a few NEGRO/EN VIVO cycles. */
+export type VideoUnderlay = { url: string; epoch: number } | null;
+
+export type ProjectionOutputKind =
   | { kind: "black" }
   | { kind: "logo"; url: string | null }
   | { kind: "image"; url: string }
@@ -25,6 +35,8 @@ export type ProjectionOutput =
        *  belongs in the control window), materialized there. */
       preload: string[];
     };
+
+export type ProjectionOutput = ProjectionOutputKind & { videoUnderlay: VideoUnderlay };
 
 export type MediaTarget = "video" | "audio";
 

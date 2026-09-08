@@ -36,58 +36,75 @@
 }
 
 /*
- * Two physical palettes (dark = default, light = alternate), mapped onto ONE
- * semantic token set consumed by @theme inline below. Components only ever
- * reference the semantic names (bg-background, text-foreground, bg-primary,
- * ...) — never --wa-* directly — so the theme toggle (settings 'ui.theme',
- * `data-theme` on <html>) needs no per-component changes.
+ * Palette derived from the official Seventh-day Adventist identity system
+ * (ALPS — adventistchurch/alps, the church's reference implementation of
+ * adventist.design). Every hue below is a literal value from that palette:
+ *
+ *   Denim   #04132b / #2f557f / #2e6de7 / #84adfc   (primary family)
+ *   Bluejay #2e6de7   Campfire #cd4900   Iris #9013fe
+ *   Ming    #007f98   Tree Frog #2b8500  Forest #355724
+ *   Cave    #255760   Emperor #4b207f    Scarlett #d0021b
+ *   Neutrals: #000 #222222 #4a4a4a #717171 #f5f5f5 #ffffff
+ *
+ * ALPS defines no dark UI surfaces (it is a web/print system), so the dark
+ * theme interpolates the Denim ramp between #04132b and #2f557f rather than
+ * inventing new hues. Two physical palettes (dark = default, light =
+ * alternate) map onto ONE semantic token set consumed by @theme inline below.
+ * Components only ever reference the semantic names (bg-background,
+ * text-foreground, bg-primary, ...) — never --wa-* directly — so the theme
+ * toggle (settings 'ui.theme', `data-theme` on <html>) needs no per-component
+ * changes.
  */
 :root, [data-theme="dark"] {
-  --wa-bg-primary: #0b1929;
-  --wa-bg-secondary: #0f2236;
-  --wa-bg-tertiary: #132d48;
-  --wa-bg-card: #163356;
-  --wa-bg-hover: #1c3f6a;
-  --wa-bg-active: #22507f;
-  --wa-text-primary: #e4eaf2;
-  --wa-text-secondary: #8ba3bc;
-  --wa-text-muted: #5a7a9a;
-  --wa-accent-primary: #2b6cb5;
-  --wa-accent-hover: #3580cc;
-  --wa-accent-light: #a8ccee;
-  --wa-danger: #c0392b;
-  --wa-success: #27ae60;
-  --wa-border: #1a3350;
-  --wa-border-light: #234568;
-  --wa-badge-ppt: #6a9fd8;
-  --wa-badge-video: #9080d0;
-  --wa-badge-image: #60b890;
-  --wa-badge-audio: #60a0e0;
-  --wa-badge-bible: #80b8d0;
+  --wa-bg-primary: #04132b;
+  --wa-bg-secondary: #081c39;
+  --wa-bg-tertiary: #0e2749;
+  --wa-bg-card: #123054;
+  --wa-bg-hover: #1a3c69;
+  --wa-bg-active: #2f557f;
+  --wa-text-primary: #f5f5f5;
+  --wa-text-secondary: #a9c0dd;
+  --wa-text-muted: #7089a8;
+  --wa-accent-primary: #2e6de7;
+  --wa-accent-hover: #5589ee;
+  --wa-accent-light: #84adfc;
+  --wa-danger: #d0021b;
+  --wa-success: #2b8500;
+  --wa-warning: #fff664;
+  --wa-on-air: #d0021b;
+  --wa-border: #12294a;
+  --wa-border-light: #1e3d66;
+  --wa-badge-ppt: #cd4900;
+  --wa-badge-video: #9013fe;
+  --wa-badge-image: #2b8500;
+  --wa-badge-audio: #007f98;
+  --wa-badge-bible: #2e6de7;
 }
 
 [data-theme="light"] {
-  --wa-bg-primary: #f4f7fb;
+  --wa-bg-primary: #f5f5f5;
   --wa-bg-secondary: #ffffff;
-  --wa-bg-tertiary: #e9eff7;
+  --wa-bg-tertiary: #eaeff6;
   --wa-bg-card: #ffffff;
-  --wa-bg-hover: #e3ecf7;
-  --wa-bg-active: #d3e3f5;
-  --wa-text-primary: #0f2236;
-  --wa-text-secondary: #3f5872;
-  --wa-text-muted: #6d84a0;
-  --wa-accent-primary: #2b6cb5;
-  --wa-accent-hover: #1f5695;
-  --wa-accent-light: #dcebfa;
-  --wa-danger: #c0392b;
-  --wa-success: #1e8449;
-  --wa-border: #d3dfec;
-  --wa-border-light: #c1d1e3;
-  --wa-badge-ppt: #3f6fb0;
-  --wa-badge-video: #6d5cb8;
-  --wa-badge-image: #2f8f66;
-  --wa-badge-audio: #2f78b8;
-  --wa-badge-bible: #3d8aa3;
+  --wa-bg-hover: #e1eaf6;
+  --wa-bg-active: #cfe0f5;
+  --wa-text-primary: #04132b;
+  --wa-text-secondary: #4a4a4a;
+  --wa-text-muted: #717171;
+  --wa-accent-primary: #2f557f;
+  --wa-accent-hover: #04132b;
+  --wa-accent-light: #84adfc;
+  --wa-danger: #d0021b;
+  --wa-success: #355724;
+  --wa-warning: #cd4900;
+  --wa-on-air: #d0021b;
+  --wa-border: #d7dee7;
+  --wa-border-light: #c2ccd9;
+  --wa-badge-ppt: #cd4900;
+  --wa-badge-video: #4b207f;
+  --wa-badge-image: #355724;
+  --wa-badge-audio: #255760;
+  --wa-badge-bible: #2f557f;
 }
 
 @theme inline {
@@ -113,6 +130,11 @@
   --color-danger: var(--wa-danger);
   --color-danger-foreground: #ffffff;
   --color-success: var(--wa-success);
+  --color-success-foreground: #ffffff;
+  --color-warning: var(--wa-warning);
+  /* Scarlett, reserved for ONE meaning: content is on the projector right now. */
+  --color-on-air: var(--wa-on-air);
+  --color-on-air-foreground: #ffffff;
 
   --color-badge-ppt: var(--wa-badge-ppt);
   --color-badge-video: var(--wa-badge-video);
@@ -120,7 +142,8 @@
   --color-badge-audio: var(--wa-badge-audio);
   --color-badge-bible: var(--wa-badge-bible);
 
-  --font-sans: "InterVariable", "Segoe UI", system-ui, sans-serif;
+  /* Noto Sans is the church's official typeface (Advent Sans is logo-only). */
+  --font-sans: "Noto Sans Variable", "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
 
   /*
    * Elevation scale — 3 levels only. surface = resting cards/panels,

@@ -5,7 +5,7 @@ import { ASSET_EXTENSIONS, ASSET_KINDS, type AssetKind } from "@shared/constants
  *  asset (dropped anywhere to add it) and a playlist row (dropped on another
  *  row to reorder). Kept distinct so a single `onDrop` can tell them apart. */
 export const MEDIA_ASSET_MIME = "application/x-worship-media-asset";
-export const PLAYLIST_INDEX_MIME = "application/x-worship-playlist-index";
+export const SCHEDULE_INDEX_MIME = "application/x-worship-schedule-index";
 
 export type DraggedAsset = { assetId: number; kind: AssetKind };
 

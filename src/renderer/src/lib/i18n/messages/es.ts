@@ -6,14 +6,14 @@ const es = {
   app: { title: "WorshipApp" },
   header: {
     openDisplay: "Abrir Pantalla",
-    closeDisplay: "Cerrar",
-    changeLogo: "Cambiar Logo",
-    selectDisplay: "Seleccionar pantalla",
+    closeDisplay: "Cerrar Pantalla",
+    primaryDisplay: "(principal)",
   },
-  playlist: {
-    title: "Lista de Reproducción",
-    empty: "Lista vacía",
+  schedule: {
+    title: "Programa",
+    empty: "Programa vacío",
     emptyHint: "Agregá elementos o arrastrá archivos",
+    itemCount: "{count} elementos",
     moveUp: "Mover arriba",
     moveDown: "Mover abajo",
     remove: "Quitar",
@@ -22,6 +22,22 @@ const es = {
     addVideo: "Video",
     addImage: "Imagen",
     addAudio: "Audio",
+  },
+  resources: {
+    title: "Recursos",
+    empty: "No hay archivos",
+    emptyHint: "Agregá archivos o arrastralos acá",
+    addToSchedule: "Agregar al programa",
+  },
+  slides: {
+    title: "Diapositivas",
+    placeholder: "Nada en vista previa",
+    placeholderHint: "Elegí un elemento del programa o de los recursos",
+  },
+  actions: { goLive: "EN VIVO" },
+  status: {
+    black: "NEGRO",
+    logo: "LOGO",
   },
   library: {
     videos: "Videos",
@@ -36,8 +52,9 @@ const es = {
   },
   preview: {
     title: "Vista Previa",
-    placeholder: "Seleccioná un elemento de la lista",
-    placeholderHint: "o usá la pestaña Biblia para buscar versículos",
+    placeholder: "Nada en vista previa",
+    placeholderHint: "Elegí un elemento del programa o de los recursos",
+    position: "{current} / {total}",
   },
   bible: {
     title: "Biblia",
@@ -47,6 +64,7 @@ const es = {
     chapter: "Cap...",
     showChapter: "Mostrar Capítulo",
     search: "Buscar…",
+    noResults: "Sin resultados",
     empty: "Buscá un versículo",
     emptyHint: "Seleccioná libro y capítulo",
     previous: "Anterior",
@@ -79,8 +97,8 @@ const es = {
       locate: "Buscar soffice…",
     },
   },
-  live: { title: "En Vivo", disconnected: "Desconectado", noSignal: "Sin señal" },
-  footer: { black: "NEGRO", logo: "LOGO", present: "EN VIVO", stop: "DETENER" },
+  live: { title: "En Vivo", disconnected: "Sin pantalla", noSignal: "Sin señal" },
+  footer: { black: "NEGRO", logo: "LOGO", live: "VIVO", clear: "LIMPIAR" },
   services: {
     title: "Servicios",
     save: "Guardar culto",
@@ -93,9 +111,13 @@ const es = {
   },
   settings: {
     title: "Configuración",
+    display: "Pantalla",
     theme: "Tema",
     themeDark: "Oscuro",
     themeLight: "Claro",
+    logo: "Logo",
+    chooseFile: "Elegir archivo…",
+    clearLive: "Contenido en vivo",
   },
   common: { cancel: "Cancelar", confirm: "Confirmar", save: "Guardar", delete: "Eliminar" },
 };

@@ -31,6 +31,13 @@ export type IpcContract = {
   "projection:show": { req: ProjectionOutput; res: void };
   "projection:mediaCommand": { req: MediaCommand; res: void };
   "projection:setSoundtrack": { req: DeckSoundtrackPush; res: void };
+  /** Pulled once by the projection window on mount so its first paint can
+   *  never race the "display-content"/"deck-soundtrack" pushes that follow a
+   *  fresh `projection:open` — see `docs/knowledge/01-architecture.md`. */
+  "projection:getSnapshot": {
+    req: void;
+    res: { output: ProjectionOutput | null; soundtrack: DeckSoundtrackPush };
+  };
   /** Projection window -> main -> control window. The projection window is
    *  describing its own <video>/<audio> element, not making a decision. */
   "projection:reportMediaStatus": { req: MediaStatus; res: void };

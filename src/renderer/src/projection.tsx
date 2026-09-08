@@ -1,4 +1,4 @@
-import "@fontsource-variable/inter";
+import "@fontsource-variable/noto-sans";
 import "./styles/globals.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

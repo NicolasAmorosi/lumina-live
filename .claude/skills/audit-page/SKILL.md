@@ -1,6 +1,6 @@
 ---
 name: audit-page
-description: Full end-to-end auditor for one WorshipApp feature (IPC contract → main handlers → React/Zustand renderer → design-system usage). Checks correctness, unhandled states (loading/empty/error), projection-output coverage, PowerPoint overlay correctness, and style/token uniformity. Writes a severity-rated report to auditorias/reports/ and updates the status index. Report-only — never fixes unless asked. Use when asked to audit, review in depth, or QA a complete feature (playlist, library, bible, ppt, black/logo controls, services).
+description: Full end-to-end auditor for one WorshipApp feature (IPC contract → main handlers → React/Zustand renderer → design-system usage). Checks correctness, unhandled states (loading/empty/error), projection-output coverage, slide-deck and NEGRO/LOGO overlay correctness, and style/token uniformity. Writes a severity-rated report to auditorias/reports/ and updates the status index. Report-only — never fixes unless asked. Use when asked to audit, review in depth, or QA a complete feature (playlist, library, bible, ppt, black/logo controls, services).
 user-invocable: true
 tools: Read, Write, Edit, Bash, Glob, Grep
 ---
@@ -12,7 +12,7 @@ severity-rated report under `auditorias/reports/`, then update the status table 
 `auditorias/README.md`. `npm run typecheck` already catches missing/mis-typed IPC handlers and
 non-exhaustive `selectOutput` switches — don't re-derive what the compiler already guarantees.
 Focus your manual tracing on what TypeScript can't see: runtime behavior, error handling, UX
-states, PowerShell safety, and design-system consistency. Run `npm run typecheck && npm run lint`
+states, LibreOffice pipeline safety, and design-system consistency. Run `npm run typecheck && npm run lint`
 first and fold any failures into the report as Critical findings.
 
 Arguments: `$ARGUMENTS` — the feature to audit (`playlist`, `library`, `bible`, `ppt`,
@@ -26,7 +26,7 @@ report. The deliverable is the report + the updated index.
 ## Phase 0 — Read project knowledge first
 
 1. Read `CLAUDE.md` and the relevant `docs/knowledge/` entries for the target feature:
-   `01-architecture.md` (windows/processes), `02-ipc-contract.md` (channels), `03-powerpoint-com.md`
+   `01-architecture.md` (windows/processes), `02-ipc-contract.md` (channels), `03-slides-libreoffice.md`
    (if the feature touches PPT), `04-renderer-state.md` (state/flags), `05-data-and-persistence.md`
    (if it touches settings/library/bible data), `06-ui-and-theme.md` (styling).
 2. Scan `.claude/knowledge/INDEX.md` for prior findings on this feature — don't re-report a known
@@ -63,14 +63,19 @@ re-verify by hand.
 
 For every handler this feature owns:
 
-- **Error handling.** Does a failure (missing file, PowerShell timeout, malformed JSON, a FK
-  constraint from `service_items.media_asset_id` restrict) surface as a clear `IpcError` the
-  renderer can show, or does it throw something opaque? Empty `catch {}` blocks are only
-  acceptable for genuinely best-effort operations (e.g. `preOpenPowerPoint`) — flag any that hide
-  a failure the user should see.
-- **Path/string safety.** Any file path passed to PowerShell must go through
-  `src/main/powerpoint/powershell.ts`'s `-EncodedCommand` + environment-variable pattern — flag
-  any new string interpolation into a script (see `docs/knowledge/03-powerpoint-com.md`).
+- **Error handling.** Does a failure (missing file, LibreOffice conversion timeout, malformed
+  OOXML, a FK constraint from `service_items.media_asset_id` restrict) surface as a clear
+  `IpcError` the renderer can show, or does it throw something opaque? Empty `catch {}` blocks are
+  only acceptable for genuinely best-effort operations — flag any that hide a failure the user
+  should see.
+- **LibreOffice invocation safety.** `soffice` is spawned with an argument array, never a shell
+  string: flag any string interpolation into a command line, any unquoted filter name, and any
+  path built by concatenation instead of resolved through `src/main/paths.ts`
+  (see `docs/knowledge/03-slides-libreoffice.md` and
+  `.claude/knowledge/slides-libreoffice-pipeline.md`).
+- **Range support.** If the handler or protocol path serves media, confirm `serveFile()` still
+  honors `Range` (206 + `Accept-Ranges`) — see
+  `.claude/knowledge/worship-protocol-range-and-video-lifecycle.md`.
 - **Window lifecycle.** If the handler touches the projection window, confirm it goes through
   `projectionState` (`src/main/services/projection-state.ts`) rather than a raw `BrowserWindow`
   reference that could be stale/destroyed.
@@ -127,9 +132,9 @@ For each user-facing action in the feature, confirm:
 
 ## Phase 6 — Cross-cutting
 
-- **Windows-only assumptions.** If the feature touches PowerPoint, confirm it degrades gracefully
-  (no uncaught exception) when `powershell` isn't available, per
-  `docs/knowledge/03-powerpoint-com.md`.
+- **Missing external dependency.** If the feature touches presentations, confirm it degrades
+  gracefully (no uncaught exception, and a message that guides the install) when LibreOffice
+  isn't present, per `docs/knowledge/03-slides-libreoffice.md`.
 - **Dead/duplicate code.** Any handler, method, or render function this feature made redundant.
 
 ---
@@ -198,17 +203,19 @@ features require Windows; audited on macOS").
 ## Coverage matrix
 | Case | Main | Renderer |
 |------|------|----------|
-| IPC channel parity (main ↔ preload) | … | n/a |
-| Orphaned `window.api.*` methods | n/a | … |
-| Flag consistency (black/logo/ppt/video) | n/a | … |
-| `restorePrevious()` branch coverage | n/a | … |
-| `els` id parity | n/a | … |
+| Contract ↔ `Handlers` parity (`npm run typecheck`) | … | n/a |
+| Orphaned `window.worship.*` calls | n/a | … |
+| `selectOutput` exhaustiveness for this content type | n/a | … |
+| Two-stage flow honored (select ≠ project; only `goLive()`) | n/a | … |
+| NEGRO/LOGO over a live video (pause + resume, deck audio keeps playing) | … | … |
 | Loading / empty / error states | … | … |
-| PowerShell path escaping | … | n/a |
-| Style token reuse | n/a | … |
+| `worship://` `Range` / 206 support | … | n/a |
+| LibreOffice absent → graceful degradation | … | … |
+| Semantic tokens only (no hardcoded color/shadow/radius) | n/a | … |
 
 ## Not verified / assumptions
-<anything you couldn't check and why — Windows-only feature audited on macOS, etc.>
+<anything you couldn't check and why — needs a real projector / second display, a deck too large
+to convert here, etc.>
 ```
 
 Severity rubric:

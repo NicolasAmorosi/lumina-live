@@ -1,0 +1,79 @@
+import { useBibleStore } from "@renderer/stores/bible.store";
+import { useDeckStore } from "@renderer/stores/deck.store";
+import { useLibraryStore } from "@renderer/stores/library.store";
+import { usePreviewStore } from "@renderer/stores/preview.store";
+import { useServiceStore } from "@renderer/stores/service.store";
+import type { AssetKind } from "@shared/constants";
+
+/**
+ * Selecting something only ever previews it — nothing here touches
+ * `projection.store`. Sending it to the projector is `goLive()`'s job
+ * (lib/actions/playback.ts), which is the whole point of the two-stage flow.
+ *
+ * These live in the actions layer because a selection spans stores: the panel
+ * that owns the highlight, the panels that must drop theirs, and the preview
+ * cursor.
+ */
+
+export function previewScheduleItem(index: number): void {
+  useServiceStore.getState().select(index);
+  useLibraryStore.getState().select(null);
+  usePreviewStore.getState().setTarget({ kind: "scheduleItem", index });
+}
+
+export function previewVerse(verseIndex: number): void {
+  useServiceStore.getState().select(null);
+  useLibraryStore.getState().select(null);
+  usePreviewStore.getState().setTarget({ kind: "verse", verseIndex });
+}
+
+export function previewAsset(assetId: number, assetKind: AssetKind): void {
+  useServiceStore.getState().select(null);
+  useLibraryStore.getState().select(assetId);
+  usePreviewStore.getState().setTarget({ kind: "asset", assetId, assetKind });
+}
+
+export function setPreviewSlide(index: number): void {
+  usePreviewStore.getState().setSlideIndex(index);
+}
+
+/**
+ * The deck behind the current preview target, whether it came from the
+ * schedule or straight from the library. Shared by the cursor logic and the
+ * preview position readout so "which deck am I previewing" has one answer.
+ */
+export function previewDeckAssetId(): number | null {
+  const target = usePreviewStore.getState().target;
+  if (target?.kind === "asset") return target.assetKind === "ppt" ? target.assetId : null;
+  if (target?.kind !== "scheduleItem") return null;
+  const item = useServiceStore.getState().items[target.index];
+  return item?.kind === "ppt" ? item.mediaAssetId : null;
+}
+
+/** Moves the preview cursor — a deck slide or a verse — without touching the
+ *  projector. Bound to the preview monitor's arrows and to ↑/↓. */
+export function advancePreview(direction: 1 | -1): void {
+  const { setSlideIndex, slideIndex, target } = usePreviewStore.getState();
+  if (!target) return;
+
+  if (target.kind === "verse") {
+    const next = target.verseIndex + direction;
+    if (next < 0 || next >= useBibleStore.getState().verses.length) return;
+    previewVerse(next);
+    return;
+  }
+
+  const assetId = previewDeckAssetId();
+  if (assetId === null) return;
+  const total = useDeckStore.getState().byAssetId[assetId]?.deck?.slides.length ?? 0;
+  const next = slideIndex + direction;
+  if (next < 1 || next > total) return;
+  setSlideIndex(next);
+}
+
+export function clearPreview(): void {
+  useServiceStore.getState().select(null);
+  useLibraryStore.getState().select(null);
+  useBibleStore.getState().setCurrentVerseIndex(null);
+  usePreviewStore.getState().clear();
+}

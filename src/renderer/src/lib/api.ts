@@ -22,6 +22,7 @@ export const api = {
     mediaCommand: (command: MediaCommand) => invoke("projection:mediaCommand", command),
     setSoundtrack: (soundtrack: DeckSoundtrackPush) =>
       invoke("projection:setSoundtrack", soundtrack),
+    getSnapshot: () => invoke("projection:getSnapshot", undefined),
   },
   files: {
     pick: (kind: AssetKind, multiple: boolean) => invoke("files:pick", { kind, multiple }),

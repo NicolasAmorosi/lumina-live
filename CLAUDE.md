@@ -25,6 +25,44 @@ Es el sucesor directo de la versión vanilla JS de este mismo repo (conservada t
 - **No crees archivos de documentación (`.md`, README, docs) salvo que se pidan explícitamente.**
 - Sé conciso. Da código directo, sin relleno.
 
+## Certeza antes de código — 99% o preguntá
+
+**Antes de escribir código no trivial hay que llegar a ~99% de certeza sobre lo que el usuario
+quiere.** No se asume: se pregunta. Este proyecto tiene demasiadas decisiones invisibles
+(qué pasa en el proyector, qué pasa con el audio del deck, qué ve el operador en el monitor)
+como para adivinarlas.
+
+El protocolo, en orden:
+
+1. **Leé antes de preguntar.** Las preguntas se hacen sobre lo que el repo *no* contesta. Si la
+   respuesta está en `CLAUDE.md`, en `docs/knowledge/`, en `.claude/knowledge/` o en el código,
+   no es una pregunta: es una lectura pendiente.
+2. **Enumerá los supuestos** que el pedido deja abiertos. Un supuesto es abierto cuando dos
+   lecturas razonables del pedido llevan a implementaciones distintas.
+3. **Preguntá con `AskUserQuestion`**, no en prosa: opciones concretas y mutuamente excluyentes,
+   con la recomendada primera y el trade-off explícito en cada una. Agrupá todo lo que puedas en
+   una sola tanda de preguntas en vez de gotearlas.
+4. **Recién entonces implementá**, y decí de entrada bajo qué supuestos quedó resuelto lo que no
+   se preguntó.
+
+Preguntas que casi siempre hay que hacer en este proyecto, porque el pedido casi nunca las
+responde:
+
+- ¿El cambio afecta **lo que se proyecta** (`ProjectionOutput`) o solo la ventana de control?
+- ¿Qué pasa si eso está **EN VIVO** en ese momento? ¿Y con NEGRO/LOGO encima?
+- ¿Hace falta un **canal IPC nuevo** o alcanza con estado del renderer?
+- ¿El comportamiento va en un **store**, en un **efecto** (`effects/`) o en una **acción**
+  (`lib/actions/`)?
+- ¿Va a `components/ui/` (visual reutilizable) o queda en la feature?
+
+**Excepciones — acá se ejecuta directo, sin preguntar:** typos, renombres obvios, formato,
+pedidos de solo lectura (explicar, buscar, auditar), y seguir una instrucción que el usuario ya
+dio explícita y completa en el mismo mensaje. Si el usuario ya contestó algo, **no se
+re-pregunta**: eso es fricción, no rigor.
+
+Si aparece una duda a mitad de la implementación: hacé primero todo lo que no depende de la
+respuesta, y preguntá por lo que sí depende. No se entrega nada a medias en silencio.
+
 ## Stack
 
 | Capa | Tecnología |
@@ -32,6 +70,7 @@ Es el sucesor directo de la versión vanilla JS de este mismo repo (conservada t
 | Build | `electron-vite` (main + preload + renderer en un solo config, HMR, dev-server URL correcto) |
 | Lenguaje | TypeScript 5.9 estricto (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`) |
 | UI | React 19 + Tailwind v4 (`@theme inline`, sin `tailwind.config.js`) |
+| Identidad | paleta y tipografía oficiales de la iglesia (ALPS / `adventist.design`): Denim + Noto Sans |
 | Utilidades UI | `clsx` + `tailwind-merge` (`cn()`), `lucide-react` — **sin cva, sin Radix** |
 | Estado | Zustand (slices por dominio) |
 | DB | `better-sqlite3` (Node-API, sin rebuild nativo) + Drizzle ORM + FTS5 para la Biblia |
@@ -77,11 +116,17 @@ src/
         ├── projection/ProjectionApp.tsx  # shell de la ventana de proyección (sin lógica de dominio)
         ├── components/
         │   ├── ui/          # primitivas del design system — barrel index.ts
-        │   ├── shared/      # composiciones cross-feature (modal, panel)
-        │   └── pages/       # una carpeta por feature (playlist, bible, preview, services...)
-        ├── stores/          # Zustand: service, projection, bible, library, settings
-        ├── effects/         # projection-effects.ts — la única lógica "con orden" que queda
-        └── lib/             # api.ts, ipc.ts, i18n/, utils.ts, hooks/
+        │   ├── shared/      # cross-feature: modal, panel, output-view (renderiza un ProjectionOutput)
+        │   └── pages/       # una carpeta por feature:
+        │       ├── layout/     # AppShell (grilla estilo EasyWorship), TopBar, StatusBar
+        │       ├── schedule/   # el orden del culto (columna izq. arriba)
+        │       ├── resources/  # browser con pestañas: Biblia | Videos | Imágenes | Audios | PPT
+        │       ├── slides/     # grilla central de diapositivas/versículos del ítem en preview
+        │       ├── monitors/   # columna der.: LIVE arriba, PREVIEW abajo, transporte del deck
+        │       └── services/   # modal de cultos guardados
+        ├── stores/          # Zustand: service, preview, projection, deck, bible, library, settings
+        ├── effects/         # projection-sync.ts + deck-autoplay.ts — la lógica "con orden"
+        └── lib/             # api.ts, ipc.ts, i18n/, utils.ts, hooks/, actions/ (cruza stores)
 ```
 
 ## Reutilización de componentes — no negociable
@@ -120,11 +165,17 @@ Esta es la regla central del sistema de componentes, calcado de
 | `text-subtle` | texto terciario (hints, placeholders) |
 | `bg-primary` / `bg-primary-hover` | acento principal (azul adventista) |
 | `bg-danger` / `bg-success` | estados |
+| `bg-on-air` / `border-on-air` | **reservado**: esto está en el proyector AHORA (monitor LIVE, riel de la fila activa) |
 | `bg-badge-{ppt,video,image,audio,bible}` | color por tipo de contenido en playlist/biblioteca |
 | `shadow-surface` / `shadow-raised` / `shadow-overlay` | los ÚNICOS 3 niveles de elevación — cards / dropdowns-tooltips / modales-toasts |
 
 El tema (`ui.theme` en `settings`, `data-theme` en `<html>`) redefine los `--wa-*`; los
 componentes nunca necesitan saber en qué tema están.
+
+Todos los valores de color salen del sistema de identidad oficial de la iglesia (familia **Denim**
++ colores de acento de ALPS) y la tipografía es **Noto Sans** self-hosted. Antes de agregar un
+color nuevo, leé la tabla de la paleta en `docs/knowledge/06-ui-and-theme.md` — tiene que salir de
+ahí, no inventarse.
 
 ## Base de conocimiento — léela según la tarea
 
@@ -140,6 +191,65 @@ componentes nunca necesitan saber en qué tema están.
 
 También revisá [`.claude/knowledge/INDEX.md`](.claude/knowledge/INDEX.md) — hallazgos puntuales
 que se van acumulando sesión a sesión.
+
+### Las dos bases de conocimiento — frontera
+
+Hay dos, y no son lo mismo. Escribir en la equivocada es cómo se pierde un hallazgo.
+
+| | `docs/knowledge/` | `.claude/knowledge/` |
+|---|---|---|
+| Qué es | documentación **estructural** curada: cómo funciona el sistema hoy | hallazgos **atómicos** y fechados: qué nos sorprendió y qué aprendimos |
+| Forma | 7 documentos temáticos, numerados, se **reescriben** cuando el sistema cambia | un archivo por hallazgo, `kebab-case`, se **acumulan** (append-only) + `INDEX.md` |
+| Se lee | al empezar a trabajar en un área | cuando el síntoma o el archivo coincide con el **Trigger** de una entrada |
+| Ejemplo | "así funciona el pipeline de slides" | "las diapositivas ocultas no se exportan al PDF, y `advTm` no está donde parece" |
+
+Regla de **promoción**: un hallazgo que deja de ser una anécdota y se vuelve una regla del
+sistema sube a `docs/knowledge/` (y a la sección de convenciones de este archivo si es
+no-negociable). La entrada atómica se queda igual, como el diagnóstico detallado — es lo que ya
+pasó con el header `Range` de `worship://`.
+
+`HANDOFF.md` no es ninguna de las dos: es estado de una tarea en curso, no conocimiento.
+
+## Ciclo de automejora — obligatorio, no opcional
+
+Cada sesión tiene que dejar el proyecto mejor documentado de lo que lo encontró, o confirmar
+explícitamente que no había nada que documentar.
+
+**Al cerrar una tarea no trivial, decidí si surgió un hallazgo durable y registralo con
+`/learn`** (`.claude/skills/learn/SKILL.md`, que ya lleva el formato y actualiza `INDEX.md`).
+
+Un hallazgo califica si cumple **las tres**:
+
+1. **No es derivable** del código, del `git log` ni de este archivo.
+2. **Costó descubrirlo**: un supuesto equivocado, un error engañoso, una herramienta que se
+   comportó distinto de su documentación, un fix que llevó varios intentos.
+3. **Va a volver a importar**: condiciona un área entera (protocolo, slides, proyección, DB,
+   empaquetado), no una línea.
+
+No se registra: lo que hace un archivo, estructura que git ya versiona, una regla que ya está
+acá o en `docs/knowledge/`, ni estado de tarea (eso es `HANDOFF.md`). **Cerrar el ciclo sin
+escribir nada es un resultado válido** — nunca inventes una entrada para tener algo que mostrar.
+
+Dos automatismos sostienen esto (`.claude/settings.json` → `.claude/hooks/`):
+
+- `SessionStart` inyecta al contexto el protocolo de certeza, la barra mínima de verificación y
+  el índice de hallazgos ya registrados.
+- `Stop` avisa al usuario cuando hay cambios en `src/` y nada nuevo en `.claude/knowledge/`.
+  Es solo un `systemMessage`, nunca bloquea el turno.
+
+## Configuración de Claude en este repo
+
+| Ruta | Qué es |
+|---|---|
+| `.claude/settings.json` | versionado: allowlist de comandos de verificación/solo-lectura, `deny` de `legacy/**` y de `rm -rf`, y los dos hooks del ciclo |
+| `.claude/settings.local.json` | preferencias personales, no versionado |
+| `.claude/hooks/` | los scripts que ejecutan los hooks (probables a mano: `echo '{}' \| ./.claude/hooks/<script>.sh`) |
+| `.claude/skills/` | `/add-ipc`, `/audit-page`, `/commit`, `/learn` |
+| `.claude/knowledge/` | hallazgos atómicos + `INDEX.md` |
+
+Los comandos destructivos u outward-facing (`git commit`, `git push`, `npm install`,
+`db:generate`, borrar archivos) **siguen pidiendo confirmación a propósito**. No los agregues al
+allowlist.
 
 ## Comandos esenciales
 
@@ -166,9 +276,27 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
 - **Los archivos locales se sirven por `worship://`** (`src/main/protocol/worship-protocol.ts`),
   resolviendo por id de `media_assets` o por sesión de slides — nunca por ruta de filesystem
   embebida en la URL. No reintroduzcas `file:///` construido a mano.
+- **`serveFile()` DEBE honrar `Range` (206 + `Accept-Ranges`).** No lo "simplifiques" de vuelta a
+  `net.fetch(file://…)`: eso ignora los headers, deja a todo video/audio **sin seek** y rompe la
+  reproducción con `PIPELINE_ERROR_DECODE (-12909)` por datos desalineados. Diagnóstico completo en
+  [`.claude/knowledge/worship-protocol-range-and-video-lifecycle.md`](.claude/knowledge/worship-protocol-range-and-video-lifecycle.md).
 - **La ventana de proyección no tiene lógica de dominio.** Es una función pura del último
   `ProjectionOutput` recibido (`src/shared/types/projection.ts`). Si necesitás que "sepa" algo del
   culto, calculalo en el control y mandalo por `projection:show`.
+- **Seleccionar NUNCA proyecta.** El flujo es de dos etapas, como EasyWorship: un click (en el
+  programa, en un recurso, en un versículo o en una diapositiva) mueve el target de preview
+  (`lib/actions/preview.ts` + `stores/preview.store.ts`), y `goLive()`
+  (`lib/actions/playback.ts`) es el **único** camino de ahí al proyector — compartido por el botón
+  EN VIVO, Enter y el doble click. No agregues un segundo camino a `projection.store`.
+- **Los monitores usan el mismo renderer que el proyector.**
+  `components/shared/output-view.tsx` (`OutputView`) es lo que pinta la ventana de proyección Y
+  los monitores LIVE y PREVIEW. Si el preview y lo proyectado se pintan distinto, un monitor puede
+  mentirle al operador — por eso hay un solo componente y los tamaños van en `cqw`.
+- **NEGRO/LOGO pausa un video en vivo y mantiene su posición; la pista de audio de un deck sigue
+  sonando.** El `<video>` no se desmonta al taparlo (`videoUnderlay` en `ProjectionOutput` +
+  `LiveVideo` en `output-view.tsx`) — solo se oculta y se pausa, y al destapar reanuda donde
+  estaba. Son dos comportamientos deliberadamente distintos: el video se detiene, la música del
+  deck no.
 - **`selectOutput` (`src/renderer/src/stores/projection.store.ts`) es la única fuente de qué se
   proyecta.** Es un `switch` exhaustivo sobre `BaseContent` — agregar un tipo de contenido nuevo
   sin manejarlo ahí es un error de compilación, no un bug de runtime como el `restorePrevious()`

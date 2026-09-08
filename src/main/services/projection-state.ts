@@ -3,15 +3,14 @@ import type { DeckSoundtrackPush, ProjectionOutput } from "@shared/types/project
 
 /**
  * Holds the last output sent to the projection window and a reference to that
- * window. Because the window is destroyed and recreated on every
- * `projection:open` (matching the legacy behavior), main must replay the last
- * output once the new window's `did-finish-load` fires, or reopening the
- * projection leaves it blank while the control window believes it's live.
- *
- * The deck soundtrack is snapshotted alongside it for the same reason: it is a
- * SECOND declarative input to the projection window (it has to outlive slide
- * changes and NEGRO/LOGO), so replaying only `lastOutput` would bring a deck
- * back silently. The control window re-seeks it once it sees the new epoch.
+ * window. `getSnapshot()` is what the projection window pulls once on mount:
+ * a fresh `projection:open` shows the window before its page has loaded, and
+ * `send()`/`setSoundtrack()` calls made in that gap (goLive() runs right
+ * after `openIfNeeded()`, with no wait for the page to be ready) would
+ * otherwise race the renderer's own `display-content`/`deck-soundtrack`
+ * listener — pushed while nothing is listening yet is a silent drop, not a
+ * queued delivery. Pulling the last known state once mounted needs no timing
+ * assumption about `did-finish-load` vs. React mounting.
  */
 class ProjectionState {
   private window: BrowserWindow | null = null;
@@ -20,12 +19,6 @@ class ProjectionState {
 
   setWindow(win: BrowserWindow | null): void {
     this.window = win;
-    if (win) {
-      win.webContents.once("did-finish-load", () => {
-        if (this.lastOutput) this.send(this.lastOutput);
-        if (this.lastSoundtrack) this.sendSoundtrack(this.lastSoundtrack);
-      });
-    }
   }
 
   getWindow(): BrowserWindow | null {
@@ -39,15 +32,11 @@ class ProjectionState {
 
   setSoundtrack(soundtrack: DeckSoundtrackPush): void {
     this.lastSoundtrack = soundtrack;
-    this.sendSoundtrack(soundtrack);
-  }
-
-  private sendSoundtrack(soundtrack: DeckSoundtrackPush): void {
     this.getWindow()?.webContents.send("deck-soundtrack", soundtrack);
   }
 
-  getLastOutput(): ProjectionOutput | null {
-    return this.lastOutput;
+  getSnapshot(): { output: ProjectionOutput | null; soundtrack: DeckSoundtrackPush } {
+    return { output: this.lastOutput, soundtrack: this.lastSoundtrack };
   }
 }
 

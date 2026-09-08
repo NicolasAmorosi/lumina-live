@@ -5,11 +5,13 @@ su lugar, **Zustand** en slices por dominio (`src/renderer/src/stores/`):
 
 | Store | Qué guarda |
 |---|---|
-| `service.store.ts` | playlist actual (`items`), `selectedIndex`, `activeIndex` — reemplaza la parte "playlist" de `state` |
+| `service.store.ts` | programa actual (`items`), `selectedIndex` (highlight), `activeIndex` (en vivo) |
+| `preview.store.ts` | **qué se está mirando** (`target`: ítem del programa \| versículo \| asset de la biblioteca) + `slideIndex`, el cursor de preview independiente del de proyección |
 | `projection.store.ts` | `base` (qué se eligió proyectar) + `overlay` ('none'\|'black'\|'logo') + `logoUrl` + `presentationOpen` |
 | `bible.store.ts` | versión/libro/capítulo activos, versículos cargados, índice de versículo actual |
 | `library.store.ts` | biblioteca de medios por tipo, pestaña activa, selección |
 | `settings.store.ts` | espejo en memoria de la tabla `settings`, aplica `data-theme` al `<html>` |
+| `display.store.ts` | pantallas disponibles, cuál está elegida (persistida en `settings['projection.displayId']`), `open()/close()` de la ventana de proyección |
 
 Cada store toca solo lo que le corresponde — el polling de PPT (antes cada 800ms sobre el
 `state` global entero) ya no re-renderiza componentes que no leen ese slice.
@@ -62,8 +64,31 @@ El control es la única fuente de verdad; la ventana de proyección no tiene est
 `01-architecture.md` sobre el replay en `did-finish-load`). No hay Context ni estado de React
 compartido entre ventanas — son dos procesos de renderer distintos, la única vía es IPC.
 
+## La capa de acciones
+
+`lib/actions/` es donde vive todo lo que cruza stores, y está partida según el flujo de dos
+etapas de EasyWorship:
+
+- `preview.ts` — selección y cursor de preview. **No toca `projection.store` nunca.** Un click en
+  el programa, en un versículo o en un asset termina siempre acá.
+- `playback.ts` — `goLive()` es el **único** camino de preview a proyector, compartido por el
+  botón EN VIVO, Enter, y el doble click en una fila, un tile o un versículo, así que los cuatro
+  no pueden divergir. También `clearLive()` (LIMPIAR), `advanceSlide`/`gotoSlide` y
+  `toggleOverlay`. Ordena las cosas para que un deck esté **listo antes** de cambiar `base`: darle
+  EN VIVO a un `.pptx` sin convertir deja el proyector como está en vez de cortar a negro durante
+  la conversión.
+- `bible.ts` — `projectVerse`/`advanceVerse` (en vivo), `previewSearchHit` y
+  `addVerseToSchedule`.
+
 ## Teclado
 
-`use-global-shortcuts.ts`: Delete/Backspace (quitar), ←/→ (versículo o diapositiva según la
-pestaña), **Espacio** (pausar/reanudar un deck que se pasa solo — el atajo que hace falta para
-poder frenar en seco un PPT con auto-avance), B/L (NEGRO/LOGO) y Enter (EN VIVO).
+`use-global-shortcuts.ts`, con la división que hace que se puedan apretar sin mirar:
+
+| Tecla | Qué mueve |
+|---|---|
+| ←/→ | **lo que está en vivo** — la diapositiva o el versículo en pantalla, derivado de `base` y no del panel enfocado |
+| ↑/↓ | **el cursor de preview** — nada llega al proyector |
+| Enter | manda el preview al proyector (`goLive()`) |
+| Espacio | pausa/reanuda un deck con auto-avance — el atajo que hace falta para frenar en seco un PPT que se pasa solo |
+| B / L | NEGRO / LOGO |
+| Delete/Backspace | quita el ítem seleccionado (biblioteca antes que programa) |

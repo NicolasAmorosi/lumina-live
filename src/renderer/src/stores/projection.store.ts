@@ -5,6 +5,8 @@ import type {
   MediaStatus,
   OverlayState,
   ProjectionOutput,
+  ProjectionOutputKind,
+  VideoUnderlay,
 } from "@shared/types/projection";
 import type { DeckSlide, DeckSoundtrack } from "@shared/types/deck";
 import { assetUrl, LOGO_URL } from "@shared/urls";
@@ -112,7 +114,13 @@ export const useProjectionStore = create<ProjectionStoreState>()(
  * selector recomputes. The switch below is exhaustive — TypeScript refuses to
  * compile if a new BaseContent variant is added and not handled here.
  */
-export function selectOutput(state: ProjectionStoreState): ProjectionOutput {
+/** `base`'s own video identity, regardless of NEGRO/LOGO — see `VideoUnderlay`. */
+function selectVideoUnderlay(state: ProjectionStoreState): VideoUnderlay {
+  if (state.base?.kind !== "video") return null;
+  return { url: assetUrl(state.base.assetId), epoch: state.base.epoch };
+}
+
+function selectOutputWithoutUnderlay(state: ProjectionStoreState): ProjectionOutputKind {
   if (state.overlay === "black") return { kind: "black" };
   if (state.overlay === "logo") return { kind: "logo", url: state.logoUrl ?? LOGO_URL };
   if (state.base === null) return { kind: "logo", url: state.logoUrl ?? LOGO_URL };
@@ -149,6 +157,10 @@ export function selectOutput(state: ProjectionStoreState): ProjectionOutput {
     case "text":
       return { kind: "text", body: state.base.body };
   }
+}
+
+export function selectOutput(state: ProjectionStoreState): ProjectionOutput {
+  return { ...selectOutputWithoutUnderlay(state), videoUnderlay: selectVideoUnderlay(state) };
 }
 
 /**

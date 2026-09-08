@@ -5,9 +5,10 @@ import { advanceSlide } from "@renderer/lib/actions/playback";
 import { restartDeck, toggleAutoplay } from "@renderer/effects/deck-autoplay";
 
 /**
- * Transport for the deck currently being projected. Only rendered when the
- * selected item IS the live one — otherwise next/prev would silently target
- * nothing, which is the selected-vs-projected confusion the COM version had.
+ * Transport for the deck currently being projected — it lives under the LIVE
+ * monitor, never under the preview one, so its buttons can only ever mean
+ * "change what the congregation sees". That is the selected-vs-projected
+ * confusion the COM version had.
  */
 export function DeckTransport() {
   const t = useT();
@@ -37,7 +38,7 @@ export function DeckTransport() {
   }
 
   return (
-    <div className="flex shrink-0 flex-col gap-1.5 border-t border-border p-2">
+    <div className="flex shrink-0 flex-col gap-1.5 p-1.5">
       <div className="flex items-center justify-center gap-2">
         <Button disabled={current <= 1} onClick={() => advanceSlide(-1)} size="sm">
           <Icon name="prev" /> {t("deck.previous")}

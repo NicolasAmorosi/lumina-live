@@ -1,6 +1,5 @@
 import type { DragEvent } from "react";
-import { cn } from "@renderer/lib/utils";
-import { Badge, Icon, type BadgeVariant, type IconName } from "@renderer/components/ui";
+import { Badge, Icon, ListRow, type BadgeVariant, type IconName } from "@renderer/components/ui";
 import { useMediaAsset } from "@renderer/lib/hooks/use-media-asset";
 import { useDeckThumb } from "@renderer/lib/hooks/use-deck-thumb";
 import type { ServiceItemDTO } from "@shared/types/service";
@@ -36,17 +35,30 @@ function useItemIconAndBadge(item: ServiceItemDTO): { badge: BadgeVariant; icon:
   return { icon: ICON_BY_KIND[item.kind], badge: BADGE_BY_KIND[item.kind] };
 }
 
-type PlaylistRowProps = {
+type ScheduleRowProps = {
+  /** On the projector right now. */
   active: boolean;
   dragOver: boolean;
   index: number;
   item: ServiceItemDTO;
+  /** Stage one: preview only. */
   onClick: () => void;
+  /** Stage two: straight to the projector. */
+  onDoubleClick: () => void;
   onDragStart: (e: DragEvent<HTMLLIElement>) => void;
   selected: boolean;
 };
 
-export function PlaylistRow({ active, dragOver, index, item, onClick, onDragStart, selected }: PlaylistRowProps) {
+export function ScheduleRow({
+  active,
+  dragOver,
+  index,
+  item,
+  onClick,
+  onDoubleClick,
+  onDragStart,
+  selected,
+}: ScheduleRowProps) {
   const label = useItemLabel(item);
   const { icon, badge } = useItemIconAndBadge(item);
   // Real first-slide thumbnail once the deck is converted; the static badge
@@ -54,27 +66,27 @@ export function PlaylistRow({ active, dragOver, index, item, onClick, onDragStar
   const thumb = useDeckThumb(item.kind === "ppt" ? item.mediaAssetId : null);
 
   return (
-    <li
-      className={cn(
-        "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors",
-        selected ? "bg-active" : "hover:bg-hover",
-        active && "ring-1 ring-primary",
-        dragOver && "border-t-2 border-primary",
-      )}
+    <ListRow
+      active={active}
       data-index={index}
       draggable
+      dropBefore={dragOver}
+      index={index + 1}
+      leading={
+        thumb ? (
+          <img alt="" className="h-5 w-8 rounded object-cover" src={thumb} />
+        ) : (
+          <Badge className="px-1.5" variant={badge}>
+            <Icon className="size-3" name={icon} />
+          </Badge>
+        )
+      }
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       onDragStart={onDragStart}
+      selected={selected}
     >
-      {thumb ? (
-        <img alt="" className="h-5 w-8 shrink-0 rounded object-cover" src={thumb} />
-      ) : (
-        <Badge className="shrink-0 px-1.5" variant={badge}>
-          <Icon className="size-3" name={icon} />
-        </Badge>
-      )}
-      <span className="truncate">{label}</span>
-      {active ? <span className="ml-auto size-1.5 shrink-0 rounded-full bg-success" /> : null}
-    </li>
+      {label}
+    </ListRow>
   );
 }
