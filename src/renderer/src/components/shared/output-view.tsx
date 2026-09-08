@@ -8,6 +8,15 @@ type LiveVideoProps = {
   /** NEGRO/LOGO is over the video right now. */
   covered: boolean;
   mode: OutputViewMode;
+  /** Declarative, operator-controlled pause from the media panel — distinct
+   *  from `covered`, and deliberately takes priority: an explicit pause must
+   *  survive a NEGRO/LOGO round-trip instead of being silently overridden by
+   *  it when the overlay comes back off. */
+  paused: boolean;
+  /** Point the operator chose on the preview scrubber before EN VIVO. Applied
+   *  once, right when this element mounts — never re-applied later, so a
+   *  scrub from the media panel afterwards isn't fought on the next render. */
+  startAtSeconds: number;
   url: string;
   videoRef?: Ref<HTMLVideoElement> | undefined;
 };
@@ -23,8 +32,9 @@ type LiveVideoProps = {
  * the opposite of a deck's soundtrack (`ProjectionApp`), which is meant to keep
  * playing through an overlay.
  */
-function LiveVideo({ covered, mode, url, videoRef }: LiveVideoProps) {
+function LiveVideo({ covered, mode, paused, startAtSeconds, url, videoRef }: LiveVideoProps) {
   const elementRef = useRef<HTMLVideoElement | null>(null);
+  const shouldPlay = mode === "live" && !covered && !paused;
 
   function attach(element: HTMLVideoElement | null) {
     elementRef.current = element;
@@ -32,18 +42,34 @@ function LiveVideo({ covered, mode, url, videoRef }: LiveVideoProps) {
     else if (videoRef) (videoRef as { current: HTMLVideoElement | null }).current = element;
   }
 
-  // `autoPlay` only applies to a freshly loaded element, so transitions in and
-  // out of NEGRO/LOGO have to be driven imperatively.
+  // `autoPlay` only applies to a freshly loaded element, so every transition —
+  // NEGRO/LOGO, and an operator pause/resume from the media panel — has to be
+  // driven imperatively.
   useEffect(() => {
     const element = elementRef.current;
     if (!element || mode !== "live") return;
-    if (covered) element.pause();
-    else element.play().catch(() => undefined);
-  }, [covered, mode]);
+    if (shouldPlay) element.play().catch(() => undefined);
+    else element.pause();
+  }, [mode, shouldPlay]);
+
+  // The component is keyed by epoch at the call site, so this instance only
+  // ever has one `startAtSeconds` for its whole lifetime — applying it once,
+  // on mount, is correct without watching for later changes.
+  useEffect(() => {
+    const element = elementRef.current;
+    if (!element || startAtSeconds <= 0) return;
+    const apply = () => {
+      element.currentTime = startAtSeconds;
+    };
+    if (element.readyState >= 1) apply();
+    else element.addEventListener("loadedmetadata", apply, { once: true });
+    return () => element.removeEventListener("loadedmetadata", apply);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <video
-      autoPlay={mode === "live" && !covered}
+      autoPlay={shouldPlay}
       className={cn("max-h-full max-w-full", covered && "hidden")}
       muted={mode === "monitor"}
       preload="metadata"
@@ -118,6 +144,8 @@ export function OutputView({ className, mode, output, videoRef }: OutputViewProp
           covered={output.kind !== "video"}
           key={output.videoUnderlay.epoch}
           mode={mode}
+          paused={output.videoUnderlay.paused}
+          startAtSeconds={output.videoUnderlay.startAtSeconds}
           url={output.videoUnderlay.url}
           videoRef={videoRef}
         />

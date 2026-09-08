@@ -9,8 +9,8 @@ import { usePreviewContent } from "@renderer/lib/hooks/use-preview";
 import { previewVerse } from "@renderer/lib/actions/preview";
 import { goLive } from "@renderer/lib/actions/playback";
 import { cn } from "@renderer/lib/utils";
-import { assetUrl } from "@shared/urls";
 import { DeckSlides } from "./deck-slides";
+import { PreviewMediaBar } from "./preview-media-bar";
 
 /**
  * The centre column: the preview monitor pinned on top (a fixed box, the same
@@ -81,17 +81,22 @@ export function SlidesPanel() {
       );
     }
 
-    return (
-      <SlideGrid>
-        <ThumbTile
-          icon={content.asset.kind}
-          label={content.asset.name}
-          selected
-          src={content.asset.kind === "image" ? assetUrl(content.asset.id) : null}
-        />
-      </SlideGrid>
-    );
+    // A live image needs no grid content of its own — the preview monitor
+    // above already shows it full-size. A video/audio's transport lives
+    // outside this grid entirely (see `mediaBar` below), so there is nothing
+    // left to render here for either.
+    return null;
   }
+
+  // A video/audio selected here never plays in the control window — its
+  // duration and a start-point scrubber replace the old icon-on-black tile.
+  // Rendered as a sibling of the monitor, never inside `PanelBody`, so its
+  // margins match `LiveMediaPanel`'s exactly instead of picking up an extra
+  // layer of padding — see `MonitorsColumn`.
+  const mediaBar =
+    content?.kind === "media" && content.asset.kind !== "image" ? (
+      <PreviewMediaBar asset={content.asset} />
+    ) : null;
 
   const heading =
     content?.kind === "deck"
@@ -105,14 +110,21 @@ export function SlidesPanel() {
   return (
     <>
       <PanelHeader
-        actions={heading ? <Badge variant="blue">{heading}</Badge> : undefined}
+        actions={
+          heading ? (
+            <Badge className="min-w-0 flex-1 truncate" variant="blue">
+              {heading}
+            </Badge>
+          ) : null
+        }
         title={t("slides.title")}
       />
-      <div className="grid min-h-0 flex-1 grid-rows-2 gap-2 p-2">
+      <div className="grid min-h-0 flex-1 grid-rows-[auto_auto_minmax(0,1fr)] gap-3 p-3">
         <PreviewMonitor />
+        {mediaBar}
         {/* Grids fill from the top; the empty/converting states are centred. */}
         <PanelBody
-          className={cn("flex flex-col", !content && "items-center justify-center")}
+          className={cn("flex flex-col p-1.5", !content && "items-center justify-center")}
         >
           {body()}
         </PanelBody>

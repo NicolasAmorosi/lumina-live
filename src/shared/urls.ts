@@ -29,4 +29,11 @@ export function deckAudioUrl(audioId: number): string {
   return `worship://deck-audio/${audioId}`;
 }
 
+/** A deck's *linked* soundtrack — an external file the source presentation
+ *  points at (or sits next to), resolved per media asset rather than baked
+ *  into the content-addressed deck cache. See `linked-audio.ts`. */
+export function linkedAudioUrl(mediaAssetId: number): string {
+  return `worship://linked-audio/${mediaAssetId}`;
+}
+
 export const LOGO_URL = "worship://logo";

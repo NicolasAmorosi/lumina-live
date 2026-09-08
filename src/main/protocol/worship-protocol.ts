@@ -210,6 +210,17 @@ export function registerWorshipProtocolHandler(mediaRepo: MediaRepo): void {
           // No immutable header: a soundtrack is seeked through, not swapped.
           return serveFile(request, withinCache(getSlidesRepo().getAudioPath(audioId)));
         }
+        case "linked-audio": {
+          // worship://linked-audio/<mediaAssetId> — an external file the
+          // source .pps/.pptx points at (or sits next to), resolved per media
+          // asset (`linked-audio.ts`), not part of the content-addressed
+          // slides cache. Same trust model as "asset": the id is DB-derived,
+          // never a path from the URL, so no `withinCache` restriction to an
+          // arbitrary library location.
+          const assetId = Number(segments[0]);
+          if (!Number.isFinite(assetId)) return new Response("Not found", { status: 404 });
+          return serveFile(request, mediaRepo.linkedAudioPathById(assetId));
+        }
         case "raster": {
           // Short-lived capability handed to the offscreen rasterizer window so
           // it can read the in-flight PDF without any filesystem access.

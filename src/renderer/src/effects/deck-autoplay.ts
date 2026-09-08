@@ -1,11 +1,18 @@
 import { api } from "@renderer/lib/api";
 import { useProjectionStore, type LiveDeck } from "@renderer/stores/projection.store";
+import { DECK_SOUNDTRACK_TRACK_ID, useAudioStore } from "@renderer/stores/audio.store";
+import { mediaTargetKey } from "@shared/types/projection";
 import { SLIDES_MIN_ADVANCE_MS } from "@shared/constants";
+
+/** Fixed identity for the deck's own soundtrack track — routes both the
+ *  `mediaCommand` calls below and the `mediaStatus` read they react to. */
+const DECK_AUDIO_TARGET = { kind: "audio", trackId: DECK_SOUNDTRACK_TRACK_ID } as const;
+const DECK_AUDIO_STATUS_KEY = mediaTargetKey(DECK_AUDIO_TARGET);
 
 /**
  * Deck auto-advance lives in the CONTROL window, never in the projection
  * window — the projection window stays a pure function of its declarative
- * inputs (`display-content` + `deck-soundtrack`).
+ * inputs (`display-content` + `audio-tracks`).
  *
  * Two modes:
  *
@@ -125,9 +132,10 @@ export function pauseAutoplay(): void {
   if (state.autoplay !== "playing") return;
   clearTimer();
   state.setAutoplay("paused");
-  if (state.liveDeck?.soundtrack) {
-    void api.projection.mediaCommand({ target: "audio", action: "pause" });
-  }
+  // Declarative now — see `AudioTrackPush.paused` — instead of a play/pause
+  // command, so the pause survives a projection-window reload the same way
+  // the rest of "what's live" does.
+  if (state.liveDeck?.soundtrack) useAudioStore.getState().setPaused(DECK_SOUNDTRACK_TRACK_ID, true);
 }
 
 export function resumeAutoplay(): void {
@@ -135,9 +143,7 @@ export function resumeAutoplay(): void {
   if (state.autoplay !== "paused" && state.autoplay !== "finished") return;
   state.setAutoplay("playing");
   deadline = performance.now();
-  if (state.liveDeck?.soundtrack) {
-    void api.projection.mediaCommand({ target: "audio", action: "play" });
-  }
+  if (state.liveDeck?.soundtrack) useAudioStore.getState().setPaused(DECK_SOUNDTRACK_TRACK_ID, false);
   if (state.autoplayMode === "detached" || !state.liveDeck?.soundtrack) scheduleDetached();
 }
 
@@ -155,7 +161,8 @@ export function restartDeck(): void {
   state.setSlideIndex(1);
   state.setAutoplayMode("synced");
   if (state.liveDeck?.soundtrack) {
-    void api.projection.mediaCommand({ target: "audio", action: "restart" });
+    useAudioStore.getState().setPaused(DECK_SOUNDTRACK_TRACK_ID, false);
+    void api.projection.mediaCommand({ target: DECK_AUDIO_TARGET, action: "restart" });
   }
   if (state.liveDeck?.autoAdvance) {
     state.setAutoplay("playing");
@@ -181,9 +188,9 @@ export function startDeckAutoplay(): () => void {
   );
 
   const unsubscribeStatus = useProjectionStore.subscribe(
-    (state) => state.mediaStatus,
+    (state) => state.mediaStatus[DECK_AUDIO_STATUS_KEY],
     (status) => {
-      if (!status || status.target !== "audio") return;
+      if (!status) return;
       const state = useProjectionStore.getState();
       const deck = state.liveDeck;
       if (!deck?.soundtrack || state.base?.kind !== "deck") return;
@@ -196,7 +203,7 @@ export function startDeckAutoplay(): () => void {
         const expected = deck.cumulativeMs[state.base.slideIndex] ?? 0;
         if (state.autoplayMode === "synced" && expected > 0 && status.currentTimeSeconds < 0.5) {
           void api.projection.mediaCommand({
-            target: "audio",
+            target: DECK_AUDIO_TARGET,
             action: "seek",
             timeSeconds: expected / 1000,
           });

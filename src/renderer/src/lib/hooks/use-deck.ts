@@ -9,6 +9,9 @@ export type DeckState = {
   reconvert: () => void;
   locateSoffice: () => void;
   markStale: () => void;
+  /** Cache-only re-fetch of the DTO — for after a change that never touches
+   *  the deck cache, like setting the linked-audio override. */
+  refresh: () => void;
 };
 
 /**
@@ -26,6 +29,7 @@ export function useDeck(assetId: number | null): DeckState {
   const peek = useDeckStore((s) => s.peek);
   const locateSoffice = useDeckStore((s) => s.locateSoffice);
   const markStale = useDeckStore((s) => s.markStale);
+  const refreshDeck = useDeckStore((s) => s.peek);
 
   useEffect(() => {
     if (assetId === null) return;
@@ -50,6 +54,9 @@ export function useDeck(assetId: number | null): DeckState {
     locateSoffice: () => void locateSoffice(),
     markStale: () => {
       if (assetId !== null) markStale(assetId);
+    },
+    refresh: () => {
+      if (assetId !== null) void refreshDeck(assetId);
     },
   };
 }

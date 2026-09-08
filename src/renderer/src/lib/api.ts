@@ -1,7 +1,7 @@
 import { invoke } from "./ipc";
 import type { AssetKind } from "@shared/constants";
 import type {
-  DeckSoundtrackPush,
+  AudioTrackPush,
   MediaCommand,
   ProjectionOutput,
 } from "@shared/types/projection";
@@ -20,8 +20,7 @@ export const api = {
     close: () => invoke("projection:close", undefined),
     show: (output: ProjectionOutput) => invoke("projection:show", output),
     mediaCommand: (command: MediaCommand) => invoke("projection:mediaCommand", command),
-    setSoundtrack: (soundtrack: DeckSoundtrackPush) =>
-      invoke("projection:setSoundtrack", soundtrack),
+    setAudioTracks: (tracks: AudioTrackPush[]) => invoke("projection:setAudioTracks", tracks),
     getSnapshot: () => invoke("projection:getSnapshot", undefined),
   },
   files: {
@@ -52,6 +51,8 @@ export const api = {
     add: (paths: string[], kind: AssetKind) => invoke("library:add", { paths, kind }),
     remove: (id: number) => invoke("library:remove", { id }),
     relocate: (id: number) => invoke("library:relocate", { id }),
+    setLinkedAudio: (id: number, path: string | null) =>
+      invoke("library:setLinkedAudio", { id, path }),
   },
   services: {
     list: () => invoke("services:list", undefined),

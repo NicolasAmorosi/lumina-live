@@ -20,13 +20,6 @@ canciones/letras con secciones proyectables.
   y dejó el alta de archivos solo vía el diálogo (`files:pick`). El drag interno
   playlist↔biblioteca (`draggable` en las filas) está scaffoldeado pero sin `onDrop` implementado.
 
-- **Barra de progreso de video**: el transporte ya existe (`MediaStatus` + `media-status` se
-  emiten desde `ProjectionApp` para `<video>` y `<audio>`, y `components/ui/progress-bar.tsx` es
-  determinada) — falta solo conectarlo en la vista previa de un video, como ya está hecho para el
-  tiempo hasta la próxima diapositiva de un deck. Si además se quiere que sea *arrastrable*, el
-  seek ya funciona: hasta 2026-09-08 `worship://` ignoraba los headers `Range` y el rango
-  `seekable` de todo video/audio venía vacío, así que un scrubber habría sido imposible (ver
-  [`.claude/knowledge/worship-protocol-range-and-video-lifecycle.md`](../../.claude/knowledge/worship-protocol-range-and-video-lifecycle.md)).
 - **UI de favoritos e historial bíblico**: las tablas `bible_favorites` y `projection_history` y
   sus repos existen y funcionan (`HistoryRepo.record()` ya se llama en cada
   `projection:show`), pero no hay pantalla que los liste todavía.

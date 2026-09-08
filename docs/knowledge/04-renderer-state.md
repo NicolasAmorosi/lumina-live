@@ -58,6 +58,22 @@ en `LiveMonitorPanel` allá).
   elegida. Un `navEpoch` incremental descarta cualquier `media-status` en vuelo para que una
   respuesta tardía no pise la diapositiva recién elegida.
 
+`src/renderer/src/effects/end-of-playback.ts` saca solo del aire un video o un deck con
+auto-avance que terminó de reproducirse por su cuenta, dejando la escena de logo
+(`clearBaseContent()`) — la congregación nunca se queda mirando el último frame o la última
+diapositiva porque el operador se olvidó de limpiar. Un deck se considera terminado cuando pasó a
+`autoplay: "finished"` **y**, si tiene soundtrack, esa pista también reportó `ended` — lo que
+termina último manda; una música más larga que la suma de los timings no se corta a mitad.
+Ningún deck manual (sin `advanceAfterMs`) se auto-limpia nunca.
+
+El punto que hay que respetar al tocar este archivo: `MediaStatus.ended` es *sticky* en el
+elemento del DOM y se re-emite al montar (`use-media-status-reporter.ts` llama a `report()` sin
+esperar un evento), y la pista del deck siempre reutiliza la misma clave
+(`audio:deck-soundtrack`, `audio.store.ts`). Sin comparar `status.epoch` contra el epoch vigente
+(`base.epoch` para el video, `soundtrackEpoch` para el deck), un `ended: true` de un video o deck
+anterior podría limpiar el que está sonando ahora. Cualquier consumidor nuevo de `mediaStatus`
+que mire `ended` tiene que hacer la misma comparación.
+
 ## Sincronización entre ventanas
 
 El control es la única fuente de verdad; la ventana de proyección no tiene estado propio (ver

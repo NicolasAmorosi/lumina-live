@@ -15,6 +15,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { containerKind, extractAudioParts, readPresentationMeta } from "../src/main/slides/pptx-metadata";
+import { resolveLinkedAudio } from "../src/main/slides/linked-audio";
 
 const run = promisify(execFile);
 
@@ -151,6 +152,15 @@ async function main(): Promise<void> {
       if (meta.skippedVideoParts.length > 0) {
         console.log(`   video embebido (fuera de alcance): ${meta.skippedVideoParts.length}`);
       }
+
+      // Only relevant when the deck has no usable embedded/transition audio —
+      // that's what toDTO() falls back to as the soundtrack.
+      const linked = resolveLinkedAudio(file);
+      console.log(
+        meta.audio.length > 0
+          ? `   audio vinculado: (ignorado, el deck ya tiene audio embebido)`
+          : `   audio vinculado: ${linked ? path.basename(linked) : "no encontrado"}`,
+      );
       console.log();
     } catch (error) {
       failures += 1;

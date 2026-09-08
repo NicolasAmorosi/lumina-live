@@ -8,7 +8,7 @@ import type {
   BibleVersionDTO,
 } from "../types/bible";
 import type {
-  DeckSoundtrackPush,
+  AudioTrackPush,
   MediaCommand,
   MediaStatus,
   ProjectionOutput,
@@ -30,13 +30,17 @@ export type IpcContract = {
   "projection:close": { req: void; res: void };
   "projection:show": { req: ProjectionOutput; res: void };
   "projection:mediaCommand": { req: MediaCommand; res: void };
-  "projection:setSoundtrack": { req: DeckSoundtrackPush; res: void };
+  /** The full set of audio tracks that should exist in the projection window
+   *  right now — a deck's soundtrack (if any) plus every standalone audio
+   *  asset sent live. Replaces the old single-soundtrack channel: audio going
+   *  live no longer means "the one audio", it means "one more track". */
+  "projection:setAudioTracks": { req: AudioTrackPush[]; res: void };
   /** Pulled once by the projection window on mount so its first paint can
-   *  never race the "display-content"/"deck-soundtrack" pushes that follow a
+   *  never race the "display-content"/"audio-tracks" pushes that follow a
    *  fresh `projection:open` — see `docs/knowledge/01-architecture.md`. */
   "projection:getSnapshot": {
     req: void;
-    res: { output: ProjectionOutput | null; soundtrack: DeckSoundtrackPush };
+    res: { output: ProjectionOutput | null; audioTracks: AudioTrackPush[] };
   };
   /** Projection window -> main -> control window. The projection window is
    *  describing its own <video>/<audio> element, not making a decision. */
@@ -72,6 +76,11 @@ export type IpcContract = {
   "library:add": { req: { paths: string[]; kind: AssetKind }; res: MediaAsset[] };
   "library:remove": { req: { id: number }; res: void };
   "library:relocate": { req: { id: number }; res: MediaAsset | null };
+  /** Manual override for a `ppt` asset's linked soundtrack — `path: null`
+   *  clears it back to automatic resolution (`linked-audio.ts`). Never
+   *  triggers a deck reconversion: the linked audio is served by reference,
+   *  not baked into the deck cache. */
+  "library:setLinkedAudio": { req: { id: number; path: string | null }; res: MediaAsset | null };
 
   "services:list": { req: void; res: ServiceSummary[] };
   "services:load": { req: { id: number }; res: ServiceDTO };
@@ -91,7 +100,7 @@ export type IpcEvents = {
   /** -> projection window */
   "display-content": ProjectionOutput;
   "media-command": MediaCommand;
-  "deck-soundtrack": DeckSoundtrackPush;
+  "audio-tracks": AudioTrackPush[];
   /** -> control window */
   "media-status": MediaStatus;
   "deck-progress": DeckProgress;

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
+import { mediaTargetKey } from "@shared/types/projection";
 import type {
   BaseContent,
   MediaStatus,
@@ -34,22 +35,30 @@ export type AutoplayState = "off" | "playing" | "paused" | "finished";
  */
 export type AutoplayMode = "synced" | "detached";
 
-type ProjectionStoreState = {
+export type ProjectionStoreState = {
   base: BaseContent | null;
   overlay: OverlayState;
   logoUrl: string | null;
   presentationOpen: boolean;
+  /** Declarative, operator-set pause for the live video — see `VideoUnderlay`.
+   *  Reset to `false` whenever `base` changes, so a fresh EN VIVO always
+   *  starts playing. */
+  videoPaused: boolean;
 
   liveDeck: LiveDeck | null;
   autoplay: AutoplayState;
   autoplayMode: AutoplayMode;
   soundtrackEpoch: number;
-  mediaStatus: MediaStatus | null;
+  /** Keyed by `mediaTargetKey` — one slot per media element (the video, each
+   *  live audio track) so two elements reporting at once can never overwrite
+   *  each other's clock. */
+  mediaStatus: Record<string, MediaStatus>;
 
   setBase: (base: BaseContent | null) => void;
   setOverlay: (overlay: OverlayState) => void;
   setLogoUrl: (url: string | null) => void;
   setPresentationOpen: (open: boolean) => void;
+  setVideoPaused: (paused: boolean) => void;
 
   setLiveDeck: (deck: LiveDeck | null) => void;
   setSlideIndex: (index: number) => void;
@@ -68,24 +77,25 @@ export const useProjectionStore = create<ProjectionStoreState>()(
     overlay: "none",
     logoUrl: null,
     presentationOpen: false,
+    videoPaused: false,
 
     liveDeck: null,
     autoplay: "off",
     autoplayMode: "synced",
     soundtrackEpoch: 0,
-    mediaStatus: null,
+    mediaStatus: {},
 
-    setBase: (base) => set({ base }),
+    setBase: (base) => set({ base, videoPaused: false }),
     setOverlay: (overlay) => set({ overlay }),
     setLogoUrl: (logoUrl) => set({ logoUrl }),
     setPresentationOpen: (presentationOpen) => set({ presentationOpen }),
+    setVideoPaused: (videoPaused) => set({ videoPaused }),
 
     setLiveDeck: (liveDeck) =>
       set((state) => ({
         liveDeck,
         autoplay: "off",
         autoplayMode: "synced",
-        mediaStatus: null,
         soundtrackEpoch: state.soundtrackEpoch + 1,
       })),
 
@@ -103,7 +113,10 @@ export const useProjectionStore = create<ProjectionStoreState>()(
 
     setAutoplay: (autoplay) => set({ autoplay }),
     setAutoplayMode: (autoplayMode) => set({ autoplayMode }),
-    setMediaStatus: (mediaStatus) => set({ mediaStatus }),
+    setMediaStatus: (status) =>
+      set((state) => ({
+        mediaStatus: { ...state.mediaStatus, [mediaTargetKey(status.target)]: status },
+      })),
   })),
 );
 
@@ -117,7 +130,12 @@ export const useProjectionStore = create<ProjectionStoreState>()(
 /** `base`'s own video identity, regardless of NEGRO/LOGO — see `VideoUnderlay`. */
 function selectVideoUnderlay(state: ProjectionStoreState): VideoUnderlay {
   if (state.base?.kind !== "video") return null;
-  return { url: assetUrl(state.base.assetId), epoch: state.base.epoch };
+  return {
+    url: assetUrl(state.base.assetId),
+    epoch: state.base.epoch,
+    paused: state.videoPaused,
+    startAtSeconds: state.base.startAtSeconds,
+  };
 }
 
 function selectOutputWithoutUnderlay(state: ProjectionStoreState): ProjectionOutputKind {

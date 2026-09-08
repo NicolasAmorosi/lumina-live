@@ -16,18 +16,25 @@ type PreviewStoreState = {
   /** 1-based cursor inside the previewed deck, independent of the live one. */
   slideIndex: number;
   target: PreviewTarget | null;
+  /** For a video/audio target: where EN VIVO should start it, chosen on the
+   *  preview media bar's scrubber. Silence-only in the control window — this
+   *  never plays anything locally, it only decides a starting point. */
+  startAtSeconds: number;
 
   clear: () => void;
   setSlideIndex: (index: number) => void;
   setTarget: (target: PreviewTarget) => void;
+  setStartAtSeconds: (seconds: number) => void;
 };
 
 export const usePreviewStore = create<PreviewStoreState>((set) => ({
   slideIndex: 1,
   target: null,
+  startAtSeconds: 0,
 
-  clear: () => set({ target: null, slideIndex: 1 }),
+  clear: () => set({ target: null, slideIndex: 1, startAtSeconds: 0 }),
   setSlideIndex: (slideIndex) => set({ slideIndex: Math.max(1, slideIndex) }),
-  // A new target always starts at its first slide/verse.
-  setTarget: (target) => set({ target, slideIndex: 1 }),
+  // A new target always starts at its first slide/verse and its own beginning.
+  setTarget: (target) => set({ target, slideIndex: 1, startAtSeconds: 0 }),
+  setStartAtSeconds: (seconds) => set({ startAtSeconds: Math.max(0, seconds) }),
 }));

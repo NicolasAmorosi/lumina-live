@@ -6,6 +6,9 @@ import { useLiveHeading } from "@renderer/lib/hooks/use-live";
 import { cn } from "@renderer/lib/utils";
 import { LiveMonitor } from "./live-monitor";
 import { LiveContentGrid } from "./live-content-grid";
+import { LiveMediaPanel } from "./live-media-panel";
+import { DeckTransport } from "./deck-transport";
+import { VerseTransport } from "./verse-transport";
 
 /**
  * EasyWorship's right-hand column: a header matching the other two columns'
@@ -14,20 +17,53 @@ import { LiveContentGrid } from "./live-content-grid";
  * live equivalent of the centre column's grid — a deck's slides or a
  * passage's verses, whichever is on air. The preview monitor used to live
  * here too; it is pinned in the centre column now, next to what it previews.
+ *
+ * The monitor itself is a bare stage (`components/ui/monitor.tsx`), so all
+ * of its former status text (NEGRO/LOGO/desconectado) lives here in the
+ * header instead — see `useLiveStatus`. The slide counter used to live here
+ * too; it's redundant with `DeckTransport`'s own counter and the highlighted
+ * tile in `LiveContentGrid`, so it was dropped rather than shown three times.
  */
+function useLiveStatus(): string {
+  const t = useT();
+  const presentationOpen = useProjectionStore((s) => s.presentationOpen);
+  const overlay = useProjectionStore((s) => s.overlay);
+  const base = useProjectionStore((s) => s.base);
+
+  if (!presentationOpen) return t("live.disconnected");
+  if (overlay === "black") return t("status.black");
+  if (overlay === "logo") return t("status.logo");
+  if (base === null) return t("live.noSignal");
+  return "";
+}
+
 export function MonitorsColumn() {
   const t = useT();
   const presentationOpen = useProjectionStore((s) => s.presentationOpen);
   const overlay = useProjectionStore((s) => s.overlay);
   const base = useProjectionStore((s) => s.base);
   const heading = useLiveHeading();
+  const status = useLiveStatus();
 
   const broadcasting = presentationOpen && overlay === "none" && base !== null;
 
   return (
     <>
       <PanelHeader
-        actions={heading ? <Badge variant="blue">{heading}</Badge> : undefined}
+        actions={
+          <>
+            {heading ? (
+              <Badge className="min-w-0 flex-1 truncate" variant="blue">
+                {heading}
+              </Badge>
+            ) : null}
+            {status ? (
+              <Badge className="shrink-0" variant="neutral">
+                {status}
+              </Badge>
+            ) : null}
+          </>
+        }
         title={
           <span className="flex items-center gap-1.5">
             {broadcasting ? (
@@ -37,10 +73,24 @@ export function MonitorsColumn() {
           </span>
         }
       />
-      <div className="grid min-h-0 flex-1 grid-rows-2 gap-2 p-2">
+      <div className="grid min-h-0 flex-1 grid-rows-[auto_auto_auto_minmax(0,1fr)] gap-3 p-3">
         <LiveMonitor />
-        <PanelBody className={cn("flex flex-col", base === null && "items-center justify-center")}>
-          <LiveContentGrid />
+        {/* The deck and verse transports are the only other rows sized
+            `auto` — a service with neither a deck nor a verse live looks
+            exactly like it did before either existed (each renders `null`,
+            and they're mutually exclusive since `base` can't be both kinds
+            at once). They're siblings of the monitor, never its footer, so
+            neither can shrink the stage itself — see `Monitor`. The media
+            panel lives below, inside the scrolling body, not as its own
+            `auto` row: an unbounded number of audio tracks must never
+            compete with the monitor for height, only grow the scroll area. */}
+        <DeckTransport />
+        <VerseTransport />
+        <PanelBody className="flex flex-col gap-3 p-1.5">
+          <LiveMediaPanel />
+          <div className={cn("flex flex-1 flex-col", base === null && "items-center justify-center")}>
+            <LiveContentGrid />
+          </div>
         </PanelBody>
       </div>
     </>

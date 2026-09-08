@@ -16,7 +16,7 @@ export const projectionHandlers: Pick<
   | "projection:close"
   | "projection:show"
   | "projection:mediaCommand"
-  | "projection:setSoundtrack"
+  | "projection:setAudioTracks"
   | "projection:reportMediaStatus"
   | "projection:getSnapshot"
 > = {
@@ -46,8 +46,8 @@ export const projectionHandlers: Pick<
     win?.webContents.send("media-command", command);
   },
 
-  "projection:setSoundtrack": (soundtrack) => {
-    projectionState.setSoundtrack(soundtrack);
+  "projection:setAudioTracks": (tracks) => {
+    projectionState.setAudioTracks(tracks);
   },
 
   /** The projection window describing its own media element; forwarded to the

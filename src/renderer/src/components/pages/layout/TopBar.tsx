@@ -26,6 +26,7 @@ export function TopBar({ onOpenServices, onOpenSettings }: TopBarProps) {
   const itemCount = useServiceStore((s) => s.items.length);
   const overlay = useProjectionStore((s) => s.overlay);
   const setOverlay = useProjectionStore((s) => s.setOverlay);
+  const base = useProjectionStore((s) => s.base);
   const previewContent = usePreviewContent();
 
   // The projection window never opens on its own any more — the first tap on
@@ -76,6 +77,7 @@ export function TopBar({ onOpenServices, onOpenSettings }: TopBarProps) {
         </Button>
         <Button
           className="w-24"
+          disabled={base === null}
           onClick={() => setOverlayAndOpen("none")}
           size="sm"
           toggled={overlay === "none"}

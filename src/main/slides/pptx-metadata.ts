@@ -47,7 +47,10 @@ export type ExtractedAudio = AudioRef & {
 /** Chromium can't decode these, so mark them unplayable rather than silently
  *  producing an <audio> element that never makes a sound. */
 const UNPLAYABLE_AUDIO_EXT = new Set(["wma", "mid", "midi"]);
-const AUDIO_EXT = new Set([
+/** Also used by `linked-audio.ts` to recognize a sibling/hinted audio file —
+ *  the same "is this audio" question, just asked about a file on disk instead
+ *  of a zip entry. */
+export const AUDIO_EXT = new Set([
   "mp3",
   "m4a",
   "aac",

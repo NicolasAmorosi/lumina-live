@@ -1,5 +1,5 @@
 import { useT } from "@renderer/lib/i18n/i18n-provider";
-import { EmptyState, SlideGrid, ThumbTile } from "@renderer/components/ui";
+import { SlideGrid, ThumbTile } from "@renderer/components/ui";
 import { useBibleStore } from "@renderer/stores/bible.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { gotoSlide } from "@renderer/lib/actions/playback";
@@ -64,5 +64,8 @@ export function LiveContentGrid() {
     );
   }
 
-  return <EmptyState className="max-w-md" icon="layers" title={t("live.noSignal")} />;
+  // A video/image/text base, a sounding audio track, or genuinely nothing
+  // live — this grid has nothing to add in any of those cases, so it stays
+  // empty rather than showing a redundant placeholder.
+  return null;
 }

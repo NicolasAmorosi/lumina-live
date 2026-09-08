@@ -1,21 +1,33 @@
 import { useT } from "@renderer/lib/i18n/i18n-provider";
-import { Button, Icon, ProgressBar } from "@renderer/components/ui";
+import { IconButton, Icon, MediaPanel, ProgressBar } from "@renderer/components/ui";
 import { useProjectionStore } from "@renderer/stores/projection.store";
-import { advanceSlide } from "@renderer/lib/actions/playback";
+import { useLiveHeading } from "@renderer/lib/hooks/use-live";
+import { DECK_SOUNDTRACK_TRACK_ID } from "@renderer/stores/audio.store";
+import { advanceSlide, clearBaseContent } from "@renderer/lib/actions/playback";
 import { restartDeck, toggleAutoplay } from "@renderer/effects/deck-autoplay";
+import { mediaTargetKey } from "@shared/types/projection";
+
+const DECK_AUDIO_STATUS_KEY = mediaTargetKey({ kind: "audio", trackId: DECK_SOUNDTRACK_TRACK_ID });
 
 /**
  * Transport for the deck currently being projected — it lives under the LIVE
  * monitor, never under the preview one, so its buttons can only ever mean
  * "change what the congregation sees". That is the selected-vs-projected
  * confusion the COM version had.
+ *
+ * Styled as the same kind of row as `MediaTrackRow` (icon, truncated title,
+ * fixed-size trailing buttons) so a PPT in flight reads as one more media
+ * player instead of a one-off button bar — see `MediaPanel`.
  */
 export function DeckTransport() {
   const t = useT();
   const base = useProjectionStore((s) => s.base);
   const liveDeck = useProjectionStore((s) => s.liveDeck);
   const autoplay = useProjectionStore((s) => s.autoplay);
-  const mediaStatus = useProjectionStore((s) => s.mediaStatus);
+  const heading = useLiveHeading();
+  // Filtered by target: the shared slot also carries the video's or other
+  // audio tracks' clocks, which must never be read as this deck's.
+  const mediaStatus = useProjectionStore((s) => s.mediaStatus[DECK_AUDIO_STATUS_KEY]);
 
   if (base?.kind !== "deck" || !liveDeck) return null;
 
@@ -38,43 +50,65 @@ export function DeckTransport() {
   }
 
   return (
-    <div className="flex shrink-0 flex-col gap-1.5 p-1.5">
-      <div className="flex items-center justify-center gap-2">
-        <Button disabled={current <= 1} onClick={() => advanceSlide(-1)} size="sm">
-          <Icon name="prev" /> {t("deck.previous")}
-        </Button>
+    <MediaPanel className="shrink-0">
+      <div className="flex items-center gap-2 px-2 py-1">
+        <Icon className="size-4 shrink-0 text-primary" name="ppt" />
+
+        <span className="min-w-0 flex-1 truncate text-sm text-foreground">{heading ?? ""}</span>
+
+        <IconButton
+          aria-label={t("deck.previous")}
+          disabled={current <= 1}
+          onClick={() => advanceSlide(-1)}
+          size="xs"
+          variant="ghost"
+        >
+          <Icon name="prev" />
+        </IconButton>
 
         {liveDeck.autoAdvance ? (
           <>
-            <Button onClick={() => toggleAutoplay()} size="sm" variant="secondary">
+            <IconButton
+              aria-label={autoplay === "playing" ? t("deck.pause") : t("deck.play")}
+              onClick={() => toggleAutoplay()}
+              size="xs"
+              variant="ghost"
+            >
               <Icon name={autoplay === "playing" ? "pause" : "play"} />
-              {autoplay === "playing" ? t("deck.pause") : t("deck.play")}
-            </Button>
-            <Button onClick={() => restartDeck()} size="sm" variant="ghost">
-              {t("deck.restart")}
-            </Button>
+            </IconButton>
+            <IconButton aria-label={t("deck.restart")} onClick={() => restartDeck()} size="xs" variant="ghost">
+              <Icon name="restart" />
+            </IconButton>
           </>
         ) : null}
 
-        <span className="text-xs text-subtle">
-          {t("deck.slideCounter", { current, total })}
+        <IconButton
+          aria-label={t("deck.next")}
+          disabled={current >= total}
+          onClick={() => advanceSlide(1)}
+          size="xs"
+          variant="ghost"
+        >
+          <Icon name="next" />
+        </IconButton>
+
+        <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-subtle">
+          {t("deck.counter", { current, total })}
         </span>
 
-        <Button disabled={current >= total} onClick={() => advanceSlide(1)} size="sm">
-          {t("deck.next")} <Icon name="next" />
-        </Button>
+        <IconButton aria-label={t("common.delete")} onClick={clearBaseContent} size="xs" variant="ghost">
+          <Icon name="close" />
+        </IconButton>
       </div>
 
       {elapsedRatio !== null ? (
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 px-2 py-1">
           <ProgressBar className="flex-1" value={elapsedRatio} />
           {secondsLeft !== null ? (
-            <span className="shrink-0 text-xs text-subtle">
-              {t("deck.nextIn", { seconds: secondsLeft })}
-            </span>
+            <span className="shrink-0 text-xs text-subtle">{t("deck.nextIn", { seconds: secondsLeft })}</span>
           ) : null}
         </div>
       ) : null}
-    </div>
+    </MediaPanel>
   );
 }

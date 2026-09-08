@@ -17,8 +17,12 @@ export const SERVICE_ITEM_KINDS = ["media", "ppt", "bible", "text"] as const;
 export type ServiceItemKind = (typeof SERVICE_ITEM_KINDS)[number];
 
 /** Bump to invalidate every cached deck at once when the conversion pipeline
- *  itself changes (different rasterizer settings, fixed OOXML parsing, …). */
-export const SLIDES_CONVERTER_VERSION = 1;
+ *  itself changes (different rasterizer settings, fixed OOXML parsing, …).
+ *  Bumped to 2: decks converted before the `soffice` shared-profile race fix
+ *  (see .claude/knowledge/soffice-shared-profile-race.md) can be cached with
+ *  `timings_source: "none"` and every `advance_ms` null even though the
+ *  source file has real timings — only a reconversion recovers them. */
+export const SLIDES_CONVERTER_VERSION = 2;
 export const SLIDES_THUMB_WIDTH = 320;
 export const SLIDES_DEFAULT_RENDER_WIDTH = 1920;
 export const SLIDES_MIN_RENDER_WIDTH = 1280;

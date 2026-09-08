@@ -300,7 +300,26 @@ type RunOptions = {
   signal?: AbortSignal;
 };
 
-function runSoffice({ info, args, timeoutMs, signal }: RunOptions): Promise<void> {
+/** Every `soffice` invocation shares one `-env:UserInstallation` profile
+ *  (`baseArgs()` below), which means its own lock file and named pipe: a
+ *  second instance launched while the first is still running exits with code
+ *  1 and produces nothing, silently. Verified against a real `.pps` — the
+ *  `Promise.all` in `deck-service.ts` used to fire `convertToPdf` and the
+ *  legacy-binary `convertToPptx` upgrade pass at the same time, and the
+ *  second one always lost the race. A module-level chain serializes every
+ *  call through here so no future caller can reintroduce the race. */
+let sofficeChain: Promise<void> = Promise.resolve();
+
+function runSoffice(options: RunOptions): Promise<void> {
+  const next = sofficeChain.then(() => runSofficeExclusive(options));
+  // Swallow rejections here so one failed conversion doesn't wedge the chain
+  // for every conversion queued after it — callers still see their own
+  // rejection via `next`.
+  sofficeChain = next.catch(() => undefined);
+  return next;
+}
+
+function runSofficeExclusive({ info, args, timeoutMs, signal }: RunOptions): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
       reject(new SlideError("CANCELED", "Conversión cancelada."));

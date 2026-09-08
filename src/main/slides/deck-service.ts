@@ -12,8 +12,7 @@ import type { DeckDTO, DeckProgress } from "@shared/types/deck";
 import { deckCacheDir, slidesCacheDir, slidesTempDir, sofficeProfileDir } from "../paths";
 import { getMediaRepo, getSettingsRepo, getSlidesRepo } from "../services/repos";
 import { broadcast } from "../services/broadcast";
-import { findLinkedAudio } from "../db/repositories/media.repo";
-import type { NewAudio, NewSlide } from "../db/repositories/slides.repo";
+import type { DeckRow, NewAudio, NewSlide } from "../db/repositories/slides.repo";
 import { SlideError, isSlideError } from "./errors";
 import {
   convertTimeoutFor,
@@ -201,6 +200,18 @@ function emptyMeta(): PresentationMeta {
   return { slideCount: 0, slideSizeEmu: null, slides: [], audio: [], skippedVideoParts: [] };
 }
 
+/** Assembles the DTO for a `ready` deck row, folding in the asset's *linked*
+ *  soundtrack (an external file, resolved per media asset — see
+ *  `linked-audio.ts`) as the fallback when the deck itself carries no
+ *  embedded/transition audio. Re-resolves the link first so a stale or
+ *  never-set `linked_audio_path` (e.g. a library entry added before this
+ *  heuristic existed) gets picked up without forcing a reconversion. */
+function toDeckDTO(row: DeckRow, assetId: number): DeckDTO {
+  const mediaRepo = getMediaRepo();
+  mediaRepo.ensureLinkedAudio(assetId);
+  return getSlidesRepo().toDTO(row, assetId, mediaRepo.linkedAudioPathById(assetId));
+}
+
 /** Reads timings/audio out of the source. Legacy binary .ppt/.pps carry no
  *  OOXML, so they get a second LibreOffice pass to .pptx purely to recover
  *  them — that round-trip preserves advTm and is the difference between parity
@@ -240,6 +251,9 @@ async function readMetadata(
     } catch (error) {
       if (isSlideError(error) && error.slideCode === "CANCELED") throw error;
       // A failed upgrade pass must never block the main conversion.
+      console.warn(
+        `[slides] .ppt/.pps → .pptx upgrade pass failed, auto-advance and embedded audio disabled for this deck: ${String(error)}`,
+      );
       return { meta: emptyMeta(), timingsSource: "none", parsedFrom: sourcePath };
     }
   }
@@ -280,7 +294,7 @@ async function runConversion(job: Job): Promise<DeckDTO> {
       fs.existsSync(byAsset.cacheDir)
     ) {
       slidesRepo.touchDeck(byAsset.id);
-      const dto = slidesRepo.toDTO(byAsset, assetId);
+      const dto = toDeckDTO(byAsset, assetId);
       emitProgress({ assetId, status: "ready", done: dto.slideCount, total: dto.slideCount, error: null });
       return dto;
     }
@@ -300,7 +314,7 @@ async function runConversion(job: Job): Promise<DeckDTO> {
       fs.existsSync(byIdentity.cacheDir)
     ) {
       slidesRepo.relinkDeck(byIdentity.id, assetId, sourcePath);
-      const dto = slidesRepo.toDTO({ ...byIdentity, mediaAssetId: assetId }, assetId);
+      const dto = toDeckDTO({ ...byIdentity, mediaAssetId: assetId }, assetId);
       emitProgress({ assetId, status: "ready", done: dto.slideCount, total: dto.slideCount, error: null });
       return dto;
     }
@@ -315,15 +329,18 @@ async function runConversion(job: Job): Promise<DeckDTO> {
     const pdfDir = path.join(jobDir, "pdf");
     fs.mkdirSync(pdfDir, { recursive: true });
 
-    const [pdfPath, metaResult] = await Promise.all([
-      convertToPdf({
-        sourcePath,
-        outDir: pdfDir,
-        timeoutMs: convertTimeoutFor(stat.size),
-        signal,
-      }),
-      readMetadata(sourcePath, jobDir, stat.size, signal),
-    ]);
+    // Sequential, not `Promise.all`: for a legacy binary deck, `readMetadata`
+    // launches a second `soffice` (the .ppt/.pps → .pptx upgrade pass) — see
+    // the serialization comment on `runSoffice` in `libreoffice.ts` for why
+    // that no longer races the PDF conversion, but running them one after the
+    // other keeps this call site honest about the shared resource either way.
+    const metaResult = await readMetadata(sourcePath, jobDir, stat.size, signal);
+    const pdfPath = await convertToPdf({
+      sourcePath,
+      outDir: pdfDir,
+      timeoutMs: convertTimeoutFor(stat.size),
+      signal,
+    });
     consecutiveTimeouts = 0;
 
     const imagesDir = path.join(jobDir, "images");
@@ -383,12 +400,21 @@ async function runConversion(job: Job): Promise<DeckDTO> {
       };
     });
 
-    // Audio: embedded parts, plus the legacy sibling-.mp3 convention folded
-    // into the same list so the renderer has one thing to reason about.
+    // Audio embedded in the file itself, independent of whether the timings
+    // lined up — a deck with mismatched slide/page counts still loses only
+    // its auto-advance, not its soundtrack. The other audio source (a linked
+    // sibling file, e.g. an old hymnal's external .mp3) is deliberately NOT
+    // handled here: `slide_decks` is keyed by content hash and shared across
+    // library entries, but a sibling file depends on the *folder* the source
+    // currently lives in — baking it into the cache would let the first
+    // conversion's folder impose its audio on every other entry that happens
+    // to share the same deck bytes. It lives on `media_assets.linkedAudioPath`
+    // instead and is resolved per-asset (see `linked-audio.ts` and
+    // `MediaRepo.ensureLinkedAudio`), served by reference, never copied.
     const audioDir = path.join(jobDir, "audio");
     const audio: NewAudio[] = [];
 
-    if (timingsSource !== "none" && meta.audio.length > 0) {
+    if (meta.audio.length > 0) {
       for (const extracted of extractAudioParts(metaResult.parsedFrom, meta.audio, audioDir)) {
         audio.push({
           audioFile: extracted.file,
@@ -403,25 +429,6 @@ async function runConversion(job: Job): Promise<DeckDTO> {
           playable: extracted.playable,
         });
       }
-    }
-
-    const sibling = findLinkedAudio(sourcePath);
-    if (sibling && audio.length === 0) {
-      fs.mkdirSync(audioDir, { recursive: true });
-      const file = `sibling${path.extname(sibling).toLowerCase()}`;
-      fs.copyFileSync(sibling, path.join(audioDir, file));
-      audio.push({
-        audioFile: file,
-        ext: path.extname(sibling).replace(/^\./, "").toLowerCase(),
-        bytes: fs.statSync(sibling).size,
-        origin: "linked-sibling",
-        scope: "deck",
-        startSlideIndex: null,
-        stopSlideIndex: null,
-        loop: false,
-        volume: null,
-        playable: true,
-      });
     }
 
     if (meta.skippedVideoParts.length > 0) {
@@ -465,7 +472,7 @@ async function runConversion(job: Job): Promise<DeckDTO> {
     const row = getSlidesRepo().getDeckById(deckId);
     if (!row) throw new SlideError("RASTER_FAILED", "No se pudo leer el deck recién creado.");
 
-    const dto = getSlidesRepo().toDTO(row, assetId);
+    const dto = toDeckDTO(row, assetId);
     emitProgress({ assetId, status: "ready", done: dto.slideCount, total: dto.slideCount, error: null });
     evictIfOverCap();
     return dto;
@@ -503,7 +510,7 @@ export function getDeck(assetId: number): DeckDTO | null {
   const row = repo.findDeckByAsset(assetId);
   if (!row || row.status !== "ready") return null;
   if (!fs.existsSync(row.cacheDir)) return null;
-  return repo.toDTO(row, assetId);
+  return toDeckDTO(row, assetId);
 }
 
 /** Idempotent per assetId: a second call while a conversion is in flight joins

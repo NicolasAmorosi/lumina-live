@@ -21,6 +21,12 @@ export type DeckSlide = {
 export type DeckSoundtrack = {
   url: string;
   durationMs: number | null;
+  /** `embedded`/`transition` come from inside the file and live in the deck
+   *  cache; `linked` is an external file resolved per media asset (an old
+   *  hymnal's sibling .mp3) and served by reference — see `linked-audio.ts`. */
+  origin: "embedded" | "transition" | "linked";
+  /** File name, for the "Asignar audio" control to show what's playing. */
+  name: string;
 };
 
 export type DeckDTO = {
@@ -35,6 +41,11 @@ export type DeckDTO = {
   /** True iff any slide carries an advanceAfterMs — drives whether autoplay
    *  starts automatically when the deck is presented. */
   autoAdvance: boolean;
+  /** "none" means the .pptx/.ppt's own timings couldn't be read or didn't
+   *  line up with the rendered pages — auto-advance was disabled on purpose,
+   *  not lost by accident. Drives whether the UI shows that as a fact instead
+   *  of silence. */
+  timingsSource: "ooxml" | "ooxml-converted" | "none";
   sourceMtimeMs: number;
   convertedAt: number;
   error: string | null;

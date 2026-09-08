@@ -2,6 +2,7 @@ import type { DragEvent } from "react";
 import { Badge, Icon, ListRow, type BadgeVariant, type IconName } from "@renderer/components/ui";
 import { useMediaAsset } from "@renderer/lib/hooks/use-media-asset";
 import { useDeckThumb } from "@renderer/lib/hooks/use-deck-thumb";
+import { useAudioStore } from "@renderer/stores/audio.store";
 import type { ServiceItemDTO } from "@shared/types/service";
 
 const ICON_BY_KIND: Record<ServiceItemDTO["kind"], IconName> = {
@@ -64,6 +65,13 @@ export function ScheduleRow({
   // Real first-slide thumbnail once the deck is converted; the static badge
   // stays as the fallback until then.
   const thumb = useDeckThumb(item.kind === "ppt" ? item.mediaAssetId : null);
+  // Audio never claims the on-air rail (`active`) — that means "this is what
+  // the projector shows", and audio never is. Its own indicator here is what
+  // tells the operator it's sounding without implying it's on screen.
+  const sounding = useAudioStore(
+    (s) =>
+      item.kind === "media" && s.tracks.some((t) => t.source === "asset" && t.assetId === item.mediaAssetId),
+  );
 
   return (
     <ListRow
@@ -85,6 +93,7 @@ export function ScheduleRow({
       onDoubleClick={onDoubleClick}
       onDragStart={onDragStart}
       selected={selected}
+      trailing={sounding ? <Icon className="size-3.5 animate-pulse text-badge-audio" name="audio" /> : undefined}
     >
       {label}
     </ListRow>

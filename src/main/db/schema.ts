@@ -236,9 +236,12 @@ export const deckSlides = sqliteTable(
   (t) => [uniqueIndex("ux_deck_slide").on(t.deckId, t.slideIndex)],
 );
 
-/** Audio extracted from the .pptx (embedded media, transition sounds) or the
- *  legacy sibling-`.mp3` convention (`origin: "linked-sibling"`), folded into
- *  the same list so the renderer has one audio source to reason about. */
+/** Audio extracted from inside the .pptx itself (embedded media, transition
+ *  sounds). A *linked* soundtrack — the legacy sibling-`.mp3` convention old
+ *  hymnal decks use — is deliberately NOT stored here: it lives on
+ *  `media_assets.linked_audio_path` and is served by reference, because it
+ *  depends on the source folder, not on the content-addressed deck cache.
+ *  See `linked-audio.ts`. */
 export const deckAudio = sqliteTable(
   "deck_audio",
   {
@@ -249,7 +252,7 @@ export const deckAudio = sqliteTable(
     audioFile: text("audio_file").notNull(),
     ext: text("ext").notNull(),
     bytes: integer("bytes").notNull(),
-    origin: text("origin", { enum: ["embedded", "transition", "linked-sibling"] }).notNull(),
+    origin: text("origin", { enum: ["embedded", "transition"] }).notNull(),
     scope: text("scope", { enum: ["deck", "slide"] }).notNull(),
     startSlideIndex: integer("start_slide_index"),
     stopSlideIndex: integer("stop_slide_index"),

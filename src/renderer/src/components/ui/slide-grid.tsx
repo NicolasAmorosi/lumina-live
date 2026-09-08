@@ -16,7 +16,7 @@ export function SlideGrid({ children, variant = "flow" }: SlideGridProps) {
   return (
     <div
       className={cn(
-        "grid content-start gap-2",
+        "grid content-start gap-3",
         variant === "fixed-2" ? "grid-cols-2" : "grid-cols-[repeat(auto-fill,minmax(9rem,1fr))]",
       )}
     >

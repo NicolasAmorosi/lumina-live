@@ -104,8 +104,11 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
         return { kind: "image", url: assetUrl(content.asset.id), videoUnderlay: null };
       }
       if (content.asset.kind === "video") {
-        const underlay = { url: assetUrl(content.asset.id), epoch: 0 };
-        return { kind: "video", ...underlay, videoUnderlay: underlay };
+        // Preview never plays anything (mode="monitor" never autoplays) — it
+        // shows a frozen first frame. The chosen start point only matters
+        // once EN VIVO actually sends this asset live; see `goLive()`.
+        const underlay = { url: assetUrl(content.asset.id), epoch: 0, paused: true, startAtSeconds: 0 };
+        return { kind: "video", url: underlay.url, epoch: underlay.epoch, videoUnderlay: underlay };
       }
       return null;
     }
@@ -114,24 +117,4 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
     case "text":
       return { kind: "text", body: content.body, videoUnderlay: null };
   }
-}
-
-/**
- * Where the preview cursor is inside what it is previewing — slide 3 of 12,
- * verse 7 of 31 — for the monitor's readout and its arrows' disabled state.
- * `total` is 0 when the previewed thing has no navigable parts.
- */
-export function usePreviewPosition(content: PreviewContent | null): { index: number; total: number } {
-  const slideIndex = usePreviewStore((s) => s.slideIndex);
-  const target = usePreviewStore((s) => s.target);
-  const verseCount = useBibleStore((s) => s.verses.length);
-  const deckSlideCount = useDeckStore((s) =>
-    content?.kind === "deck" ? (s.byAssetId[content.assetId]?.deck?.slides.length ?? 0) : 0,
-  );
-
-  if (content?.kind === "deck") {
-    return { index: Math.min(slideIndex, Math.max(1, deckSlideCount)), total: deckSlideCount };
-  }
-  if (target?.kind === "verse") return { index: target.verseIndex + 1, total: verseCount };
-  return { index: 1, total: 0 };
 }

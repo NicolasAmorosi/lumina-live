@@ -5,6 +5,7 @@ import type { Db } from "../client";
 import { mediaAssets } from "../schema";
 import type { AssetKind } from "@shared/constants";
 import type { MediaAsset } from "@shared/types/media";
+import { resolveLinkedAudio } from "../../slides/linked-audio";
 
 function toPathKey(filePath: string): string {
   const normalized = path.normalize(filePath).normalize("NFC");
@@ -28,12 +29,12 @@ function toDTO(row: typeof mediaAssets.$inferSelect): MediaAsset {
   };
 }
 
-/** Finds a sibling `.mp3` with the same basename — the "linked audio" convention. */
+/** Resolves the audio a legacy `.ppt`/`.pps` deck points at (or sits next to)
+ *  — see `linked-audio.ts` for the three-rule heuristic. Kept as a thin
+ *  re-export here so callers that only know about "media assets" don't need
+ *  to reach into `slides/`. */
 export function findLinkedAudio(filePath: string): string | null {
-  const dir = path.dirname(filePath);
-  const base = path.basename(filePath, path.extname(filePath));
-  const candidate = path.join(dir, `${base}.mp3`);
-  return fs.existsSync(candidate) ? candidate : null;
+  return resolveLinkedAudio(filePath);
 }
 
 export class MediaRepo {
@@ -116,6 +117,42 @@ export class MediaRepo {
   getPathById(id: number): string | null {
     const row = this.db.select().from(mediaAssets).where(eq(mediaAssets.id, id)).get();
     return row ? row.path : null;
+  }
+
+  linkedAudioPathById(id: number): string | null {
+    const row = this.db.select().from(mediaAssets).where(eq(mediaAssets.id, id)).get();
+    return row?.linkedAudioPath ?? null;
+  }
+
+  /** Manual override for when the heuristic in `linked-audio.ts` guesses
+   *  wrong (or there's simply no matching file yet) — set from the "Assign
+   *  audio" control. `null` clears it back to automatic resolution. */
+  setLinkedAudio(id: number, audioPath: string | null): MediaAsset | null {
+    const row = this.db.select().from(mediaAssets).where(eq(mediaAssets.id, id)).get();
+    if (!row) return null;
+    this.db
+      .update(mediaAssets)
+      .set({ linkedAudioPath: audioPath, updatedAt: Date.now() })
+      .where(eq(mediaAssets.id, id))
+      .run();
+    return toDTO({ ...row, linkedAudioPath: audioPath });
+  }
+
+  /** Re-resolves the linked audio for a `ppt` asset when the stored path is
+   *  empty or has gone missing — covers library entries added before the
+   *  resolver could find their sibling, or before this heuristic existed. */
+  ensureLinkedAudio(id: number): void {
+    const row = this.db.select().from(mediaAssets).where(eq(mediaAssets.id, id)).get();
+    if (!row || row.kind !== "ppt") return;
+    if (row.linkedAudioPath && fs.existsSync(row.linkedAudioPath)) return;
+    const resolved = resolveLinkedAudio(row.path);
+    if (resolved !== row.linkedAudioPath) {
+      this.db
+        .update(mediaAssets)
+        .set({ linkedAudioPath: resolved, updatedAt: Date.now() })
+        .where(eq(mediaAssets.id, id))
+        .run();
+    }
   }
 
   /** Re-stats every in-library row, marking newly-missing files and clearing the flag

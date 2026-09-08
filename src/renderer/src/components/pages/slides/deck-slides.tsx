@@ -1,10 +1,23 @@
 import { useT } from "@renderer/lib/i18n/i18n-provider";
-import { Button, Callout, ProgressBar, SlideGrid, Skeleton, ThumbTile } from "@renderer/components/ui";
+import {
+  Badge,
+  Button,
+  Callout,
+  Icon,
+  IconButton,
+  ProgressBar,
+  SlideGrid,
+  Skeleton,
+  ThumbTile,
+  Tooltip,
+} from "@renderer/components/ui";
 import { useDeck } from "@renderer/lib/hooks/use-deck";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
 import { setPreviewSlide } from "@renderer/lib/actions/preview";
 import { goLive, gotoSlide } from "@renderer/lib/actions/playback";
+import { api } from "@renderer/lib/api";
+import type { DeckDTO } from "@shared/types/deck";
 
 /**
  * Every state a deck can be in, in the centre column: missing LibreOffice,
@@ -12,6 +25,51 @@ import { goLive, gotoSlide } from "@renderer/lib/actions/playback";
  * that triggers a conversion (via useDeck), so browsing the schedule can't
  * queue work twice.
  */
+function DeckAudioStrip({ assetId, deck }: { assetId: number; deck: DeckDTO }) {
+  const t = useT();
+  const { refresh } = useDeck(assetId);
+
+  async function assign() {
+    const paths = await api.files.pick("audio", false);
+    const chosen = paths[0];
+    if (!chosen) return;
+    await api.library.setLinkedAudio(assetId, chosen);
+    refresh();
+  }
+
+  async function remove() {
+    await api.library.setLinkedAudio(assetId, null);
+    refresh();
+  }
+
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-sm">
+      <Icon className="shrink-0 text-muted-foreground" name="audio" />
+      <span className="min-w-0 flex-1 truncate text-foreground">
+        {deck.soundtrack?.name ?? t("deck.audio.none")}
+      </span>
+      {deck.timingsSource !== "none" ? (
+        <Badge variant="blue">{t("deck.audio.autoAdvance")}</Badge>
+      ) : null}
+      {deck.soundtrack?.origin === "linked" ? (
+        <Button onClick={() => void remove()} size="xs" variant="ghost">
+          {t("deck.audio.remove")}
+        </Button>
+      ) : null}
+      {deck.soundtrack?.origin !== "embedded" && deck.soundtrack?.origin !== "transition" ? (
+        <Button onClick={() => void assign()} size="xs" variant="ghost">
+          {deck.soundtrack ? t("deck.audio.change") : t("deck.audio.assign")}
+        </Button>
+      ) : null}
+      <Tooltip content={t("deck.audio.help")}>
+        <IconButton aria-label={t("deck.audio.help")} size="xs" variant="ghost">
+          <Icon name="help" />
+        </IconButton>
+      </Tooltip>
+    </div>
+  );
+}
+
 export function DeckSlides({ assetId }: { assetId: number }) {
   const t = useT();
   const { entry, environment, locateSoffice, markStale, reconvert } = useDeck(assetId);
@@ -66,7 +124,7 @@ export function DeckSlides({ assetId }: { assetId: number }) {
   }
 
   return (
-    <div className="flex min-h-0 flex-col gap-2">
+    <div className="flex min-h-0 flex-col gap-3">
       {entry.status === "stale" ? (
         <Callout tone="warning">
           <p>{t("deck.stale")}</p>
@@ -74,6 +132,9 @@ export function DeckSlides({ assetId }: { assetId: number }) {
             {t("deck.reconvert")}
           </Button>
         </Callout>
+      ) : null}
+      {entry.status === "ready" && entry.deck ? (
+        <DeckAudioStrip assetId={assetId} deck={entry.deck} />
       ) : null}
       <SlideGrid variant="fixed-2">
         {slides.map((slide) => (
