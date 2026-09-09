@@ -1,3 +1,4 @@
+import type { AssetKind } from "../constants";
 import {
   SLIDES_DEFAULT_CACHE_MB,
   SLIDES_DEFAULT_RENDER_WIDTH,
@@ -25,6 +26,14 @@ export type SettingsMap = {
   "slides.imageFormat": SlideImageFormat;
   "slides.cacheMaxMb": number;
   "slides.maxRenderWidth": number;
+  /** Folders the operator has linked per asset kind, so a resource tab can
+   *  offer "this folder's files" as an alternative to the added-to-library
+   *  list. Files inside are registered like any other asset (so preview/
+   *  live/drag all work the same) but never marked `inLibrary`. */
+  "library.linkedFolders": Record<AssetKind, string[]>;
+  /** Which source view (`"recent"` or one of that kind's linked folder
+   *  paths) a resource tab was last left on, restored on next launch. */
+  "library.activeView": Record<AssetKind, string>;
 };
 
 export const DEFAULT_SETTINGS: SettingsMap = {
@@ -40,4 +49,6 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   "slides.imageFormat": "webp",
   "slides.cacheMaxMb": SLIDES_DEFAULT_CACHE_MB,
   "slides.maxRenderWidth": SLIDES_DEFAULT_RENDER_WIDTH,
+  "library.linkedFolders": { video: [], image: [], audio: [], ppt: [] },
+  "library.activeView": { video: "recent", image: "recent", audio: "recent", ppt: "recent" },
 };

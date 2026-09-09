@@ -1,6 +1,7 @@
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { Badge, EmptyState, SlideGrid, ThumbTile } from "@renderer/components/ui";
 import { PanelBody, PanelHeader } from "@renderer/components/shared/panel";
+import { PreviewMissingState } from "@renderer/components/shared/preview-missing-state";
 import { PreviewMonitor } from "@renderer/components/pages/monitors/preview-monitor";
 import { useBibleStore } from "@renderer/stores/bible.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
@@ -8,7 +9,6 @@ import { useProjectionStore } from "@renderer/stores/projection.store";
 import { usePreviewContent } from "@renderer/lib/hooks/use-preview";
 import { previewVerse } from "@renderer/lib/actions/preview";
 import { goLive } from "@renderer/lib/actions/playback";
-import { cn } from "@renderer/lib/utils";
 import { DeckSlides } from "./deck-slides";
 import { PreviewMediaBar } from "./preview-media-bar";
 
@@ -30,17 +30,12 @@ export function SlidesPanel() {
 
   function body() {
     if (!content) {
-      return (
-        <EmptyState
-          className="max-w-md"
-          description={t("slides.placeholderHint")}
-          icon="layers"
-          title={t("slides.placeholder")}
-        />
-      );
+      return <EmptyState description={t("slides.placeholderHint")} icon="layers" title={t("slides.placeholder")} />;
     }
 
-    if (content.kind === "deck") return <DeckSlides assetId={content.assetId} />;
+    if (content.kind === "deck") {
+      return <DeckSlides assetId={content.assetId} missingSince={content.missingSince} />;
+    }
 
     // A verse being previewed brings its whole chapter along, so the operator
     // can walk the passage without going back to the resource tab.
@@ -81,6 +76,10 @@ export function SlidesPanel() {
       );
     }
 
+    if (content.kind === "media" && content.asset.missingSince !== null) {
+      return <PreviewMissingState />;
+    }
+
     // A live image needs no grid content of its own — the preview monitor
     // above already shows it full-size. A video/audio's transport lives
     // outside this grid entirely (see `mediaBar` below), so there is nothing
@@ -119,15 +118,10 @@ export function SlidesPanel() {
         }
         title={t("slides.title")}
       />
-      <div className="grid min-h-0 flex-1 grid-rows-[auto_auto_minmax(0,1fr)] gap-3 p-3">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
         <PreviewMonitor />
         {mediaBar}
-        {/* Grids fill from the top; the empty/converting states are centred. */}
-        <PanelBody
-          className={cn("flex flex-col p-1.5", !content && "items-center justify-center")}
-        >
-          {body()}
-        </PanelBody>
+        <PanelBody className="p-1.5">{body()}</PanelBody>
       </div>
     </>
   );

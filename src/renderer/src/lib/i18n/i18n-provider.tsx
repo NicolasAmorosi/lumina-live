@@ -5,6 +5,11 @@ import type { Messages } from "./messages/es";
 
 const dictionaries: Partial<Record<Locale, Messages>> = { es };
 
+/** Locales that actually have a dictionary — what the language picker offers.
+ *  Dropping in `it.ts`/`en.ts` here (and adding it to `dictionaries` above)
+ *  is the whole change needed for a new option to appear. */
+export const availableLocales = Object.keys(dictionaries) as Locale[];
+
 function resolveKey(messages: Messages, key: string): string {
   const parts = key.split(".");
   let node: unknown = messages;

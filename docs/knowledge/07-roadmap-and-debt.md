@@ -27,8 +27,10 @@ canciones/letras con secciones proyectables.
   extrae ni se reproduce (fuera de alcance acordado). El audio embebido sí funciona.
 - **Ajustes de proyección configurables** (tamaño de fuente, alineación) para biblia/texto: hoy
   siguen hardcodeados en `vw` dentro de `ProjectionApp.tsx`, igual que la legacy.
-- **Pantalla de Configuración**: el toggle de tema vive en el header; falta una página dedicada
-  para volumen de media, idioma (cuando haya más de un diccionario) y demás `settings`.
+- **Pantalla de Configuración**: ya tiene categorías (Proyección, Sistema) con tema e idioma
+  expuestos; falta agregar `media.volume` y las claves `slides.*` (override de LibreOffice,
+  formato/tamaño de las diapositivas cacheadas) — encajan como un grupo más dentro de una
+  categoría existente o una nueva categoría "Avanzado".
 
 ## Multiplataforma — resuelto
 

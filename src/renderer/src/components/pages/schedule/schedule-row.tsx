@@ -79,6 +79,7 @@ export function ScheduleRow({
       data-index={index}
       draggable
       dropBefore={dragOver}
+      grip
       index={index + 1}
       leading={
         thumb ? (

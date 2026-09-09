@@ -11,12 +11,18 @@ import { AUDIO_EXT, containerKind } from "./pptx-metadata";
  * `showPr`), so it has to be resolved straight from the original file, once,
  * against whatever now sits beside it.
  *
- * Three rules, in order of confidence:
+ * Four rules, in order of confidence:
  *  1. The file's own hint — the external link it recorded, matched by
  *     *basename* against the deck's folder (the recorded path is someone
  *     else's Windows machine; only the filename can still be right).
  *  2. The PowerPoint convention: `<same base name>.<audio ext>`.
- *  3. If the folder holds exactly one audio file, that's obviously it.
+ *  3. Partial containment between a loose comparison key of the deck's name
+ *     and each candidate's — the deck and its audio share *some* substring
+ *     of their title (see `comparisonKey`). There is deliberately no "only
+ *     audio file in the folder" fallback anymore: a folder holding one deck
+ *     with audio and a sibling deck without one used to hand that unrelated
+ *     audio to the silent deck just because it was alone in the folder.
+ *  4. `null` — nothing matched, let the operator assign it by hand.
  */
 export function resolveLinkedAudio(presentationPath: string): string | null {
   const dir = path.dirname(presentationPath);
@@ -43,9 +49,53 @@ export function resolveLinkedAudio(presentationPath: string): string | null {
     if (match) return path.join(dir, match);
   }
 
-  if (audioFiles.length === 1) return path.join(dir, audioFiles[0]!);
+  const byPartialName = matchByPartialName(base, audioFiles);
+  if (byPartialName) return path.join(dir, byPartialName);
 
   return null;
+}
+
+const MIN_MATCH_CHARS = 4;
+
+/** Rule 3: the deck and one of the folder's audio files share *some*
+ *  substring of their title, once both are reduced to a loose comparison
+ *  key. Ties resolve to the exact-key match first, then to the longest key
+ *  (the most specific title); a tie between two equally-long, distinct keys
+ *  is genuinely ambiguous and returns `null` rather than guessing. */
+function matchByPartialName(deckBase: string, audioFiles: string[]): string | null {
+  const deckKey = comparisonKey(deckBase);
+  if (deckKey.length < MIN_MATCH_CHARS) return null;
+
+  const candidates: { name: string; key: string }[] = [];
+  for (const name of audioFiles) {
+    const key = comparisonKey(path.basename(name, path.extname(name)));
+    if (key.length < MIN_MATCH_CHARS) continue;
+    if (deckKey.includes(key) || key.includes(deckKey)) candidates.push({ name, key });
+  }
+  if (candidates.length === 0) return null;
+
+  const exact = candidates.find((c) => c.key === deckKey);
+  if (exact) return exact.name;
+
+  candidates.sort((a, b) => b.key.length - a.key.length);
+  const [longest, runnerUp] = candidates;
+  if (runnerUp && runnerUp.key.length === longest!.key.length && runnerUp.key !== longest!.key) {
+    return null;
+  }
+  return longest!.name;
+}
+
+/** Loose comparison key: NFC → strip diacritics → lowercase → alphanumerics
+ *  only. `"001 Cantad alegres al Señor"` → `"001cantadalegresalsenor"`.
+ *  Unlike `normalize()` below, which compares whole file names for an exact
+ *  match, this compares the *content* of two names across whatever
+ *  separators (spaces, dashes, numbering) happen to differ between them. */
+function comparisonKey(base: string): string {
+  return base
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 }
 
 function extOf(fileName: string): string {

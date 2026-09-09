@@ -1,15 +1,21 @@
 import { dialog } from "electron";
 import path from "node:path";
 import type { Handlers } from "../register";
-import { ASSET_EXTENSIONS } from "@shared/constants";
+import { ASSET_EXTENSIONS, ASSET_KINDS, type AssetKind } from "@shared/constants";
 import { findLinkedAudio } from "../../db/repositories/media.repo";
 import { getSettingsRepo } from "../../services/repos";
 
-function filtersFor(kind: keyof typeof ASSET_EXTENSIONS) {
+function filtersFor(kind: AssetKind | "all") {
+  if (kind === "all") {
+    return [{ name: "all", extensions: ASSET_KINDS.flatMap((k) => [...ASSET_EXTENSIONS[k]]) }];
+  }
   return [{ name: kind, extensions: [...ASSET_EXTENSIONS[kind]] }];
 }
 
-export const filesHandlers: Pick<Handlers, "files:pick" | "files:probe" | "files:setLogo"> = {
+export const filesHandlers: Pick<
+  Handlers,
+  "files:pick" | "files:probe" | "files:setLogo" | "files:pickFolder"
+> = {
   "files:pick": async ({ kind, multiple }) => {
     const settingsRepo = getSettingsRepo();
     const lastFolder = settingsRepo.get("files.lastFolder");
@@ -34,6 +40,12 @@ export const filesHandlers: Pick<Handlers, "files:pick" | "files:probe" | "files
       hasAudio: audioPath !== null,
       audioPath,
     };
+  },
+
+  "files:pickFolder": async () => {
+    const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    return result.filePaths[0]!;
   },
 
   "files:setLogo": async () => {

@@ -1,6 +1,5 @@
 import { useT } from "@renderer/lib/i18n/i18n-provider";
-import { Badge, Button, Icon, IconButton, Toolbar } from "@renderer/components/ui";
-import { useServiceStore } from "@renderer/stores/service.store";
+import { Button, Icon, IconButton, Toolbar } from "@renderer/components/ui";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { useDisplayStore } from "@renderer/stores/display.store";
 import { goLive } from "@renderer/lib/actions/playback";
@@ -13,7 +12,7 @@ type TopBarProps = { onOpenServices: () => void; onOpenSettings: () => void };
  * Chrome bar, laid out in the same three columns as the workspace below it so
  * each group of controls sits exactly above the column it acts on:
  *
- *   col 1 (schedule/resources) — settings, saved services, current service
+ *   col 1 (schedule/resources) — settings, saved services
  *   col 2 (slides)             — EN VIVO: preview -> live, right now
  *   col 3 (monitors)           — NEGRO / LOGO / VIVO: what the projector shows
  *
@@ -22,8 +21,6 @@ type TopBarProps = { onOpenServices: () => void; onOpenSettings: () => void };
  */
 export function TopBar({ onOpenServices, onOpenSettings }: TopBarProps) {
   const t = useT();
-  const serviceName = useServiceStore((s) => s.currentServiceName);
-  const itemCount = useServiceStore((s) => s.items.length);
   const overlay = useProjectionStore((s) => s.overlay);
   const setOverlay = useProjectionStore((s) => s.setOverlay);
   const base = useProjectionStore((s) => s.base);
@@ -46,8 +43,6 @@ export function TopBar({ onOpenServices, onOpenSettings }: TopBarProps) {
         <Button onClick={onOpenServices} size="sm" variant="ghost">
           <Icon name="save" /> {t("services.title")}
         </Button>
-        <Badge variant="blue">{serviceName}</Badge>
-        <Badge>{t("schedule.itemCount", { count: itemCount })}</Badge>
       </div>
 
       <div className="flex items-center justify-end">

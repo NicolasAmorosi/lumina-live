@@ -13,7 +13,7 @@ import type { ProjectionOutput } from "@shared/types/projection";
  * "what am I looking at" from three stores.
  */
 export type PreviewContent =
-  | { kind: "deck"; assetId: number; title: string }
+  | { kind: "deck"; assetId: number; title: string; missingSince: number | null }
   | { kind: "media"; asset: MediaAsset }
   | { kind: "bible"; reference: string; text: string; verseIndex: number | null }
   | { kind: "text"; body: string };
@@ -47,7 +47,7 @@ export function usePreviewContent(): PreviewContent | null {
   if (target.kind === "asset") {
     if (!directAsset) return null;
     return target.assetKind === "ppt"
-      ? { kind: "deck", assetId: directAsset.id, title: directAsset.name }
+      ? { kind: "deck", assetId: directAsset.id, title: directAsset.name, missingSince: directAsset.missingSince }
       : { kind: "media", asset: directAsset };
   }
 
@@ -55,7 +55,12 @@ export function usePreviewContent(): PreviewContent | null {
   switch (scheduleItem.kind) {
     case "ppt":
       return scheduleAsset
-        ? { kind: "deck", assetId: scheduleAsset.id, title: scheduleItem.title ?? scheduleAsset.name }
+        ? {
+            kind: "deck",
+            assetId: scheduleAsset.id,
+            title: scheduleItem.title ?? scheduleAsset.name,
+            missingSince: scheduleAsset.missingSince,
+          }
         : null;
     case "media":
       return scheduleAsset ? { kind: "media", asset: scheduleAsset } : null;
@@ -79,6 +84,7 @@ export function usePreviewContent(): PreviewContent | null {
  */
 export function usePreviewOutput(content: PreviewContent | null): ProjectionOutput | null {
   const slideIndex = usePreviewStore((s) => s.slideIndex);
+  const playing = usePreviewStore((s) => s.playing);
   const deckEntry = useDeckStore((s) => (content?.kind === "deck" ? s.byAssetId[content.assetId] : undefined));
 
   if (!content) return null;
@@ -100,14 +106,24 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
       };
     }
     case "media": {
+      // A missing file has nothing to show — the preview monitor falls back
+      // to its own black "not found" stage (see `PreviewMonitor`) instead of
+      // pointing an <img>/<video> at a dead url.
+      if (content.asset.missingSince !== null) return null;
       if (content.asset.kind === "image") {
         return { kind: "image", url: assetUrl(content.asset.id), videoUnderlay: null };
       }
       if (content.asset.kind === "video") {
-        // Preview never plays anything (mode="monitor" never autoplays) — it
-        // shows a frozen first frame. The chosen start point only matters
-        // once EN VIVO actually sends this asset live; see `goLive()`.
-        const underlay = { url: assetUrl(content.asset.id), epoch: 0, paused: true, startAtSeconds: 0 };
+        // The preview never autoplays — only the operator's own play button
+        // (`togglePreviewPlayback`) sets `playing`, which this just mirrors
+        // declaratively. `epoch` stays fixed at 0 so the element is reused
+        // (only `src` changes) across every click in the library instead of
+        // being torn down and rebuilt — the same churn that produces
+        // PIPELINE_ERROR_DECODE on the live video. `startAtSeconds` stays 0
+        // too: re-applying it as a prop would fight the element's own clock
+        // on every re-render, so a scrub goes through `seekPreview` imperatively
+        // instead, exactly like the live video's own seek.
+        const underlay = { url: assetUrl(content.asset.id), epoch: 0, paused: !playing, startAtSeconds: 0 };
         return { kind: "video", url: underlay.url, epoch: underlay.epoch, videoUnderlay: underlay };
       }
       return null;

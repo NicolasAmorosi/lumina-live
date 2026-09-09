@@ -3,6 +3,7 @@ import { MediaPanel } from "@renderer/components/ui";
 import { MediaTrackRow } from "@renderer/components/shared/media-track-row";
 import { usePreviewStore } from "@renderer/stores/preview.store";
 import { useMediaDuration } from "@renderer/lib/hooks/use-media-duration";
+import { seekPreview, togglePreviewPlayback } from "@renderer/lib/actions/preview-playback";
 import { assetUrl } from "@shared/urls";
 import type { MediaAsset } from "@shared/types/media";
 
@@ -10,28 +11,41 @@ type PreviewMediaBarProps = { asset: MediaAsset };
 
 /**
  * What a selected video/audio shows in the centre column instead of the old
- * icon-on-black tile: its duration, and a scrubber the operator drags to pick
- * where EN VIVO should start it. Purely informative otherwise — nothing plays
- * here, sound stays silent in the control window until it's actually live.
+ * icon-on-black tile. For a **video**, the operator can actually play it here
+ * (muted, in the preview monitor above — see `mode="preview"` on
+ * `OutputView`) to confirm it's the right clip and find an entry point by
+ * watching it, not just guessing from the scrubber; its duration comes from
+ * the real preview element instead of the detached probe. For **audio**,
+ * nothing plays — sound in the control window before EN VIVO would interrupt
+ * the service with no visual payoff, so it keeps the original silent,
+ * informational row: duration from `useMediaDuration` and a scrubber that only
+ * picks where EN VIVO should start it.
+ *
  * Same shell and row as the live media panel (`MediaPanel` + `MediaTrackRow`)
  * so the two columns' media controls never drift apart.
  */
 export function PreviewMediaBar({ asset }: PreviewMediaBarProps) {
   const t = useT();
-  const startAtSeconds = usePreviewStore((s) => s.startAtSeconds);
-  const setStartAtSeconds = usePreviewStore((s) => s.setStartAtSeconds);
-  const kind = asset.kind === "video" ? "video" : "audio";
-  const duration = useMediaDuration(assetUrl(asset.id), kind);
+  const positionSeconds = usePreviewStore((s) => s.positionSeconds);
+  const previewDuration = usePreviewStore((s) => s.durationSeconds);
+  const playing = usePreviewStore((s) => s.playing);
+  const isVideo = asset.kind === "video";
+  // Audio still has no live element in the control window, so its duration
+  // keeps coming from the silent, detached probe.
+  const probedDuration = useMediaDuration(isVideo ? null : assetUrl(asset.id), "audio");
+  const duration = isVideo ? previewDuration : (probedDuration ?? 0);
 
   return (
     <MediaPanel className="w-full">
       <MediaTrackRow
-        currentSeconds={startAtSeconds}
-        durationSeconds={duration ?? 0}
-        hint={t("media.previewHint")}
-        kind={kind}
+        currentSeconds={positionSeconds}
+        durationSeconds={duration}
+        hint={isVideo ? t("media.previewMuted") : t("media.previewHint")}
+        kind={isVideo ? "video" : "audio"}
         label={asset.name}
-        onSeek={duration ? setStartAtSeconds : undefined}
+        onSeek={duration ? seekPreview : undefined}
+        onTogglePause={isVideo ? togglePreviewPlayback : undefined}
+        paused={isVideo && !playing}
       />
     </MediaPanel>
   );

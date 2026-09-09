@@ -89,10 +89,11 @@ The `LiveVideo` component owns the resulting rules:
 - **Keyed by `epoch`**, so pressing EN VIVO again on the same video restarts it from the
   beginning — but an overlay toggle never changes the key.
 - **NEGRO/LOGO pauses it and holds its position; uncovering resumes from there.** This is
-  product-decided operator behaviour (asked for explicitly) and is deliberately the *opposite*
-  of a deck's soundtrack, which is meant to keep playing through an overlay (see
-  `ProjectionApp`'s `<audio>`). `autoPlay` only applies to a freshly loaded element, so the
-  transitions are driven imperatively in an effect.
+  product-decided operator behaviour (asked for explicitly). `autoPlay` only applies to a
+  freshly loaded element, so the transitions are driven imperatively in an effect.
+  **Update (2026-09-09):** a deck's own soundtrack now follows the same rule too (see
+  `projection-sync.ts`'s `toAudioTrackPush` and `deck-autoplay.ts`'s `isFrozenByCover`). Only a
+  standalone audio asset sent live is still meant to keep playing through an overlay.
 - `useMediaStatusReporter` is keyed off `videoUnderlay?.epoch`, not `output.kind === "video"`, so
   it doesn't tear its listeners down every time an overlay covers the video.
 

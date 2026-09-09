@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, Ref } from "react";
 import { cn } from "@renderer/lib/utils";
 
-type IconButtonVariant = "primary" | "outline" | "ghost";
+type IconButtonVariant = "primary" | "outline" | "ghost" | "success" | "warning" | "danger";
 type IconButtonSize = "xs" | "sm" | "md";
 
 type IconButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -15,6 +15,9 @@ const variants: Record<IconButtonVariant, string> = {
   primary: "bg-primary text-primary-foreground hover:bg-primary-hover",
   outline: "border border-border bg-transparent text-foreground hover:border-primary hover:bg-muted",
   ghost: "text-foreground hover:bg-muted",
+  success: "bg-success text-success-foreground hover:bg-success/90",
+  warning: "bg-warning text-warning-foreground hover:bg-warning/90",
+  danger: "bg-danger text-danger-foreground hover:bg-danger/90",
 };
 
 const sizes: Record<IconButtonSize, string> = {

@@ -4,18 +4,29 @@ import { cn } from "@renderer/lib/utils";
 import { Dialog } from "@renderer/components/ui";
 import { isTopModal, popModal, pushModal, subscribeModalStack } from "./modal-stack";
 
-type ModalSize = "sm" | "md" | "lg" | "xl";
+type ModalSize = "sm" | "md" | "lg" | "xl" | "2xl";
 const modalSizes: Record<ModalSize, string> = {
   sm: "max-w-md",
   md: "max-w-lg",
   lg: "max-w-2xl",
   xl: "max-w-4xl",
+  "2xl": "max-w-5xl",
+};
+
+type ModalHeight = "auto" | "tall";
+/** "tall" gives a modal a large, fixed height instead of growing to its
+ *  content — for a multi-section screen (e.g. Settings) where switching
+ *  section must not resize the dialog. Still capped by the viewport. */
+const modalHeights: Record<ModalHeight, string> = {
+  auto: "",
+  tall: "h-[min(44rem,calc(100dvh-2rem))]",
 };
 
 type ModalProps = {
   children: ReactNode;
   className?: string;
   closeOnOverlay?: boolean;
+  height?: ModalHeight;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   size?: ModalSize;
@@ -28,7 +39,15 @@ type ModalProps = {
  * stack — there's no server render here, but the pattern (and modal-stack.ts)
  * is copied verbatim from libretto-villaaurora for consistency.
  */
-export function Modal({ children, className, closeOnOverlay = true, onOpenChange, open, size = "md" }: ModalProps) {
+export function Modal({
+  children,
+  className,
+  closeOnOverlay = true,
+  height = "auto",
+  onOpenChange,
+  open,
+  size = "md",
+}: ModalProps) {
   const id = useId();
   const topId = useSyncExternalStore(subscribeModalStack, () => (isTopModal(id) ? id : null));
 
@@ -65,6 +84,7 @@ export function Modal({ children, className, closeOnOverlay = true, onOpenChange
         className={cn(
           "relative max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)]",
           modalSizes[size],
+          modalHeights[height],
           className,
         )}
         tabIndex={-1}

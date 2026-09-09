@@ -29,8 +29,8 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
  * - B/L: toggle NEGRO/LOGO overlay.
  * - Delete/Backspace: remove the selected library or schedule item.
  *
- * Suppressed while `suspended` (e.g. the Services modal is open) or when the
- * focused element is an input/select/textarea/button/link.
+ * Suppressed while `suspended` (any modal open — see `useAnyModalOpen`) or
+ * when the focused element is an input/select/textarea/button/link.
  */
 export function useGlobalShortcuts(suspended: boolean): void {
   useEffect(() => {

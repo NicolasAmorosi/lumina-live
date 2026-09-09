@@ -24,9 +24,10 @@ export const api = {
     getSnapshot: () => invoke("projection:getSnapshot", undefined),
   },
   files: {
-    pick: (kind: AssetKind, multiple: boolean) => invoke("files:pick", { kind, multiple }),
+    pick: (kind: AssetKind | "all", multiple: boolean) => invoke("files:pick", { kind, multiple }),
     probe: (path: string) => invoke("files:probe", { path }),
     setLogo: () => invoke("files:setLogo", undefined),
+    pickFolder: () => invoke("files:pickFolder", undefined),
   },
   deck: {
     get: (assetId: number) => invoke("deck:get", { assetId }),
@@ -49,10 +50,13 @@ export const api = {
     list: (kind: AssetKind) => invoke("library:list", { kind }),
     get: (id: number) => invoke("library:get", { id }),
     add: (paths: string[], kind: AssetKind) => invoke("library:add", { paths, kind }),
-    remove: (id: number) => invoke("library:remove", { id }),
+    remove: (id: number, force?: boolean) =>
+      invoke("library:remove", { id, ...(force !== undefined ? { force } : {}) }),
+    usages: (id: number) => invoke("library:usages", { id }),
     relocate: (id: number) => invoke("library:relocate", { id }),
     setLinkedAudio: (id: number, path: string | null) =>
       invoke("library:setLinkedAudio", { id, path }),
+    listFolder: (kind: AssetKind, path: string) => invoke("library:listFolder", { kind, path }),
   },
   services: {
     list: () => invoke("services:list", undefined),

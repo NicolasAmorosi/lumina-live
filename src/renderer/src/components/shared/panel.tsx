@@ -33,7 +33,7 @@ export function PanelHeader({
 
 export function PanelBody({ children, className, ...props }: PanelProps) {
   return (
-    <div className={cn("min-h-0 flex-1 overflow-y-auto", className)} {...props}>
+    <div className={cn("relative flex min-h-0 flex-1 flex-col overflow-y-auto", className)} {...props}>
       {children}
     </div>
   );

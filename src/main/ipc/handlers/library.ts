@@ -3,7 +3,8 @@ import fs from "node:fs";
 import { ASSET_EXTENSIONS } from "@shared/constants";
 import { IpcError } from "@shared/ipc/result";
 import type { Handlers } from "../register";
-import { getMediaRepo } from "../../services/repos";
+import { getMediaRepo, getServicesRepo } from "../../services/repos";
+import { removeMediaAsset } from "../../services/media-asset-removal";
 
 export const libraryHandlers: Pick<
   Handlers,
@@ -11,8 +12,10 @@ export const libraryHandlers: Pick<
   | "library:get"
   | "library:add"
   | "library:remove"
+  | "library:usages"
   | "library:relocate"
   | "library:setLinkedAudio"
+  | "library:listFolder"
 > = {
   "library:list": ({ kind }) => {
     getMediaRepo().sweep();
@@ -24,9 +27,11 @@ export const libraryHandlers: Pick<
   "library:add": ({ paths, kind }) =>
     paths.map((p) => getMediaRepo().upsertFromPath(p, kind, true)),
 
-  "library:remove": ({ id }) => {
-    getMediaRepo().remove(id);
+  "library:remove": ({ id, force }) => {
+    removeMediaAsset(id, force ?? false);
   },
+
+  "library:usages": ({ id }) => getServicesRepo().findUsages(id),
 
   "library:relocate": async ({ id }) => {
     const { dialog } = await import("electron");
@@ -49,5 +54,18 @@ export const libraryHandlers: Pick<
       }
     }
     return getMediaRepo().setLinkedAudio(id, audioPath);
+  },
+
+  "library:listFolder": ({ kind, path: folderPath }) => {
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(folderPath, { withFileTypes: true });
+    } catch {
+      return [];
+    }
+    const extensions = new Set<string>(ASSET_EXTENSIONS[kind]);
+    return entries
+      .filter((entry) => entry.isFile() && extensions.has(path.extname(entry.name).slice(1).toLowerCase()))
+      .map((entry) => getMediaRepo().upsertFromPath(path.join(folderPath, entry.name), kind, false));
   },
 };

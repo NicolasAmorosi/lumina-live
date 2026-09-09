@@ -96,11 +96,21 @@ ancho de la ventana:
 Las tres columnas del `<main>` son **`grid-cols-3`** — anchos iguales, ninguna de las tres tareas
 (explorar, montar, emitir) pesa visualmente más que las otras. No hay StatusBar ni indicador de
 "proyector conectado/desconectado" en el TopBar — LIMPIAR, la selección de pantalla y abrir/cerrar
-la proyección, el tema claro/oscuro y el logo se movieron todos a
+la proyección, el tema claro/oscuro y el idioma se movieron todos a
 `pages/settings/SettingsModal.tsx`, detrás del ícono de engranaje que reemplaza el título de la
-app. Esa modal sigue una única regla: **una configuración por fila, etiqueta a la izquierda y
-control(es) a la derecha, siempre en la misma línea** (`SettingsRow`, local al archivo — no vale
-la pena subirlo a `shared/` por una sola pantalla que lo usa).
+app.
+
+Esa modal es un panel de categorías estilo Ajustes de macOS, no una lista plana: `Modal
+size="2xl" height="tall"` (alto fijo grande — cambiar de categoría nunca redimensiona el diálogo)
+con `Tabs variant="sidebar"` a la izquierda (`components/ui/tabs.tsx`, la misma primitiva de
+`resources/`, con una tercera variante vertical) y, a la derecha, un panel scrolleable con una
+`sections/<nombre>-section.tsx` por categoría. Dentro de cada sección, `SettingsGroup` +
+`SettingsRow` (locales a `pages/settings/`, no valen la pena en `shared/` por una sola pantalla
+que los usa) agrupan filas relacionadas en una tarjeta con divisores; cada fila sigue la regla de
+siempre: etiqueta (+ descripción opcional) a la izquierda, control(es) a la derecha, sin wrap.
+Categorías de hoy: **Proyección** (pantalla, abrir/cerrar la ventana, logo, limpiar contenido en
+vivo) y **Sistema** (tema, idioma). Una configuración nueva entra en un grupo existente o crea uno
+dentro de su sección — no se agrega una tercera categoría sin necesidad.
 
 `go-live-bar.tsx` no existe más: el `EN VIVO` que antes vivía entre los monitores LIVE y PREVIEW
 ahora es el botón de la columna 2 del TopBar, y por eso las flechas de paginado de preview que

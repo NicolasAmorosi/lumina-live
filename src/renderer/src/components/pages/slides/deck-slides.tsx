@@ -3,6 +3,7 @@ import {
   Badge,
   Button,
   Callout,
+  EmptyState,
   Icon,
   IconButton,
   ProgressBar,
@@ -11,6 +12,7 @@ import {
   ThumbTile,
   Tooltip,
 } from "@renderer/components/ui";
+import { PreviewMissingState } from "@renderer/components/shared/preview-missing-state";
 import { useDeck } from "@renderer/lib/hooks/use-deck";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
@@ -70,14 +72,23 @@ function DeckAudioStrip({ assetId, deck }: { assetId: number; deck: DeckDTO }) {
   );
 }
 
-export function DeckSlides({ assetId }: { assetId: number }) {
+export function DeckSlides({ assetId, missingSince }: { assetId: number; missingSince: number | null }) {
   const t = useT();
-  const { entry, environment, locateSoffice, markStale, reconvert } = useDeck(assetId);
+  // A missing source file has nothing to convert — skip `useDeck`'s
+  // ensure/conversion trigger entirely instead of surfacing its
+  // "conversion failed" error for a file that was never going to exist.
+  const { entry, environment, locateSoffice, markStale, reconvert } = useDeck(
+    missingSince !== null ? null : assetId,
+  );
   const base = useProjectionStore((s) => s.base);
   const previewIndex = usePreviewStore((s) => s.slideIndex);
 
   const isLive = base?.kind === "deck" && base.assetId === assetId;
   const liveIndex = isLive ? base.slideIndex : null;
+
+  if (missingSince !== null) {
+    return <PreviewMissingState />;
+  }
 
   if (environment && !environment.available) {
     return (
@@ -120,7 +131,7 @@ export function DeckSlides({ assetId }: { assetId: number }) {
 
   const slides = entry.deck?.slides ?? [];
   if (slides.length === 0) {
-    return <p className="self-center text-sm text-subtle">{t("deck.noSlides")}</p>;
+    return <EmptyState icon="layers" title={t("deck.noSlides")} />;
   }
 
   return (

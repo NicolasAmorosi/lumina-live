@@ -1,5 +1,6 @@
 import type { LiHTMLAttributes, ReactNode } from "react";
 import { cn } from "@renderer/lib/utils";
+import { Icon } from "./icon";
 
 type ListRowProps = Omit<LiHTMLAttributes<HTMLLIElement>, "children"> & {
   /** On the projector right now — an on-air dot plus a coloured rail. */
@@ -7,6 +8,9 @@ type ListRowProps = Omit<LiHTMLAttributes<HTMLLIElement>, "children"> & {
   children: ReactNode;
   /** Drop indicator while a drag hovers just above this row. */
   dropBefore?: boolean;
+  /** Purely visual affordance for a `draggable` row — the row itself stays
+   *  draggable everywhere, this only hints that it can be. */
+  grip?: boolean;
   /** Position number in the gutter, the way EasyWorship numbers a schedule. */
   index?: number;
   leading?: ReactNode;
@@ -20,6 +24,7 @@ export function ListRow({
   children,
   className,
   dropBefore = false,
+  grip = false,
   index,
   leading,
   selected = false,
@@ -39,6 +44,7 @@ export function ListRow({
       {...props}
     >
       {active ? <span className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-on-air" /> : null}
+      {grip ? <Icon className="shrink-0 cursor-grab text-subtle" name="grip" /> : null}
       {index !== undefined ? (
         <span className="w-4 shrink-0 text-right text-xs tabular-nums text-subtle">{index}</span>
       ) : null}

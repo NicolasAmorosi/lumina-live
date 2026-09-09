@@ -9,6 +9,7 @@ import type {
   ServiceSummary,
   ServiceUpsert,
 } from "@shared/types/service";
+import type { MediaAssetUsage } from "@shared/types/media";
 
 function toItemDTO(row: typeof serviceItems.$inferSelect): ServiceItemDTO {
   const base = { id: row.id, position: row.position, title: row.title };
@@ -141,6 +142,33 @@ export class ServicesRepo {
 
   delete(id: number): void {
     this.db.delete(services).where(eq(services.id, id)).run();
+  }
+
+  /** Which saved services still reference `assetId`, for the "delete anyway"
+   *  confirmation — the FK violation itself doesn't say which service. */
+  findUsages(assetId: number): MediaAssetUsage[] {
+    const rows = this.db
+      .select({
+        serviceId: services.id,
+        serviceName: services.name,
+        serviceDate: services.serviceDate,
+        itemCount: count(),
+      })
+      .from(serviceItems)
+      .innerJoin(services, eq(serviceItems.serviceId, services.id))
+      .where(eq(serviceItems.mediaAssetId, assetId))
+      .groupBy(services.id)
+      .all();
+    return rows;
+  }
+
+  /** Removes every item pointing at `assetId` across all services — the only
+   *  way to free the `onDelete: "restrict"` FK on `service_items.media_asset_id`,
+   *  since the table's CHECK constraint forbids a `media`/`ppt` item with a
+   *  null asset. Leaves gaps in `position`, which `load()`'s ORDER BY and the
+   *  next `save()`'s reindex both tolerate. */
+  deleteItemsByMediaAsset(assetId: number): void {
+    this.db.delete(serviceItems).where(eq(serviceItems.mediaAssetId, assetId)).run();
   }
 }
 

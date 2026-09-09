@@ -1,11 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { eq, and } from "drizzle-orm";
+import Database from "better-sqlite3";
 import type { Db } from "../client";
 import { mediaAssets } from "../schema";
-import type { AssetKind } from "@shared/constants";
+import { LINKED_AUDIO_RESOLVER_VERSION, type AssetKind } from "@shared/constants";
 import type { MediaAsset } from "@shared/types/media";
 import { resolveLinkedAudio } from "../../slides/linked-audio";
+import { IpcError } from "@shared/ipc/result";
 
 function toPathKey(filePath: string): string {
   const normalized = path.normalize(filePath).normalize("NFC");
@@ -92,6 +94,10 @@ export class MediaRepo {
         sizeBytes: stat.size,
         mtimeMs: Math.trunc(stat.mtimeMs),
         linkedAudioPath,
+        // Already resolved above at the current rules — mark it so
+        // `ensureLinkedAudio` doesn't immediately redo the same I/O the
+        // first time this deck is opened.
+        linkedAudioResolvedVersion: kind === "ppt" ? LINKED_AUDIO_RESOLVER_VERSION : 0,
         inLibrary: inLibrary ? 1 : 0,
         lastSeenAt: now,
         missingSince: null,
@@ -105,8 +111,26 @@ export class MediaRepo {
     return toDTO(row);
   }
 
+  /** Throws `IpcError("MEDIA_ASSET_IN_USE")` when the asset is still referenced
+   *  by a service item (`onDelete: "restrict"` in the schema) — a saved
+   *  service's history must not silently lose an item.
+   *
+   *  SQLite reports a RESTRICT violation as `SQLITE_CONSTRAINT_TRIGGER`, not
+   *  `SQLITE_CONSTRAINT_FOREIGNKEY` (that code is only for an immediate FK
+   *  check, e.g. an insert with a bad reference) — RESTRICT is implemented
+   *  internally as a trigger, so the message is the one stable signal. */
   remove(id: number): void {
-    this.db.delete(mediaAssets).where(eq(mediaAssets.id, id)).run();
+    try {
+      this.db.delete(mediaAssets).where(eq(mediaAssets.id, id)).run();
+    } catch (error) {
+      if (error instanceof Database.SqliteError && error.message.includes("FOREIGN KEY constraint failed")) {
+        throw new IpcError({
+          code: "MEDIA_ASSET_IN_USE",
+          message: `Media asset ${id} is still referenced by a service item`,
+        });
+      }
+      throw error;
+    }
   }
 
   getById(id: number): MediaAsset | null {
@@ -126,30 +150,55 @@ export class MediaRepo {
 
   /** Manual override for when the heuristic in `linked-audio.ts` guesses
    *  wrong (or there's simply no matching file yet) — set from the "Assign
-   *  audio" control. `null` clears it back to automatic resolution. */
+   *  audio" / "Remove" controls. `audioPath: null` means "this deck has no
+   *  audio", not "go back to guessing" — either way, this is an explicit
+   *  operator decision, so it also flips `linkedAudioManual` and freezes
+   *  `ensureLinkedAudio` for this asset. */
   setLinkedAudio(id: number, audioPath: string | null): MediaAsset | null {
     const row = this.db.select().from(mediaAssets).where(eq(mediaAssets.id, id)).get();
     if (!row) return null;
     this.db
       .update(mediaAssets)
-      .set({ linkedAudioPath: audioPath, updatedAt: Date.now() })
+      .set({
+        linkedAudioPath: audioPath,
+        linkedAudioManual: 1,
+        linkedAudioResolvedVersion: LINKED_AUDIO_RESOLVER_VERSION,
+        updatedAt: Date.now(),
+      })
       .where(eq(mediaAssets.id, id))
       .run();
-    return toDTO({ ...row, linkedAudioPath: audioPath });
+    return toDTO({ ...row, linkedAudioPath: audioPath, linkedAudioManual: 1 });
   }
 
-  /** Re-resolves the linked audio for a `ppt` asset when the stored path is
-   *  empty or has gone missing — covers library entries added before the
-   *  resolver could find their sibling, or before this heuristic existed. */
+  /** Re-resolves the linked audio for a `ppt` asset, unless the operator
+   *  already made an explicit call (`linkedAudioManual`) — that decision
+   *  always wins over the heuristic. Called on every deck load (`peek`/
+   *  `ensure` fire on every switch between decks in the UI), so the fast
+   *  path matters: `resolveLinkedAudio` reads the whole folder and, for
+   *  legacy binaries, the whole presentation file into memory to extract its
+   *  hint — reasonable once, not on every click. A row already resolved at
+   *  the current `LINKED_AUDIO_RESOLVER_VERSION` is trusted as-is (even a
+   *  cached "no match") as long as its file, if any, still exists; only a
+   *  stale version or a missing file pays for a full re-resolution. That
+   *  version bump is what self-corrects assets linked under an older,
+   *  looser version of the matching rules without a per-asset manual fix. */
   ensureLinkedAudio(id: number): void {
     const row = this.db.select().from(mediaAssets).where(eq(mediaAssets.id, id)).get();
     if (!row || row.kind !== "ppt") return;
-    if (row.linkedAudioPath && fs.existsSync(row.linkedAudioPath)) return;
+    if (row.linkedAudioManual === 1) return;
+    const upToDate = row.linkedAudioResolvedVersion === LINKED_AUDIO_RESOLVER_VERSION;
+    const fileStillThere = row.linkedAudioPath === null || fs.existsSync(row.linkedAudioPath);
+    if (upToDate && fileStillThere) return;
+
     const resolved = resolveLinkedAudio(row.path);
-    if (resolved !== row.linkedAudioPath) {
+    if (resolved !== row.linkedAudioPath || !upToDate) {
       this.db
         .update(mediaAssets)
-        .set({ linkedAudioPath: resolved, updatedAt: Date.now() })
+        .set({
+          linkedAudioPath: resolved,
+          linkedAudioResolvedVersion: LINKED_AUDIO_RESOLVER_VERSION,
+          updatedAt: Date.now(),
+        })
         .where(eq(mediaAssets.id, id))
         .run();
     }

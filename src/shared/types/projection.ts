@@ -85,9 +85,12 @@ export type MediaStatus = {
 /**
  * One audio element the projection window should keep mounted, independent of
  * `ProjectionOutput` — a deck's soundtrack and any number of standalone audio
- * assets sent live all have to survive NEGRO/LOGO and every slide change, so
- * none of them can be keyed off `output`. `paused` is declarative for the same
- * reason as `VideoUnderlay.paused`.
+ * assets sent live all have to survive every slide change, so none of them
+ * can be keyed off `output`. `paused` is declarative for the same reason as
+ * `VideoUnderlay.paused` — with one difference: for the deck's own soundtrack,
+ * the control window folds NEGRO/LOGO into this `paused` before sending it
+ * (see `projection-sync.ts`), so it pauses/resumes through an overlay exactly
+ * like a video; a standalone asset track is untouched by the overlay.
  *
  * `startAtSeconds` is applied once, right after the element mounts (the
  * operator's chosen start point from the preview scrubber) — folding it into

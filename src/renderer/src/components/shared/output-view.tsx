@@ -2,7 +2,7 @@ import { useEffect, useRef, type Ref } from "react";
 import { cn } from "@renderer/lib/utils";
 import type { ProjectionOutput } from "@shared/types/projection";
 
-export type OutputViewMode = "live" | "monitor";
+export type OutputViewMode = "live" | "preview" | "monitor";
 
 type LiveVideoProps = {
   /** NEGRO/LOGO is over the video right now. */
@@ -28,16 +28,23 @@ type LiveVideoProps = {
  * for nothing.
  *
  * Covering it pauses it and holds its position, rather than letting it run on
- * unseen: the operator expects NEGRO to stop the video. That is deliberately
- * the opposite of a deck's soundtrack (`ProjectionApp`), which is meant to keep
- * playing through an overlay.
+ * unseen: the operator expects NEGRO to stop the video. A deck's own
+ * soundtrack (`ProjectionApp`) now follows the same rule; only a standalone
+ * audio asset sent live is meant to keep playing through an overlay.
  */
 function LiveVideo({ covered, mode, paused, startAtSeconds, url, videoRef }: LiveVideoProps) {
   const elementRef = useRef<HTMLVideoElement | null>(null);
-  const shouldPlay = mode === "live" && !covered && !paused;
+  // "monitor" (the LIVE confidence monitor) stays frozen on its first frame;
+  // "live" and "preview" both drive real playback through this element.
+  const canPlay = mode !== "monitor";
+  const shouldPlay = canPlay && !covered && !paused;
 
   function attach(element: HTMLVideoElement | null) {
     elementRef.current = element;
+    // Belt-and-suspenders alongside the `muted` attribute below: an explicit
+    // `volume = 0` on every non-"live" mode means a future mode that forgets
+    // to check `muted` still can't make this element audible.
+    if (element && mode !== "live") element.volume = 0;
     if (typeof videoRef === "function") videoRef(element);
     else if (videoRef) (videoRef as { current: HTMLVideoElement | null }).current = element;
   }
@@ -47,10 +54,10 @@ function LiveVideo({ covered, mode, paused, startAtSeconds, url, videoRef }: Liv
   // driven imperatively.
   useEffect(() => {
     const element = elementRef.current;
-    if (!element || mode !== "live") return;
+    if (!element || !canPlay) return;
     if (shouldPlay) element.play().catch(() => undefined);
     else element.pause();
-  }, [mode, shouldPlay]);
+  }, [canPlay, shouldPlay]);
 
   // The component is keyed by epoch at the call site, so this instance only
   // ever has one `startAtSeconds` for its whole lifetime — applying it once,
@@ -70,8 +77,10 @@ function LiveVideo({ covered, mode, paused, startAtSeconds, url, videoRef }: Liv
   return (
     <video
       autoPlay={shouldPlay}
-      className={cn("max-h-full max-w-full", covered && "hidden")}
-      muted={mode === "monitor"}
+      className={cn("size-full object-contain", covered && "hidden")}
+      // Whitelist, not a check against "monitor": any future mode is muted
+      // by default and only the real projector ever gets sound.
+      muted={mode !== "live"}
       preload="metadata"
       ref={attach}
       src={url}
@@ -83,8 +92,11 @@ type OutputViewProps = {
   className?: string;
   /**
    * "live" is the projection window itself: video autoplays and is wired to
-   * the media refs. "monitor" is a confidence monitor — same pixels, muted and
-   * inert.
+   * the media refs, with sound. "preview" is the operator's preview monitor:
+   * same pixels, muted, but a video CAN play there under the operator's own
+   * play button (see `preview-media-bar.tsx`) — never automatically. "monitor"
+   * is the LIVE confidence monitor — same pixels, muted and inert, frozen on
+   * the first frame.
    */
   mode: OutputViewMode;
   output: ProjectionOutput;
@@ -98,7 +110,11 @@ type OutputViewProps = {
  *
  * Type sizes are in `cqw`, not `vw`: the root is a container, so the exact same
  * markup scales from a 240px monitor to a 4K projector with no per-size
- * variants.
+ * variants. Video/image/slide media scale the same way, but by `object-contain`
+ * on a `size-full` element rather than by type size: a source smaller than the
+ * output (a 360p video, say) is stretched up to fill it — never left at native
+ * size — while keeping its aspect ratio, so a monitor never shows content
+ * smaller, relative to its box, than the projector shows it.
  */
 export function OutputView({ className, mode, output, videoRef }: OutputViewProps) {
   // Warm the neighbouring slides so a change never waits on a decode. Plain
@@ -122,7 +138,7 @@ export function OutputView({ className, mode, output, videoRef }: OutputViewProp
       )}
     >
       {(output.kind === "logo" && output.url) || output.kind === "image" ? (
-        <img alt="" className="max-h-full max-w-full object-contain" src={output.url ?? undefined} />
+        <img alt="" className="size-full object-contain" src={output.url ?? undefined} />
       ) : null}
 
       {/* No `key` on the slide image: swapping the src attribute lets React
@@ -130,7 +146,7 @@ export function OutputView({ className, mode, output, videoRef }: OutputViewProp
       {output.kind === "slide" ? (
         <img
           alt=""
-          className="max-h-full max-w-full object-contain"
+          className="size-full object-contain"
           decoding={mode === "live" ? "sync" : "async"}
           src={output.url}
         />

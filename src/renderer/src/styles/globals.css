@@ -70,7 +70,8 @@
   --wa-accent-light: #84adfc;
   --wa-danger: #d0021b;
   --wa-success: #2b8500;
-  --wa-warning: #fff664;
+  --wa-warning: #cd4900;
+  --wa-warning-foreground: #ffffff;
   --wa-on-air: #d0021b;
   --wa-border: #12294a;
   --wa-border-light: #1e3d66;
@@ -97,6 +98,7 @@
   --wa-danger: #d0021b;
   --wa-success: #355724;
   --wa-warning: #cd4900;
+  --wa-warning-foreground: #ffffff;
   --wa-on-air: #d0021b;
   --wa-border: #d7dee7;
   --wa-border-light: #c2ccd9;
@@ -132,6 +134,7 @@
   --color-success: var(--wa-success);
   --color-success-foreground: #ffffff;
   --color-warning: var(--wa-warning);
+  --color-warning-foreground: var(--wa-warning-foreground);
   /* Scarlett, reserved for ONE meaning: content is on the projector right now. */
   --color-on-air: var(--wa-on-air);
   --color-on-air-foreground: #ffffff;

@@ -13,12 +13,16 @@ type AudioTrackElementProps = {
 /**
  * One live audio track. Any number of these can be mounted at once — a deck's
  * soundtrack plus every standalone audio asset sent live — each independent
- * of `OutputView` because none of them are keyed off what's on screen: they
- * have to keep playing through NEGRO/LOGO and every slide change.
+ * of `OutputView` because none of them are keyed off what's on screen, and
+ * the element itself is never remounted by a slide change.
  *
  * `paused` is declarative (set from the control window's media panel), so an
  * operator's explicit pause survives an overlay round-trip and a projection
- * window reload the same way `LiveVideo`'s does.
+ * window reload the same way `LiveVideo`'s does. A standalone asset track
+ * keeps playing through NEGRO/LOGO; the deck's own soundtrack does not — the
+ * control window (`projection-sync.ts`) folds the overlay into this track's
+ * `paused` before it ever reaches here, so NEGRO/LOGO pauses and holds it
+ * exactly like `LiveVideo` does for a video.
  */
 function AudioTrackElement({ onRef, track }: AudioTrackElementProps) {
   const elementRef = useRef<HTMLAudioElement | null>(null);
@@ -64,8 +68,9 @@ function AudioTrackElement({ onRef, track }: AudioTrackElementProps) {
  * There are two inputs, not one. `display-content` says what pixels to show;
  * `audio-tracks` says which audio elements should exist — a deck's soundtrack
  * and any number of standalone audio assets sent live, none of them keyed off
- * the current output because they have to outlive every slide change and keep
- * playing through NEGRO/LOGO.
+ * the current output because they have to outlive every slide change (only a
+ * standalone asset keeps playing through NEGRO/LOGO itself — see
+ * `AudioTrackElement`).
  *
  * The pixels themselves are `OutputView`, the very component the control
  * window's monitors use, so a confidence monitor can never disagree with the

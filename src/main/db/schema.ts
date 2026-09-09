@@ -26,6 +26,17 @@ export const mediaAssets = sqliteTable(
     mtimeMs: integer("mtime_ms"),
     durationMs: integer("duration_ms"),
     linkedAudioPath: text("linked_audio_path"),
+    /** Set once the operator explicitly assigns or removes a linked audio
+     *  (`library:setLinkedAudio`) — freezes `ensureLinkedAudio`'s automatic
+     *  re-resolution for this asset, so "remove" actually means "no audio"
+     *  instead of "guess again on the next refresh". */
+    linkedAudioManual: integer("linked_audio_manual").notNull().default(0),
+    /** Which `LINKED_AUDIO_RESOLVER_VERSION` produced the current
+     *  `linkedAudioPath` for a non-manual row. Lets `ensureLinkedAudio` trust
+     *  a cached result (including a cached "no match") instead of re-reading
+     *  the folder/file on every deck open, while still forcing one re-check
+     *  per asset when the matching rules change. */
+    linkedAudioResolvedVersion: integer("linked_audio_resolved_version").notNull().default(0),
     inLibrary: integer("in_library").notNull().default(1),
     lastSeenAt: integer("last_seen_at"),
     missingSince: integer("missing_since"),

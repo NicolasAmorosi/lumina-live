@@ -28,6 +28,7 @@ export function AssetTile({ asset, kind, onClick, onDoubleClick, onDragStart, se
   const t = useT();
   const deckThumb = useDeckThumb(kind === "ppt" ? asset.id : null);
   const url = assetUrl(asset.id);
+  const missing = asset.missingSince !== null;
 
   return (
     <ThumbTile
@@ -38,19 +39,19 @@ export function AssetTile({ asset, kind, onClick, onDoubleClick, onDragStart, se
       onDoubleClick={onDoubleClick}
       onDragStart={onDragStart}
       media={
-        kind === "video" ? (
+        !missing && kind === "video" ? (
           <video className="size-full object-contain" muted preload="metadata" src={url} />
         ) : undefined
       }
       overlay={
-        asset.missingSince !== null ? (
-          <Badge className="absolute inset-x-1 bottom-1 justify-center" variant="danger">
-            {t("library.missing")}
-          </Badge>
+        missing ? (
+          <span className="absolute inset-0 flex items-center justify-center">
+            <Badge variant="danger">{t("library.missing")}</Badge>
+          </span>
         ) : undefined
       }
       selected={selected}
-      src={kind === "image" ? url : kind === "ppt" ? deckThumb : null}
+      src={missing ? null : kind === "image" ? url : kind === "ppt" ? deckThumb : null}
     />
   );
 }

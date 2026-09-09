@@ -1,33 +1,63 @@
-import { useEffect, type DragEvent } from "react";
+import { useEffect, useState, type DragEvent } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
-import { Button, EmptyState } from "@renderer/components/ui";
+import { Button, Callout, EmptyState, Icon, IconButton, Tooltip } from "@renderer/components/ui";
 import { PanelBody, PanelFooter } from "@renderer/components/shared/panel";
-import { useLibraryStore } from "@renderer/stores/library.store";
+import { folderAssetsKey, useLibraryStore } from "@renderer/stores/library.store";
 import { useServiceStore } from "@renderer/stores/service.store";
+import { useSettingsStore } from "@renderer/stores/settings.store";
 import { api } from "@renderer/lib/api";
 import { readOsFilesDrag, setMediaAssetDrag } from "@renderer/lib/dnd";
 import { previewAsset } from "@renderer/lib/actions/preview";
 import { goLive } from "@renderer/lib/actions/playback";
+import { removeAsset } from "@renderer/lib/actions/remove-asset";
+import { addLinkedFolder, removeLinkedFolder, selectMediaSourceView } from "@renderer/lib/actions/library-folders";
 import { AssetTile } from "./asset-tile";
+import { MediaSourceBar } from "./media-source-bar";
+import { RemoveAssetConfirm } from "./remove-asset-confirm";
 import type { AssetKind } from "@shared/constants";
+
+/** How long the "in use" notice stays up before it auto-dismisses. */
+const REMOVE_BLOCKED_TIMEOUT_MS = 6000;
 
 /**
  * The library for one kind of asset, as a thumbnail grid. Click previews,
  * double-click goes live, drag adds to the schedule — an asset never has to be
  * in the schedule to be shown, which is what EasyWorship's resource area does.
+ *
+ * Two sources feed the grid: the added-to-library list ("recent"), or one of
+ * this kind's linked folders, browsed live from disk (`MediaSourceBar`).
  */
 export function MediaBrowser({ kind }: { kind: AssetKind }) {
   const t = useT();
-  const assets = useLibraryStore((s) => s.byKind[kind]);
+  const recentAssets = useLibraryStore((s) => s.byKind[kind]);
   const selectedId = useLibraryStore((s) => s.selectedId);
   const refresh = useLibraryStore((s) => s.refresh);
   const addFiles = useLibraryStore((s) => s.addFiles);
-  const remove = useLibraryStore((s) => s.remove);
+  const blockedAssetId = useLibraryStore((s) => s.blockedAssetId);
+  const dismissBlocked = useLibraryStore((s) => s.dismissBlocked);
   const addItem = useServiceStore((s) => s.addItem);
+  const [confirmAssetId, setConfirmAssetId] = useState<number | null>(null);
+  const activeView = useLibraryStore((s) => s.activeView[kind]);
+  const refreshFolder = useLibraryStore((s) => s.refreshFolder);
+  const folders = useSettingsStore((s) => s.settings["library.linkedFolders"][kind]);
+  const folderAssets = useLibraryStore((s) => s.folderAssets[folderAssetsKey(kind, activeView)]);
+
+  const isFolderView = activeView !== "recent";
+  const assets = isFolderView ? (folderAssets ?? []) : recentAssets;
 
   useEffect(() => {
     void refresh(kind);
   }, [kind, refresh]);
+
+  useEffect(() => {
+    if (isFolderView) void refreshFolder(kind, activeView);
+  }, [kind, activeView, isFolderView, refreshFolder]);
+
+  useEffect(() => {
+    if (blockedAssetId === null) return;
+    const timeout = setTimeout(dismissBlocked, REMOVE_BLOCKED_TIMEOUT_MS);
+    return () => clearTimeout(timeout);
+  }, [blockedAssetId, dismissBlocked]);
 
   async function handleAdd() {
     const paths = await api.files.pick(kind, true);
@@ -45,6 +75,13 @@ export function MediaBrowser({ kind }: { kind: AssetKind }) {
 
   return (
     <>
+      <MediaSourceBar
+        activeView={activeView}
+        folders={folders}
+        onAddFolder={() => void addLinkedFolder(kind)}
+        onRemoveFolder={(folderPath) => void removeLinkedFolder(kind, folderPath)}
+        onSelectView={(view) => selectMediaSourceView(kind, view)}
+      />
       <PanelBody
         className="p-1.5"
         onDragOver={(e) => e.preventDefault()}
@@ -71,34 +108,71 @@ export function MediaBrowser({ kind }: { kind: AssetKind }) {
           </div>
         )}
       </PanelBody>
+      {blockedAssetId !== null ? (
+        <Callout
+          className="mx-1.5 mb-1.5"
+          dismissLabel={t("library.removeDismiss")}
+          onDismiss={dismissBlocked}
+          tone="danger"
+        >
+          <p>{t("library.removeBlocked")}</p>
+          <Button
+            className="mt-2"
+            onClick={() => {
+              setConfirmAssetId(blockedAssetId);
+              dismissBlocked();
+            }}
+            size="xs"
+            variant="danger"
+          >
+            {t("library.removeAnyway")}
+          </Button>
+        </Callout>
+      ) : null}
+      <RemoveAssetConfirm
+        assetId={confirmAssetId}
+        assetMissing={recentAssets.find((a) => a.id === confirmAssetId)?.missingSince != null}
+        onOpenChange={(open) => {
+          if (!open) setConfirmAssetId(null);
+        }}
+      />
       <PanelFooter>
-        <Button onClick={() => void handleAdd()} size="xs" variant="secondary">
-          {t("library.add")}
-        </Button>
-        <Button
-          disabled={selectedId === null}
-          onClick={() =>
-            selectedId !== null &&
-            addItem(
-              kind === "ppt"
-                ? { kind: "ppt", mediaAssetId: selectedId, title: null }
-                : { kind: "media", mediaAssetId: selectedId, title: null },
-            )
-          }
-          size="xs"
-          variant="ghost"
-        >
-          {t("resources.addToSchedule")}
-        </Button>
-        <Button
-          className="ml-auto"
-          disabled={selectedId === null}
-          onClick={() => selectedId !== null && void remove(selectedId)}
-          size="xs"
-          variant="ghost"
-        >
-          {t("library.remove")}
-        </Button>
+        <Tooltip align="start" content={t("library.addHint")} placement="top">
+          <IconButton aria-label={t("library.add")} onClick={() => void handleAdd()} size="sm" variant="success">
+            <Icon name="add" />
+          </IconButton>
+        </Tooltip>
+        {!isFolderView ? (
+          <Tooltip align="start" content={t("library.removeHint")} placement="top">
+            <IconButton
+              aria-label={t("library.remove")}
+              disabled={selectedId === null}
+              onClick={() => selectedId !== null && void removeAsset(selectedId)}
+              size="sm"
+              variant="warning"
+            >
+              <Icon name="close" />
+            </IconButton>
+          </Tooltip>
+        ) : null}
+        <Tooltip className="ml-auto" content={t("resources.addToScheduleHint")} placement="top">
+          <IconButton
+            aria-label={t("resources.addToSchedule")}
+            disabled={selectedId === null}
+            onClick={() =>
+              selectedId !== null &&
+              addItem(
+                kind === "ppt"
+                  ? { kind: "ppt", mediaAssetId: selectedId, title: null }
+                  : { kind: "media", mediaAssetId: selectedId, title: null },
+              )
+            }
+            size="sm"
+            variant="primary"
+          >
+            <Icon name="addToSchedule" />
+          </IconButton>
+        </Tooltip>
       </PanelFooter>
     </>
   );

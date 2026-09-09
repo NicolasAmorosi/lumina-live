@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Button, DialogContent, DialogFooter, DialogHeader, Title } from "@renderer/components/ui";
+import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { Modal } from "./Modal";
 
 type ConfirmModalProps = {
   confirmLabel?: string;
   danger?: boolean;
-  description?: string;
+  description?: ReactNode;
   onConfirm: () => Promise<void> | void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
@@ -13,7 +14,7 @@ type ConfirmModalProps = {
 };
 
 export function ConfirmModal({
-  confirmLabel = "Confirmar",
+  confirmLabel,
   danger = false,
   description,
   onConfirm,
@@ -21,6 +22,7 @@ export function ConfirmModal({
   open,
   title,
 }: ConfirmModalProps) {
+  const t = useT();
   const [loading, setLoading] = useState(false);
 
   async function handleConfirm() {
@@ -43,10 +45,10 @@ export function ConfirmModal({
       {description ? <DialogContent className="text-sm text-muted-foreground">{description}</DialogContent> : null}
       <DialogFooter>
         <Button onClick={() => onOpenChange(false)} variant="ghost">
-          Cancelar
+          {t("common.cancel")}
         </Button>
         <Button loading={loading} onClick={handleConfirm} variant={danger ? "danger" : "primary"}>
-          {confirmLabel}
+          {confirmLabel ?? t("common.confirm")}
         </Button>
       </DialogFooter>
     </Modal>

@@ -1,5 +1,9 @@
 import { api } from "@renderer/lib/api";
-import { useProjectionStore, type LiveDeck } from "@renderer/stores/projection.store";
+import {
+  useProjectionStore,
+  type LiveDeck,
+  type ProjectionStoreState,
+} from "@renderer/stores/projection.store";
 import { DECK_SOUNDTRACK_TRACK_ID, useAudioStore } from "@renderer/stores/audio.store";
 import { mediaTargetKey } from "@shared/types/projection";
 import { SLIDES_MIN_ADVANCE_MS } from "@shared/constants";
@@ -41,6 +45,17 @@ function clearTimer(): void {
   }
 }
 
+/** NEGRO/LOGO pauses the deck's own soundtrack (`projection-sync.ts`), and,
+ *  so the two can never drift apart, must freeze slide auto-advance right
+ *  along with it — otherwise this module's wall-clock timers would keep
+ *  firing while the audio sits paused behind the overlay, and uncovering
+ *  would reveal a slide further ahead than the music. A deck with no
+ *  soundtrack has nothing to stay in sync with, so it's left untouched
+ *  (matches the existing `liveDeck?.soundtrack` guard on `pauseAutoplay`). */
+function isFrozenByCover(state: Pick<ProjectionStoreState, "overlay" | "liveDeck">): boolean {
+  return state.overlay !== "none" && !!state.liveDeck?.soundtrack;
+}
+
 function advanceMsFor(deck: LiveDeck, slideIndex: number): number | null {
   const advance = deck.slides[slideIndex - 1]?.advanceAfterMs;
   return advance === null || advance === undefined
@@ -64,6 +79,7 @@ function scheduleDetached(): void {
   const state = useProjectionStore.getState();
   const { liveDeck, base, autoplay } = state;
   if (autoplay !== "playing" || !liveDeck || base?.kind !== "deck") return;
+  if (isFrozenByCover(state)) return;
 
   const advance = advanceMsFor(liveDeck, base.slideIndex);
   if (advance === null) return;
@@ -93,6 +109,7 @@ function scheduleSynced(audioTimeMs: number): void {
   const state = useProjectionStore.getState();
   const { liveDeck, base, autoplay } = state;
   if (autoplay !== "playing" || !liveDeck || base?.kind !== "deck") return;
+  if (isFrozenByCover(state)) return;
 
   const nextBoundary = liveDeck.cumulativeMs[base.slideIndex + 1];
   if (nextBoundary === undefined) return;
@@ -217,6 +234,10 @@ export function startDeckAutoplay(): () => void {
         return;
       }
       if (state.autoplay !== "playing" || state.autoplayMode !== "synced") return;
+      // Guards against the `pause` status event that covering itself causes:
+      // without this, `scheduleSynced` would arm a real-time timeout against
+      // a clock that has actually stopped advancing behind the overlay.
+      if (isFrozenByCover(state)) return;
 
       const audioTimeMs = status.currentTimeSeconds * 1000;
       const expected = slideAtAudioTime(deck, audioTimeMs);
@@ -225,9 +246,29 @@ export function startDeckAutoplay(): () => void {
     },
   );
 
+  // Freezes/re-arms auto-advance in lockstep with NEGRO/LOGO covering the
+  // deck's soundtrack (see `isFrozenByCover`). "synced" mode needs no explicit
+  // re-arm here: resuming the `<audio>` element fires its own `play` event,
+  // which reaches `unsubscribeStatus` above and reschedules from there.
+  // "detached" mode has no such signal — its timer is pure wall-clock — so it
+  // has to be re-armed explicitly once uncovered.
+  const unsubscribeOverlay = useProjectionStore.subscribe(
+    (state) => state.overlay,
+    (overlay) => {
+      const state = useProjectionStore.getState();
+      if (!state.liveDeck?.soundtrack || state.base?.kind !== "deck") return;
+      if (overlay !== "none") {
+        clearTimer();
+        return;
+      }
+      if (state.autoplay === "playing" && state.autoplayMode === "detached") scheduleDetached();
+    },
+  );
+
   return () => {
     clearTimer();
     unsubscribeDeck();
     unsubscribeStatus();
+    unsubscribeOverlay();
   };
 }

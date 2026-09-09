@@ -7,6 +7,7 @@ import { useBibleStore } from "@renderer/stores/bible.store";
 import { useAudioStore, nextAssetTrack } from "@renderer/stores/audio.store";
 import { notifyManualNavigation } from "@renderer/effects/deck-autoplay";
 import { projectVerse } from "@renderer/lib/actions/bible";
+import { stopPreviewPlayback } from "@renderer/lib/actions/preview-playback";
 import { api } from "@renderer/lib/api";
 import { assetUrl } from "@shared/urls";
 import type { MediaAsset } from "@shared/types/media";
@@ -196,8 +197,13 @@ async function goLiveWithAsset(
  * double-clicking a row, a tile or a verse — so all four can never diverge.
  */
 export async function goLive(): Promise<void> {
-  const { slideIndex, startAtSeconds, target } = usePreviewStore.getState();
+  const { slideIndex, positionSeconds, target } = usePreviewStore.getState();
   if (!target) return;
+
+  // Whatever the preview video was doing, it stops the moment its file goes
+  // live — the projector picks up from `positionSeconds` below, so there is
+  // never more than one active decode of the same file at once.
+  stopPreviewPlayback();
 
   // If nothing is projected yet, the very act of going live is what turns the
   // projector on — the app itself never opens it on launch any more.
@@ -205,10 +211,10 @@ export async function goLive(): Promise<void> {
 
   switch (target.kind) {
     case "scheduleItem":
-      await goLiveWithScheduleItem(target.index, slideIndex, startAtSeconds);
+      await goLiveWithScheduleItem(target.index, slideIndex, positionSeconds);
       return;
     case "asset":
-      await goLiveWithAsset(target.assetId, target.assetKind, slideIndex, startAtSeconds);
+      await goLiveWithAsset(target.assetId, target.assetKind, slideIndex, positionSeconds);
       return;
     case "verse":
       useServiceStore.getState().setActive(null);

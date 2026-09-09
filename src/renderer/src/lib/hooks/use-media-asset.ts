@@ -33,3 +33,11 @@ export function useMediaAsset(id: number | null): MediaAsset | null {
 
   return id !== null ? (cache.get(id) ?? null) : null;
 }
+
+/** Drops a deleted asset from the module-level cache so a stale name/thumb
+ *  doesn't keep rendering for a schedule row that no longer has one. Doesn't
+ *  itself trigger a re-render — callers already touch a store, which is what
+ *  actually reruns the consumers of `useMediaAsset` above. */
+export function forgetMediaAsset(id: number): void {
+  cache.delete(id);
+}

@@ -1,0 +1,1 @@
+ALTER TABLE `media_assets` ADD `linked_audio_resolved_version` integer DEFAULT 0 NOT NULL;

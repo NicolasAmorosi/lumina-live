@@ -12,6 +12,7 @@ type ServiceStoreState = {
   newPlaylist: () => void;
   addItem: (item: ServiceItemUpsert) => void;
   removeAt: (index: number) => void;
+  removeByMediaAsset: (assetId: number) => void;
   moveUp: (index: number) => void;
   moveDown: (index: number) => void;
   reorder: (from: number, to: number) => void;
@@ -62,6 +63,30 @@ export const useServiceStore = create<ServiceStoreState>((set, get) => ({
       const items = reindex(state.items.filter((_, i) => i !== index));
       const selectedIndex = state.selectedIndex === index ? null : state.selectedIndex;
       return { items, selectedIndex };
+    }),
+
+  /** Used when a media/ppt asset is force-deleted from the library: every item
+   *  pointing at it must go, wherever it sits in the schedule — unlike
+   *  `removeAt`, which only ever removes one row by position and (as a known,
+   *  separate bug) doesn't remap `selectedIndex`/`activeIndex` either. This
+   *  remaps both cursors to the survivors' new positions instead of just
+   *  clearing them, so an unrelated selection doesn't jump to null. */
+  removeByMediaAsset: (assetId) =>
+    set((state) => {
+      const remap = new Map<number, number>();
+      const survivors: ServiceItemDTO[] = [];
+      state.items.forEach((item, oldIndex) => {
+        const isTarget = (item.kind === "media" || item.kind === "ppt") && item.mediaAssetId === assetId;
+        if (isTarget) return;
+        remap.set(oldIndex, survivors.length);
+        survivors.push(item);
+      });
+      const remapIndex = (index: number | null) => (index === null ? null : (remap.get(index) ?? null));
+      return {
+        items: reindex(survivors),
+        selectedIndex: remapIndex(state.selectedIndex),
+        activeIndex: remapIndex(state.activeIndex),
+      };
     }),
 
   moveUp: (index) => {

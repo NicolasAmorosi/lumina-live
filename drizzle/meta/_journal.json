@@ -15,6 +15,20 @@
       "when": 1788803805217,
       "tag": "0001_slide_decks",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788958345066,
+      "tag": "0002_linked_audio_manual",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788960572883,
+      "tag": "0003_linked_audio_resolver_version",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,6 @@
 import type { AssetKind } from "../constants";
 import type { DisplayInfo } from "../types/display";
-import type { FileProbe, MediaAsset } from "../types/media";
+import type { FileProbe, MediaAsset, MediaAssetUsage } from "../types/media";
 import type {
   BibleBookDTO,
   BibleSearchHit,
@@ -46,9 +46,14 @@ export type IpcContract = {
    *  describing its own <video>/<audio> element, not making a decision. */
   "projection:reportMediaStatus": { req: MediaStatus; res: void };
 
-  "files:pick": { req: { kind: AssetKind; multiple: boolean }; res: string[] };
+  /** `kind: "all"` combines every `AssetKind`'s extensions into one filter, for
+   *  a single file dialog that accepts any supported media at once — the
+   *  caller then classifies each returned path by its own extension. */
+  "files:pick": { req: { kind: AssetKind | "all"; multiple: boolean }; res: string[] };
   "files:probe": { req: { path: string }; res: FileProbe };
   "files:setLogo": { req: void; res: string | null };
+  /** Opens a native directory picker. `null` means the user canceled. */
+  "files:pickFolder": { req: void; res: string | null };
 
   /** Cache lookup only — never triggers a conversion, so it is safe to call
    *  while merely rendering a list or selecting an item. */
@@ -74,13 +79,26 @@ export type IpcContract = {
   "library:list": { req: { kind: AssetKind }; res: MediaAsset[] };
   "library:get": { req: { id: number }; res: MediaAsset | null };
   "library:add": { req: { paths: string[]; kind: AssetKind }; res: MediaAsset[] };
-  "library:remove": { req: { id: number }; res: void };
+  /** `force: true` bypasses the "in use by a saved service" guard: it also
+   *  deletes the referencing `service_items` rows, in the same transaction as
+   *  the asset itself. Without it, an asset still in use throws
+   *  `MEDIA_ASSET_IN_USE` (see `MediaRepo.remove`). */
+  "library:remove": { req: { id: number; force?: boolean }; res: void };
+  /** Which saved services (if any) still reference this asset — used to show
+   *  the operator what a forced delete would remove before they confirm it. */
+  "library:usages": { req: { id: number }; res: MediaAssetUsage[] };
   "library:relocate": { req: { id: number }; res: MediaAsset | null };
   /** Manual override for a `ppt` asset's linked soundtrack — `path: null`
    *  clears it back to automatic resolution (`linked-audio.ts`). Never
    *  triggers a deck reconversion: the linked audio is served by reference,
    *  not baked into the deck cache. */
   "library:setLinkedAudio": { req: { id: number; path: string | null }; res: MediaAsset | null };
+  /** Top-level files of `path` matching `kind`'s extensions, registered the
+   *  same way `library:add` does but never marked `inLibrary` — a linked
+   *  folder is browsed live, not imported. Returns `[]` if the folder is
+   *  gone or unreadable rather than throwing, since it may have been moved
+   *  or unmounted since it was linked. */
+  "library:listFolder": { req: { kind: AssetKind; path: string }; res: MediaAsset[] };
 
   "services:list": { req: void; res: ServiceSummary[] };
   "services:load": { req: { id: number }; res: ServiceDTO };

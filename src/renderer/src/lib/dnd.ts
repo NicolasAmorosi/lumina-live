@@ -24,7 +24,7 @@ export function readMediaAssetDrag(e: DragEvent): DraggedAsset | null {
   }
 }
 
-function classifyExt(ext: string): AssetKind | null {
+export function classifyExt(ext: string): AssetKind | null {
   const lower = ext.toLowerCase();
   return ASSET_KINDS.find((kind) => ASSET_EXTENSIONS[kind].includes(lower)) ?? null;
 }

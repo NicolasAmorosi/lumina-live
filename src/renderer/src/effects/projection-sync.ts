@@ -7,12 +7,20 @@ import { startDeckAutoplay } from "./deck-autoplay";
 import { startEndOfPlaybackEffects } from "./end-of-playback";
 import type { AudioTrackPush } from "@shared/types/projection";
 
-function toAudioTrackPush(track: LiveAudioTrack): AudioTrackPush {
+/**
+ * `track.paused` is the operator's own declarative pause and must survive a
+ * NEGRO/LOGO round-trip unchanged (same rule as `VideoUnderlay.paused` vs.
+ * `LiveVideo`'s `covered`) — so covering is combined into the pushed value
+ * here, never written back into `useAudioStore`. Only the deck's own
+ * soundtrack reacts to the cover; a standalone audio asset sent live is
+ * intentionally independent of what's on screen (see `audio.store.ts`).
+ */
+function toAudioTrackPush(track: LiveAudioTrack, covered: boolean): AudioTrackPush {
   return {
     trackId: track.trackId,
     url: track.url,
     epoch: track.epoch,
-    paused: track.paused,
+    paused: track.paused || (track.source === "deck" && covered),
     startAtSeconds: track.startAtSeconds,
   };
 }
@@ -32,11 +40,18 @@ export function startProjectionEffects(): () => void {
     void api.projection.show(next);
   });
 
-  const unsubscribeAudioTracks = useAudioStore.subscribe(
-    (state) => state.tracks,
-    (tracks) => {
-      void api.projection.setAudioTracks(tracks.map(toAudioTrackPush));
-    },
+  const pushAudioTracks = () => {
+    const covered = useProjectionStore.getState().overlay !== "none";
+    const tracks = useAudioStore.getState().tracks;
+    void api.projection.setAudioTracks(tracks.map((track) => toAudioTrackPush(track, covered)));
+  };
+
+  const unsubscribeAudioTracks = useAudioStore.subscribe((state) => state.tracks, pushAudioTracks);
+  // Re-push on every overlay toggle too, purely to recompute the deck-track's
+  // effective `paused` above — `useAudioStore.tracks` itself doesn't change.
+  const unsubscribeOverlayForAudio = useProjectionStore.subscribe(
+    (state) => state.overlay,
+    pushAudioTracks,
   );
 
   const unsubscribeStatus = onIpc("media-status", (status) => {
@@ -63,6 +78,7 @@ export function startProjectionEffects(): () => void {
   return () => {
     unsubscribeOutput();
     unsubscribeAudioTracks();
+    unsubscribeOverlayForAudio();
     unsubscribeStatus();
     unsubscribeProgress();
     stopAutoplay();

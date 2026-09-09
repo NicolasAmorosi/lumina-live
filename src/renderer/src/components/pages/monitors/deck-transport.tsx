@@ -36,9 +36,12 @@ export function DeckTransport() {
   const advanceMs = liveDeck.slides[current - 1]?.advanceAfterMs ?? null;
 
   // Time-to-next-slide, only meaningful while synced to the soundtrack clock.
+  // Kept visible while paused too — `mediaStatus` freezes at the paused
+  // timestamp (the reporter stops firing `timeupdate` once the element is
+  // paused), so the same calculation just yields a frozen ratio/countdown.
   let elapsedRatio: number | null = null;
   let secondsLeft: number | null = null;
-  if (advanceMs !== null && autoplay === "playing") {
+  if (advanceMs !== null && (autoplay === "playing" || autoplay === "paused")) {
     const boundary = liveDeck.cumulativeMs[current + 1];
     const start = liveDeck.cumulativeMs[current];
     if (boundary !== undefined && start !== undefined && mediaStatus) {
