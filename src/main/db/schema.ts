@@ -49,18 +49,24 @@ export const mediaAssets = sqliteTable(
   ],
 );
 
-export const services = sqliteTable(
-  "services",
+export const programs = sqliteTable(
+  "programs",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     name: text("name").notNull(),
     notes: text("notes"),
-    serviceDate: integer("service_date"),
+    favorite: integer("favorite", { mode: "boolean" }).notNull().default(false),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     lastOpenedAt: integer("last_opened_at"),
+    /** Manual list order, set by dragging rows in the programs modal — the
+     *  list is deliberately NOT sorted by `lastOpenedAt`, so opening a
+     *  program never shuffles the shelf the operator arranged. Lower comes
+     *  first; a brand new program takes `MIN(sort_order) - 1` (negatives are
+     *  fine) so it lands on top, and `reorder()` renormalizes to `0..n-1`. */
+    sortOrder: integer("sort_order").notNull().default(0),
   },
-  (t) => [index("ix_services_recent").on(t.lastOpenedAt)],
+  (t) => [index("ix_programs_recent").on(t.lastOpenedAt), index("ix_programs_order").on(t.sortOrder)],
 );
 
 /**
@@ -68,13 +74,13 @@ export const services = sqliteTable(
  * migration, Drizzle's schema builder can't express table-level CHECK) beats a
  * table-per-kind here: one JOIN-free query renders the whole playlist.
  */
-export const serviceItems = sqliteTable(
-  "service_items",
+export const programItems = sqliteTable(
+  "program_items",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    serviceId: integer("service_id")
+    programId: integer("program_id")
       .notNull()
-      .references(() => services.id, { onDelete: "cascade" }),
+      .references(() => programs.id, { onDelete: "cascade" }),
     position: integer("position").notNull(),
     kind: text("kind", { enum: ["media", "ppt", "bible", "text"] }).notNull(),
 
@@ -98,7 +104,7 @@ export const serviceItems = sqliteTable(
     title: text("title"),
     createdAt: integer("created_at").notNull(),
   },
-  (t) => [index("ix_items_service").on(t.serviceId, t.position)],
+  (t) => [index("ix_items_program").on(t.programId, t.position)],
 );
 
 export const bibleVersions = sqliteTable("bible_versions", {
@@ -170,7 +176,7 @@ export const projectionHistory = sqliteTable(
     mediaAssetId: integer("media_asset_id").references(() => mediaAssets.id, {
       onDelete: "set null",
     }),
-    serviceId: integer("service_id").references(() => services.id, { onDelete: "set null" }),
+    programId: integer("program_id").references(() => programs.id, { onDelete: "set null" }),
     reference: text("reference"),
     snapshotJson: text("snapshot_json").notNull(),
   },
@@ -183,7 +189,7 @@ export const projectionHistory = sqliteTable(
  * at copies of the same file share one conversion, and a mtime-only touch
  * (a cloud-sync re-write) is a hash hit instead of a multi-minute reconvert.
  * `mediaAssetId` is a SET NULL fast-path FK (deliberately not RESTRICT like
- * `service_items` — a cache row must never block deleting a library asset).
+ * `program_items` — a cache row must never block deleting a library asset).
  */
 export const slideDecks = sqliteTable(
   "slide_decks",

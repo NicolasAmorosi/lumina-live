@@ -7,6 +7,8 @@ import type {
   OverlayState,
   ProjectionOutput,
   ProjectionOutputKind,
+  SceneTransition,
+  TransitionStyle,
   VideoUnderlay,
 } from "@shared/types/projection";
 import type { DeckSlide, DeckSoundtrack } from "@shared/types/deck";
@@ -54,6 +56,16 @@ export type ProjectionStoreState = {
    *  each other's clock. */
   mediaStatus: Record<string, MediaStatus>;
 
+  /** Bumped exactly once per "send something new live" action — `goLive()`,
+   *  `clearLive()`, `clearBaseContent()`, `setOverlayDirect()` — never by
+   *  `setBase`/`setSlideIndex`/`projectVerse` themselves. That asymmetry is
+   *  what makes advancing a slide or a verse an instant cut while sending a
+   *  new scene live fades: the projection window fades only when this
+   *  changes, not merely because the pixels changed. See `beginScene()`. */
+  sceneEpoch: number;
+  transitionStyle: TransitionStyle;
+  transitionDurationMs: number;
+
   setBase: (base: BaseContent | null) => void;
   setOverlay: (overlay: OverlayState) => void;
   setLogoUrl: (url: string | null) => void;
@@ -65,6 +77,12 @@ export type ProjectionStoreState = {
   setAutoplay: (state: AutoplayState) => void;
   setAutoplayMode: (mode: AutoplayMode) => void;
   setMediaStatus: (status: MediaStatus) => void;
+
+  /** Marks "this is a new scene" — see `sceneEpoch`. Called once by every
+   *  action that sends something new live, before it touches `base`/`overlay`,
+   *  so the very first output already carries the new epoch. */
+  beginScene: () => void;
+  setTransitionSettings: (style: TransitionStyle, durationMs: number) => void;
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -84,6 +102,10 @@ export const useProjectionStore = create<ProjectionStoreState>()(
     autoplayMode: "synced",
     soundtrackEpoch: 0,
     mediaStatus: {},
+
+    sceneEpoch: 0,
+    transitionStyle: "crossfade",
+    transitionDurationMs: 300,
 
     setBase: (base) => set({ base, videoPaused: false }),
     setOverlay: (overlay) => set({ overlay }),
@@ -117,6 +139,10 @@ export const useProjectionStore = create<ProjectionStoreState>()(
       set((state) => ({
         mediaStatus: { ...state.mediaStatus, [mediaTargetKey(status.target)]: status },
       })),
+
+    beginScene: () => set((state) => ({ sceneEpoch: state.sceneEpoch + 1 })),
+    setTransitionSettings: (transitionStyle, transitionDurationMs) =>
+      set({ transitionStyle, transitionDurationMs }),
   })),
 );
 
@@ -177,8 +203,20 @@ function selectOutputWithoutUnderlay(state: ProjectionStoreState): ProjectionOut
   }
 }
 
+function selectTransition(state: ProjectionStoreState): SceneTransition {
+  return {
+    epoch: state.sceneEpoch,
+    style: state.transitionStyle,
+    durationMs: state.transitionDurationMs,
+  };
+}
+
 export function selectOutput(state: ProjectionStoreState): ProjectionOutput {
-  return { ...selectOutputWithoutUnderlay(state), videoUnderlay: selectVideoUnderlay(state) };
+  return {
+    ...selectOutputWithoutUnderlay(state),
+    videoUnderlay: selectVideoUnderlay(state),
+    transition: selectTransition(state),
+  };
 }
 
 /**

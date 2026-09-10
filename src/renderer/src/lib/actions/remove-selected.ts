@@ -1,5 +1,5 @@
 import { useLibraryStore } from "@renderer/stores/library.store";
-import { useServiceStore } from "@renderer/stores/service.store";
+import { useProgramStore } from "@renderer/stores/program.store";
 import { removeAsset } from "./remove-asset";
 
 /** Delete/Backspace target, same priority as the legacy app: a library
@@ -10,6 +10,6 @@ export function removeSelected(): void {
     void removeAsset(library.selectedId);
     return;
   }
-  const service = useServiceStore.getState();
-  if (service.selectedIndex !== null) service.removeAt(service.selectedIndex);
+  const program = useProgramStore.getState();
+  if (program.selectedIndex !== null) program.removeAt(program.selectedIndex);
 }

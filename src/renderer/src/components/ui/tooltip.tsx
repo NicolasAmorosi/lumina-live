@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@renderer/lib/utils";
 
 type TooltipProps = {
@@ -6,14 +8,23 @@ type TooltipProps = {
    *  it on-screen for a trigger near a panel's right end, "start" for one
    *  near the left end. Every panel here (`Panel`, `shared/panel.tsx`) clips
    *  overflow, so picking the wrong side renders the bubble past the clip
-   *  and it never becomes visible. */
+   *  and it never becomes visible. Ignored when `floating` is set. */
   align?: "start" | "end";
   children: ReactNode;
   className?: string;
   content: ReactNode;
+  /** Renders the bubble through a portal to `document.body`, positioned in
+   *  viewport coordinates (clamped so it never crosses the screen edge)
+   *  instead of the in-flow CSS bubble — see `Select`'s `computePosition` for
+   *  the same pattern. Use it when the trigger sits in a narrow column and
+   *  the content (e.g. a full filesystem path) needs to render at its
+   *  natural width on a single line without being clipped by an ancestor's
+   *  `overflow-hidden`. */
+  floating?: boolean;
   /** Which side of the trigger the bubble opens toward — "bottom" (default)
    *  for a trigger near a panel's top, "top" for one near a panel's bottom
-   *  (a `PanelFooter` button), for the same clipping reason as `align`. */
+   *  (a `PanelFooter` button), for the same clipping reason as `align`.
+   *  Ignored when `floating` is set — it flips automatically instead. */
   placement?: "top" | "bottom";
 };
 
@@ -29,7 +40,10 @@ type TooltipProps = {
  * `focus-visible` only engages for keyboard focus, so Tab navigation still
  * reveals the tooltip while a click dismisses it immediately.
  */
-export function Tooltip({ align = "end", children, className, content, placement = "bottom" }: TooltipProps) {
+export function Tooltip(props: TooltipProps) {
+  if (props.floating) return <FloatingTooltip {...props} />;
+
+  const { align = "end", children, className, content, placement = "bottom" } = props;
   return (
     <span className={cn("group relative inline-flex", className)}>
       {children}
@@ -43,6 +57,86 @@ export function Tooltip({ align = "end", children, className, content, placement
       >
         {content}
       </span>
+    </span>
+  );
+}
+
+// Kept clear of the viewport edge, and of the trigger itself.
+const VIEWPORT_MARGIN = 8;
+const TRIGGER_GAP = 6;
+
+type BubblePosition = { left: number; top: number };
+
+function FloatingTooltip({ children, className, content }: TooltipProps) {
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState<BubblePosition | null>(null);
+  const triggerRef = useRef<HTMLSpanElement>(null);
+  const bubbleRef = useRef<HTMLSpanElement>(null);
+
+  // Two-pass: the bubble mounts invisible first so its natural (unclamped)
+  // size can be measured, then gets placed against the viewport.
+  useLayoutEffect(() => {
+    if (!open || !triggerRef.current || !bubbleRef.current) return;
+    const reposition = () => {
+      const trigger = triggerRef.current;
+      const bubble = bubbleRef.current;
+      if (!trigger || !bubble) return;
+      const triggerRect = trigger.getBoundingClientRect();
+      const bubbleRect = bubble.getBoundingClientRect();
+      const left = Math.min(
+        Math.max(triggerRect.left, VIEWPORT_MARGIN),
+        window.innerWidth - bubbleRect.width - VIEWPORT_MARGIN,
+      );
+      const spaceBelow = window.innerHeight - triggerRect.bottom - VIEWPORT_MARGIN;
+      const openUp = spaceBelow < bubbleRect.height && triggerRect.top - VIEWPORT_MARGIN > spaceBelow;
+      const top = openUp ? triggerRect.top - bubbleRect.height - TRIGGER_GAP : triggerRect.bottom + TRIGGER_GAP;
+      setPosition({ left, top });
+    };
+    reposition();
+    window.addEventListener("resize", reposition);
+    // capture: true — a scroll inside a nested panel never bubbles to
+    // window, only the capture phase sees it.
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [open]);
+
+  function close(e: { relatedTarget?: EventTarget | null }) {
+    if (triggerRef.current?.contains(e.relatedTarget as Node)) return;
+    setOpen(false);
+    setPosition(null);
+  }
+
+  return (
+    <span
+      className={cn("inline-flex", className)}
+      onBlur={close}
+      onFocus={(e) => {
+        if (e.target.matches(":focus-visible")) setOpen(true);
+      }}
+      onPointerEnter={() => setOpen(true)}
+      onPointerLeave={close}
+      ref={triggerRef}
+    >
+      {children}
+      {open
+        ? createPortal(
+            <span
+              className={cn(
+                "pointer-events-none fixed z-[100] w-max max-w-[calc(100vw-1rem)] rounded-lg border border-border bg-card p-2 text-xs break-all text-foreground shadow-raised",
+                !position && "invisible",
+              )}
+              ref={bubbleRef}
+              role="tooltip"
+              style={position ? { left: position.left, top: position.top } : { left: 0, top: 0 }}
+            >
+              {content}
+            </span>,
+            document.body,
+          )
+        : null}
     </span>
   );
 }

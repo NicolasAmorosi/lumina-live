@@ -5,7 +5,10 @@ import { SlidesPanel } from "@renderer/components/pages/slides/SlidesPanel";
 import { MonitorsColumn } from "@renderer/components/pages/monitors/MonitorsColumn";
 import { TopBar } from "./TopBar";
 
-type AppShellProps = { onOpenServices: () => void; onOpenSettings: () => void };
+type AppShellProps = {
+  onOpenPrograms: (opts?: { mode: "create" }) => void;
+  onOpenSettings: () => void;
+};
 
 /**
  * The EasyWorship 2009 workspace, in one place:
@@ -28,10 +31,10 @@ type AppShellProps = { onOpenServices: () => void; onOpenSettings: () => void };
  * same kind of grid underneath — the only difference is whether it's staged
  * or already on the projector.
  */
-export function AppShell({ onOpenServices, onOpenSettings }: AppShellProps) {
+export function AppShell({ onOpenPrograms, onOpenSettings }: AppShellProps) {
   return (
     <div className="flex h-screen flex-col bg-background">
-      <TopBar onOpenServices={onOpenServices} onOpenSettings={onOpenSettings} />
+      <TopBar onOpenPrograms={onOpenPrograms} onOpenSettings={onOpenSettings} />
 
       <main className="grid min-h-0 flex-1 grid-cols-3 divide-x divide-border">
         <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_minmax(0,1.1fr)] divide-y divide-border">

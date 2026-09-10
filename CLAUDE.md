@@ -83,7 +83,7 @@ src/
 ├── shared/                    # ÚNICA fuente de verdad de tipos main↔renderer
 │   ├── ipc/contract.ts        # IpcContract — un entry por canal, agrupado por dominio
 │   ├── ipc/result.ts          # Result<T> / IpcError
-│   ├── types/                 # DTOs: display, media, bible, projection, service, settings
+│   ├── types/                 # DTOs: display, media, bible, projection, program, settings
 │   ├── constants.ts           # AssetKind, extensiones, timeouts de PPT
 │   └── urls.ts                # assetUrl()/slideUrl() — tokens de capacidad, no rutas
 ├── main/
@@ -95,7 +95,7 @@ src/
 │   │   ├── client.ts             # apertura + pragmas de SQLite
 │   │   ├── migrate.ts            # backup + migrate() al arrancar
 │   │   ├── seed/                 # parseo defensivo + seed de la Biblia (FTS5 rebuild)
-│   │   └── repositories/         # un repo por agregado (settings, media, bible, services, history, slides)
+│   │   └── repositories/         # un repo por agregado (settings, media, bible, programs, history, slides)
 │   ├── ipc/
 │   │   ├── register.ts           # registerHandlers<Handlers> — exhaustividad forzada por TS
 │   │   ├── index.ts               # ensambla todos los *.ts de handlers/
@@ -123,8 +123,8 @@ src/
         │       ├── resources/  # browser con pestañas: Biblia | Videos | Imágenes | Audios | PPT
         │       ├── slides/     # grilla central de diapositivas/versículos del ítem en preview
         │       ├── monitors/   # columna der.: LIVE arriba, PREVIEW abajo, transporte del deck
-        │       └── services/   # modal de cultos guardados
-        ├── stores/          # Zustand: service, preview, projection, deck, bible, library, settings
+        │       └── programs/   # modal de programas guardados
+        ├── stores/          # Zustand: program, toast, preview, projection, deck, bible, library, settings
         ├── effects/         # projection-sync.ts + deck-autoplay.ts — la lógica "con orden"
         └── lib/             # api.ts, ipc.ts, i18n/, utils.ts, hooks/, actions/ (cruza stores)
 ```

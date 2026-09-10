@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { AppShell } from "@renderer/components/pages/layout/AppShell";
-import { ServicesModal } from "@renderer/components/pages/services/ServicesModal";
+import { ProgramsModal } from "@renderer/components/pages/programs/ProgramsModal";
 import { SettingsModal } from "@renderer/components/pages/settings/SettingsModal";
 import { useAnyModalOpen } from "@renderer/components/shared/modal";
+import { ToastHost } from "@renderer/components/ui";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { LOGO_URL } from "@shared/urls";
 import { useSettingsStore } from "@renderer/stores/settings.store";
@@ -15,11 +16,17 @@ import { useGlobalShortcuts } from "@renderer/lib/hooks/use-global-shortcuts";
 /** Control window shell: boot the stores, mount the effect layer, render the
  *  workspace. All layout lives in AppShell, all behaviour in the actions. */
 export function App() {
-  const [servicesOpen, setServicesOpen] = useState(false);
+  const [programsOpen, setProgramsOpen] = useState(false);
+  const [programsInitialMode, setProgramsInitialMode] = useState<{ kind: "create" } | undefined>(
+    undefined,
+  );
   const [settingsOpen, setSettingsOpen] = useState(false);
   const loadSettings = useSettingsStore((s) => s.load);
   const logoPath = useSettingsStore((s) => s.settings["logo.path"]);
   const setLogoUrl = useProjectionStore((s) => s.setLogoUrl);
+  const transitionStyle = useSettingsStore((s) => s.settings["projection.transition.style"]);
+  const transitionDurationMs = useSettingsStore((s) => s.settings["projection.transition.durationMs"]);
+  const setTransitionSettings = useProjectionStore((s) => s.setTransitionSettings);
 
   useGlobalShortcuts(useAnyModalOpen());
 
@@ -46,11 +53,26 @@ export function App() {
     setLogoUrl(logoPath ? `${LOGO_URL}?p=${encodeURIComponent(logoPath)}` : null);
   }, [logoPath, setLogoUrl]);
 
+  // Mirrors the projection settings into the store the same way the logo
+  // does above — `selectOutput` reads them off `projection.store`, not
+  // straight from settings, so the projection window's input stays a single
+  // self-contained value with no settings dependency of its own.
+  useEffect(() => {
+    setTransitionSettings(transitionStyle, transitionDurationMs);
+  }, [transitionStyle, transitionDurationMs, setTransitionSettings]);
+
   return (
     <>
-      <AppShell onOpenServices={() => setServicesOpen(true)} onOpenSettings={() => setSettingsOpen(true)} />
-      <ServicesModal onOpenChange={setServicesOpen} open={servicesOpen} />
+      <AppShell
+        onOpenPrograms={(opts) => {
+          setProgramsInitialMode(opts?.mode === "create" ? { kind: "create" } : undefined);
+          setProgramsOpen(true);
+        }}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
+      <ProgramsModal initialMode={programsInitialMode} onOpenChange={setProgramsOpen} open={programsOpen} />
       <SettingsModal onOpenChange={setSettingsOpen} open={settingsOpen} />
+      <ToastHost />
     </>
   );
 }

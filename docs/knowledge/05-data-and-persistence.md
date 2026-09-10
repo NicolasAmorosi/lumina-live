@@ -16,11 +16,30 @@ empaquetado: `asarUnpack: ["**/node_modules/better-sqlite3/**"]` en `package.jso
 ## Tablas
 
 `settings` (key/value), `media_assets` (video/imagen/audio/PPT en una sola tabla — todos
-comparten el mismo problema de "el usuario movió el archivo"), `services`+`service_items`
-(playlists guardadas, polimórfico con `CHECK`), `bible_versions`+`bible_books`+`bible_verses`+
+comparten el mismo problema de "el usuario movió el archivo"), `programs`+`program_items`
+(playlists guardadas, polimórfico con `CHECK`; renombradas desde `services`/`service_items` en la
+migración `0004_rename_programs.sql` con `ALTER TABLE ... RENAME` — un recreate de tabla habría
+perdido el `CHECK`, que Drizzle no materializa en el snapshot), `bible_versions`+`bible_books`+`bible_verses`+
 `bible_verses_fts` (FTS5 external-content), `bible_favorites`, `projection_history`,
 `slide_decks`+`deck_slides`+`deck_audio` (cache persistente de presentaciones convertidas,
 direccionado por hash de contenido — ver `03-slides-libreoffice.md`).
+
+## El orden de `programs` es manual, no por recencia
+
+`programs.sort_order` (migración `0006_program_sort_order.sql`, índice `ix_programs_order`) es el
+orden que el operador arma arrastrando filas en el modal de programas, y es el **único** criterio
+de `ProgramsRepo.list()`. Abrir un programa ya no lo mueve: `last_opened_at` se sigue escribiendo
+en `load()` pero ya no ordena nada. Reglas del campo:
+
+- Un programa nuevo o duplicado entra con `MIN(sort_order) - 1` (puede ser negativo) para quedar
+  arriba sin reescribir las otras filas; `reorder(ids)` renormaliza toda la columna a `0..n-1`.
+- `reorder()` recibe la lista completa de ids en su nuevo orden y **no toca `updatedAt`** —
+  arrastrar no es editar contenido, igual que `setFavorite()`.
+- La migración siembra `sort_order` con el ranking que la lista mostraba antes
+  (`last_opened_at DESC NULLS LAST, updated_at DESC, id ASC`), así que al actualizar nadie ve su
+  lista reordenada.
+- El drag se desactiva en el renderer cuando hay búsqueda o filtro activo: reordenar una vista
+  parcial no se puede mapear a la lista completa.
 
 ## FTS5 sin acentos
 
@@ -36,7 +55,7 @@ de dejar que los triggers corran 31.102 veces — la carga completa mide ~550ms 
 `media_assets.missing_since` se marca en un barrido (`MediaRepo.sweep()`, corre en cada
 `library:list`) que revisa `fs.existsSync` sobre las filas `in_library=1`. Un archivo ausente
 **nunca borra la fila** — puede ser un pendrive desconectado. La UI muestra un badge y ofrece
-`library:relocate`, que reescribe `path`/`pathKey` sin tocar el id — cualquier `service_item`
+`library:relocate`, que reescribe `path`/`pathKey` sin tocar el id — cualquier `program_item`
 que lo referencie por `mediaAssetId` sigue funcionando solo.
 
 `pathKey` normaliza (`NFC` + lowercase en Windows) para que `C:\a.mp4` y `c:\A.MP4` no entren dos

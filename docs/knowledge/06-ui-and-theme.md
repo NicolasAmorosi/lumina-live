@@ -66,7 +66,7 @@ desde el primer render, incluyendo en una iglesia sin conexión.
 
 ```
 ┌ TopBar (grid-cols-3, igual que el main de abajo) ──────────────────────┐
-│ ⚙ · Servicios · culto        │        ▷ EN VIVO │ LOGO · NEGRO · ▷ EN VIVO│
+│ ⚙ · [nombre del programa · guardado · 💾 ✚ 📂]│▷ EN VIVO│LOGO·NEGRO·▷EN VIVO│
 ├───────────────┬──────────────┴────────┬─────────────────────────────────┤
 │ PROGRAMA      │                       │  EN VIVO                        │
 │ (schedule)    │      DIAPOSITIVAS     │  (+ transporte deck)            │
@@ -81,8 +81,9 @@ El `TopBar` es un **grid de 3 columnas idéntico al del `<main>`** de abajo (`gr
 cada grupo de controles queda exactamente arriba de la columna sobre la que actúa, no importa el
 ancho de la ventana:
 
-- **Columna 1** (arriba de Programa/Recursos): el ícono de engranaje (Configuraciones), el botón
-  Servicios y los badges de culto/cantidad de ítems.
+- **Columna 1** (arriba de Programa/Recursos): el ícono de engranaje (Configuraciones) y el card
+  del programa actual — nombre, badge Guardado/No guardado, y tres botones (guardado rápido, nuevo
+  programa, administrar programas guardados) que abren `pages/programs/ProgramsModal.tsx`.
 - **Columna 2** (arriba de Diapositivas): un único botón **EN VIVO** que llama a
   `lib/actions/playback.ts::goLive()` — manda lo que está en vista previa al proyector,
   reemplazando lo que hubiera. Es la única forma de cruzar de preview a vivo; no hay un segundo
@@ -167,5 +168,5 @@ El monitor de preview es literalmente el renderer de proyección alimentado con 
 
 Los mismos 6 tipos de contenido relevantes de la legacy (`black`, `logo`, `image`, `video`,
 `bible`, `text`) más `slide` (una imagen ya rasterizada del deck). El tipo
-`text` legacy no tenía ningún caller — acá sí lo tiene (`ServiceItemDTO` con `kind:'text'`), así
+`text` legacy no tenía ningún caller — acá sí lo tiene (`ProgramItemDTO` con `kind:'text'`), así
 que dejó de ser una feature muerta.

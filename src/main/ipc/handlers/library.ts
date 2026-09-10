@@ -3,7 +3,7 @@ import fs from "node:fs";
 import { ASSET_EXTENSIONS } from "@shared/constants";
 import { IpcError } from "@shared/ipc/result";
 import type { Handlers } from "../register";
-import { getMediaRepo, getServicesRepo } from "../../services/repos";
+import { getMediaRepo, getProgramsRepo } from "../../services/repos";
 import { removeMediaAsset } from "../../services/media-asset-removal";
 
 export const libraryHandlers: Pick<
@@ -31,7 +31,7 @@ export const libraryHandlers: Pick<
     removeMediaAsset(id, force ?? false);
   },
 
-  "library:usages": ({ id }) => getServicesRepo().findUsages(id),
+  "library:usages": ({ id }) => getProgramsRepo().findUsages(id),
 
   "library:relocate": async ({ id }) => {
     const { dialog } = await import("electron");

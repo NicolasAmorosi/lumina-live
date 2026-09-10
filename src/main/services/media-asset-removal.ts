@@ -1,12 +1,12 @@
 import { cancel as cancelDeckJob } from "../slides/deck-service";
-import { getDbHandle, getMediaRepo, getServicesRepo } from "./repos";
+import { getDbHandle, getMediaRepo, getProgramsRepo } from "./repos";
 
 /**
- * Deleting a media asset crosses two repositories — `service_items` (the FK
+ * Deleting a media asset crosses two repositories — `program_items` (the FK
  * that blocks the delete) and `media_assets` itself — so it lives here rather
  * than in either repo. Without `force`, this is just `MediaRepo.remove()`,
  * which still throws `IpcError("MEDIA_ASSET_IN_USE")` when the asset is in a
- * saved service. With `force`, the referencing items are deleted first, in
+ * saved program. With `force`, the referencing items are deleted first, in
  * the same transaction as the asset, so a failure never leaves items gone
  * without the asset actually being removed.
  */
@@ -19,7 +19,7 @@ export function removeMediaAsset(id: number, force: boolean): void {
   cancelDeckJob(id);
   const { sqlite } = getDbHandle();
   const run = sqlite.transaction(() => {
-    getServicesRepo().deleteItemsByMediaAsset(id);
+    getProgramsRepo().deleteItemsByMediaAsset(id);
     getMediaRepo().remove(id);
   });
   run();

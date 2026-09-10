@@ -2,7 +2,7 @@ import { useBibleStore } from "@renderer/stores/bible.store";
 import { useDeckStore } from "@renderer/stores/deck.store";
 import { useLibraryStore } from "@renderer/stores/library.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
-import { useServiceStore } from "@renderer/stores/service.store";
+import { useProgramStore } from "@renderer/stores/program.store";
 import type { AssetKind } from "@shared/constants";
 
 /**
@@ -16,19 +16,19 @@ import type { AssetKind } from "@shared/constants";
  */
 
 export function previewScheduleItem(index: number): void {
-  useServiceStore.getState().select(index);
+  useProgramStore.getState().select(index);
   useLibraryStore.getState().select(null);
   usePreviewStore.getState().setTarget({ kind: "scheduleItem", index });
 }
 
 export function previewVerse(verseIndex: number): void {
-  useServiceStore.getState().select(null);
+  useProgramStore.getState().select(null);
   useLibraryStore.getState().select(null);
   usePreviewStore.getState().setTarget({ kind: "verse", verseIndex });
 }
 
 export function previewAsset(assetId: number, assetKind: AssetKind): void {
-  useServiceStore.getState().select(null);
+  useProgramStore.getState().select(null);
   useLibraryStore.getState().select(assetId);
   usePreviewStore.getState().setTarget({ kind: "asset", assetId, assetKind });
 }
@@ -46,7 +46,7 @@ export function previewDeckAssetId(): number | null {
   const target = usePreviewStore.getState().target;
   if (target?.kind === "asset") return target.assetKind === "ppt" ? target.assetId : null;
   if (target?.kind !== "scheduleItem") return null;
-  const item = useServiceStore.getState().items[target.index];
+  const item = useProgramStore.getState().items[target.index];
   return item?.kind === "ppt" ? item.mediaAssetId : null;
 }
 
@@ -72,7 +72,7 @@ export function advancePreview(direction: 1 | -1): void {
 }
 
 export function clearPreview(): void {
-  useServiceStore.getState().select(null);
+  useProgramStore.getState().select(null);
   useLibraryStore.getState().select(null);
   useBibleStore.getState().setCurrentVerseIndex(null);
   usePreviewStore.getState().clear();

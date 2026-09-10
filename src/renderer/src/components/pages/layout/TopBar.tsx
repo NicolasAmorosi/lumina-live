@@ -1,48 +1,94 @@
 import { useT } from "@renderer/lib/i18n/i18n-provider";
-import { Button, Icon, IconButton, Toolbar } from "@renderer/components/ui";
+import { Button, Icon, IconButton, Toolbar, Tooltip } from "@renderer/components/ui";
 import { useProjectionStore } from "@renderer/stores/projection.store";
-import { useDisplayStore } from "@renderer/stores/display.store";
-import { goLive } from "@renderer/lib/actions/playback";
+import { useProgramStore } from "@renderer/stores/program.store";
+import { goLive, setOverlayDirect } from "@renderer/lib/actions/playback";
+import { hasUnsavedChanges, newProgram, saveCurrentProgram } from "@renderer/lib/actions/programs";
+import { toast } from "@renderer/lib/toast";
 import { usePreviewContent } from "@renderer/lib/hooks/use-preview";
-import type { OverlayState } from "@shared/types/projection";
 
-type TopBarProps = { onOpenServices: () => void; onOpenSettings: () => void };
+type TopBarProps = {
+  onOpenPrograms: (opts?: { mode: "create" }) => void;
+  onOpenSettings: () => void;
+};
 
 /**
  * Chrome bar, laid out in the same three columns as the workspace below it so
  * each group of controls sits exactly above the column it acts on:
  *
- *   col 1 (schedule/resources) — settings, saved services
+ *   col 1 (schedule/resources) — settings, the current-program card
  *   col 2 (slides)             — EN VIVO: preview -> live, right now
  *   col 3 (monitors)           — NEGRO / LOGO / VIVO: what the projector shows
  *
  * Screen selection, theme and logo all live in Settings now — this bar only
  * ever changes what is on the projector, never how the app is configured.
  */
-export function TopBar({ onOpenServices, onOpenSettings }: TopBarProps) {
+export function TopBar({ onOpenPrograms, onOpenSettings }: TopBarProps) {
   const t = useT();
   const overlay = useProjectionStore((s) => s.overlay);
-  const setOverlay = useProjectionStore((s) => s.setOverlay);
   const base = useProjectionStore((s) => s.base);
   const previewContent = usePreviewContent();
+  const currentProgramId = useProgramStore((s) => s.currentProgramId);
+  const currentProgramName = useProgramStore((s) => s.currentProgramName);
+  const dirty = useProgramStore((s) => s.dirty);
 
-  // The projection window never opens on its own any more — the first tap on
-  // NEGRO, LOGO or EN VIVO is what turns the projector on, whichever comes
-  // first.
-  function setOverlayAndOpen(next: OverlayState) {
-    void useDisplayStore.getState().openIfNeeded();
-    setOverlay(next);
+  function handleQuickSave() {
+    if (currentProgramId === null) {
+      onOpenPrograms({ mode: "create" });
+      return;
+    }
+    void saveCurrentProgram();
+  }
+
+  function handleNewProgram() {
+    if (hasUnsavedChanges()) {
+      toast.warning(t("programs.discardWarning"), {
+        action: { label: t("programs.discardConfirm"), onClick: newProgram },
+      });
+      return;
+    }
+    newProgram();
   }
 
   return (
     <Toolbar className="grid grid-cols-3 items-center">
-      <div className="flex items-center gap-1.5">
-        <IconButton onClick={onOpenSettings} title={t("settings.title")} variant="ghost">
-          <Icon name="settings" />
-        </IconButton>
-        <Button onClick={onOpenServices} size="sm" variant="ghost">
-          <Icon name="save" /> {t("services.title")}
-        </Button>
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Tooltip content={t("settings.title")} floating>
+            <IconButton onClick={onOpenSettings} variant="ghost">
+              <Icon name="settings" />
+            </IconButton>
+          </Tooltip>
+
+          <div className="h-5 w-px shrink-0 bg-border" />
+
+          <Tooltip content={dirty ? t("programs.saveHint") : t("programs.saveNoChanges")} floating>
+            <IconButton
+              aria-label={t("programs.save")}
+              disabled={!dirty}
+              onClick={handleQuickSave}
+              variant="ghost"
+            >
+              <Icon name="save" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip content={t("programs.newHint")} floating>
+            <IconButton aria-label={t("programs.new")} onClick={handleNewProgram} variant="ghost">
+              <Icon name="filePlus" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip content={t("programs.manage")} floating>
+            <IconButton aria-label={t("programs.manage")} onClick={() => onOpenPrograms()} variant="ghost">
+              <Icon name="folderOpen" />
+            </IconButton>
+          </Tooltip>
+        </div>
+
+        <div className="flex min-w-0 items-center gap-1.5 rounded-lg border border-border bg-surface px-2 py-1">
+          <span className="min-w-0 truncate text-sm font-medium">
+            {currentProgramName || t("programs.new")}
+          </span>
+        </div>
       </div>
 
       <div className="flex items-center justify-end">
@@ -54,7 +100,7 @@ export function TopBar({ onOpenServices, onOpenSettings }: TopBarProps) {
       <div className="flex items-center justify-end gap-1.5">
         <Button
           className="w-24"
-          onClick={() => setOverlayAndOpen("logo")}
+          onClick={() => void setOverlayDirect("logo")}
           size="sm"
           toggled={overlay === "logo"}
           variant="secondary"
@@ -63,7 +109,7 @@ export function TopBar({ onOpenServices, onOpenSettings }: TopBarProps) {
         </Button>
         <Button
           className="w-24"
-          onClick={() => setOverlayAndOpen("black")}
+          onClick={() => void setOverlayDirect("black")}
           size="sm"
           toggled={overlay === "black"}
           variant="secondary"
@@ -73,7 +119,7 @@ export function TopBar({ onOpenServices, onOpenSettings }: TopBarProps) {
         <Button
           className="w-24"
           disabled={base === null}
-          onClick={() => setOverlayAndOpen("none")}
+          onClick={() => void setOverlayDirect("none")}
           size="sm"
           toggled={overlay === "none"}
           variant="secondary"

@@ -4,10 +4,10 @@ import { createProjectionWindow } from "../../windows/projection-window";
 import { getHistoryRepo } from "../../services/repos";
 import { broadcast } from "../../services/broadcast";
 
-let currentServiceId: number | null = null;
+let currentProgramId: number | null = null;
 
-export function setCurrentServiceId(id: number | null): void {
-  currentServiceId = id;
+export function setCurrentProgramId(id: number | null): void {
+  currentProgramId = id;
 }
 
 export const projectionHandlers: Pick<
@@ -36,7 +36,7 @@ export const projectionHandlers: Pick<
 
   "projection:show": (output) => {
     projectionState.send(output);
-    getHistoryRepo().record(output, currentServiceId);
+    getHistoryRepo().record(output, currentProgramId);
   },
 
   "projection:getSnapshot": () => projectionState.getSnapshot(),

@@ -5,7 +5,7 @@ import { filesHandlers } from "./handlers/files";
 import { slidesHandlers } from "./handlers/slides";
 import { bibleHandlers } from "./handlers/bible";
 import { libraryHandlers } from "./handlers/library";
-import { servicesHandlers } from "./handlers/services";
+import { programsHandlers } from "./handlers/programs";
 import { settingsHandlers } from "./handlers/settings";
 
 /**
@@ -21,7 +21,7 @@ export function registerAllIpcHandlers(): void {
     ...slidesHandlers,
     ...bibleHandlers,
     ...libraryHandlers,
-    ...servicesHandlers,
+    ...programsHandlers,
     ...settingsHandlers,
   };
   registerHandlers(handlers);

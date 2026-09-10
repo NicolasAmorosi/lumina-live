@@ -19,7 +19,7 @@ type LibraryStoreState = {
   folderAssets: Record<string, MediaAsset[]>;
   selectedId: number | null;
   /** Set (to the asset's id) when a delete fails because it's still used by a
-   *  saved service (`MEDIA_ASSET_IN_USE`, handled in `lib/actions/remove-asset.ts`)
+   *  saved program (`MEDIA_ASSET_IN_USE`, handled in `lib/actions/remove-asset.ts`)
    *  — cleared on the next selection change, or explicitly via `dismissBlocked`. */
   blockedAssetId: number | null;
   setActiveTab: (tab: AssetKind) => void;

@@ -1,7 +1,8 @@
 import { useBibleStore } from "@renderer/stores/bible.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
-import { useServiceStore } from "@renderer/stores/service.store";
+import { useProgramStore } from "@renderer/stores/program.store";
 import { previewVerse } from "@renderer/lib/actions/preview";
+import type { DraggedVerse } from "@renderer/lib/dnd";
 import type { BibleSearchHit } from "@shared/types/bible";
 
 /** Projects the verse at `index` and marks it current — the single
@@ -34,13 +35,14 @@ export async function previewSearchHit(hit: BibleSearchHit): Promise<void> {
   if (index >= 0) previewVerse(index);
 }
 
-/** Adds the verse at `index` of the loaded chapter to the service. */
-export function addVerseToSchedule(index: number): void {
+/** Builds the drag/schedule payload for the verse at `index` of the loaded
+ *  chapter — shared by the click-to-add footer button and the draggable row,
+ *  so both add exactly the same item. */
+export function buildVerseDrag(index: number): DraggedVerse | null {
   const { bookId, chapter, verses, versionId } = useBibleStore.getState();
   const verse = verses[index];
-  if (!verse || versionId === null || bookId === null || chapter === null) return;
-  useServiceStore.getState().addItem({
-    kind: "bible",
+  if (!verse || versionId === null || bookId === null || chapter === null) return null;
+  return {
     bibleVersionId: versionId,
     bibleBookId: bookId,
     chapter,
@@ -48,5 +50,12 @@ export function addVerseToSchedule(index: number): void {
     verseTo: verse.verse,
     reference: `${verse.bookName} ${verse.chapter}:${verse.verse}`,
     text: verse.text,
-  });
+  };
+}
+
+/** Adds the verse at `index` of the loaded chapter to the program. */
+export function addVerseToSchedule(index: number): void {
+  const payload = buildVerseDrag(index);
+  if (!payload) return;
+  useProgramStore.getState().addItem({ kind: "bible", ...payload });
 }

@@ -5,7 +5,7 @@ import { useAudioStore, type LiveAudioTrack } from "@renderer/stores/audio.store
 import { useDeckStore } from "@renderer/stores/deck.store";
 import { startDeckAutoplay } from "./deck-autoplay";
 import { startEndOfPlaybackEffects } from "./end-of-playback";
-import type { AudioTrackPush } from "@shared/types/projection";
+import type { AudioTrackPush, ProjectionOutput } from "@shared/types/projection";
 
 /**
  * `track.paused` is the operator's own declarative pause and must survive a
@@ -36,8 +36,26 @@ function toAudioTrackPush(track: LiveAudioTrack, covered: boolean): AudioTrackPu
  * comparator is enough and no equalityFn workaround is needed.
  */
 export function startProjectionEffects(): () => void {
+  // Coalesced into a microtask rather than sent on every `set()`: a single
+  // user action (e.g. `goLiveWithDeck` — `setLiveDeck` + `setBase` +
+  // `setOverlay`, all synchronous) fires this listener once per call, and
+  // without batching, the projector would briefly show each intermediate
+  // state — most visibly, `clearLive()`'s `setOverlay("none")` before
+  // `setBase(null)` would flash whatever was still live for a frame before
+  // landing on the logo. Queuing the *last* value and flushing once per
+  // microtask means only the final state of a synchronous batch is ever
+  // pushed, which is also what makes a single scene transition (one
+  // `sceneEpoch`) correspond to exactly one push to the projection window.
+  let pendingOutput: ProjectionOutput | null = null;
+  let flushScheduled = false;
   const unsubscribeOutput = useProjectionStore.subscribe(selectOutputMemo, (next) => {
-    void api.projection.show(next);
+    pendingOutput = next;
+    if (flushScheduled) return;
+    flushScheduled = true;
+    queueMicrotask(() => {
+      flushScheduled = false;
+      if (pendingOutput) void api.projection.show(pendingOutput);
+    });
   });
 
   const pushAudioTracks = () => {

@@ -14,7 +14,13 @@ import type {
   ProjectionOutput,
 } from "../types/projection";
 import type { DeckDTO, DeckEnvironment, DeckProgress } from "../types/deck";
-import type { ServiceDTO, ServiceSummary, ServiceUpsert } from "../types/service";
+import type {
+  ProgramDTO,
+  ProgramDuplicateInput,
+  ProgramMetaUpsert,
+  ProgramSummary,
+  ProgramUpsert,
+} from "../types/program";
 import type { SettingsMap } from "../types/settings";
 
 /**
@@ -79,12 +85,12 @@ export type IpcContract = {
   "library:list": { req: { kind: AssetKind }; res: MediaAsset[] };
   "library:get": { req: { id: number }; res: MediaAsset | null };
   "library:add": { req: { paths: string[]; kind: AssetKind }; res: MediaAsset[] };
-  /** `force: true` bypasses the "in use by a saved service" guard: it also
-   *  deletes the referencing `service_items` rows, in the same transaction as
+  /** `force: true` bypasses the "in use by a saved program" guard: it also
+   *  deletes the referencing `program_items` rows, in the same transaction as
    *  the asset itself. Without it, an asset still in use throws
    *  `MEDIA_ASSET_IN_USE` (see `MediaRepo.remove`). */
   "library:remove": { req: { id: number; force?: boolean }; res: void };
-  /** Which saved services (if any) still reference this asset — used to show
+  /** Which saved programs (if any) still reference this asset — used to show
    *  the operator what a forced delete would remove before they confirm it. */
   "library:usages": { req: { id: number }; res: MediaAssetUsage[] };
   "library:relocate": { req: { id: number }; res: MediaAsset | null };
@@ -100,10 +106,25 @@ export type IpcContract = {
    *  or unmounted since it was linked. */
   "library:listFolder": { req: { kind: AssetKind; path: string }; res: MediaAsset[] };
 
-  "services:list": { req: void; res: ServiceSummary[] };
-  "services:load": { req: { id: number }; res: ServiceDTO };
-  "services:save": { req: ServiceUpsert; res: ServiceSummary };
-  "services:delete": { req: { id: number }; res: void };
+  "programs:list": { req: void; res: ProgramSummary[] };
+  "programs:load": { req: { id: number }; res: ProgramDTO };
+  "programs:save": { req: ProgramUpsert; res: ProgramSummary };
+  "programs:delete": { req: { id: number }; res: void };
+  /** Renames/edits a program's metadata without touching its items or
+   *  rewriting their ids — unlike `programs:save`, which always replaces the
+   *  full item list. */
+  "programs:updateMeta": { req: ProgramMetaUpsert; res: ProgramSummary };
+  /** Copies a program's header + items in one transaction on the main side;
+   *  never touches the currently loaded program. */
+  "programs:duplicate": { req: ProgramDuplicateInput; res: ProgramSummary };
+  /** Flips just the favorite flag — deliberately separate from `updateMeta`,
+   *  which requires `name` and would clobber `notes` if called partially. */
+  "programs:setFavorite": { req: { id: number; favorite: boolean }; res: ProgramSummary };
+  /** Applies the operator's manual list order: `ids` is the whole list in the
+   *  order it should appear. Returns the re-sorted list so the caller can
+   *  replace its state with what actually got persisted instead of trusting
+   *  its optimistic guess. */
+  "programs:reorder": { req: { ids: number[] }; res: ProgramSummary[] };
 
   "settings:get": { req: void; res: SettingsMap };
   "settings:set": { req: Partial<SettingsMap>; res: void };

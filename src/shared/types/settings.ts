@@ -3,6 +3,7 @@ import {
   SLIDES_DEFAULT_CACHE_MB,
   SLIDES_DEFAULT_RENDER_WIDTH,
 } from "../constants";
+import type { TransitionStyle } from "./projection";
 
 export type Theme = "dark" | "light";
 export type Locale = "es" | "it" | "en";
@@ -15,6 +16,10 @@ export type SettingsMap = {
   "ui.theme": Theme;
   "ui.locale": Locale;
   "media.volume": number;
+  /** How the projector moves between scenes — see `TransitionStyle`. */
+  "projection.transition.style": TransitionStyle;
+  /** Ignored when the style is "none". */
+  "projection.transition.durationMs": number;
   /** Explicit user override for the LibreOffice binary. When set and invalid,
    *  discovery reports the error instead of silently falling back — a wrong
    *  override must never be invisible. */
@@ -43,6 +48,8 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   "ui.theme": "dark",
   "ui.locale": "es",
   "media.volume": 0.5,
+  "projection.transition.style": "crossfade",
+  "projection.transition.durationMs": 300,
   "slides.sofficePath": null,
   "slides.sofficePathResolved": null,
   "slides.profileWarmedVersion": null,

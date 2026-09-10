@@ -1,6 +1,6 @@
 ---
 name: audit-page
-description: Full end-to-end auditor for one WorshipApp feature (IPC contract → main handlers → React/Zustand renderer → design-system usage). Checks correctness, unhandled states (loading/empty/error), projection-output coverage, slide-deck and NEGRO/LOGO overlay correctness, and style/token uniformity. Writes a severity-rated report to auditorias/reports/ and updates the status index. Report-only — never fixes unless asked. Use when asked to audit, review in depth, or QA a complete feature (playlist, library, bible, ppt, black/logo controls, services).
+description: Full end-to-end auditor for one WorshipApp feature (IPC contract → main handlers → React/Zustand renderer → design-system usage). Checks correctness, unhandled states (loading/empty/error), projection-output coverage, slide-deck and NEGRO/LOGO overlay correctness, and style/token uniformity. Writes a severity-rated report to auditorias/reports/ and updates the status index. Report-only — never fixes unless asked. Use when asked to audit, review in depth, or QA a complete feature (playlist, library, bible, ppt, black/logo controls, programs).
 user-invocable: true
 tools: Read, Write, Edit, Bash, Glob, Grep
 ---
@@ -64,7 +64,7 @@ re-verify by hand.
 For every handler this feature owns:
 
 - **Error handling.** Does a failure (missing file, LibreOffice conversion timeout, malformed
-  OOXML, a FK constraint from `service_items.media_asset_id` restrict) surface as a clear
+  OOXML, a FK constraint from `program_items.media_asset_id` restrict) surface as a clear
   `IpcError` the renderer can show, or does it throw something opaque? Empty `catch {}` blocks are
   only acceptable for genuinely best-effort operations — flag any that hide a failure the user
   should see.
@@ -81,13 +81,13 @@ For every handler this feature owns:
   reference that could be stale/destroyed.
 - **Persistence correctness.** If the handler touches `media_assets`, confirm it never treats a
   missing file as a reason to delete the row (see `05-data-and-persistence.md` on
-  `missing_since`). If it touches `service_items`, confirm the `CHECK` constraint's shape
+  `missing_since`). If it touches `program_items`, confirm the `CHECK` constraint's shape
   (exactly one of media/bible/text fields populated per kind) is respected.
 
 ## Phase 3 — Renderer audit (stores, components/pages)
 
 - **Store consistency.** Does every store action that changes one field also update every other
-  field that should move with it (e.g. `service.store.ts`'s `selectedIndex` after `removeAt`)? A
+  field that should move with it (e.g. `program.store.ts`'s `selectedIndex` after `removeAt`)? A
   stale field here is the most common bug class.
 - **`selectOutput` coverage.** If this feature introduces a new `BaseContent`/`ProjectionOutput`
   variant, `npm run typecheck` already forces a branch in `selectOutput`

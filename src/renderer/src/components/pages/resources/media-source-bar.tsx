@@ -36,41 +36,40 @@ export function MediaSourceBar({ activeView, folders, onAddFolder, onRemoveFolde
       </button>
 
       {folders.map((folderPath) => (
-        <div className="group/folder relative min-w-0 flex-1" key={folderPath}>
-          <button
-            className={cn(
-              baseButton,
-              "flex w-full items-center gap-1 pr-5",
-              activeView === folderPath ? activeButton : inactiveButton,
-            )}
-            onClick={() => onSelectView(folderPath)}
-            title={folderPath}
-            type="button"
-          >
-            <Icon className="shrink-0 size-3" name="folder" />
-            {/* `dir="rtl"` + `text-align: left` makes the ellipsis eat the
-             *  start of the path instead of the end — the tail (file/folder
-             *  name) is what tells two similar paths apart, not the shared
-             *  prefix. */}
-            <span className="min-w-0 flex-1 overflow-hidden text-left whitespace-nowrap text-ellipsis" dir="rtl">
-              {folderPath}
-            </span>
-          </button>
-          <Tooltip
-            align="end"
-            className="absolute top-1/2 right-0.5 z-20 hidden -translate-y-1/2 group-hover/folder:inline-flex"
-            content={t("resources.removeFolderHint")}
-            placement="bottom"
-          >
-            <IconButton
-              aria-label={t("resources.removeFolder")}
-              onClick={() => onRemoveFolder(folderPath)}
-              size="xs"
-              variant="ghost"
+        <div className="group/folder min-w-0 flex-1" key={folderPath}>
+          <div className="relative">
+            <Tooltip className="block w-full min-w-0" content={folderPath} floating>
+              <button
+                className={cn(baseButton, "flex w-full items-center gap-1 pr-5", activeView === folderPath ? activeButton : inactiveButton)}
+                onClick={() => onSelectView(folderPath)}
+                type="button"
+              >
+                <Icon className="shrink-0 size-3" name="folder" />
+                {/* `dir="rtl"` + `text-align: left` makes the ellipsis eat the
+                 *  start of the path instead of the end — the tail (file/folder
+                 *  name) is what tells two similar paths apart, not the shared
+                 *  prefix. */}
+                <span className="min-w-0 flex-1 overflow-hidden text-left whitespace-nowrap text-ellipsis" dir="rtl">
+                  {folderPath}
+                </span>
+              </button>
+            </Tooltip>
+            <Tooltip
+              align="end"
+              className="absolute top-1/2 right-0.5 z-20 hidden -translate-y-1/2 group-hover/folder:inline-flex"
+              content={t("resources.removeFolderHint")}
+              placement="bottom"
             >
-              <Icon className="size-3" name="close" />
-            </IconButton>
-          </Tooltip>
+              <IconButton
+                aria-label={t("resources.removeFolder")}
+                onClick={() => onRemoveFolder(folderPath)}
+                size="xs"
+                variant="ghost"
+              >
+                <Icon className="size-3" name="close" />
+              </IconButton>
+            </Tooltip>
+          </div>
         </div>
       ))}
 

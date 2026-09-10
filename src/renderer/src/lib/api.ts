@@ -5,7 +5,7 @@ import type {
   MediaCommand,
   ProjectionOutput,
 } from "@shared/types/projection";
-import type { ServiceUpsert } from "@shared/types/service";
+import type { ProgramDuplicateInput, ProgramMetaUpsert, ProgramUpsert } from "@shared/types/program";
 import type { SettingsMap } from "@shared/types/settings";
 
 /** Thin per-domain facade over `invoke` — pure readability sugar in the
@@ -58,11 +58,15 @@ export const api = {
       invoke("library:setLinkedAudio", { id, path }),
     listFolder: (kind: AssetKind, path: string) => invoke("library:listFolder", { kind, path }),
   },
-  services: {
-    list: () => invoke("services:list", undefined),
-    load: (id: number) => invoke("services:load", { id }),
-    save: (input: ServiceUpsert) => invoke("services:save", input),
-    delete: (id: number) => invoke("services:delete", { id }),
+  programs: {
+    list: () => invoke("programs:list", undefined),
+    load: (id: number) => invoke("programs:load", { id }),
+    save: (input: ProgramUpsert) => invoke("programs:save", input),
+    delete: (id: number) => invoke("programs:delete", { id }),
+    updateMeta: (input: ProgramMetaUpsert) => invoke("programs:updateMeta", input),
+    duplicate: (input: ProgramDuplicateInput) => invoke("programs:duplicate", input),
+    setFavorite: (input: { id: number; favorite: boolean }) => invoke("programs:setFavorite", input),
+    reorder: (ids: number[]) => invoke("programs:reorder", { ids }),
   },
   settings: {
     get: () => invoke("settings:get", undefined),

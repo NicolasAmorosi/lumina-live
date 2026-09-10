@@ -15,12 +15,11 @@ export type MediaAsset = {
   updatedAt: number;
 };
 
-/** One saved service that still references an asset — surfaced to the
+/** One saved program that still references an asset — surfaced to the
  *  operator when a delete is blocked, so they can see what would break. */
 export type MediaAssetUsage = {
-  serviceId: number;
-  serviceName: string;
-  serviceDate: number | null;
+  programId: number;
+  programName: string;
   itemCount: number;
 };
 

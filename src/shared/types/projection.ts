@@ -50,7 +50,40 @@ export type ProjectionOutputKind =
       preload: string[];
     };
 
-export type ProjectionOutput = ProjectionOutputKind & { videoUnderlay: VideoUnderlay };
+/** How the projector should move from whatever it was showing to a new
+ *  scene. "none" cuts instantly (today's behaviour, and always what a
+ *  confidence monitor other than LIVE gets). "crossfade" fades the new scene
+ *  in over the old one without ever going fully black; "fade-through-black"
+ *  fades out to black first, then in. Configurable from Settings →
+ *  Projection. */
+export type TransitionStyle = "none" | "crossfade" | "fade-through-black";
+
+/** Carried on every `ProjectionOutput` so the projection window (and the
+ *  LIVE monitor) can tell "the same scene, re-sent" from "a genuinely new
+ *  scene" without any side channel. `epoch` only advances when the control
+ *  window deliberately begins a new scene (`beginScene()` in
+ *  `projection.store.ts`) — navigating within what's already live (a slide,
+ *  a verse) never bumps it, which is what keeps that navigation an instant
+ *  cut instead of a fade. `style`/`durationMs` are a mirror of the
+ *  `projection.transition.*` settings, folded in here (not sent over a
+ *  separate channel) for the same reason `videoUnderlay` lives here: the
+ *  projection window stays a pure function of one input, and the value
+ *  survives the snapshot replay in `main/services/projection-state.ts`. */
+export type SceneTransition = {
+  epoch: number;
+  style: TransitionStyle;
+  durationMs: number;
+};
+
+/** Used by every preview output (`use-preview.ts`) — stage one of the
+ *  two-stage flow never fades, no matter what the projector is configured
+ *  to do. */
+export const INSTANT_TRANSITION: SceneTransition = { epoch: 0, style: "none", durationMs: 0 };
+
+export type ProjectionOutput = ProjectionOutputKind & {
+  videoUnderlay: VideoUnderlay;
+  transition: SceneTransition;
+};
 
 /** Identifies one media element in the projection window: the single video,
  *  or one of N simultaneous audio tracks by its `trackId`. */

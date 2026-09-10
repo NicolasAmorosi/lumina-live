@@ -1,5 +1,5 @@
 import { useProjectionStore } from "@renderer/stores/projection.store";
-import { useServiceStore } from "@renderer/stores/service.store";
+import { useProgramStore } from "@renderer/stores/program.store";
 import { useMediaAsset } from "@renderer/lib/hooks/use-media-asset";
 import type { BaseContent } from "@shared/types/projection";
 
@@ -18,8 +18,8 @@ function liveAssetId(base: BaseContent | null): number | null {
  */
 export function useLiveHeading(): string | null {
   const base = useProjectionStore((s) => s.base);
-  const activeIndex = useServiceStore((s) => s.activeIndex);
-  const items = useServiceStore((s) => s.items);
+  const activeIndex = useProgramStore((s) => s.activeIndex);
+  const items = useProgramStore((s) => s.items);
   const activeItem = activeIndex !== null ? items[activeIndex] : undefined;
   const asset = useMediaAsset(liveAssetId(base));
 

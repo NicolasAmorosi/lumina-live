@@ -5,7 +5,7 @@ import { useAudioStore } from "@renderer/stores/audio.store";
 import { useLibraryStore } from "@renderer/stores/library.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
-import { useServiceStore } from "@renderer/stores/service.store";
+import { useProgramStore } from "@renderer/stores/program.store";
 import { clearBaseContent } from "./playback";
 import { clearPreview } from "./preview";
 
@@ -17,7 +17,7 @@ import { clearPreview } from "./preview";
  * delete, forced or not, so nothing keeps pointing at a row that's gone.
  */
 function purgeAsset(id: number): void {
-  useServiceStore.getState().removeByMediaAsset(id);
+  useProgramStore.getState().removeByMediaAsset(id);
 
   const base = useProjectionStore.getState().base;
   if (base && "assetId" in base && base.assetId === id) clearBaseContent();
@@ -34,8 +34,8 @@ function purgeAsset(id: number): void {
 
 /** The library "remove" button and the Delete/Backspace shortcut both call
  *  this. Success cleans up every stale reference; a `MEDIA_ASSET_IN_USE`
- *  rejection surfaces as `blockedAssetId` for the Callout instead of being
- *  thrown — any other error still propagates. */
+ *  rejection surfaces as `blockedAssetId`, which `MediaBrowser` turns into a
+ *  toast, instead of being thrown — any other error still propagates. */
 export async function removeAsset(id: number): Promise<void> {
   try {
     await api.library.remove(id);
@@ -54,7 +54,7 @@ export async function removeAsset(id: number): Promise<void> {
 
 /** The "Eliminar igualmente" escape hatch — same cleanup as `removeAsset`,
  *  but bypasses the in-use guard by also deleting the referencing
- *  `service_items` (main-side, in one transaction — see
+ *  `program_items` (main-side, in one transaction — see
  *  `main/services/media-asset-removal.ts`). */
 export async function forceRemoveAsset(id: number): Promise<void> {
   await api.library.remove(id, true);

@@ -12,7 +12,7 @@ import { clearBaseContent } from "@renderer/lib/actions/playback";
  * reads as one more media player under the LIVE monitor instead of a
  * one-off. Previous/next only move the projector while the live verse
  * belongs to the chapter loaded in the Bible browser (`advanceVerse`); a
- * verse sent live straight from a saved service item has no chapter to walk,
+ * verse sent live straight from a saved program item has no chapter to walk,
  * so both arrows stay disabled instead of the whole row disappearing.
  */
 export function VerseTransport() {

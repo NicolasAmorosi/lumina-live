@@ -3,6 +3,7 @@ import { MediaPanel } from "@renderer/components/ui";
 import { MediaTrackRow } from "@renderer/components/shared/media-track-row";
 import { usePreviewStore } from "@renderer/stores/preview.store";
 import { useMediaDuration } from "@renderer/lib/hooks/use-media-duration";
+import { clearPreview } from "@renderer/lib/actions/preview";
 import { seekPreview, togglePreviewPlayback } from "@renderer/lib/actions/preview-playback";
 import { assetUrl } from "@shared/urls";
 import type { MediaAsset } from "@shared/types/media";
@@ -43,6 +44,7 @@ export function PreviewMediaBar({ asset }: PreviewMediaBarProps) {
         hint={isVideo ? t("media.previewMuted") : t("media.previewHint")}
         kind={isVideo ? "video" : "audio"}
         label={asset.name}
+        onDelete={clearPreview}
         onSeek={duration ? seekPreview : undefined}
         onTogglePause={isVideo ? togglePreviewPlayback : undefined}
         paused={isVideo && !playing}

@@ -3,6 +3,7 @@ import { api } from "@renderer/lib/api";
 import { onIpc } from "@renderer/lib/ipc";
 import { OutputView } from "@renderer/components/shared/output-view";
 import { useMediaStatusReporter } from "./use-media-status-reporter";
+import { INSTANT_TRANSITION } from "@shared/types/projection";
 import type { AudioTrackPush, MediaCommand, ProjectionOutput } from "@shared/types/projection";
 
 type AudioTrackElementProps = {
@@ -80,7 +81,15 @@ export function ProjectionApp() {
   const [output, setOutput] = useState<ProjectionOutput>({
     kind: "black",
     videoUnderlay: null,
+    transition: INSTANT_TRANSITION,
   });
+  // Flips once, the first time real data (a push or the replayed snapshot)
+  // replaces the synthetic placeholder above. Used only to change
+  // `OutputView`'s `key` below — remounting it means its own "the very first
+  // scene never fades" rule (see `output-view.tsx`) applies to the real
+  // content, instead of animating a fade FROM the placeholder INTO whatever
+  // was actually live when the window reopened.
+  const [hasRealOutput, setHasRealOutput] = useState(false);
   const [tracks, setTracks] = useState<AudioTrackPush[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
@@ -96,6 +105,7 @@ export function ProjectionApp() {
     let sawPush = false;
     const offOutput = onIpc("display-content", (next) => {
       sawPush = true;
+      setHasRealOutput(true);
       setOutput(next);
     });
     const offTracks = onIpc("audio-tracks", (next) => {
@@ -104,7 +114,10 @@ export function ProjectionApp() {
     });
     void api.projection.getSnapshot().then(({ output: snapshot, audioTracks }) => {
       if (sawPush) return;
-      if (snapshot) setOutput(snapshot);
+      if (snapshot) {
+        setHasRealOutput(true);
+        setOutput(snapshot);
+      }
       setTracks(audioTracks);
     });
     return () => {
@@ -141,7 +154,7 @@ export function ProjectionApp() {
 
   return (
     <div className="h-screen w-screen bg-black">
-      <OutputView mode="live" output={output} videoRef={videoRef} />
+      <OutputView key={hasRealOutput ? "live" : "placeholder"} mode="live" output={output} videoRef={videoRef} />
 
       {/* Outside the output view on purpose: keyed by trackId+epoch so a track
           restarts from the beginning only when it is truly a new play (a

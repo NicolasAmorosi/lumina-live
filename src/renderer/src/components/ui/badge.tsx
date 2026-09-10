@@ -1,12 +1,13 @@
 import type { HTMLAttributes } from "react";
 import { cn } from "@renderer/lib/utils";
 
-export type BadgeVariant = "blue" | "neutral" | "danger" | "ppt" | "video" | "image" | "audio" | "bible";
+export type BadgeVariant = "blue" | "neutral" | "danger" | "success" | "ppt" | "video" | "image" | "audio" | "bible";
 
 const variants: Record<BadgeVariant, string> = {
   blue: "bg-primary/15 text-primary",
   neutral: "bg-muted text-muted-foreground",
   danger: "bg-danger/15 text-danger",
+  success: "bg-success/15 text-success",
   ppt: "bg-badge-ppt/20 text-badge-ppt",
   video: "bg-badge-video/20 text-badge-video",
   image: "bg-badge-image/20 text-badge-image",

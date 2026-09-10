@@ -1,11 +1,12 @@
 import { useEffect, useState, type DragEvent } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
-import { Button, Callout, EmptyState, Icon, IconButton, Tooltip } from "@renderer/components/ui";
+import { EmptyState, Icon, IconButton, Tooltip } from "@renderer/components/ui";
 import { PanelBody, PanelFooter } from "@renderer/components/shared/panel";
 import { folderAssetsKey, useLibraryStore } from "@renderer/stores/library.store";
-import { useServiceStore } from "@renderer/stores/service.store";
+import { useProgramStore } from "@renderer/stores/program.store";
 import { useSettingsStore } from "@renderer/stores/settings.store";
 import { api } from "@renderer/lib/api";
+import { toast } from "@renderer/lib/toast";
 import { readOsFilesDrag, setMediaAssetDrag } from "@renderer/lib/dnd";
 import { previewAsset } from "@renderer/lib/actions/preview";
 import { goLive } from "@renderer/lib/actions/playback";
@@ -15,9 +16,6 @@ import { AssetTile } from "./asset-tile";
 import { MediaSourceBar } from "./media-source-bar";
 import { RemoveAssetConfirm } from "./remove-asset-confirm";
 import type { AssetKind } from "@shared/constants";
-
-/** How long the "in use" notice stays up before it auto-dismisses. */
-const REMOVE_BLOCKED_TIMEOUT_MS = 6000;
 
 /**
  * The library for one kind of asset, as a thumbnail grid. Click previews,
@@ -35,7 +33,7 @@ export function MediaBrowser({ kind }: { kind: AssetKind }) {
   const addFiles = useLibraryStore((s) => s.addFiles);
   const blockedAssetId = useLibraryStore((s) => s.blockedAssetId);
   const dismissBlocked = useLibraryStore((s) => s.dismissBlocked);
-  const addItem = useServiceStore((s) => s.addItem);
+  const addItem = useProgramStore((s) => s.addItem);
   const [confirmAssetId, setConfirmAssetId] = useState<number | null>(null);
   const activeView = useLibraryStore((s) => s.activeView[kind]);
   const refreshFolder = useLibraryStore((s) => s.refreshFolder);
@@ -53,11 +51,20 @@ export function MediaBrowser({ kind }: { kind: AssetKind }) {
     if (isFolderView) void refreshFolder(kind, activeView);
   }, [kind, activeView, isFolderView, refreshFolder]);
 
+  // Surfaced as a toast (rather than an in-panel Callout) — the store's
+  // `blockedAssetId` only needs to live long enough to hand the id off here.
+  // It still auto-dismisses like every other toast: the action stays
+  // reachable through the library's own remove flow, so nothing is lost once
+  // it disappears.
   useEffect(() => {
     if (blockedAssetId === null) return;
-    const timeout = setTimeout(dismissBlocked, REMOVE_BLOCKED_TIMEOUT_MS);
-    return () => clearTimeout(timeout);
-  }, [blockedAssetId, dismissBlocked]);
+    const id = blockedAssetId;
+    toast.danger(t("library.removeBlocked"), {
+      action: { label: t("library.removeAnyway"), onClick: () => setConfirmAssetId(id) },
+      durationMs: 6000,
+    });
+    dismissBlocked();
+  }, [blockedAssetId, dismissBlocked, t]);
 
   async function handleAdd() {
     const paths = await api.files.pick(kind, true);
@@ -108,27 +115,6 @@ export function MediaBrowser({ kind }: { kind: AssetKind }) {
           </div>
         )}
       </PanelBody>
-      {blockedAssetId !== null ? (
-        <Callout
-          className="mx-1.5 mb-1.5"
-          dismissLabel={t("library.removeDismiss")}
-          onDismiss={dismissBlocked}
-          tone="danger"
-        >
-          <p>{t("library.removeBlocked")}</p>
-          <Button
-            className="mt-2"
-            onClick={() => {
-              setConfirmAssetId(blockedAssetId);
-              dismissBlocked();
-            }}
-            size="xs"
-            variant="danger"
-          >
-            {t("library.removeAnyway")}
-          </Button>
-        </Callout>
-      ) : null}
       <RemoveAssetConfirm
         assetId={confirmAssetId}
         assetMissing={recentAssets.find((a) => a.id === confirmAssetId)?.missingSince != null}

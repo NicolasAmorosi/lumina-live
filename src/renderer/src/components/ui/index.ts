@@ -21,3 +21,4 @@ export { ListRow } from "./list-row";
 export { Toolbar, ToolbarGroup } from "./toolbar";
 export { Callout } from "./callout";
 export { Tooltip } from "./tooltip";
+export { ToastHost } from "./toast";

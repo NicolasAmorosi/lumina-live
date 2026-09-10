@@ -52,7 +52,7 @@ export class MediaRepo {
   }
 
   /** Adds a file if new, or reactivates it in the library if it already exists (e.g. was
-   *  referenced by a service but not shown in the library list). */
+   *  referenced by a program but not shown in the library list). */
   upsertFromPath(filePath: string, kind: AssetKind, inLibrary: boolean): MediaAsset {
     const stat = fs.statSync(filePath);
     const pathKey = toPathKey(filePath);
@@ -112,8 +112,8 @@ export class MediaRepo {
   }
 
   /** Throws `IpcError("MEDIA_ASSET_IN_USE")` when the asset is still referenced
-   *  by a service item (`onDelete: "restrict"` in the schema) — a saved
-   *  service's history must not silently lose an item.
+   *  by a program item (`onDelete: "restrict"` in the schema) — a saved
+   *  program's history must not silently lose an item.
    *
    *  SQLite reports a RESTRICT violation as `SQLITE_CONSTRAINT_TRIGGER`, not
    *  `SQLITE_CONSTRAINT_FOREIGNKEY` (that code is only for an immediate FK
@@ -126,7 +126,7 @@ export class MediaRepo {
       if (error instanceof Database.SqliteError && error.message.includes("FOREIGN KEY constraint failed")) {
         throw new IpcError({
           code: "MEDIA_ASSET_IN_USE",
-          message: `Media asset ${id} is still referenced by a service item`,
+          message: `Media asset ${id} is still referenced by a program item`,
         });
       }
       throw error;

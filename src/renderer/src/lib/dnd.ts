@@ -1,13 +1,44 @@
 import type { DragEvent } from "react";
 import { ASSET_EXTENSIONS, ASSET_KINDS, type AssetKind } from "@shared/constants";
 
-/** Custom MIME types for the two things draggable inside the app: a library
- *  asset (dropped anywhere to add it) and a playlist row (dropped on another
- *  row to reorder). Kept distinct so a single `onDrop` can tell them apart. */
+/** Custom MIME types for the things draggable inside the app: a library asset
+ *  or a Bible verse (both dropped anywhere to add them) and a playlist row
+ *  (dropped on another row to reorder). Kept distinct so a single `onDrop`
+ *  can tell them apart. */
 export const MEDIA_ASSET_MIME = "application/x-worship-media-asset";
+export const BIBLE_VERSE_MIME = "application/x-worship-bible-verse";
 export const SCHEDULE_INDEX_MIME = "application/x-worship-schedule-index";
+/** A row of the saved-programs list, dropped on another row to reorder the
+ *  list itself. Carries the program's **id**, not its index — the list can be
+ *  refreshed mid-drag — and is kept distinct from `SCHEDULE_INDEX_MIME` so a
+ *  program row can never be read as a playlist reorder. */
+export const PROGRAM_ROW_MIME = "application/x-worship-program-row";
+
+let transparentDragImage: HTMLImageElement | null = null;
+
+/** Suppresses the browser's default translucent drag-ghost, which otherwise
+ *  trails the cursor in every direction. Used by vertical reorder lists whose
+ *  only drop feedback is a `dropBefore` line (see `ListRow`) — with the ghost
+ *  gone, nothing appears to move sideways while dragging up/down. */
+export function hideDragGhost(e: DragEvent): void {
+  transparentDragImage ??= new Image();
+  if (!transparentDragImage.src) {
+    transparentDragImage.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBTAA7";
+  }
+  e.dataTransfer.setDragImage(transparentDragImage, 0, 0);
+}
 
 export type DraggedAsset = { assetId: number; kind: AssetKind };
+
+export type DraggedVerse = {
+  bibleVersionId: number;
+  bibleBookId: number;
+  chapter: number;
+  verseFrom: number;
+  verseTo: number;
+  reference: string;
+  text: string;
+};
 
 export function setMediaAssetDrag(e: DragEvent, payload: DraggedAsset): void {
   e.dataTransfer.effectAllowed = "copy";
@@ -19,6 +50,21 @@ export function readMediaAssetDrag(e: DragEvent): DraggedAsset | null {
   if (!raw) return null;
   try {
     return JSON.parse(raw) as DraggedAsset;
+  } catch {
+    return null;
+  }
+}
+
+export function setBibleVerseDrag(e: DragEvent, payload: DraggedVerse): void {
+  e.dataTransfer.effectAllowed = "copy";
+  e.dataTransfer.setData(BIBLE_VERSE_MIME, JSON.stringify(payload));
+}
+
+export function readBibleVerseDrag(e: DragEvent): DraggedVerse | null {
+  const raw = e.dataTransfer.getData(BIBLE_VERSE_MIME);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as DraggedVerse;
   } catch {
     return null;
   }

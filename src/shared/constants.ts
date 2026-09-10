@@ -13,8 +13,8 @@ export const ASSET_EXTENSIONS: Record<AssetKind, readonly string[]> = {
   ppt: ["ppt", "pptx", "pptm", "pps", "ppsx", "ppsm", "odp"],
 };
 
-export const SERVICE_ITEM_KINDS = ["media", "ppt", "bible", "text"] as const;
-export type ServiceItemKind = (typeof SERVICE_ITEM_KINDS)[number];
+export const PROGRAM_ITEM_KINDS = ["media", "ppt", "bible", "text"] as const;
+export type ProgramItemKind = (typeof PROGRAM_ITEM_KINDS)[number];
 
 /** Bump to invalidate every cached deck at once when the conversion pipeline
  *  itself changes (different rasterizer settings, fixed OOXML parsing, …).

@@ -9,7 +9,7 @@ detalle de cada capa.
 - Reproducción de video e imagen en segunda pantalla
 - Reproducción de audio (con audio vinculado a PowerPoint)
 - Biblia integrada (RV1960) con búsqueda por texto sin acentos (FTS5) y proyección de versículos
-- Playlists guardadas como servicios reutilizables (abrir/duplicar un culto anterior)
+- Playlists guardadas como programas reutilizables (abrir/duplicar/editar un culto anterior)
 - Biblioteca de medios persistente (videos, imágenes, audios) con detección de archivos movidos/borrados
 - Controles de negro/logo con toggle
 - Tema claro/oscuro

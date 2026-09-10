@@ -5,7 +5,7 @@ su lugar, **Zustand** en slices por dominio (`src/renderer/src/stores/`):
 
 | Store | Qué guarda |
 |---|---|
-| `service.store.ts` | programa actual (`items`), `selectedIndex` (highlight), `activeIndex` (en vivo) |
+| `program.store.ts` | programa actual (`items`, nombre, notas, fecha), `selectedIndex` (highlight), `activeIndex` (en vivo), `dirty` |
 | `preview.store.ts` | **qué se está mirando** (`target`: ítem del programa \| versículo \| asset de la biblioteca) + `slideIndex`, el cursor de preview independiente del de proyección |
 | `projection.store.ts` | `base` (qué se eligió proyectar) + `overlay` ('none'\|'black'\|'logo') + `logoUrl` + `presentationOpen` |
 | `bible.store.ts` | versión/libro/capítulo activos, versículos cargados, índice de versículo actual |

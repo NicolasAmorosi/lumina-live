@@ -6,6 +6,7 @@ import {
   EmptyState,
   Icon,
   IconButton,
+  MediaPanel,
   ProgressBar,
   SlideGrid,
   Skeleton,
@@ -16,7 +17,7 @@ import { PreviewMissingState } from "@renderer/components/shared/preview-missing
 import { useDeck } from "@renderer/lib/hooks/use-deck";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
-import { setPreviewSlide } from "@renderer/lib/actions/preview";
+import { clearPreview, setPreviewSlide } from "@renderer/lib/actions/preview";
 import { goLive, gotoSlide } from "@renderer/lib/actions/playback";
 import { api } from "@renderer/lib/api";
 import type { DeckDTO } from "@shared/types/deck";
@@ -45,30 +46,37 @@ function DeckAudioStrip({ assetId, deck }: { assetId: number; deck: DeckDTO }) {
   }
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-border bg-muted px-3 py-2 text-sm">
-      <Icon className="shrink-0 text-muted-foreground" name="audio" />
-      <span className="min-w-0 flex-1 truncate text-foreground">
-        {deck.soundtrack?.name ?? t("deck.audio.none")}
-      </span>
-      {deck.timingsSource !== "none" ? (
-        <Badge variant="blue">{t("deck.audio.autoAdvance")}</Badge>
-      ) : null}
-      {deck.soundtrack?.origin === "linked" ? (
-        <Button onClick={() => void remove()} size="xs" variant="ghost">
-          {t("deck.audio.remove")}
-        </Button>
-      ) : null}
-      {deck.soundtrack?.origin !== "embedded" && deck.soundtrack?.origin !== "transition" ? (
-        <Button onClick={() => void assign()} size="xs" variant="ghost">
-          {deck.soundtrack ? t("deck.audio.change") : t("deck.audio.assign")}
-        </Button>
-      ) : null}
-      <Tooltip content={t("deck.audio.help")}>
-        <IconButton aria-label={t("deck.audio.help")} size="xs" variant="ghost">
-          <Icon name="help" />
+    <MediaPanel>
+      <div className="flex items-center gap-2 px-2 py-1 text-sm">
+        <Icon className="size-4 shrink-0 text-muted-foreground" name="audio" />
+        <span className="min-w-0 flex-1 truncate text-foreground">
+          {deck.soundtrack?.name ?? t("deck.audio.none")}
+        </span>
+        {/* `timingsSource` only certifies the OOXML timing data could be read,
+         * not that any slide actually carries an advance delay — `autoAdvance`
+         * (already derived from the slides themselves) is the fact this badge
+         * claims to show. */}
+        {deck.autoAdvance ? <Badge variant="blue">{t("deck.audio.autoAdvance")}</Badge> : null}
+        {deck.soundtrack?.origin === "linked" ? (
+          <Button onClick={() => void remove()} size="xs" variant="ghost">
+            {t("deck.audio.remove")}
+          </Button>
+        ) : null}
+        {deck.soundtrack?.origin !== "embedded" && deck.soundtrack?.origin !== "transition" ? (
+          <Button onClick={() => void assign()} size="xs" variant="ghost">
+            {deck.soundtrack ? t("deck.audio.change") : t("deck.audio.assign")}
+          </Button>
+        ) : null}
+        <Tooltip content={t("deck.audio.help")}>
+          <IconButton aria-label={t("deck.audio.help")} size="xs" variant="ghost">
+            <Icon name="help" />
+          </IconButton>
+        </Tooltip>
+        <IconButton aria-label={t("common.delete")} onClick={clearPreview} size="xs" variant="ghost">
+          <Icon name="close" />
         </IconButton>
-      </Tooltip>
-    </div>
+      </div>
+    </MediaPanel>
   );
 }
 

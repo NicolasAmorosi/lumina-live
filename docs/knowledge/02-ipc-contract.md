@@ -4,7 +4,7 @@
 
 Todo el contrato vive en **`src/shared/ipc/contract.ts`**: un tipo `IpcContract` con un entry
 por canal (`{ req, res }`), agrupado por prefijo de dominio (`displays:`, `projection:`,
-`files:`, `ppt:`, `bible:`, `library:`, `services:`, `settings:`). Los push events (main →
+`files:`, `ppt:`, `bible:`, `library:`, `programs:`, `settings:`). Los push events (main →
 renderer sin invoke) están aparte, en `IpcEvents`.
 
 Esto reemplaza el viejo "lockstep de 3 archivos" (`main.js` + `preload.js` + `app.js`, todo a

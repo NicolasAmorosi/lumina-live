@@ -9,10 +9,10 @@ export class HistoryRepo {
   constructor(private readonly db: Db) {}
 
   /** Last deck recorded, so a 60-slide auto-advancing deck writes one row
-   *  instead of 60 and doesn't burn through MAX_ROWS in a few services. */
+   *  instead of 60 and doesn't burn through MAX_ROWS in a few programs. */
   private lastDeckAssetId: number | null = null;
 
-  record(output: ProjectionOutput, serviceId: number | null): void {
+  record(output: ProjectionOutput, programId: number | null): void {
     if (output.kind === "black") return; // not worth remembering
 
     if (output.kind === "slide") {
@@ -24,7 +24,7 @@ export class HistoryRepo {
           projectedAt: Date.now(),
           kind: "slide",
           mediaAssetId: output.deckAssetId,
-          serviceId,
+          programId,
           reference: null,
           // `preload` is a transient rendering detail, not history.
           snapshotJson: JSON.stringify({
@@ -44,7 +44,7 @@ export class HistoryRepo {
         projectedAt: Date.now(),
         kind: output.kind,
         mediaAssetId: null,
-        serviceId,
+        programId,
         reference: "reference" in output ? output.reference : null,
         snapshotJson: JSON.stringify(output),
       })

@@ -21,8 +21,9 @@ export function SystemSection() {
     <div className="flex flex-col gap-6">
       <SettingsGroup title={t("settings.groups.appearance")}>
         <SettingsRow description={t("settings.themeDesc")} label={t("settings.theme")}>
-          <div className="inline-flex rounded-lg border border-border p-0.5">
+          <div className="inline-flex gap-1 rounded-lg border border-border p-0.5">
             <Button
+              className="w-28 justify-center"
               onClick={() => void updateSettings({ "ui.theme": "dark" })}
               size="sm"
               toggled={theme === "dark"}
@@ -31,6 +32,7 @@ export function SystemSection() {
               <Icon name="moon" /> {t("settings.themeDark")}
             </Button>
             <Button
+              className="w-28 justify-center"
               onClick={() => void updateSettings({ "ui.theme": "light" })}
               size="sm"
               toggled={theme === "light"}

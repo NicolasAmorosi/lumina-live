@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { EmptyState, Icon, IconButton, Input, ListRow, Select, Tooltip } from "@renderer/components/ui";
 import { PanelBody, PanelFooter } from "@renderer/components/shared/panel";
 import { useBibleStore } from "@renderer/stores/bible.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
 import { api } from "@renderer/lib/api";
-import { addVerseToSchedule, previewSearchHit } from "@renderer/lib/actions/bible";
+import { addVerseToSchedule, buildVerseDrag, previewSearchHit } from "@renderer/lib/actions/bible";
 import { previewVerse } from "@renderer/lib/actions/preview";
 import { goLive } from "@renderer/lib/actions/playback";
+import { setBibleVerseDrag } from "@renderer/lib/dnd";
 import type { BibleBookDTO, BibleSearchHit } from "@shared/types/bible";
 
 const MIN_TEXT_QUERY_LENGTH = 3;
@@ -58,6 +60,8 @@ export function BibleBrowser() {
   const [searchMode, setSearchMode] = useState<SearchMode>("reference");
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<BibleSearchHit[]>([]);
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const itemRefs = useRef<(HTMLLIElement | null)[]>([]);
 
   useEffect(() => {
     void loadVersions();
@@ -71,6 +75,19 @@ export function BibleBrowser() {
     () => (searchMode === "reference" ? matchReference(books, query) : []),
     [books, query, searchMode],
   );
+
+  const resultCount = searchMode === "text" ? searchResults.length : referenceMatches.length;
+
+  // The list content changes on every keystroke — always land back on the
+  // top hit rather than keeping a stale index that now points at something
+  // unrelated to what's on screen.
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [referenceMatches, searchResults]);
+
+  useEffect(() => {
+    itemRefs.current[highlightedIndex]?.scrollIntoView({ block: "nearest" });
+  }, [highlightedIndex]);
 
   async function handleTextSearch(value: string) {
     if (versionId === null || value.trim().length < MIN_TEXT_QUERY_LENGTH) {
@@ -95,6 +112,30 @@ export function BibleBrowser() {
       setPendingChapter("");
     }
     setQuery("");
+  }
+
+  /** Lets the search field behave like a combobox: arrows move the
+   *  highlighted result, Enter picks it — the same action its click handler
+   *  would run — without ever taking focus off the input. */
+  function handleSearchKeyDown(e: KeyboardEvent<HTMLInputElement>) {
+    if (resultCount === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightedIndex((i) => Math.min(i + 1, resultCount - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightedIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (searchMode === "text") {
+        const hit = searchResults[highlightedIndex];
+        if (hit) void previewSearchHit(hit);
+      } else {
+        const match = referenceMatches[highlightedIndex];
+        if (match) selectReferenceMatch(match);
+      }
+    }
   }
 
   return (
@@ -162,6 +203,7 @@ export function BibleBrowser() {
                 setQuery(value);
                 if (searchMode === "text") void handleTextSearch(value);
               }}
+              onKeyDown={handleSearchKeyDown}
               placeholder={searchMode === "reference" ? t("bible.referenceSearch") : t("bible.search")}
               value={query}
             />
@@ -176,8 +218,16 @@ export function BibleBrowser() {
               <EmptyState icon="search" title={t("bible.noResults")} />
             ) : (
               <ul className="flex flex-col gap-0.5">
-                {searchResults.map((hit) => (
-                  <ListRow key={hit.id} onClick={() => void previewSearchHit(hit)}>
+                {searchResults.map((hit, index) => (
+                  <ListRow
+                    key={hit.id}
+                    onClick={() => void previewSearchHit(hit)}
+                    onMouseEnter={() => setHighlightedIndex(index)}
+                    ref={(el) => {
+                      itemRefs.current[index] = el;
+                    }}
+                    selected={highlightedIndex === index}
+                  >
                     <span dangerouslySetInnerHTML={{ __html: hit.snippet }} />
                   </ListRow>
                 ))}
@@ -187,10 +237,15 @@ export function BibleBrowser() {
             <EmptyState icon="bible" title={t("bible.noResults")} />
           ) : (
             <ul className="flex flex-col gap-0.5">
-              {referenceMatches.map((match) => (
+              {referenceMatches.map((match, index) => (
                 <ListRow
                   key={`${match.book.id}-${match.chapter ?? "book"}`}
                   onClick={() => selectReferenceMatch(match)}
+                  onMouseEnter={() => setHighlightedIndex(index)}
+                  ref={(el) => {
+                    itemRefs.current[index] = el;
+                  }}
+                  selected={highlightedIndex === index}
                 >
                   {match.chapter !== null ? `${match.book.name} ${match.chapter}` : match.book.name}
                 </ListRow>
@@ -204,12 +259,17 @@ export function BibleBrowser() {
             {verses.map((verse, index) => (
               <ListRow
                 active={currentVerseIndex === index}
+                draggable
                 index={verse.verse}
                 key={verse.id}
                 onClick={() => previewVerse(index)}
                 onDoubleClick={() => {
                   previewVerse(index);
                   void goLive();
+                }}
+                onDragStart={(e) => {
+                  const payload = buildVerseDrag(index);
+                  if (payload) setBibleVerseDrag(e, payload);
                 }}
                 selected={previewIndex === index}
               >

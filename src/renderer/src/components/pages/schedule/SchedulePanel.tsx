@@ -2,10 +2,16 @@ import { useState, type DragEvent } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { Badge, EmptyState, Icon, IconButton, Tooltip } from "@renderer/components/ui";
 import { PanelBody, PanelFooter, PanelHeader } from "@renderer/components/shared/panel";
-import { useServiceStore } from "@renderer/stores/service.store";
+import { useProgramStore } from "@renderer/stores/program.store";
 import { useLibraryStore } from "@renderer/stores/library.store";
 import { api } from "@renderer/lib/api";
-import { SCHEDULE_INDEX_MIME, classifyExt, readMediaAssetDrag, readOsFilesDrag } from "@renderer/lib/dnd";
+import {
+  SCHEDULE_INDEX_MIME,
+  classifyExt,
+  readBibleVerseDrag,
+  readMediaAssetDrag,
+  readOsFilesDrag,
+} from "@renderer/lib/dnd";
 import { previewScheduleItem } from "@renderer/lib/actions/preview";
 import { goLive } from "@renderer/lib/actions/playback";
 import { ScheduleRow } from "./schedule-row";
@@ -14,25 +20,33 @@ import type { AssetKind } from "@shared/constants";
 /** The service running order — EasyWorship's "Schedule", top-left. */
 export function SchedulePanel() {
   const t = useT();
-  const { activeIndex, items, moveDown, moveUp, removeAt, reorder, selectedIndex } = useServiceStore();
-  const serviceName = useServiceStore((s) => s.currentServiceName);
-  const addItem = useServiceStore((s) => s.addItem);
-  const clear = useServiceStore((s) => s.clear);
+  const { activeIndex, items, moveDown, moveUp, removeAt, reorder, selectedIndex } = useProgramStore();
+  const addItem = useProgramStore((s) => s.addItem);
+  const clear = useProgramStore((s) => s.clear);
+  const dirty = useProgramStore((s) => s.dirty);
   const refreshLibrary = useLibraryStore((s) => s.refresh);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
-  function addAssetItem(assetId: number, kind: AssetKind) {
+  function addAssetItem(assetId: number, kind: AssetKind, insertAt?: number) {
     addItem(
       kind === "ppt"
         ? { kind: "ppt", mediaAssetId: assetId, title: null }
         : { kind: "media", mediaAssetId: assetId, title: null },
+      insertAt,
     );
   }
 
-  async function addPaths(paths: string[], kind: AssetKind) {
+  async function addPaths(paths: string[], kind: AssetKind, insertAt?: number) {
     const assets = await api.library.add(paths, kind);
     await refreshLibrary(kind);
-    for (const asset of assets) addAssetItem(asset.id, kind);
+    // Each added asset is inserted right after the previous one, so a
+    // multi-file drop lands as a contiguous run at the drop point instead of
+    // reversed or collapsed onto a single position.
+    let at = insertAt;
+    for (const asset of assets) {
+      addAssetItem(asset.id, kind, at);
+      if (at !== undefined) at += 1;
+    }
   }
 
   /** One dialog, every supported extension at once — each picked file is then
@@ -64,6 +78,7 @@ export function SchedulePanel() {
     e.preventDefault();
     const reorderFrom = e.dataTransfer.getData(SCHEDULE_INDEX_MIME);
     const draggedAsset = readMediaAssetDrag(e);
+    const draggedVerse = readBibleVerseDrag(e);
     const osFiles = readOsFilesDrag(e);
     const targetIndex = dropTargetIndex(e);
     setDragOverIndex(null);
@@ -73,21 +88,31 @@ export function SchedulePanel() {
       return;
     }
     if (draggedAsset) {
-      addAssetItem(draggedAsset.assetId, draggedAsset.kind);
+      addAssetItem(draggedAsset.assetId, draggedAsset.kind, targetIndex);
+      return;
+    }
+    if (draggedVerse) {
+      addItem({ kind: "bible", ...draggedVerse }, targetIndex);
       return;
     }
     const byKind = new Map<AssetKind, string[]>();
     for (const file of osFiles) byKind.set(file.kind, [...(byKind.get(file.kind) ?? []), file.path]);
-    for (const [kind, paths] of byKind) await addPaths(paths, kind);
+    let at = targetIndex;
+    for (const [kind, paths] of byKind) {
+      await addPaths(paths, kind, at);
+      at += paths.length;
+    }
   }
 
   return (
     <>
       <PanelHeader
         actions={
-          <Badge className="min-w-0 flex-1 truncate" variant="blue">
-            {serviceName}
-          </Badge>
+          <Tooltip content={dirty ? t("schedule.notSavedHint") : t("schedule.savedHint")} floating>
+            <Badge variant={dirty ? "neutral" : "success"}>
+              {dirty ? t("schedule.notSaved") : t("schedule.saved")}
+            </Badge>
+          </Tooltip>
         }
         title={t("schedule.title")}
       />

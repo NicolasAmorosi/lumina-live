@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { Locale } from "@shared/types/settings";
+import { useSettingsStore } from "@renderer/stores/settings.store";
 import es from "./messages/es";
 import type { Messages } from "./messages/es";
 
@@ -56,4 +57,14 @@ export function useI18n(): I18nContextValue {
 
 export function useT(): (key: string, params?: TParams) => string {
   return useI18n().t;
+}
+
+/** Non-hook translator for `lib/actions/*` — plain functions outside React
+ *  that still need a translated string (e.g. a toast message). Reads the
+ *  locale straight from the settings store's current snapshot rather than
+ *  from context, since there's no component tree to read it from. */
+export function t(key: string, params?: TParams): string {
+  const locale = useSettingsStore.getState().settings["ui.locale"];
+  const messages = dictionaries[locale] ?? es;
+  return interpolate(resolveKey(messages, key), params);
 }

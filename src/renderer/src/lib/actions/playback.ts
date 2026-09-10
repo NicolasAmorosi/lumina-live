@@ -1,4 +1,4 @@
-import { useServiceStore } from "@renderer/stores/service.store";
+import { useProgramStore } from "@renderer/stores/program.store";
 import { buildCumulativeMs, useProjectionStore } from "@renderer/stores/projection.store";
 import { useDeckStore } from "@renderer/stores/deck.store";
 import { useDisplayStore } from "@renderer/stores/display.store";
@@ -72,6 +72,10 @@ async function goLiveWithDeck(assetId: number, startSlideIndex: number): Promise
   if (!deck || deck.status !== "ready" || deck.slides.length === 0) return false;
 
   const store = useProjectionStore.getState();
+  // Begins the new scene right here, at the commit — not before the `await`
+  // above — so a not-yet-converted deck (which returns `false` before this
+  // point) never burns an epoch on a projector that ends up unchanged.
+  store.beginScene();
   store.setLiveDeck(toLiveDeck(deck));
   store.setBase({
     kind: "deck",
@@ -117,11 +121,13 @@ async function goLiveWithMediaAsset(assetId: number, startAtSeconds: number): Pr
     return "audio";
   }
 
-  const { setBase, setOverlay } = useProjectionStore.getState();
+  const { beginScene, setBase, setOverlay } = useProjectionStore.getState();
   if (asset.kind === "video") {
+    beginScene();
     videoEpoch += 1;
     setBase({ kind: "video", assetId: asset.id, epoch: videoEpoch, startAtSeconds });
   } else if (asset.kind === "image") {
+    beginScene();
     setBase({ kind: "image", assetId: asset.id });
   } else {
     return "failed";
@@ -134,7 +140,7 @@ async function goLiveWithMediaAsset(assetId: number, startAtSeconds: number): Pr
 }
 
 async function goLiveWithScheduleItem(index: number, startSlideIndex: number, startAtSeconds: number): Promise<void> {
-  const { items, setActive } = useServiceStore.getState();
+  const { items, setActive } = useProgramStore.getState();
   const item = items[index];
   if (!item) return;
 
@@ -158,6 +164,7 @@ async function goLiveWithScheduleItem(index: number, startSlideIndex: number, st
       // belong to the chapter currently loaded in the Bible browser, so any
       // stale live-verse cursor from earlier browsing must not linger.
       useBibleStore.getState().setCurrentVerseIndex(null);
+      useProjectionStore.getState().beginScene();
       useProjectionStore.getState().setBase({
         kind: "bible",
         text: item.text,
@@ -169,6 +176,7 @@ async function goLiveWithScheduleItem(index: number, startSlideIndex: number, st
     case "text": {
       setActive(index);
       useAudioStore.getState().setDeckTrack(null);
+      useProjectionStore.getState().beginScene();
       useProjectionStore.getState().setBase({ kind: "text", body: item.body });
       useProjectionStore.getState().setOverlay("none");
     }
@@ -188,7 +196,7 @@ async function goLiveWithAsset(
         : "failed"
       : await goLiveWithMediaAsset(assetId, startAtSeconds);
   // Live content that isn't in the schedule: no row can claim the on-air rail.
-  if (result === "base") useServiceStore.getState().setActive(null);
+  if (result === "base") useProgramStore.getState().setActive(null);
 }
 
 /**
@@ -199,6 +207,13 @@ async function goLiveWithAsset(
 export async function goLive(): Promise<void> {
   const { slideIndex, positionSeconds, target } = usePreviewStore.getState();
   if (!target) return;
+
+  // `beginScene()` is NOT called here at the top: `goLiveWithDeck`/
+  // `goLiveWithMediaAsset` below can fail (asset missing, deck not yet
+  // converted) or resolve to an audio-only track that never touches `base` —
+  // none of those actually change what the projector shows. Each branch
+  // calls `beginScene()` itself, right at its own commit point, so an epoch
+  // is only ever spent on a push that really changes the picture.
 
   // Whatever the preview video was doing, it stops the moment its file goes
   // live — the projector picks up from `positionSeconds` below, so there is
@@ -217,8 +232,9 @@ export async function goLive(): Promise<void> {
       await goLiveWithAsset(target.assetId, target.assetKind, slideIndex, positionSeconds);
       return;
     case "verse":
-      useServiceStore.getState().setActive(null);
+      useProgramStore.getState().setActive(null);
       useAudioStore.getState().setDeckTrack(null);
+      useProjectionStore.getState().beginScene();
       projectVerse(target.verseIndex);
       useProjectionStore.getState().setOverlay("none");
   }
@@ -229,10 +245,11 @@ export async function goLive(): Promise<void> {
  *  every audio track too, not just the deck's — LIMPIAR means silence. */
 export function clearLive(): void {
   const store = useProjectionStore.getState();
+  store.beginScene();
   store.setOverlay("none");
   store.setBase(null);
   store.setLiveDeck(null);
-  useServiceStore.getState().setActive(null);
+  useProgramStore.getState().setActive(null);
   useBibleStore.getState().setCurrentVerseIndex(null);
   useAudioStore.getState().clear();
 }
@@ -259,16 +276,25 @@ export function gotoSlide(index: number): void {
  *  image — back to nothing, via each row's own delete button. Unlike
  *  `clearLive` (the LIMPIAR button), it never touches independent audio
  *  tracks: deleting the video shouldn't silence a soundtrack playing
- *  alongside it. It does land on LOGO, though — with no base left, NEGRO/LOGO/
- *  VIVO would otherwise keep showing VIVO selected while the projector is
- *  actually rendering the logo fallback (see `selectOutputWithoutUnderlay`). */
+ *  alongside it.
+ *
+ *  NEGRO/LOGO are unaffected on purpose: `selectOutputWithoutUnderlay` shows
+ *  black/the logo regardless of `base` while either is up, so deleting
+ *  what's underneath is invisible to the congregation — the operator stays
+ *  exactly where they were, nothing to fade. Only `overlay === "none"` (the
+ *  live content itself was on screen) actually loses something visible, so
+ *  only that case begins a new scene and forces the overlay to LOGO — with
+ *  no base left, NEGRO/LOGO/VIVO would otherwise keep showing VIVO selected
+ *  while the projector is actually rendering the logo fallback. */
 export function clearBaseContent(): void {
   const store = useProjectionStore.getState();
+  const wasLive = store.overlay === "none";
+  if (wasLive) store.beginScene();
   store.setBase(null);
   store.setLiveDeck(null);
-  store.setOverlay("logo");
+  if (wasLive) store.setOverlay("logo");
   useAudioStore.getState().setDeckTrack(null);
-  useServiceStore.getState().setActive(null);
+  useProgramStore.getState().setActive(null);
   // Otherwise the Bible browser would keep showing the deleted verse as
   // on-air (bible-browser.tsx reads this independently of `base`) — the same
   // reason clearLive() resets it.
@@ -281,6 +307,23 @@ export function clearBaseContent(): void {
  *  projection window on demand, the same as `goLive()`. */
 export async function toggleOverlay(kind: Extract<OverlayState, "black" | "logo">): Promise<void> {
   await useDisplayStore.getState().openIfNeeded();
-  const { overlay, setOverlay } = useProjectionStore.getState();
+  const { beginScene, overlay, setOverlay } = useProjectionStore.getState();
+  beginScene();
   setOverlay(overlay === kind ? "none" : kind);
+}
+
+/** Shared by the three status-bar buttons (LOGO/NEGRO/EN VIVO) — each always
+ *  forces its own state (never "un-toggles" on a second press, unlike B/L's
+ *  `toggleOverlay`). Opens the projection window on demand, same as
+ *  `goLive()`, and begins a new scene so switching overlays fades like every
+ *  other "send something new" action. */
+export async function setOverlayDirect(kind: OverlayState): Promise<void> {
+  await useDisplayStore.getState().openIfNeeded();
+  const store = useProjectionStore.getState();
+  // Pressing a button for the state that's already showing must not fade —
+  // there is nothing to fade between, and under "fade through black" it would
+  // flash the whole scene out and back in for no visible change.
+  if (store.overlay === kind) return;
+  store.beginScene();
+  store.setOverlay(kind);
 }

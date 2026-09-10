@@ -1,10 +1,11 @@
 import { useBibleStore } from "@renderer/stores/bible.store";
 import { useDeckStore } from "@renderer/stores/deck.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
-import { useServiceStore } from "@renderer/stores/service.store";
+import { useProgramStore } from "@renderer/stores/program.store";
 import { useMediaAsset } from "@renderer/lib/hooks/use-media-asset";
 import { assetUrl } from "@shared/urls";
 import type { MediaAsset } from "@shared/types/media";
+import { INSTANT_TRANSITION } from "@shared/types/projection";
 import type { ProjectionOutput } from "@shared/types/projection";
 
 /**
@@ -20,7 +21,7 @@ export type PreviewContent =
 
 export function usePreviewContent(): PreviewContent | null {
   const target = usePreviewStore((s) => s.target);
-  const items = useServiceStore((s) => s.items);
+  const items = useProgramStore((s) => s.items);
   const verses = useBibleStore((s) => s.verses);
 
   const scheduleItem = target?.kind === "scheduleItem" ? items[target.index] : undefined;
@@ -103,6 +104,10 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
         // The projector warms neighbours; a monitor has no reason to.
         preload: [],
         videoUnderlay: null,
+        // The preview monitor never fades — it moves with every ↑/↓, and
+        // `OutputView` also forces this by `mode`, but the value has to be
+        // here too since it's part of `ProjectionOutput`.
+        transition: INSTANT_TRANSITION,
       };
     }
     case "media": {
@@ -111,7 +116,12 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
       // pointing an <img>/<video> at a dead url.
       if (content.asset.missingSince !== null) return null;
       if (content.asset.kind === "image") {
-        return { kind: "image", url: assetUrl(content.asset.id), videoUnderlay: null };
+        return {
+          kind: "image",
+          url: assetUrl(content.asset.id),
+          videoUnderlay: null,
+          transition: INSTANT_TRANSITION,
+        };
       }
       if (content.asset.kind === "video") {
         // The preview never autoplays — only the operator's own play button
@@ -124,13 +134,30 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
         // on every re-render, so a scrub goes through `seekPreview` imperatively
         // instead, exactly like the live video's own seek.
         const underlay = { url: assetUrl(content.asset.id), epoch: 0, paused: !playing, startAtSeconds: 0 };
-        return { kind: "video", url: underlay.url, epoch: underlay.epoch, videoUnderlay: underlay };
+        return {
+          kind: "video",
+          url: underlay.url,
+          epoch: underlay.epoch,
+          videoUnderlay: underlay,
+          transition: INSTANT_TRANSITION,
+        };
       }
       return null;
     }
     case "bible":
-      return { kind: "bible", text: content.text, reference: content.reference, videoUnderlay: null };
+      return {
+        kind: "bible",
+        text: content.text,
+        reference: content.reference,
+        videoUnderlay: null,
+        transition: INSTANT_TRANSITION,
+      };
     case "text":
-      return { kind: "text", body: content.body, videoUnderlay: null };
+      return {
+        kind: "text",
+        body: content.body,
+        videoUnderlay: null,
+        transition: INSTANT_TRANSITION,
+      };
   }
 }

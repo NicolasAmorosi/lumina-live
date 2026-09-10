@@ -29,6 +29,27 @@
       "when": 1788960572883,
       "tag": "0003_linked_audio_resolver_version",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789004400000,
+      "tag": "0004_rename_programs",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1789008000000,
+      "tag": "0005_favorite_programs",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1789016400000,
+      "tag": "0006_program_sort_order",
+      "breakpoints": true
     }
   ]
 }

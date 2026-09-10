@@ -14,7 +14,7 @@ type RemoveAssetConfirmProps = {
 };
 
 /** "Eliminar igualmente" — the escape hatch from the in-use Callout. Confirms,
- *  then force-deletes: the asset AND every saved-service item pointing at it
+ *  then force-deletes: the asset AND every saved-program item pointing at it
  *  (see `forceRemoveAsset` / `main/services/media-asset-removal.ts`). */
 export function RemoveAssetConfirm({ assetId, assetMissing, onOpenChange }: RemoveAssetConfirmProps) {
   const t = useT();
@@ -36,10 +36,10 @@ export function RemoveAssetConfirm({ assetId, assetMissing, onOpenChange }: Remo
             {usages.map((usage) => (
               <li
                 className="flex items-center gap-2 rounded-md px-2 py-1.5 text-foreground"
-                key={usage.serviceId}
+                key={usage.programId}
               >
                 <Icon className="shrink-0 text-subtle" name="fileText" />
-                <span className="min-w-0 flex-1 truncate">{usage.serviceName}</span>
+                <span className="min-w-0 flex-1 truncate">{usage.programName}</span>
                 <Badge>{t("library.removeUsedInCount", { count: usage.itemCount })}</Badge>
               </li>
             ))}

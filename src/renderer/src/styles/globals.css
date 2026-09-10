@@ -13,6 +13,14 @@
   from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
   to   { opacity: 0; transform: translate3d(0.75rem, 0.5rem, 0) scale(0.94); }
 }
+.wa-toast-enter { animation: toast-enter 180ms ease-out; }
+
+/* The programs modal's side panel (`components/pages/programs/`) expands the
+ * dialog itself sideways rather than compressing the list column — see
+ * `.claude/knowledge/` for the rationale. */
+@utility modal-expand {
+  transition: max-width 200ms ease;
+}
 @keyframes linear-loader-slide {
   0% { transform: translateX(-120%); }
   60%  { transform: translateX(320%); }
@@ -26,6 +34,38 @@
 }
 .wa-button-loading-shimmer { animation: button-loading-shimmer 1.1s ease-in-out infinite; will-change: transform; }
 
+/*
+ * Projector scene transitions (`components/shared/output-view.tsx`). Unlike
+ * the keyframes above, these have no fixed-duration `.wa-*` utility class:
+ * the duration is the operator's own setting (`projection.transition.*`),
+ * applied per instance via inline `animationDuration`, so only the keyframe
+ * *names* live here. Each pair (fade / fade-through-black) spans the same
+ * total duration for both the outgoing and incoming side of a transition, so
+ * they always finish together.
+ *
+ * Deliberately NOT covered by `prefers-reduced-motion` below: that block is
+ * for the operator's own UI, and this is what the congregation sees on the
+ * projector — gating it on the operator's OS accessibility setting would let
+ * the projector output silently disagree with what the LIVE monitor shows,
+ * which the confidence-monitor invariant (CLAUDE.md) doesn't allow.
+ */
+@keyframes wa-scene-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes wa-scene-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+@keyframes wa-scene-black-then-in {
+  0%, 50% { opacity: 0; }
+  100%    { opacity: 1; }
+}
+@keyframes wa-scene-out-then-black {
+  0%      { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   @keyframes toast-enter { from { opacity: 0; } to { opacity: 1; } }
   @keyframes toast-exit  { from { opacity: 1; } to { opacity: 0; } }
@@ -33,6 +73,8 @@
   .wa-linear-loader-slide { animation: linear-loader-slide 1.4s ease-in-out infinite alternate; will-change: opacity; }
   @keyframes button-loading-shimmer { from { opacity: 0.45; } to { opacity: 0.8; } }
   .wa-button-loading-shimmer { animation: button-loading-shimmer 1.4s ease-in-out infinite alternate; will-change: opacity; }
+  .wa-toast-enter { animation-duration: 1ms; }
+  .modal-expand { transition-duration: 1ms; }
 }
 
 /*

@@ -20,7 +20,7 @@ Arguments: `$ARGUMENTS` — describe the capability needed (e.g. "get the curren
 
 1. **Read the contract first.** Read `src/shared/ipc/contract.ts` to see the naming convention
    (`dominio:accion`, e.g. `bible:search`, `library:relocate`) and which domain the new channel
-   belongs to (`displays` / `projection` / `files` / `ppt` / `bible` / `library` / `services` /
+   belongs to (`displays` / `projection` / `files` / `ppt` / `bible` / `library` / `programs` /
    `settings`, or a new domain if none fits).
 2. **Pick a channel name and request/response shape** consistent with the existing ones. Confirm
    with the user if the capability is ambiguous — don't guess business logic. Define any new
