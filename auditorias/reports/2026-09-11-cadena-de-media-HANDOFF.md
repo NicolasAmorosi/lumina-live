@@ -54,8 +54,8 @@ backup on "is anything actually pending?" fixes the cost and the defect with one
 |---|---|
 | Audited | `src/` in full: 18.268 lines, 176 files |
 | Findings | 3 critical + 18 high + 52 of the 54-row catalogue fixed, plus `N1`, `N2`, `N3`. **2 open, both performance, both deliberately deferred** |
-| Git | **Nothing committed yet.** Branch `main`, last commit `4ec5ff3` ("chore: beta 0.2.0"). The user chose, in session 5, to **commit by intent at the end of the session** — see §7 |
-| Session 5 source files | 15 changed + 2 new (`src/main/slides/ppt-binary-timings.ts`, `src/main/slides/backfill-timings.ts`) |
+| Git | **Committed at last**, at the end of session 5, after five sessions of a dirty tree. Branch `main`, two commits ahead of `origin/main` and **not pushed**: `2d9417e` (106 source files) and `feb083c` (27 doc files). Working tree clean. Why two and not the five that were planned: §7 |
+| Session 5 source files | 16 changed + 2 new (`src/main/slides/ppt-binary-timings.ts`, `src/main/slides/backfill-timings.ts`), of which only 10 were untouched by earlier sessions — which is why the commit split had to change (§7) |
 
 Confirm against the report itself (these must match the table rows, not memory):
 
@@ -72,13 +72,18 @@ ls src/main/slides/ppt-binary-timings.ts src/main/slides/backfill-timings.ts  # 
 
 The 2-row gap is `M23` and `M42` — report §10.
 
-### ⚠️ The working tree mixes six sessions
+### The six work streams are inside one commit, on purpose
 
-All uncommitted, all mixed: the earlier optimization work
-(`plans/2026-09-10-import-y-prewarm-optimizacion/`), then sessions 1–5 of the audit. They touch
-overlapping files (`deck-service.ts`, `slides.repo.ts`, `projection.store.ts`), so **`git diff`
-cannot separate them**. Session 2's files are listed in report §8, session 3's in the old §4.2 file
-list, session 4's in the previous handoff, session 5's in §4 below.
+`2d9417e` carries the earlier optimization work
+(`plans/2026-09-10-import-y-prewarm-optimizacion/`) and audit sessions 1–5 together, because by the
+time it was committed they overlapped inside the same files (`deck-service.ts`, `slides.repo.ts`,
+`projection.store.ts`, `index.ts`) and `git diff` could no longer separate them. **Its message
+enumerates the five streams** — that is the only map there is. Per-session file lists: session 2 in
+report §8, session 3 in the old §4.2 list, session 4 in the previous handoff, session 5 in §4
+below.
+
+**A revert of "the audit" is still not a `git` operation.** If one fix has to come out, take it out
+by hand.
 
 ---
 
@@ -118,8 +123,8 @@ sqlite3 ~/Library/Application\ Support/worship-app/worship.db "
 
 Expect `36`, then **`676` of `676`**. (Before session 5: 1012 and 554 of 676.)
 
-A pre-session-5 copy of the database was taken before anything ran; if the backfill ever has to be
-reasoned about again, note that it is idempotent and only writes `NULL`s, so re-running it is safe.
+The backfill that produced those numbers is idempotent and only ever writes `NULL`s, so re-running
+it is safe and there is no snapshot to restore.
 
 Real decks used for verification (the user's own files, not fixtures):
 `~/Downloads/PPT test/Himnario Nuevo {Cantado,Instrumental}/*.pps` (614 + 613),
@@ -265,18 +270,35 @@ Outside the catalogue, unchanged: **`M19`'s missing half** — per-channel paylo
 
 ---
 
-## 7. Commit strategy — decided, and the next thing to do
+## 7. Commit strategy — what was done, and why not what was planned
 
-The user chose, in session 5: **commit by intent at the end of the session, shown before being
-executed.** The suggested split, coarsest first:
+Session 5 committed the lot. **Two commits, each of which builds and passes the whole bar:**
 
-1. `perf:` — the earlier optimization work in `plans/2026-09-10-import-y-prewarm-optimizacion/`.
-2. `fix:` — sessions 1–4 of the audit (blocking + high + medium fixes, `N1`–`N3`).
-3. `perf:` — session 5's performance findings.
-4. `fix(slides):` — the auto-advance recovery and its backfill.
-5. `docs:` — the report, this handoff, `docs/knowledge/`, `.claude/knowledge/`.
+| | |
+|---|---|
+| `2d9417e` | `fix:` — all 106 source files (the optimization work + audit sessions 1–5). Its message enumerates the five streams |
+| `feb083c` | `docs:` — the report, this handoff, `docs/knowledge/`, `.claude/knowledge/`, `CLAUDE.md`, `plans/` |
 
-`git diff` cannot separate 1 from 2–3 inside the overlapping files (`deck-service.ts`,
-`slides.repo.ts`, `projection.store.ts`), so those commits are by *file*, not by hunk, and the
-boundary between 1 and 2 is approximate. That is the cost of six uncommitted sessions, and it does
-not get cheaper by waiting.
+Neither is pushed. `main` is 2 ahead of `origin/main`.
+
+**The plan was four commits by intent, and it was abandoned for a concrete reason.** Only 10 files
+were exclusive to session 5; the auto-advance fix needs `mergeBinaryTimings` in `deck-service.ts`,
+three new methods in `slides.repo.ts` and the wiring in `index.ts` — all files earlier sessions had
+already modified. Splitting by file therefore produced commits that **did not compile
+individually**: `deck-service.ts` would import a module that a later commit adds. A history whose
+commits cannot be built, bisected or reverted is worse than one honest commit that says what it
+contains, so the user chose two commits that each build.
+
+The finer split is still possible by hunk surgery on the eight overlapping files
+(`deck-service.ts`, `slides.repo.ts`, `index.ts`, `media.repo.ts`, `rasterizer.ts`,
+`linked-audio.ts`, `worship-protocol.ts`, `scripts/db-smoke.ts`) — it was offered and declined as
+not worth the risk of mis-assigning a hunk.
+
+### What the next session should know
+
+- The tree is clean. **A commit boundary now exists** — unlike every previous handoff, which had to
+  warn that it did not.
+- Nothing is pushed. Ask before pushing.
+- The pre-session-5 database copy that was taken before the backfill ran was a scratch-directory
+  copy and is gone with the session. It is not needed: the backfill is idempotent and only ever
+  writes `NULL`s.
