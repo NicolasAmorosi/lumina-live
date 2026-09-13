@@ -1,0 +1,10 @@
+## A `list*` IPC channel that mutates and broadcasts closes a feedback loop with any renderer effect that refetches on that broadcast
+**Area:** ipc, data
+**Trigger:** adding/touching a `library:list*`-shaped read that internally upserts (any read backed by `importPaths`/a repo write), or a renderer effect that reacts to a broadcast event by re-calling the very IPC that could have caused it.
+
+- `library:listFolder` (`src/main/ipc/handlers/library.ts`) looks like a read but isn't: it calls `importPaths()`, which used to end with an unconditional `broadcast("library-changed", { kind })`. The renderer's `library-sync.ts` answered `library-changed` by calling `refreshFolder()` → `api.library.listFolder` → `importPaths()` again → another `library-changed` → forever, for as long as a linked-folder tab stayed open. No error, no stack overflow — just the app quietly re-scanning and re-broadcasting on a loop.
+- The visible symptom was misleading: not a frozen UI, but the import progress bar for a large folder ("Importando 100 de 624") flickering on and off indefinitely. The same handler that restarted the loop (`refreshFolder`) was also the one that cleared the progress state, producing the flicker. `PROGRESS_MIN_INTERVAL_MS` throttling made the number look frozen at the first chunk's count each time.
+- Fix, two parts: (1) `importPaths` only broadcasts `library-changed` when `MediaRepo.upsertBatch` reports at least one real mutation — a stable re-scan of an unchanged folder emits nothing; (2) `library:listFolder` passes `emitChanged: false` because it already returns the fresh list directly to its caller, so it never needed the broadcast at all. The general rule: **a `list*` channel must never broadcast the event that would cause a subscriber to call that same `list*` channel again.** If a read internally writes, either suppress its broadcast entirely or gate it on "did anything actually change."
+- The regression test for this lives in `scripts/db-smoke.ts` (`upsertBatch` returning `mutated: 0` for a stable re-import) — it runs without Electron and would have caught this before it ever reached a real folder.
+
+**Last updated:** 2026-09-10

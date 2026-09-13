@@ -148,6 +148,13 @@ Esta es la regla central del sistema de componentes, calcado de
 - **Todos los colores/sombras/radios vienen de `styles/globals.css`** (`@theme inline` +
   `:root`/`[data-theme]`). Nunca un valor de color hardcodeado en un componente — ni siquiera
   "solo por ahora". Ver la tabla de tokens semánticos abajo.
+- **Una primitiva que puede vivir dentro de una celda de grilla lleva `h-full` Y `w-full`.** No
+  alcanza con uno: un `<button>` se dimensiona *shrink-to-fit* incluso siendo `display:flex`, así
+  que en cuanto deja de ser el grid item (p. ej. envuelto por el `role="listitem"` de
+  `VirtualGrid`) su ancho pasa a ser el de su propio contenido. Y si además una grilla calcula
+  offsets a partir de su altura, ese número va en `components/ui/thumb-tile.geometry.ts`,
+  impuesto por el CSS — nunca estimado desde él. Diagnóstico completo en
+  [`.claude/knowledge/tile-height-uniformity-flex-min-height-and-grid-auto-rows.md`](.claude/knowledge/tile-height-uniformity-flex-min-height-and-grid-auto-rows.md).
 - **Barrel exports**: `components/ui/index.ts` reexporta todo con named exports. Sin default
   exports en componentes.
 - **Naming**: archivos `kebab-case` en `ui/` y sueltos; `PascalCase` para componentes dentro de
@@ -280,9 +287,29 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   `net.fetch(file://…)`: eso ignora los headers, deja a todo video/audio **sin seek** y rompe la
   reproducción con `PIPELINE_ERROR_DECODE (-12909)` por datos desalineados. Diagnóstico completo en
   [`.claude/knowledge/worship-protocol-range-and-video-lifecycle.md`](.claude/knowledge/worship-protocol-range-and-video-lifecycle.md).
+- **Cancelar un trabajo encolado SIEMPRE settlea su promesa.** Sacar un `Job` de una cola sin
+  `inFlight.delete()` + `reject(CANCELED)` no lo cancela: deja una promesa que nunca resuelve y,
+  peor, un zombi en el mapa de dedupe que devuelve esa misma promesa muerta para siempre —
+  salteándose incluso el cache-hit, que está guardado por `!inFlight.has()`. Un job **corriendo**
+  no necesita nada de eso (lo settlea `pump`). Diagnóstico en
+  [`.claude/knowledge/canceling-a-queued-job-must-settle-it-or-it-poisons-the-dedupe-map.md`](.claude/knowledge/canceling-a-queued-job-must-settle-it-or-it-poisons-the-dedupe-map.md).
+- **Nada de `dangerouslySetInnerHTML`, nunca.** Para resaltar coincidencias, la primitiva recibe
+  **segmentos** (`{text, match}[]`), no un string con markup adentro — así la versión insegura ni
+  siquiera se puede escribir. El caso que lo motivó: el `snippet()` de FTS5 envuelve el texto
+  crudo del versículo, que sale de un JSON que importa el usuario, y el renderer tiene el puente
+  IPC genérico. Ver
+  [`.claude/knowledge/fts5-snippet-is-markup-wrapped-around-user-supplied-text.md`](.claude/knowledge/fts5-snippet-is-markup-wrapped-around-user-supplied-text.md).
 - **La ventana de proyección no tiene lógica de dominio.** Es una función pura del último
   `ProjectionOutput` recibido (`src/shared/types/projection.ts`). Si necesitás que "sepa" algo del
   culto, calculalo en el control y mandalo por `projection:show`.
+- **Main tampoco sabe qué está en vivo, y no se le inventa una segunda fuente de verdad.**
+  `selectOutput` es una proyección **con pérdida**: un deck tapado por NEGRO/LOGO y "no hay nada en
+  vivo" llegan a main como el mismo `ProjectionOutput`. Cualquier decisión de main sobre "lo que
+  está en vivo" (pins de desalojo, atribución de historial, rechazar una operación) o viaja dentro
+  del output porque el proyector mismo la necesita —como `videoUnderlay`— o es del control. Un
+  guard en main que acierta el 95% es peor que ninguno: el 5% es un rechazo que el operador no
+  puede explicar ni saltear en pleno culto. Diagnóstico en
+  [`.claude/knowledge/main-cannot-know-what-is-live-under-an-overlay.md`](.claude/knowledge/main-cannot-know-what-is-live-under-an-overlay.md).
 - **Seleccionar NUNCA proyecta.** El flujo es de dos etapas, como EasyWorship: un click (en el
   programa, en un recurso, en un versículo o en una diapositiva) mueve el target de preview
   (`lib/actions/preview.ts` + `stores/preview.store.ts`), y `goLive()`
@@ -292,6 +319,32 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   `components/shared/output-view.tsx` (`OutputView`) es lo que pinta la ventana de proyección Y
   los monitores LIVE y PREVIEW. Si el preview y lo proyectado se pintan distinto, un monitor puede
   mentirle al operador — por eso hay un solo componente y los tamaños van en `cqw`.
+- **Un archivo que el proyector no puede reproducir se reporta, nunca se pinta ahí.** El
+  `<video>`/`<audio>`/`<img>` de la ventana de proyección tiene `onError` y manda
+  `projection:reportMediaError`; el aviso (banda roja sobre el escenario, toast, fila marcada en el
+  panel de medios) lo pinta **solo** la ventana de control — `OutputView` en `mode === "live"` no
+  recibe `errorLabel` porque la congregación no puede ver un cartel de error. Y el aviso **no**
+  cambia lo proyectado: qué hacer con un archivo roto lo decide el operador, no la app. Es la regla
+  de "los monitores nunca le mienten al operador" aplicada al caso en que la mentira sería un
+  escenario negro y silencioso.
+- **Los tiempos de auto-avance de un `.ppt`/`.pps` legacy se leen del binario de origen, no del
+  `.pptx` convertido.** El exportador de PPTX de LibreOffice solo escribe `<p:transition>` cuando la
+  diapositiva tiene un efecto visual, y `advTm` es un atributo de ese elemento: sin efecto, el
+  tiempo desaparece (222 de 1226 archivos del himnario real). `ppt-binary-timings.ts` los lee, y
+  `mergeBinaryTimings` **solo rellena huecos y abandona el merge entero ante una sola discrepancia**
+  con lo que el `.pptx` sí trajo — avanzar con el tiempo de otra diapositiva en pleno culto es peor
+  que no avanzar. Diagnóstico en
+  [`.claude/knowledge/libreoffice-pptx-export-drops-advtm-without-a-transition-effect.md`](.claude/knowledge/libreoffice-pptx-export-drops-advtm-without-a-transition-effect.md).
+- **Nunca leas un `.pptx` entero para sacarle sus partes XML.** Un zip es de acceso aleatorio: va
+  todo por `readZipEntries` (`src/main/slides/zip-reader.ts`), que lee el directorio central y solo
+  los rangos pedidos. `unzipSync` con `filter` **no** evita el `readFileSync` de 200 MB, solo el
+  inflate. Y si agregás un camino nuevo de lectura de entradas, pasale a `inflateSync` su buffer
+  `out` con el tamaño que ya trae el directorio central. Diagnóstico y mediciones en
+  [`.claude/knowledge/a-pptx-is-random-access-and-inflatesync-needs-its-out-buffer.md`](.claude/knowledge/a-pptx-is-random-access-and-inflatesync-needs-its-out-buffer.md).
+- **En `before-quit` no corre nada asíncrono.** Ni un `setTimeout`, ni un callback, ni una promesa:
+  el proceso ya se fue. La limpieza de salida es sincrónica y punto — por eso el SIGKILL de respaldo
+  de `soffice` va en la misma llamada que el SIGTERM. Ver
+  [`.claude/knowledge/nothing-asynchronous-survives-before-quit.md`](.claude/knowledge/nothing-asynchronous-survives-before-quit.md).
 - **NEGRO/LOGO pausa un video en vivo y mantiene su posición; la pista de audio de un deck sigue
   sonando.** El `<video>` no se desmonta al taparlo (`videoUnderlay` en `ProjectionOutput` +
   `LiveVideo` en `output-view.tsx`) — solo se oculta y se pausa, y al destapar reanuda donde

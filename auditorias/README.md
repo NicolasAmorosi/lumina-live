@@ -1,20 +1,20 @@
 # Auditorías — WorshipApp
 
-Índice de auditorías de features producidas por el skill `/audit-page`. Cada auditoría cubre una
-feature end-to-end (`main.js` → `preload.js` → `app.js` → HTML/CSS) y queda registrada como un
-reporte inmutable en `reports/`.
+Índice de las auditorías del proyecto. Cada una queda como un **reporte inmutable y fechado** en
+`reports/`: se lee como una foto del sistema en ese momento, no se reescribe después. Lo que se
+arregla a partir de ella se anota en el propio reporte, en su sección de estado.
 
-## Cómo se corre una auditoría
+Hay dos formas de producir una:
 
-```
-/audit-page playlist
-/audit-page bible
-/audit-page ppt
-```
+| | Auditoría de feature | Auditoría transversal |
+|---|---|---|
+| Cómo se corre | el skill `/audit-page <feature>` | a pedido, leyendo el área entera |
+| Alcance | una feature de punta a punta: contrato IPC → handlers de main → renderer/Zustand → design system | un eje que cruza todas las features (memoria, performance, ciclo de vida, seguridad) |
+| Archivo | `reports/<feature>.md` | `reports/<fecha>-<tema>.md` |
 
-No requiere levantar nada — es análisis estático de los 5 archivos fuente más una checklist de
-verificación manual (no hay Playwright/browser automation para Electron acá). Si el reporte
-incluye verificación manual, va marcado explícitamente; si no se ejecutó, el reporte dice por qué.
+Ninguna de las dos levanta la app **para producir el diagnóstico**: son análisis estático más una
+checklist de verificación manual. Esa checklist sí se ejecuta después, manejando la app por CDP, y
+el reporte dice explícitamente qué se verificó, con qué números y qué quedó sin poder verificarse.
 
 ## Leyenda de estado
 
@@ -25,16 +25,25 @@ incluye verificación manual, va marcado explícitamente; si no se ejecutó, el 
 | 🟡 | Hallazgos abiertos |
 | 🟢 | Limpia |
 
-## Estado por feature
+## Auditorías transversales
+
+| Fecha | Tema | Estado | Hallazgos | Informe |
+|---|---|---|---|---|
+| 2026-09-11 | Cadena de procesamiento de media de punta a punta (import → conversión → caché → serving → proyección), los dos paneles de la primera columna y el sistema que los sostiene | 🟡 | 3 críticos + 18 altos + 52 de las 54 filas del catálogo **arregladas** · **ningún defecto abierto**: quedan `M23` (solo Linux, no verificable acá) y `M42` (necesita decisión de UI) · quinta sesión (2026-09-13): 11 de los 13 de rendimiento cerrados, y **el pase automático perdido** — no era de los archivos ni de nuestro parser sino del exportador a `.pptx` de LibreOffice, **222 de 1226 decks del himnario**, arreglado leyendo los tiempos del binario de origen + backfill de 122 decks en 42 ms sin reconvertir | [`2026-09-11-cadena-de-media.md`](reports/2026-09-11-cadena-de-media.md) · [handoff](reports/2026-09-11-cadena-de-media-HANDOFF.md) |
+
+Cuando una auditoría deja trabajo aplicado o pendiente, lleva un **handoff** al lado del informe:
+el informe es el diagnóstico (inmutable), el handoff es el runbook — en qué estado quedó el repo,
+cómo verificarlo y qué sigue.
+
+## Auditorías por feature
 
 | # | Feature | Archivos principales | Estado | Hallazgos | Última auditoría | Informe |
 |---|---|---|---|---|---|---|
-| 1 | Playlist | `app.js` (playlist), `main.js` (files/display) | ⬜ | — | — | — |
-| 2 | Biblioteca de medios | `app.js` (library), `main.js` (media-library) | ⬜ | — | — | — |
-| 3 | Biblia | `app.js` (bible), `main.js` (bible), `data/bible/` | ⬜ | — | — | — |
-| 4 | PowerPoint | `main.js` (ppt-*), `app.js` (ppt) | ⬜ | — | — | — |
-| 5 | Negro / Logo / En vivo | `app.js` (toggle*, restorePrevious) | ⬜ | — | — | — |
-| 6 | Display / proyección | `main.js` (display), `presentation.html` | ⬜ | — | — | — |
+| 1 | Programa (schedule) | `pages/schedule/`, `stores/program.store.ts`, `ipc/handlers/programs.ts` | 🟡 | cubierto en parte por la transversal — **todo arreglado** (B1, B2, M24, M26, M47, L1–L3); falta verificarlo en la app | 2026-09-13 | — |
+| 2 | Biblioteca de medios | `pages/resources/`, `stores/library.store.ts`, `services/library-import.ts` | 🟡 | cubierto en parte por la transversal (B3, B6, B7, M13, M29–M31, M38, M39, M43, L4–L6 y **`N3`** arreglados); queda `M42` abierto — paginar `library:list`, que es una feature con decisión de UI, no un ajuste de rendimiento | 2026-09-13 | — |
+| 3 | Biblia | `pages/resources/bible-browser.tsx`, `db/repositories/bible.repo.ts` | 🟡 | cubierto en parte por la transversal — **todo arreglado** (C3, B6, M26, M45); falta verificarlo en la app | 2026-09-13 | — |
+| 4 | Presentaciones (LibreOffice) | `slides/`, `stores/deck.store.ts` | 🟢 | cubierto en parte por la transversal — **todo arreglado** (C1, A1–A5, M1–M12, M18, M20–M22, M44). Quinta sesión: el auto-avance que el round-trip a `.pptx` perdía en 222 de 1226 decks del himnario, ahora leído del binario de origen (§11 del informe) | 2026-09-13 | — |
+| 5 | Negro / Logo / En vivo | `lib/actions/playback.ts`, `stores/projection.store.ts` | ⬜ | — | — | — |
+| 6 | Proyección | `windows/projection-window.ts`, `projection/`, `components/shared/output-view.tsx` | 🟡 | cubierto en parte por la transversal — **todo arreglado** (C2, M25, M27, M28, M34, M40, M41, N1); falta verificarlo en la app | 2026-09-13 | — |
 
-_Última actualización del índice: 2026-09-02 (0 de 6 auditadas — índice creado junto con la base
-de conocimiento del proyecto)._
+_Última actualización del índice: 2026-09-13 (quinta sesión)._

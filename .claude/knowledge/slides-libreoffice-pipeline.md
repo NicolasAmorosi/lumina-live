@@ -20,9 +20,14 @@ auto-advance / wrong slides.
 - **`<p:transition>` usually isn't a direct child of `p:sld`** in decks made by modern PowerPoint:
   it lives in `mc:AlternateContent/mc:Choice[@Requires="p14"]`, with a copy in `mc:Fallback`.
   Check Choice → Fallback → bare, or you silently read zero timings.
-- **Legacy binary `.ppt`/`.pps` round-trip works**: a second `--convert-to pptx` pass recovers
-  timings and audio (verified on a real 52-slide `.ppt`).
+- **Legacy binary `.ppt`/`.pps` round-trip works, but NOT for every timing**: a second
+  `--convert-to pptx` pass recovers structure and embedded audio (verified on a real 52-slide
+  `.ppt`) — and silently loses `advTm` on any slide with no visual transition effect, because
+  LibreOffice's PPTX export only writes the `<p:transition>` element that attribute lives on when
+  there is an effect to write. The times are re-read from the source binary instead; full
+  diagnosis in
+  [libreoffice-pptx-export-drops-advtm-without-a-transition-effect.md](libreoffice-pptx-export-drops-advtm-without-a-transition-effect.md).
 - electron-vite does **not** always restart the main process on a file change — if a main-side fix
   seems to have no effect, restart `npm run dev` before assuming the code is wrong.
 
-**Last updated:** 2026-09-07
+**Last updated:** 2026-09-13
