@@ -118,7 +118,7 @@ src/
         │   ├── ui/          # primitivas del design system — barrel index.ts
         │   ├── shared/      # cross-feature: modal, panel, output-view (renderiza un ProjectionOutput)
         │   └── pages/       # una carpeta por feature:
-        │       ├── layout/     # AppShell (grilla estilo EasyWorship), TopBar, StatusBar
+        │       ├── layout/     # AppShell (grilla estilo EasyWorship), TopBar
         │       ├── schedule/   # el orden del culto (columna izq. arriba)
         │       ├── resources/  # browser con pestañas: Biblia | Videos | Imágenes | Audios | PPT
         │       ├── slides/     # grilla central de diapositivas/versículos del ítem en preview

@@ -40,10 +40,20 @@ window = null`). The projection handler simply didn't copy it.
 `getWindow()`:
 
 ```ts
-clearWindowIf(win: BrowserWindow): void {
-  if (this.window === win) this.window = null;
+clearWindowIf(win: BrowserWindow): boolean {
+  if (this.window !== win) return false;
+  this.window = null;
+  return true;
 }
 ```
+
+It returns a boolean since 2026-09-13, and that return is now load-bearing for a second reason:
+it gates the `projection-closed` broadcast that tells the control window the projector is gone
+(see
+[`the-control-window-mirrors-the-projectors-existence-and-nothing-pushed-it.md`](the-control-window-mirrors-the-projectors-existence-and-nothing-pushed-it.md)).
+A reopen must stay silent — announcing the OLD window's death would switch the control window's
+live state off while the NEW projector sits on screen — so the same identity check that protects
+the reference now also protects the event.
 
 `getWindow()` filters out destroyed windows, and by the time `closed` fires for the *current*
 window it is already destroyed — so `getWindow() === win` is never true and the guard would leak
@@ -56,4 +66,4 @@ For any window the app recreates: capture the window object in the listener's cl
 identity before mutating shared state. Register the listener **after** the new window is stored,
 and never assume `close()`'s side effects have landed by the time the next statement runs.
 
-**Last updated:** 2026-09-11
+**Last updated:** 2026-09-13
