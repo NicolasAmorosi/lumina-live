@@ -21,6 +21,22 @@ class ProjectionState {
     this.window = win;
   }
 
+  /**
+   * Drops the reference only if `win` is still the current window.
+   *
+   * A `closed` listener must never clear this unconditionally: `close()` is
+   * asynchronous, so a reopen (`projection:open` → close the old one, create a
+   * new one) delivers the OLD window's `closed` after the new one is already
+   * registered, and an unconditional clear would leave main convinced there is
+   * no projector while one is on screen. Comparing against the raw field
+   * rather than `getWindow()` matters too: by the time `closed` fires for the
+   * current window it is already destroyed, so `getWindow()` answers `null`
+   * and would never match.
+   */
+  clearWindowIf(win: BrowserWindow): void {
+    if (this.window === win) this.window = null;
+  }
+
   getWindow(): BrowserWindow | null {
     return this.window && !this.window.isDestroyed() ? this.window : null;
   }

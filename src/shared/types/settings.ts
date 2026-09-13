@@ -31,6 +31,13 @@ export type SettingsMap = {
   "slides.imageFormat": SlideImageFormat;
   "slides.cacheMaxMb": number;
   "slides.maxRenderWidth": number;
+  /** Internal escape hatch (no UI control): lets a background prewarm job be
+   *  soft-interrupted when the operator opens something interactively.
+   *  Killing `soffice` mid-conversion carries a small risk of leaving its
+   *  profile locked (see `.claude/knowledge/soffice-shared-profile-race.md`)
+   *  — set to `false` to degrade to plain priority ordering (no preemption)
+   *  without a release, if that risk ever needs to go to zero. */
+  "slides.preemptBackground": boolean;
   /** Folders the operator has linked per asset kind, so a resource tab can
    *  offer "this folder's files" as an alternative to the added-to-library
    *  list. Files inside are registered like any other asset (so preview/
@@ -56,6 +63,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   "slides.imageFormat": "webp",
   "slides.cacheMaxMb": SLIDES_DEFAULT_CACHE_MB,
   "slides.maxRenderWidth": SLIDES_DEFAULT_RENDER_WIDTH,
+  "slides.preemptBackground": true,
   "library.linkedFolders": { video: [], image: [], audio: [], ppt: [] },
   "library.activeView": { video: "recent", image: "recent", audio: "recent", ppt: "recent" },
 };

@@ -1,11 +1,13 @@
 import { useEffect } from "react";
+import { reconvertDeck } from "@renderer/lib/actions/deck";
 import { useDeckStore, type DeckEntry } from "@renderer/stores/deck.store";
 import type { DeckEnvironment } from "@shared/types/deck";
 
 export type DeckState = {
   entry: DeckEntry | undefined;
   environment: DeckEnvironment | null;
-  /** Force a re-conversion (retry / stale file). */
+  /** Force a re-conversion (retry / stale file). Refused, with a toast, while
+   *  that very deck is on the projector — see `reconvertDeck`. */
   reconvert: () => void;
   locateSoffice: () => void;
   markStale: () => void;
@@ -49,7 +51,7 @@ export function useDeck(assetId: number | null): DeckState {
     entry,
     environment,
     reconvert: () => {
-      if (assetId !== null) void ensure(assetId, true);
+      if (assetId !== null) reconvertDeck(assetId);
     },
     locateSoffice: () => void locateSoffice(),
     markStale: () => {

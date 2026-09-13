@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { Button, Icon, IconButton, Toolbar, Tooltip } from "@renderer/components/ui";
 import { useProjectionStore } from "@renderer/stores/projection.store";
@@ -31,13 +32,22 @@ export function TopBar({ onOpenPrograms, onOpenSettings }: TopBarProps) {
   const currentProgramId = useProgramStore((s) => s.currentProgramId);
   const currentProgramName = useProgramStore((s) => s.currentProgramName);
   const dirty = useProgramStore((s) => s.dirty);
+  // A save is a round-trip (write, then re-read the saved row). Nothing marked
+  // that window, so a second click inside it sent a second `programs:save` for
+  // the same schedule — two writes racing, and the second one re-hydrating the
+  // store from whichever finished last.
+  const [saving, setSaving] = useState(false);
 
   function handleQuickSave() {
     if (currentProgramId === null) {
       onOpenPrograms({ mode: "create" });
       return;
     }
-    void saveCurrentProgram();
+    if (saving) return;
+    setSaving(true);
+    // `saveCurrentProgram` reports its own failure as a toast, so there is
+    // nothing to catch here — only the busy flag to put back.
+    void saveCurrentProgram().finally(() => setSaving(false));
   }
 
   function handleNewProgram() {
@@ -64,8 +74,9 @@ export function TopBar({ onOpenPrograms, onOpenSettings }: TopBarProps) {
 
           <Tooltip content={dirty ? t("programs.saveHint") : t("programs.saveNoChanges")} floating>
             <IconButton
+              aria-busy={saving || undefined}
               aria-label={t("programs.save")}
-              disabled={!dirty}
+              disabled={!dirty || saving}
               onClick={handleQuickSave}
               variant="ghost"
             >

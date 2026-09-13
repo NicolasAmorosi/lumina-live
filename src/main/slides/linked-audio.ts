@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { unzipSync } from "fflate";
 import { AUDIO_EXT, containerKind } from "./pptx-metadata";
+import { readZipEntries } from "./zip-reader";
 
 /**
  * Old church hymnal decks (`.pps`/`.ppt`) rarely embed their soundtrack —
@@ -24,14 +24,48 @@ import { AUDIO_EXT, containerKind } from "./pptx-metadata";
  *     audio to the silent deck just because it was alone in the folder.
  *  4. `null` — nothing matched, let the operator assign it by hand.
  */
-export function resolveLinkedAudio(presentationPath: string): string | null {
-  const dir = path.dirname(presentationPath);
+/**
+ * Directory listings, cached for a couple of seconds.
+ *
+ * The parameterized `dirCache` this replaces was never passed by any caller,
+ * so a first pass over a linked folder of 600 decks re-listed the SAME
+ * 1200-entry directory 600 times — one synchronous `readdirSync` per deck, on
+ * the thread that serves the projection window. A batch is the only thing
+ * fast enough to hit this window, which is the point: the TTL is far shorter
+ * than the time it takes a person to drop an `.mp3` into the folder and click
+ * a deck, so a newly-added file is still found on the next real open.
+ */
+const DIR_CACHE_TTL_MS = 2_000;
+/** A hard cap as well as a TTL: a sweep across many folders must not turn
+ *  this into a second copy of the library in memory. */
+const DIR_CACHE_MAX = 32;
+const dirCache = new Map<string, { at: number; entries: string[] }>();
+
+function listAudioDir(dir: string): string[] | null {
+  const now = Date.now();
+  const hit = dirCache.get(dir);
+  if (hit && now - hit.at < DIR_CACHE_TTL_MS) return hit.entries;
+
   let entries: string[];
   try {
     entries = fs.readdirSync(dir);
   } catch {
+    dirCache.delete(dir);
     return null;
   }
+  // Map iteration is insertion-ordered, so the first key is the oldest.
+  if (dirCache.size >= DIR_CACHE_MAX && !dirCache.has(dir)) {
+    const oldest = dirCache.keys().next().value;
+    if (oldest !== undefined) dirCache.delete(oldest);
+  }
+  dirCache.set(dir, { at: now, entries });
+  return entries;
+}
+
+export function resolveLinkedAudio(presentationPath: string): string | null {
+  const dir = path.dirname(presentationPath);
+  const entries = listAudioDir(dir);
+  if (!entries) return null;
   const audioFiles = entries.filter((name) => AUDIO_EXT.has(extOf(name)));
   if (audioFiles.length === 0) return null;
 
@@ -123,23 +157,52 @@ const AUDIO_EXT_PATTERN = [...AUDIO_EXT].join("|");
 // purpose, this is a hint to look up by basename, never a path we open.
 const AUDIO_NAME_RE = new RegExp(`[^\\\\/:*?"<>|\\x00-\\x1f]{1,240}\\.(?:${AUDIO_EXT_PATTERN})`, "i");
 
+/** Read in bounded chunks, not the whole file: a compound-file `.pps` can
+ *  carry tens of MB of embedded media, and the hint this is looking for is
+ *  at most 240 characters — materializing the entire file as two full-size
+ *  strings (`utf16le` + `latin1`) was allocating roughly 3x the file's size
+ *  in memory, synchronously, on the main thread, for every deck that needed
+ *  this resolved. */
+const HINT_SCAN_CHUNK_BYTES = 4 * 1024 * 1024;
+/** Overlap between consecutive chunks, comfortably larger than the longest
+ *  possible hint at 2 bytes/char (UTF-16LE) — a hint straddling a chunk
+ *  boundary still lands whole inside the next chunk's read. */
+const HINT_SCAN_OVERLAP_BYTES = 512;
+
 /** Legacy `.ppt`/`.pps` (OLE2) store their linked-media path as a UTF-16LE
  *  string somewhere in the compound file — there's no structured record
  *  worth parsing for a hint this soft, so scan the raw bytes both as
- *  UTF-16LE and Windows-1252 text. */
+ *  UTF-16LE and Windows-1252 text, in bounded chunks rather than all at once. */
 function extractHintFromBinary(filePath: string): string | null {
-  let buf: Buffer;
+  let fd: number;
   try {
-    buf = fs.readFileSync(filePath);
+    fd = fs.openSync(filePath, "r");
   } catch {
     return null;
   }
-  for (const encoding of ["utf16le", "latin1"] as const) {
-    const text = buf.toString(encoding);
-    const match = AUDIO_NAME_RE.exec(text);
-    if (match) return path.win32.basename(match[0]);
+  try {
+    const size = fs.fstatSync(fd).size;
+    const buffer = Buffer.alloc(HINT_SCAN_CHUNK_BYTES);
+    let offset = 0;
+    while (offset < size) {
+      const length = Math.min(HINT_SCAN_CHUNK_BYTES, size - offset);
+      const bytesRead = fs.readSync(fd, buffer, 0, length, offset);
+      if (bytesRead <= 0) break;
+      const chunk = buffer.subarray(0, bytesRead);
+      for (const encoding of ["utf16le", "latin1"] as const) {
+        const text = chunk.toString(encoding);
+        const match = AUDIO_NAME_RE.exec(text);
+        if (match) return path.win32.basename(match[0]);
+      }
+      if (offset + bytesRead >= size) break;
+      offset += Math.max(bytesRead - HINT_SCAN_OVERLAP_BYTES, 1);
+    }
+    return null;
+  } catch {
+    return null;
+  } finally {
+    fs.closeSync(fd);
   }
-  return null;
 }
 
 /** Modern `.pptx`/`.ppsx` link external audio via a `Relationship` with
@@ -149,10 +212,13 @@ function extractHintFromBinary(filePath: string): string | null {
 function extractHintFromOoxml(filePath: string): string | null {
   let entries;
   try {
-    const zipBuf = fs.readFileSync(filePath);
-    entries = unzipSync(new Uint8Array(zipBuf), {
-      filter: (file) => file.name.includes("_rels/") && file.name.endsWith(".rels"),
-    });
+    // By offset, never the whole archive: this runs from
+    // `MediaRepo.ensureLinkedAudio`, i.e. on a deck load, and a `.pptx`'s
+    // `_rels` parts are a few KB inside what can be hundreds of MB of media.
+    entries = readZipEntries(
+      filePath,
+      (name) => name.includes("_rels/") && name.endsWith(".rels"),
+    );
   } catch {
     return null;
   }

@@ -1,13 +1,30 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@renderer/lib/api";
 import { onIpc } from "@renderer/lib/ipc";
 import { OutputView } from "@renderer/components/shared/output-view";
 import { useMediaStatusReporter } from "./use-media-status-reporter";
 import { INSTANT_TRANSITION } from "@shared/types/projection";
-import type { AudioTrackPush, MediaCommand, ProjectionOutput } from "@shared/types/projection";
+import type {
+  AudioTrackPush,
+  MediaCommand,
+  ProjectionMediaError,
+  ProjectionOutput,
+} from "@shared/types/projection";
+
+/** The projector reports what it cannot play and shows nothing about it — the
+ *  congregation must never see a warning. Telling the operator is the control
+ *  window's job (see `projection-sync.ts`). */
+function reportMediaError(error: ProjectionMediaError): void {
+  void api.projection.reportMediaError(error);
+}
 
 type AudioTrackElementProps = {
-  onRef: (element: HTMLAudioElement | null) => void;
+  /** The shared `trackId -> element` map `media-command` routes through. Passed
+   *  as the map itself rather than as a per-track callback so the `ref` below
+   *  can be stable: a fresh closure every render makes React detach and
+   *  reattach the ref on every one of them (`delete` then `set`), and a command
+   *  arriving inside that window finds no element at all. */
+  registry: Map<string, HTMLAudioElement>;
   track: AudioTrackPush;
 };
 
@@ -25,7 +42,7 @@ type AudioTrackElementProps = {
  * `paused` before it ever reaches here, so NEGRO/LOGO pauses and holds it
  * exactly like `LiveVideo` does for a video.
  */
-function AudioTrackElement({ onRef, track }: AudioTrackElementProps) {
+function AudioTrackElement({ registry, track }: AudioTrackElementProps) {
   const elementRef = useRef<HTMLAudioElement | null>(null);
   useMediaStatusReporter(elementRef, track.trackId, track.epoch);
 
@@ -52,12 +69,30 @@ function AudioTrackElement({ onRef, track }: AudioTrackElementProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [track.epoch]);
 
-  function attach(element: HTMLAudioElement | null) {
-    elementRef.current = element;
-    onRef(element);
-  }
+  const trackId = track.trackId;
+  const attach = useCallback(
+    (element: HTMLAudioElement | null) => {
+      elementRef.current = element;
+      if (element) registry.set(trackId, element);
+      else registry.delete(trackId);
+    },
+    [registry, trackId],
+  );
 
-  return <audio autoPlay={!track.paused} ref={attach} src={track.url} />;
+  return (
+    <audio
+      autoPlay={!track.paused}
+      onError={(event) =>
+        reportMediaError({
+          target: { kind: "audio", trackId: track.trackId },
+          url: track.url,
+          code: event.currentTarget.error?.code ?? null,
+        })
+      }
+      ref={attach}
+      src={track.url}
+    />
+  );
 }
 
 /**
@@ -154,7 +189,13 @@ export function ProjectionApp() {
 
   return (
     <div className="h-screen w-screen bg-black">
-      <OutputView key={hasRealOutput ? "live" : "placeholder"} mode="live" output={output} videoRef={videoRef} />
+      <OutputView
+        key={hasRealOutput ? "live" : "placeholder"}
+        mode="live"
+        onMediaError={reportMediaError}
+        output={output}
+        videoRef={videoRef}
+      />
 
       {/* Outside the output view on purpose: keyed by trackId+epoch so a track
           restarts from the beginning only when it is truly a new play (a
@@ -163,10 +204,7 @@ export function ProjectionApp() {
       {tracks.map((track) => (
         <AudioTrackElement
           key={`${track.trackId}:${track.epoch}`}
-          onRef={(element) => {
-            if (element) audioRefs.current.set(track.trackId, element);
-            else audioRefs.current.delete(track.trackId);
-          }}
+          registry={audioRefs.current}
           track={track}
         />
       ))}

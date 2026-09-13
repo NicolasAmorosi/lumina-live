@@ -89,10 +89,15 @@ export class BibleRepo {
     const ftsQuery = toFtsQuery(query);
     if (!ftsQuery) return [];
 
+    // The delimiters are control characters, not `<mark>` tags: a snippet
+    // carries the verse's own text, a verse can come from any JSON the
+    // operator imports, and the renderer used to hand this straight to
+    // `dangerouslySetInnerHTML`. See `SNIPPET_MARK_START` in
+    // `shared/types/bible.ts` for the full reasoning.
     const stmt = this.sqlite.prepare(`
       SELECT v.id AS id, v.book_id AS bookId, b.name AS bookName, v.chapter AS chapter,
              v.verse AS verse, v.text AS text,
-             snippet(bible_verses_fts, 0, '<mark>', '</mark>', '…', 12) AS snippet
+             snippet(bible_verses_fts, 0, char(1), char(2), '…', 12) AS snippet
       FROM bible_verses_fts f
       JOIN bible_verses v ON v.id = f.rowid
       JOIN bible_books b ON b.id = v.book_id

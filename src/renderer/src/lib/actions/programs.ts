@@ -169,4 +169,13 @@ export async function deleteProgram(id: number): Promise<void> {
  *  `hasUnsavedChanges()` first — this never asks on its own. */
 export function newProgram(): void {
   useProgramStore.getState().newProgram();
+  // Main keeps its own notion of "the current program" for history attribution
+  // and deck pinning, and nothing used to tell it the schedule had been reset:
+  // every verse and slide sent live afterwards was recorded against the
+  // previous service. Deliberately not surfaced to the operator — a failure
+  // here misfiles a history row, which is not worth a toast over the schedule
+  // they just cleared.
+  void api.programs.releaseCurrent().catch((error: unknown) => {
+    console.error("[programs] releaseCurrent failed", error);
+  });
 }

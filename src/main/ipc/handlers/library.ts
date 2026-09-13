@@ -5,6 +5,7 @@ import { IpcError } from "@shared/ipc/result";
 import type { Handlers } from "../register";
 import { getMediaRepo, getProgramsRepo } from "../../services/repos";
 import { removeMediaAsset } from "../../services/media-asset-removal";
+import { importPaths } from "../../services/library-import";
 
 export const libraryHandlers: Pick<
   Handlers,
@@ -17,15 +18,16 @@ export const libraryHandlers: Pick<
   | "library:setLinkedAudio"
   | "library:listFolder"
 > = {
-  "library:list": ({ kind }) => {
-    getMediaRepo().sweep();
-    return getMediaRepo().list(kind);
-  },
+  // A pure read: the "is this file still there?" sweep no longer runs inline
+  // on every list — see `services/library-sweeper.ts`. `missingSince` can lag
+  // a sweep's debounce/throttle window, which is fine: dragging a truly gone
+  // file to EN VIVO is still caught downstream (`SOURCE_MISSING` in
+  // `deck-service.ts`, the 410 from `worship-protocol.ts`).
+  "library:list": ({ kind }) => getMediaRepo().list(kind),
 
   "library:get": ({ id }) => getMediaRepo().getById(id),
 
-  "library:add": ({ paths, kind }) =>
-    paths.map((p) => getMediaRepo().upsertFromPath(p, kind, true)),
+  "library:add": ({ paths, kind }) => importPaths(paths, kind, { inLibrary: true }),
 
   "library:remove": ({ id, force }) => {
     removeMediaAsset(id, force ?? false);
@@ -56,16 +58,24 @@ export const libraryHandlers: Pick<
     return getMediaRepo().setLinkedAudio(id, audioPath);
   },
 
-  "library:listFolder": ({ kind, path: folderPath }) => {
+  "library:listFolder": async ({ kind, path: folderPath }) => {
     let entries: fs.Dirent[];
     try {
-      entries = fs.readdirSync(folderPath, { withFileTypes: true });
+      // Asynchronous on purpose: a linked folder is routinely a USB stick or
+      // an SMB share, where a directory listing can take seconds. Done
+      // synchronously it froze the main process — which means it froze the
+      // PROJECTION — for as long as the drive took to answer.
+      entries = await fs.promises.readdir(folderPath, { withFileTypes: true });
     } catch {
       return [];
     }
     const extensions = new Set<string>(ASSET_EXTENSIONS[kind]);
-    return entries
+    const matched = entries
       .filter((entry) => entry.isFile() && extensions.has(path.extname(entry.name).slice(1).toLowerCase()))
-      .map((entry) => getMediaRepo().upsertFromPath(path.join(folderPath, entry.name), kind, false));
+      .map((entry) => path.join(folderPath, entry.name));
+    // Read-only from the caller's point of view: it returns the fresh list
+    // directly, so it must never broadcast `library-changed` — see the
+    // block comment on `importPaths` for why that would loop.
+    return importPaths(matched, kind, { inLibrary: false, emitChanged: false });
   },
 };

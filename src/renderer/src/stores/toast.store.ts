@@ -29,20 +29,53 @@ type ToastStoreState = {
 
 const DEFAULT_DURATION_MS = 4000;
 
+/** Most toasts on screen at once. Past this the oldest is retired to make
+ *  room: a burst — one per failing file while a whole folder is missing —
+ *  otherwise stacks past the height of the window, hiding the app behind its
+ *  own notifications and burying the newest (most relevant) message off
+ *  screen. A toast carrying an `action` is never auto-dismissed, so without a
+ *  cap a burst of those would stay there for the rest of the service. */
+const MAX_TOASTS = 4;
+
+/** Auto-dismiss timers, so a toast closed by hand (or evicted by the cap)
+ *  doesn't leave one behind still counting down towards an id that is already
+ *  gone. */
+const timers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function cancelTimer(id: string): void {
+  const timer = timers.get(id);
+  if (timer === undefined) return;
+  clearTimeout(timer);
+  timers.delete(id);
+}
+
 export const useToastStore = create<ToastStoreState>((set, get) => ({
   toasts: [],
 
   push: ({ tone, message, action, durationMs }) => {
     const id = crypto.randomUUID();
     const effectiveDuration = durationMs ?? (action ? null : DEFAULT_DURATION_MS);
-    set((state) => ({
-      toasts: [...state.toasts, { id, tone, message, action, durationMs: effectiveDuration }],
-    }));
+    const evicted: string[] = [];
+    set((state) => {
+      const next = [...state.toasts, { id, tone, message, action, durationMs: effectiveDuration }];
+      while (next.length > MAX_TOASTS) {
+        const oldest = next.shift();
+        if (oldest) evicted.push(oldest.id);
+      }
+      return { toasts: next };
+    });
+    for (const evictedId of evicted) cancelTimer(evictedId);
     if (effectiveDuration !== null) {
-      setTimeout(() => get().dismiss(id), effectiveDuration);
+      timers.set(
+        id,
+        setTimeout(() => get().dismiss(id), effectiveDuration),
+      );
     }
     return id;
   },
 
-  dismiss: (id) => set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) })),
+  dismiss: (id) => {
+    cancelTimer(id);
+    set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }));
+  },
 }));

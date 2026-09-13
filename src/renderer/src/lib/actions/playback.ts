@@ -68,7 +68,22 @@ function toLiveDeck(deck: DeckDTO): LiveDeck {
  * conversion.
  */
 async function goLiveWithDeck(assetId: number, startSlideIndex: number): Promise<boolean> {
-  const deck = await useDeckStore.getState().ensure(assetId);
+  const deckStore = useDeckStore.getState();
+  const cached = deckStore.byAssetId[assetId];
+  let deck: DeckDTO | null;
+  if (cached?.status === "ready" && cached.deck && cached.deck.slides.length > 0) {
+    // Already known ready in the store — go live with it immediately instead
+    // of waiting on an `ensure()` round-trip. For an already-prewarmed deck
+    // that round-trip is a pure cache hit on main's side anyway (same DTO,
+    // a beat later); waiting on it is exactly what made EN VIVO on a
+    // prepared deck feel slow. Still revalidate in the background (a
+    // relocate, a source file that changed on disk) so a real change is
+    // caught on the next go-live rather than never.
+    deck = cached.deck;
+    void deckStore.ensure(assetId);
+  } else {
+    deck = await deckStore.ensure(assetId);
+  }
   if (!deck || deck.status !== "ready" || deck.slides.length === 0) return false;
 
   const store = useProjectionStore.getState();

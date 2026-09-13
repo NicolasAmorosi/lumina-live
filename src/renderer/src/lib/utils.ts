@@ -14,6 +14,39 @@ export function cn(...inputs: ClassValue[]): string {
   return twMerge(clsx(inputs));
 }
 
+export type BoundedSet = {
+  has: (value: string) => boolean;
+  add: (value: string) => void;
+};
+
+/**
+ * A `Set` of strings that forgets its oldest entries past `max`.
+ *
+ * For the module-level registries a virtualized grid needs. A tile that
+ * scrolls out of view is unmounted, so anything kept in its own state is gone
+ * — but "this url answered 404" and "this url has already decoded once" are
+ * facts about the library, not about one mounted component, and re-learning
+ * them on every pass is exactly the cost virtualization exists to avoid. Kept
+ * bounded because a long session browsing a large library would otherwise grow
+ * them without end; a `Set` iterates in insertion order, so its first key is
+ * the oldest.
+ */
+export function createBoundedSet(max: number): BoundedSet {
+  const entries = new Set<string>();
+  return {
+    has: (value) => entries.has(value),
+    add: (value) => {
+      if (entries.has(value)) return;
+      while (entries.size >= max) {
+        const oldest = entries.keys().next();
+        if (oldest.done) break;
+        entries.delete(oldest.value);
+      }
+      entries.add(value);
+    },
+  };
+}
+
 const COMBINING_DIACRITICAL_MARKS = /[̀-ͯ]/g;
 export function normalizeForSearch(value: string): string {
   return value.normalize("NFD").replace(COMBINING_DIACRITICAL_MARKS, "").toLowerCase();

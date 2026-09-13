@@ -1,4 +1,4 @@
-import { desc, inArray } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 import type { Db } from "../client";
 import { projectionHistory } from "../schema";
 import type { ProjectionOutput } from "@shared/types/projection";
@@ -60,16 +60,23 @@ export class HistoryRepo {
       .all();
   }
 
-  /** Called once at startup to keep the table bounded. */
+  /** Called once at startup (deferred — see `main/index.ts`) to keep the table
+   *  bounded.
+   *
+   *  Done entirely in SQL: the previous version pulled EVERY id into memory,
+   *  sorted them in JS and deleted with `IN (...)`, which on a table that had
+   *  been growing unbounded (this method had no caller at all) meant both a
+   *  full materialization and a bound-parameter list large enough to hit
+   *  SQLite's limit — the prune would throw exactly when it was most needed. */
   prune(): void {
-    const rows = this.db.select({ id: projectionHistory.id }).from(projectionHistory).all();
-    if (rows.length <= MAX_ROWS) return;
-    // Oldest-first ids beyond the cap; projectionHistory.id is monotonically increasing.
-    const toDelete = rows
-      .map((r) => r.id)
-      .sort((a, b) => a - b)
-      .slice(0, rows.length - MAX_ROWS);
-    if (toDelete.length === 0) return;
-    this.db.delete(projectionHistory).where(inArray(projectionHistory.id, toDelete)).run();
+    this.db
+      .delete(projectionHistory)
+      .where(
+        sql`${projectionHistory.id} NOT IN (
+          SELECT ${projectionHistory.id} FROM ${projectionHistory}
+          ORDER BY ${projectionHistory.id} DESC LIMIT ${MAX_ROWS}
+        )`,
+      )
+      .run();
   }
 }

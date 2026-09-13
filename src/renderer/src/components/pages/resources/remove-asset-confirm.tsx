@@ -20,9 +20,26 @@ export function RemoveAssetConfirm({ assetId, assetMissing, onOpenChange }: Remo
   const t = useT();
   const [usages, setUsages] = useState<MediaAssetUsage[]>([]);
 
+  // Cleared and re-read per asset, with a cancellation guard. Without it the
+  // dialog could list the programs of a PREVIOUSLY targeted asset while
+  // confirming a force-delete of the current one — the list is the only thing
+  // telling the operator what else is about to be modified, so it showing
+  // someone else's data is the worst possible failure here. The early
+  // `return` on `null` also used to leave the last list on screen for the
+  // first instant of the next opening.
   useEffect(() => {
+    setUsages([]);
     if (assetId === null) return;
-    void api.library.usages(assetId).then(setUsages);
+    let cancelled = false;
+    void api.library
+      .usages(assetId)
+      .then((rows) => {
+        if (!cancelled) setUsages(rows);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
   }, [assetId]);
 
   return (

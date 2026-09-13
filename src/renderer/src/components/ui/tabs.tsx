@@ -8,6 +8,10 @@ export type TabsVariant = "underline" | "folder" | "sidebar";
 
 type TabsProps<T extends string> = {
   className?: string;
+  /** Shared with the `TabPanel`s this list controls, so tab and panel can
+   *  point at each other (`aria-controls` / `aria-labelledby`). Omit it when
+   *  the content isn't rendered as a `tabpanel` at all. */
+  idBase?: string;
   onChange: (value: T) => void;
   tabs: readonly TabItem<T>[];
   /** "folder" is the dense, EasyWorship-style resource selector. "sidebar" is
@@ -15,6 +19,16 @@ type TabsProps<T extends string> = {
   variant?: TabsVariant;
   value: T;
 };
+
+/** The two halves of one tab's identity. Kept as functions so the tab and its
+ *  panel can never disagree about the string. */
+function tabDomId(idBase: string, value: string): string {
+  return `${idBase}-tab-${value}`;
+}
+
+function panelDomId(idBase: string, value: string): string {
+  return `${idBase}-panel-${value}`;
+}
 
 const isVertical: Record<TabsVariant, boolean> = {
   underline: false,
@@ -51,6 +65,7 @@ const inactiveVariants: Record<TabsVariant, string> = {
 
 export function Tabs<T extends string>({
   className,
+  idBase,
   onChange,
   tabs,
   value,
@@ -67,8 +82,16 @@ export function Tabs<T extends string>({
     event.preventDefault();
     const index = tabs.findIndex((tab) => tab.value === value);
     const delta = event.key === nextKey ? 1 : -1;
-    const next = tabs[(index + delta + tabs.length) % tabs.length];
-    if (next) onChange(next.value);
+    const nextIndex = (index + delta + tabs.length) % tabs.length;
+    const next = tabs[nextIndex];
+    if (!next) return;
+    onChange(next.value);
+    // Roving tabindex is only half the contract: selection moves the `0` to
+    // the new tab, and focus has to follow it, or the next arrow key is read
+    // by a button that is now `tabIndex={-1}` and the operator is stranded
+    // one tab behind what is actually selected.
+    const buttons = event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+    buttons[nextIndex]?.focus();
   }
 
   return (
@@ -82,12 +105,14 @@ export function Tabs<T extends string>({
         const active = tab.value === value;
         return (
           <button
+            aria-controls={idBase ? panelDomId(idBase, tab.value) : undefined}
             aria-selected={active}
             className={cn(
               "inline-flex cursor-pointer items-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
               tabVariants[variant],
               active ? activeVariants[variant] : inactiveVariants[variant],
             )}
+            id={idBase ? tabDomId(idBase, tab.value) : undefined}
             key={tab.value}
             onClick={() => onChange(tab.value)}
             role="tab"
@@ -103,7 +128,50 @@ export function Tabs<T extends string>({
   );
 }
 
-export function TabPanel({ active, children }: { active: boolean; children: ReactNode }) {
-  if (!active) return null;
-  return <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</div>;
+/**
+ * The box every `TabPanel` is stacked inside. Positioned, because the panels
+ * overlap: a tab that has been visited stays mounted (see `TabPanel`) and the
+ * inactive ones sit underneath the active one rather than beside it.
+ */
+export function TabPanels({ children }: { children: ReactNode }) {
+  return <div className="relative flex min-h-0 flex-1 flex-col">{children}</div>;
+}
+
+/**
+ * One tab's content, inside a `TabPanels`.
+ *
+ * An inactive panel is hidden with `visibility`, never unmounted and never
+ * `display: none`. Both of those destroy the layout box, and with it the
+ * scroll offset of everything inside — which for a virtualized grid means
+ * coming back to the top of a folder of 600 files, re-measuring, re-reading
+ * `deck:statuses` and re-warming from scratch. `visibility: hidden` keeps the
+ * box (so scroll position and measured widths survive) while taking the
+ * subtree out of the tab order and off the screen.
+ */
+export function TabPanel({
+  active,
+  children,
+  idBase,
+  value,
+}: {
+  active: boolean;
+  children: ReactNode;
+  /** Must match the `idBase` given to the controlling `Tabs`. */
+  idBase: string;
+  value: string;
+}) {
+  return (
+    <div
+      aria-hidden={!active || undefined}
+      aria-labelledby={tabDomId(idBase, value)}
+      className={cn(
+        "absolute inset-0 flex min-h-0 flex-col overflow-hidden",
+        !active && "invisible pointer-events-none",
+      )}
+      id={panelDomId(idBase, value)}
+      role="tabpanel"
+    >
+      {children}
+    </div>
+  );
 }

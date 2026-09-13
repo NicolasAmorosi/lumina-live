@@ -3,7 +3,15 @@ import path from "node:path";
 import type { Handlers } from "../register";
 import type { DeckEnvironment } from "@shared/types/deck";
 import { getSettingsRepo } from "../../services/repos";
-import { cancel, getDeck, prepareDeck, currentProgress } from "../../slides/deck-service";
+import {
+  cancel,
+  getDeck,
+  prepareDeck,
+  currentProgress,
+  prewarmExplicit,
+  setVisiblePrewarm,
+} from "../../slides/deck-service";
+import { cancelPrewarmBatch, deckStatuses, startPrewarmBatch } from "../../services/prewarm-service";
 import { invalidateSofficeCache, locateSoffice, type SofficeStatus } from "../../slides/libreoffice";
 
 function toEnvironment(status: SofficeStatus): DeckEnvironment {
@@ -20,16 +28,34 @@ export const slidesHandlers: Pick<
   | "deck:progress"
   | "deck:environment"
   | "deck:locateSoffice"
+  | "deck:prewarm"
+  | "deck:prewarmBatch"
+  | "deck:cancelPrewarmBatch"
+  | "deck:statuses"
 > = {
   "deck:get": ({ assetId }) => getDeck(assetId),
 
-  "deck:ensure": ({ assetId, force }) => prepareDeck(assetId, force ?? false),
+  "deck:ensure": ({ assetId, force }) =>
+    prepareDeck(assetId, { force: force ?? false, priority: "interactive" }),
 
   "deck:cancel": ({ assetId }) => {
     cancel(assetId);
   },
 
   "deck:progress": ({ assetId }) => currentProgress(assetId),
+
+  "deck:prewarm": ({ assetIds, scope }) => {
+    if (scope === "visible") setVisiblePrewarm(assetIds);
+    else prewarmExplicit(assetIds, scope);
+  },
+
+  "deck:prewarmBatch": ({ assetIds, label }) => startPrewarmBatch(assetIds, label),
+
+  "deck:cancelPrewarmBatch": ({ jobId }) => {
+    cancelPrewarmBatch(jobId);
+  },
+
+  "deck:statuses": ({ assetIds }) => deckStatuses(assetIds),
 
   "deck:environment": async () => toEnvironment(await locateSoffice()),
 

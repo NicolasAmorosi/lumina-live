@@ -3,7 +3,10 @@ import { AppShell } from "@renderer/components/pages/layout/AppShell";
 import { ProgramsModal } from "@renderer/components/pages/programs/ProgramsModal";
 import { SettingsModal } from "@renderer/components/pages/settings/SettingsModal";
 import { useAnyModalOpen } from "@renderer/components/shared/modal";
-import { ToastHost } from "@renderer/components/ui";
+import { ErrorBoundary } from "@renderer/components/shared/error-boundary";
+import { Button, LoadingState, ToastHost } from "@renderer/components/ui";
+import { useT } from "@renderer/lib/i18n/i18n-provider";
+import { installGlobalErrorHandlers } from "@renderer/lib/global-error-handlers";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { LOGO_URL } from "@shared/urls";
 import { useSettingsStore } from "@renderer/stores/settings.store";
@@ -11,11 +14,13 @@ import { useDeckStore } from "@renderer/stores/deck.store";
 import { useDisplayStore } from "@renderer/stores/display.store";
 import { useLibraryStore } from "@renderer/stores/library.store";
 import { startProjectionEffects } from "@renderer/effects/projection-sync";
+import { startLibrarySyncEffects } from "@renderer/effects/library-sync";
 import { useGlobalShortcuts } from "@renderer/lib/hooks/use-global-shortcuts";
 
 /** Control window shell: boot the stores, mount the effect layer, render the
  *  workspace. All layout lives in AppShell, all behaviour in the actions. */
 export function App() {
+  const t = useT();
   const [programsOpen, setProgramsOpen] = useState(false);
   const [programsInitialMode, setProgramsInitialMode] = useState<{ kind: "create" } | undefined>(
     undefined,
@@ -30,6 +35,8 @@ export function App() {
 
   useGlobalShortcuts(useAnyModalOpen());
 
+  useEffect(() => installGlobalErrorHandlers(), []);
+
   useEffect(() => {
     void (async () => {
       await loadSettings();
@@ -43,7 +50,12 @@ export function App() {
       await useDisplayStore.getState().load();
     })();
     void useDeckStore.getState().loadEnvironment();
-    return startProjectionEffects();
+    const stopProjectionEffects = startProjectionEffects();
+    const stopLibrarySync = startLibrarySyncEffects();
+    return () => {
+      stopProjectionEffects();
+      stopLibrarySync();
+    };
   }, [loadSettings]);
 
   useEffect(() => {
@@ -63,13 +75,40 @@ export function App() {
 
   return (
     <>
-      <AppShell
-        onOpenPrograms={(opts) => {
-          setProgramsInitialMode(opts?.mode === "create" ? { kind: "create" } : undefined);
-          setProgramsOpen(true);
-        }}
-        onOpenSettings={() => setSettingsOpen(true)}
-      />
+      {/* Scoped to the workspace, not to the whole app: the toast host stays
+          mounted outside it, so whatever recovery message the operator needs
+          is still on screen even with the shell replaced by its fallback. */}
+      <ErrorBoundary
+        fallback={({ error, reset }) => (
+          <div className="flex h-full items-center justify-center p-6">
+            <LoadingState
+              action={
+                <div className="flex gap-2">
+                  <Button onClick={reset} size="sm" variant="primary">
+                    {t("common.retry")}
+                  </Button>
+                  <Button onClick={() => window.location.reload()} size="sm" variant="outline">
+                    {t("app.reload")}
+                  </Button>
+                </div>
+              }
+              hint={error.message}
+              icon="alert"
+              surface="panel"
+              title={t("app.crashed")}
+              tone="failed"
+            />
+          </div>
+        )}
+      >
+        <AppShell
+          onOpenPrograms={(opts) => {
+            setProgramsInitialMode(opts?.mode === "create" ? { kind: "create" } : undefined);
+            setProgramsOpen(true);
+          }}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+      </ErrorBoundary>
       <ProgramsModal initialMode={programsInitialMode} onOpenChange={setProgramsOpen} open={programsOpen} />
       <SettingsModal onOpenChange={setSettingsOpen} open={settingsOpen} />
       <ToastHost />

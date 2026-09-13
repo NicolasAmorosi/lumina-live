@@ -35,6 +35,17 @@ export const slidesTempDir = path.join(slidesCacheDir, ".tmp");
  *  from any copy the user runs as a normal GUI app. */
 export const sofficeProfileDir = path.join(userDataDir, "soffice-profile");
 
+/** Generated library thumbnails (images and video first frames). Sharded one
+ *  level by the first two characters of the key, because a church's media
+ *  folder can easily hold thousands of files and some filesystems get slow
+ *  listing a single directory that size. Purely derived data: deleting it
+ *  costs nothing but a regeneration. */
+export const thumbCacheDir = path.join(userDataDir, "thumb-cache");
+
+export function thumbCachePath(key: string): string {
+  return path.join(thumbCacheDir, key.slice(0, 2), `${key}.jpg`);
+}
+
 export function deckCacheDir(contentHash: string, renderWidth: number, imageFormat: string): string {
   return path.join(slidesCacheDir, `${contentHash.slice(0, 16)}-${renderWidth}-${imageFormat}`);
 }

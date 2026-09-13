@@ -1,5 +1,6 @@
 import { app, BrowserWindow, screen } from "electron";
 import path from "node:path";
+import { trustWindow } from "../ipc/trusted-senders";
 
 const PRELOAD = path.join(__dirname, "../preload/index.js");
 
@@ -39,6 +40,8 @@ export function createProjectionWindow(displayId?: number): BrowserWindow {
       webSecurity: true,
     },
   });
+
+  trustWindow(win);
 
   const devServerUrl = process.env["ELECTRON_RENDERER_URL"];
   if (!app.isPackaged && devServerUrl) {

@@ -7,9 +7,11 @@ import { useAudioStore } from "@renderer/stores/audio.store";
 import { useLiveHeading } from "@renderer/lib/hooks/use-live";
 import { seekMedia, stopAudioTrack, toggleAudioTrackPause, toggleVideoPause } from "@renderer/lib/actions/media";
 import { clearBaseContent } from "@renderer/lib/actions/playback";
-import { mediaTargetKey } from "@shared/types/projection";
+import { mediaErrorKey, mediaTargetKey } from "@shared/types/projection";
+import { assetUrl } from "@shared/urls";
 
 const VIDEO_STATUS_KEY = mediaTargetKey({ kind: "video" });
+const VIDEO_ERROR_KEY = mediaErrorKey({ kind: "video" });
 
 /**
  * The global media control — every audio-producing thing live right now, in
@@ -32,8 +34,16 @@ export function LiveMediaPanel() {
   // one-per-track — see the Rules of Hooks. Indexing a single subscribed
   // object during render is still reactive and stays simple.
   const mediaStatus = useProjectionStore((s) => s.mediaStatus);
+  const mediaErrors = useProjectionStore((s) => s.mediaErrors);
   const audioTracks = useAudioStore((s) => s.tracks);
   const heading = useLiveHeading();
+
+  /** Only surface an error that still describes the url this row is about —
+   *  same rule the monitors' notice follows, so the panel and the stage can
+   *  never disagree about whether something is broken. */
+  function errorFor(key: string, url: string): string | undefined {
+    return mediaErrors[key]?.url === url ? t("media.loadErrorRow") : undefined;
+  }
 
   const rows: ReactNode[] = [];
 
@@ -43,6 +53,7 @@ export function LiveMediaPanel() {
       <MediaTrackRow
         currentSeconds={status?.currentTimeSeconds ?? 0}
         durationSeconds={status?.durationSeconds ?? 0}
+        error={errorFor(VIDEO_ERROR_KEY, assetUrl(base.assetId))}
         key="video"
         kind="video"
         label={heading ?? ""}
@@ -56,7 +67,13 @@ export function LiveMediaPanel() {
 
   if (base?.kind === "image") {
     rows.push(
-      <MediaTrackRow key="image" kind="image" label={heading ?? ""} onDelete={clearBaseContent} />,
+      <MediaTrackRow
+        error={errorFor(mediaErrorKey({ kind: "scene" }), assetUrl(base.assetId))}
+        key="image"
+        kind="image"
+        label={heading ?? ""}
+        onDelete={clearBaseContent}
+      />,
     );
   }
 
@@ -67,6 +84,7 @@ export function LiveMediaPanel() {
       <MediaTrackRow
         currentSeconds={status?.currentTimeSeconds ?? 0}
         durationSeconds={status?.durationSeconds ?? 0}
+        error={errorFor(mediaErrorKey({ kind: "audio", trackId: track.trackId }), track.url)}
         key={track.trackId}
         kind="audio"
         label={isDeck ? t("media.deckMusic", { title: heading ?? "" }) : track.label}

@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import { unzipSync, type Unzipped } from "fflate";
 import { XMLParser } from "fast-xml-parser";
 import { SLIDES_MIN_ADVANCE_MS } from "@shared/constants";
+import { readZipEntries } from "./zip-reader";
 
 export type ContainerKind = "ooxml" | "binary" | "odf" | "unknown";
 
@@ -122,11 +122,13 @@ export function containerKind(filePath: string): ContainerKind {
   }
 }
 
-/** Decompresses only the entries we actually read — important on a 200 MB deck
- *  where the media parts should stay compressed until extraction. */
-function readEntries(filePath: string, wanted: (name: string) => boolean): Unzipped {
-  const buf = fs.readFileSync(filePath);
-  return unzipSync(new Uint8Array(buf), { filter: (file) => wanted(file.name) });
+/** Reads only the entries we actually parse, straight out of the archive by
+ *  offset — see `zip-reader.ts`. Filtering an `unzipSync` over the whole file
+ *  (what this used to do) skipped the inflate but still paid for a
+ *  `readFileSync` of every media byte in the deck, synchronously, on the
+ *  thread that serves the projection window. */
+function readEntries(filePath: string, wanted: (name: string) => boolean): Record<string, Uint8Array> {
+  return readZipEntries(filePath, wanted);
 }
 
 function decode(entry: Uint8Array | undefined): string | null {

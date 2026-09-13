@@ -99,6 +99,15 @@ export function Select({ className, disabled, onChange, options, placeholder, si
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [open]);
 
+  // The typeahead buffer's reset timer is the one thing in here that can
+  // outlive the component: a Select unmounted within 500 ms of a keystroke
+  // (a modal closing under the operator's hands) left it counting down
+  // towards a ref nobody reads any more.
+  useEffect(() => {
+    const typeahead = typeaheadRef.current;
+    return () => window.clearTimeout(typeahead.timer);
+  }, []);
+
   function optionId(index: number) {
     return `${id}-option-${index}`;
   }

@@ -1,0 +1,94 @@
+import type { ReactNode } from "react";
+import { cn } from "@renderer/lib/utils";
+import { Icon, type IconName } from "./icon";
+import { LinearLoader } from "./linear-loader";
+import { ProgressBar } from "./progress-bar";
+
+type LoadingStateTone = "busy" | "queued" | "failed";
+/** `stage` sits on the monitor's black stage (light text in both themes, same
+ *  reason `Monitor`'s own empty-state text is `text-white/60`); `panel` sits
+ *  on a normal `bg-surface`/`bg-card` panel. */
+type LoadingStateSurface = "stage" | "panel";
+
+type LoadingStateProps = {
+  /** A `<Button>` — cancel, retry. */
+  action?: ReactNode;
+  className?: string;
+  hint?: string | undefined;
+  icon?: IconName;
+  /** 0..1 for a determinate bar, `null` for indeterminate, `undefined` for
+   *  no bar at all. */
+  progress?: number | null | undefined;
+  surface?: LoadingStateSurface;
+  title: string;
+  tone?: LoadingStateTone;
+};
+
+const surfaceTextClassName: Record<LoadingStateSurface, string> = {
+  stage: "text-white",
+  panel: "text-foreground",
+};
+const surfaceHintClassName: Record<LoadingStateSurface, string> = {
+  stage: "text-white/60",
+  panel: "text-subtle",
+};
+const surfaceTrackClassName: Record<LoadingStateSurface, string> = {
+  stage: "bg-white/15",
+  panel: "bg-muted",
+};
+const toneIconClassName: Record<LoadingStateTone, string> = {
+  busy: "text-primary",
+  queued: "text-muted-foreground",
+  failed: "text-danger",
+};
+const toneBarTone: Record<LoadingStateTone, "primary" | "danger"> = {
+  busy: "primary",
+  queued: "primary",
+  failed: "danger",
+};
+
+/**
+ * One shared shape for "something is converting/queued/failed" — the deck
+ * conversion status is the reason this exists (it has to render identically
+ * on the black monitor stage and on a normal panel, per the "monitors never
+ * lie to the operator" rule), but anything else with a determinate/indeterminate
+ * progress + retry/cancel action fits here too.
+ */
+export function LoadingState({
+  action,
+  className,
+  hint,
+  icon = "spinner",
+  progress,
+  surface = "panel",
+  title,
+  tone = "busy",
+}: LoadingStateProps) {
+  return (
+    <div
+      aria-live="polite"
+      className={cn(
+        "flex w-full max-w-xs flex-col items-center gap-2 px-4 text-center",
+        surfaceTextClassName[surface],
+        className,
+      )}
+    >
+      <Icon
+        className={cn("size-6", toneIconClassName[tone], icon === "spinner" && "animate-spin")}
+        name={icon}
+      />
+      <p className="text-sm font-medium">{title}</p>
+      {progress === null ? (
+        <LinearLoader className={cn("w-full", surfaceTrackClassName[surface])} />
+      ) : progress !== undefined ? (
+        <ProgressBar
+          className={cn("w-full", surfaceTrackClassName[surface])}
+          tone={toneBarTone[tone]}
+          value={progress}
+        />
+      ) : null}
+      {hint ? <p className={cn("text-xs", surfaceHintClassName[surface])}>{hint}</p> : null}
+      {action ? <div className="mt-1">{action}</div> : null}
+    </div>
+  );
+}

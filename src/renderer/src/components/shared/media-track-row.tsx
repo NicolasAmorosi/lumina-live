@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { IconButton, Icon, MediaScrubber, type IconName } from "@renderer/components/ui";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { cn, formatClock } from "@renderer/lib/utils";
@@ -11,6 +12,10 @@ type MediaTrackRowProps = {
    *  skips the pause button, the clock readouts and the scrubber outright,
    *  instead of showing a meaningless 0:00/0:00. */
   durationSeconds?: number;
+  /** What the projector reported it could not play, already translated.
+   *  Replaces `hint` and re-tones the row — a track the operator believes is
+   *  sounding, and isn't, is worth more than a tidy row. */
+  error?: string | undefined;
   kind: MediaTrackKind;
   label: string;
   /** Compact second line under the label — e.g. "no suena hasta EN VIVO".
@@ -84,6 +89,7 @@ export function MediaTrackRow({
   className,
   currentSeconds = 0,
   durationSeconds,
+  error,
   kind,
   label,
   hint,
@@ -95,13 +101,22 @@ export function MediaTrackRow({
 }: MediaTrackRowProps) {
   const t = useT();
   const hasTiming = durationSeconds !== undefined;
+  // Where the scrubber is painting while it is ahead of the reported position
+  // — dragging, or holding a committed seek until the projector confirms it.
+  // The clock reads this instead of `currentSeconds` so the operator can see
+  // the second he is about to jump to, and so the two halves of the same
+  // control can never show different positions.
+  const [scrubSeconds, setScrubSeconds] = useState<number | null>(null);
 
   return (
     <div className={cn("flex flex-col gap-0.5 px-2 py-1", className)}>
       <div className={cn("flex items-center gap-2", paused && "opacity-70")}>
         <Icon
-          className={cn("size-4 shrink-0", kind === "audio" ? "text-badge-audio" : "text-primary")}
-          name={kindIcon[kind]}
+          className={cn(
+            "size-4 shrink-0",
+            error ? "text-danger" : kind === "audio" ? "text-badge-audio" : "text-primary",
+          )}
+          name={error ? "alert" : kindIcon[kind]}
         />
 
         <span
@@ -124,13 +139,14 @@ export function MediaTrackRow({
         {hasTiming ? (
           <>
             <span className={cn(clockWidthClass(durationSeconds), "shrink-0 text-right text-xs tabular-nums text-subtle")}>
-              {formatClock(currentSeconds)}
+              {formatClock(scrubSeconds ?? currentSeconds)}
             </span>
 
             <MediaScrubber
               className="w-28 shrink-0"
               currentSeconds={currentSeconds}
               durationSeconds={durationSeconds}
+              onPositionChange={setScrubSeconds}
               onSeek={onSeek}
               tone={kindTone[kind]}
             />
@@ -158,7 +174,11 @@ export function MediaTrackRow({
         )}
       </div>
 
-      {hint ? <p className="truncate pl-6 text-xs text-subtle">{hint}</p> : null}
+      {error ? (
+        <p className="truncate pl-6 text-xs text-danger">{error}</p>
+      ) : hint ? (
+        <p className="truncate pl-6 text-xs text-subtle">{hint}</p>
+      ) : null}
     </div>
   );
 }

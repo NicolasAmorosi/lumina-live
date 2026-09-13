@@ -1,10 +1,11 @@
 import { useT } from "@renderer/lib/i18n/i18n-provider";
+import { cn } from "@renderer/lib/utils";
 import { IconButton, Icon, MediaPanel, ProgressBar } from "@renderer/components/ui";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { useLiveHeading } from "@renderer/lib/hooks/use-live";
 import { DECK_SOUNDTRACK_TRACK_ID } from "@renderer/stores/audio.store";
 import { advanceSlide, clearBaseContent } from "@renderer/lib/actions/playback";
-import { restartDeck, toggleAutoplay } from "@renderer/effects/deck-autoplay";
+import { resyncDeck, restartDeck, toggleAutoplay } from "@renderer/effects/deck-autoplay";
 import { mediaTargetKey } from "@shared/types/projection";
 
 const DECK_AUDIO_STATUS_KEY = mediaTargetKey({ kind: "audio", trackId: DECK_SOUNDTRACK_TRACK_ID });
@@ -24,6 +25,7 @@ export function DeckTransport() {
   const base = useProjectionStore((s) => s.base);
   const liveDeck = useProjectionStore((s) => s.liveDeck);
   const autoplay = useProjectionStore((s) => s.autoplay);
+  const autoplayMode = useProjectionStore((s) => s.autoplayMode);
   const heading = useLiveHeading();
   // Filtered by target: the shared slot also carries the video's or other
   // audio tracks' clocks, which must never be read as this deck's.
@@ -35,13 +37,20 @@ export function DeckTransport() {
   const total = liveDeck.slides.length;
   const advanceMs = liveDeck.slides[current - 1]?.advanceAfterMs ?? null;
 
+  const autoplayActive = autoplay === "playing" || autoplay === "paused";
+  // Once the operator navigates by hand, the slide cursor no longer matches
+  // the audio clock this bar reads — showing its old countdown would just be
+  // a wrong number. It's shown grayed out instead, with the same-slot button
+  // that's the only way back to the synced flow (`resyncDeck`).
+  const isDesynced = autoplayMode === "detached" && liveDeck.autoAdvance && autoplayActive;
+
   // Time-to-next-slide, only meaningful while synced to the soundtrack clock.
   // Kept visible while paused too — `mediaStatus` freezes at the paused
   // timestamp (the reporter stops firing `timeupdate` once the element is
   // paused), so the same calculation just yields a frozen ratio/countdown.
   let elapsedRatio: number | null = null;
   let secondsLeft: number | null = null;
-  if (advanceMs !== null && (autoplay === "playing" || autoplay === "paused")) {
+  if (!isDesynced && advanceMs !== null && autoplayActive) {
     const boundary = liveDeck.cumulativeMs[current + 1];
     const start = liveDeck.cumulativeMs[current];
     if (boundary !== undefined && start !== undefined && mediaStatus) {
@@ -104,10 +113,18 @@ export function DeckTransport() {
         </IconButton>
       </div>
 
-      {elapsedRatio !== null ? (
+      {elapsedRatio !== null || isDesynced ? (
         <div className="flex items-center gap-2 px-2 py-1">
-          <ProgressBar className="flex-1" value={elapsedRatio} />
-          {secondsLeft !== null ? (
+          <ProgressBar className={cn("flex-1", isDesynced && "opacity-40")} value={elapsedRatio ?? 0} />
+          {isDesynced ? (
+            <button
+              className="shrink-0 whitespace-nowrap text-xs font-medium text-primary hover:underline"
+              onClick={() => resyncDeck()}
+              type="button"
+            >
+              {t("deck.resync")}
+            </button>
+          ) : secondsLeft !== null ? (
             <span className="shrink-0 text-xs text-subtle">{t("deck.nextIn", { seconds: secondsLeft })}</span>
           ) : null}
         </div>

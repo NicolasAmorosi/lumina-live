@@ -37,4 +37,8 @@ export async function removeLinkedFolder(kind: AssetKind, folderPath: string): P
   });
 
   if (useLibraryStore.getState().activeView[kind] === folderPath) selectMediaSourceView(kind, "recent");
+  // An unlinked folder's listing is dead weight: nothing can select it again,
+  // and it was holding a full `MediaAsset[]` (hundreds of entries, for the
+  // folders this feature exists for) until the app closed.
+  useLibraryStore.getState().forgetFolder(kind, folderPath);
 }

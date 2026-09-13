@@ -272,7 +272,16 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
 
   return (
     <Modal
-      className={cn("modal-expand", panelMode !== null && "max-w-[84rem]")}
+      className={cn(
+        "overflow-hidden",
+        // `84rem` = the base `2xl` width (`64rem`) + the side panel's own
+        // `w-80` (`20rem`) — see `program-side-panel.tsx`. No transition here:
+        // animating `max-width` stretched the header's empty middle (it
+        // spans the full dialog width, but its title/close button don't grow
+        // with it). The dialog jumps straight to its final size and only the
+        // panel itself animates in — see `.wa-program-panel-enter`.
+        panelMode !== null && "max-w-[84rem]",
+      )}
       height="tall"
       onOpenChange={(next) => {
         if (!next) requestClose();

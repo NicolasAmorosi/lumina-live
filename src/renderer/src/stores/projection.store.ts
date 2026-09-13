@@ -1,10 +1,11 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
-import { mediaTargetKey } from "@shared/types/projection";
+import { mediaErrorKey, mediaTargetKey } from "@shared/types/projection";
 import type {
   BaseContent,
   MediaStatus,
   OverlayState,
+  ProjectionMediaError,
   ProjectionOutput,
   ProjectionOutputKind,
   SceneTransition,
@@ -55,6 +56,15 @@ export type ProjectionStoreState = {
    *  live audio track) so two elements reporting at once can never overwrite
    *  each other's clock. */
   mediaStatus: Record<string, MediaStatus>;
+  /** Keyed by `mediaErrorKey`, so it shares "video"/"audio:<id>" with
+   *  `mediaStatus` and adds "scene" for the still image. At most one entry per
+   *  element — a later failure of the same element replaces the earlier one.
+   *
+   *  Nothing here is authoritative about what the operator sees: a stored
+   *  error only surfaces while its `url` is still what's live (see
+   *  `ProjectionMediaError`), which is why an entry going stale costs nothing
+   *  and needs no timer. */
+  mediaErrors: Record<string, ProjectionMediaError>;
 
   /** Bumped exactly once per "send something new live" action — `goLive()`,
    *  `clearLive()`, `clearBaseContent()`, `setOverlayDirect()` — never by
@@ -77,6 +87,20 @@ export type ProjectionStoreState = {
   setAutoplay: (state: AutoplayState) => void;
   setAutoplayMode: (mode: AutoplayMode) => void;
   setMediaStatus: (status: MediaStatus) => void;
+  /** Records what the projector reported it could not load or decode. */
+  setMediaError: (error: ProjectionMediaError) => void;
+  /** Drops the status slot of every audio track that no longer exists.
+   *
+   *  Needed because a track's key embeds its epoch (`asset:<id>:<epoch>`, see
+   *  `audio.store.ts`) and the epoch is bumped on every go-live — so sending
+   *  the same audio live ten times created ten keys, and nothing ever removed
+   *  any of them: not `removeTrack`, not `clear`. A long rehearsal left
+   *  hundreds of dead entries, each one copied again on every single
+   *  `setMediaStatus` (which runs ~4x/second per playing element).
+   *
+   *  Prunes `mediaErrors`'s audio entries in the same pass — they are keyed
+   *  the same way and go stale for exactly the same reason. */
+  pruneMediaStatus: (liveTrackIds: readonly string[]) => void;
 
   /** Marks "this is a new scene" — see `sceneEpoch`. Called once by every
    *  action that sends something new live, before it touches `base`/`overlay`,
@@ -102,6 +126,7 @@ export const useProjectionStore = create<ProjectionStoreState>()(
     autoplayMode: "synced",
     soundtrackEpoch: 0,
     mediaStatus: {},
+    mediaErrors: {},
 
     sceneEpoch: 0,
     transitionStyle: "crossfade",
@@ -140,7 +165,47 @@ export const useProjectionStore = create<ProjectionStoreState>()(
         mediaStatus: { ...state.mediaStatus, [mediaTargetKey(status.target)]: status },
       })),
 
-    beginScene: () => set((state) => ({ sceneEpoch: state.sceneEpoch + 1 })),
+    setMediaError: (error) =>
+      set((state) => ({
+        mediaErrors: { ...state.mediaErrors, [mediaErrorKey(error.target)]: error },
+      })),
+
+    pruneMediaStatus: (liveTrackIds) =>
+      set((state) => {
+        const keep = new Set(
+          liveTrackIds.map((trackId) => mediaTargetKey({ kind: "audio", trackId })),
+        );
+        const isStale = (key: string) => key.startsWith("audio:") && !keep.has(key);
+        const staleStatus = Object.keys(state.mediaStatus).filter(isStale);
+        const staleErrors = Object.keys(state.mediaErrors).filter(isStale);
+        // No-op when there is nothing to drop: this runs on every change to
+        // the live track list, and handing back a fresh object would make
+        // every subscriber recompute for nothing.
+        if (staleStatus.length === 0 && staleErrors.length === 0) return state;
+        const mediaStatus = { ...state.mediaStatus };
+        for (const key of staleStatus) delete mediaStatus[key];
+        const mediaErrors = { ...state.mediaErrors };
+        for (const key of staleErrors) delete mediaErrors[key];
+        return { mediaStatus, mediaErrors };
+      }),
+
+    // Dropping the scene/video error slots here is what makes re-sending the
+    // very same file a real retry: matching on url alone would keep painting
+    // the old warning over a file the operator has since fixed or plugged
+    // back in. Audio slots are deliberately untouched — they belong to the
+    // track list's lifecycle, and `pruneMediaStatus` is what retires them.
+    beginScene: () =>
+      set((state) => {
+        const sceneEpoch = state.sceneEpoch + 1;
+        const keys = [mediaErrorKey({ kind: "scene" }), mediaErrorKey({ kind: "video" })];
+        // The common case by far is that there is nothing to drop, and this
+        // runs on every go-live: handing back a fresh `mediaErrors` object
+        // would make its subscribers recompute for nothing.
+        if (!keys.some((key) => key in state.mediaErrors)) return { sceneEpoch };
+        const mediaErrors = { ...state.mediaErrors };
+        for (const key of keys) delete mediaErrors[key];
+        return { sceneEpoch, mediaErrors };
+      }),
     setTransitionSettings: (transitionStyle, transitionDurationMs) =>
       set({ transitionStyle, transitionDurationMs }),
   })),
@@ -226,17 +291,59 @@ export function selectOutput(state: ProjectionStoreState): ProjectionOutput {
  * effect subscription and the live monitor use the default comparator, instead
  * of each carrying its own workaround (a JSON equalityFn here, a useShallow
  * there) for the same problem.
+ *
+ * The memo compares the *inputs* `selectOutput` actually reads, by reference,
+ * rather than serializing its result. It used to build the output and
+ * `JSON.stringify` it on every single store notification — and the store's
+ * busiest writer by far is `setMediaStatus`, which the projection window
+ * drives at roughly 4 Hz per playing element and which no field of the output
+ * depends on. Every one of those notifications paid for a full object build
+ * plus a serialization of a deck's worth of slide urls, only to conclude
+ * nothing had changed.
+ *
+ * Reference comparison is sound here because every one of these fields is
+ * replaced immutably by the store, never mutated in place. It is also what
+ * makes the identity stable no matter which subscriber calls first: two
+ * states that differ only in `mediaStatus` produce the same input tuple and
+ * therefore the same cached object, instead of racing over one slot of
+ * serialized output — the single-slot thrash React documents as a cause of
+ * `useSyncExternalStore` render loops.
  */
+type OutputInputs = readonly [
+  ProjectionStoreState["base"],
+  ProjectionStoreState["overlay"],
+  ProjectionStoreState["logoUrl"],
+  ProjectionStoreState["videoPaused"],
+  ProjectionStoreState["liveDeck"],
+  ProjectionStoreState["sceneEpoch"],
+  ProjectionStoreState["transitionStyle"],
+  ProjectionStoreState["transitionDurationMs"],
+];
+
+function outputInputs(state: ProjectionStoreState): OutputInputs {
+  return [
+    state.base,
+    state.overlay,
+    state.logoUrl,
+    state.videoPaused,
+    state.liveDeck,
+    state.sceneEpoch,
+    state.transitionStyle,
+    state.transitionDurationMs,
+  ];
+}
+
+let lastInputs: OutputInputs | null = null;
 let lastOutput: ProjectionOutput | null = null;
-let lastKey = "";
 
 export function selectOutputMemo(state: ProjectionStoreState): ProjectionOutput {
-  const next = selectOutput(state);
-  const key = JSON.stringify(next);
-  if (lastOutput !== null && key === lastKey) return lastOutput;
-  lastOutput = next;
-  lastKey = key;
-  return next;
+  const inputs = outputInputs(state);
+  if (lastOutput !== null && lastInputs !== null && lastInputs.every((value, i) => Object.is(value, inputs[i]))) {
+    return lastOutput;
+  }
+  lastInputs = inputs;
+  lastOutput = selectOutput(state);
+  return lastOutput;
 }
 
 /** Cumulative audio timestamps for a deck's slides, used by the autoplay

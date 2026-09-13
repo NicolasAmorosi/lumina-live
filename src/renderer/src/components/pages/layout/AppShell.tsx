@@ -37,7 +37,15 @@ export function AppShell({ onOpenPrograms, onOpenSettings }: AppShellProps) {
       <TopBar onOpenPrograms={onOpenPrograms} onOpenSettings={onOpenSettings} />
 
       <main className="grid min-h-0 flex-1 grid-cols-3 divide-x divide-border">
-        <div className="grid min-h-0 grid-rows-[minmax(0,1fr)_minmax(0,1.1fr)] divide-y divide-border">
+        {/* The minimums never bind at the window's own `minHeight` (700px, see
+            `control-window.ts`) — at that size the split is the plain
+            1fr / 1.1fr it has always been. They are the floor for the case
+            Electron cannot honour that minimum, on a screen short enough that
+            the resources panel would otherwise be squeezed to a few pixels and
+            the virtualized grid would mount a single row of tiles. `overflow-
+            hidden` is what keeps that floor from spilling into the panel
+            below instead. */}
+        <div className="grid min-h-0 grid-rows-[minmax(160px,1fr)_minmax(220px,1.1fr)] divide-y divide-border overflow-hidden">
           <Panel>
             <SchedulePanel />
           </Panel>

@@ -3,7 +3,11 @@
  *  adding `it`/`en` later means dropping in another file here, not touching
  *  ~40 components again. */
 const es = {
-  app: { title: "WorshipApp" },
+  app: {
+    title: "WorshipApp",
+    crashed: "Algo falló en la interfaz",
+    reload: "Recargar",
+  },
   header: {
     openDisplay: "Abrir Pantalla",
     closeDisplay: "Cerrar Pantalla",
@@ -14,6 +18,7 @@ const es = {
     empty: "Programa vacío",
     emptyHint: "Agregá elementos o arrastrá archivos",
     itemCount: "{count} elementos",
+    addError: "No se pudieron agregar los archivos al programa",
     saved: "Guardado",
     notSaved: "No guardado",
     savedHint: "El programa coincide con la última versión guardada.",
@@ -41,6 +46,9 @@ const es = {
     addFolderHint: "Elegir una carpeta y ver sus archivos acá",
     removeFolder: "Desvincular carpeta",
     removeFolderHint: "Desvincular esta carpeta (no borra los archivos)",
+    removeFolderConfirmTitle: "¿Desvincular la carpeta?",
+    removeFolderConfirmBody:
+      "Se deja de ver «{folder}» en esta pestaña. No se borra ningún archivo del disco, y podés volver a vincularla cuando quieras.",
   },
   slides: {
     title: "Preview",
@@ -71,6 +79,9 @@ const es = {
     files: "archivos",
     missing: "No encontrado",
     relocate: "Relocalizar…",
+    importing: "Importando {done} de {total}…",
+    loading: "Leyendo la carpeta…",
+    loadFailed: "No se pudo leer la biblioteca",
   },
   preview: {
     title: "Vista Previa",
@@ -108,14 +119,20 @@ const es = {
     pause: "Pausar",
     restart: "Reiniciar",
     nextIn: "Próxima en {seconds}s",
+    resync: "Resincronizar",
     notLive: "No está en vivo",
     converting: "Convirtiendo diapositivas… {done} de {total}",
     convertingHint: "Se hace una sola vez por archivo",
     preparing: "Preparando la conversión…",
+    cancel: "Cancelar",
     failed: "No se pudo convertir la presentación",
     retry: "Reintentar",
+    canceled: "Conversión cancelada",
+    canceledHint: "La presentación quedó sin convertir. Podés volver a intentarlo cuando quieras.",
     stale: "El archivo original cambió",
     reconvert: "Volver a convertir",
+    reconvertBlockedLive:
+      "No se puede volver a convertir la presentación que está EN VIVO. Sacala del proyector primero.",
     evicted: "Las diapositivas ya no están en caché",
     noSlides: "La presentación no tiene diapositivas",
     noLibreOffice: {
@@ -132,6 +149,18 @@ const es = {
       help: "Esta franja muestra el audio de esta presentación. Si el archivo trae audio incrustado o de transición, se puede reemplazar acá. Si no trae uno, podés asignar un archivo de audio externo y después cambiarlo o quitarlo. \"Auto-avance\" indica que las diapositivas tienen sus propios tiempos y avanzan solas.",
     },
   },
+  prewarm: {
+    action: "Preparar carpeta",
+    actionHint: "Convertir de antemano las presentaciones de esta vista",
+    title: "Preparar las presentaciones",
+    warnTitle: "Hay {count} presentaciones sin convertir",
+    warnBody: "Puede tardar unos {minutes} minutos. Se convierte una por vez, en segundo plano.",
+    body: "Podés seguir usando la app mientras tanto: lo que abras se convierte primero y la preparación se reanuda después.",
+    bodyHint: "Cada presentación se convierte una sola vez; después queda en caché.",
+    start: "Preparar",
+    progress: "Preparando {done} de {total}…",
+    cancel: "Cancelar",
+  },
   media: {
     title: "Medios",
     play: "Reproducir",
@@ -141,6 +170,10 @@ const es = {
     startAt: "Empieza en",
     previewHint: "No suena hasta EN VIVO",
     previewMuted: "Sin sonido — no interrumpe la proyección",
+    loadError: "No se pudo reproducir el archivo",
+    loadErrorRow: "No se pudo reproducir",
+    loadErrorToast: "No se pudo reproducir «{name}» en el proyector",
+    loadErrorToastGeneric: "No se pudo reproducir un archivo en el proyector",
   },
   live: { title: "En Vivo", disconnected: "Sin pantalla", noSignal: "Sin señal" },
   footer: { black: "NEGRO", logo: "LOGO", live: "VIVO", clear: "LIMPIAR" },

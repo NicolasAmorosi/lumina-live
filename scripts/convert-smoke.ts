@@ -16,6 +16,7 @@ import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 import { containerKind, extractAudioParts, readPresentationMeta } from "../src/main/slides/pptx-metadata";
 import { resolveLinkedAudio } from "../src/main/slides/linked-audio";
+import { readBinarySlideTimings } from "../src/main/slides/ppt-binary-timings";
 
 const run = promisify(execFile);
 
@@ -124,10 +125,34 @@ async function main(): Promise<void> {
       }
 
       const meta = readPresentationMeta(parseSource);
-      const timed = meta.slides.filter((s) => s.autoAdvanceMs !== null);
       const hidden = meta.slides.filter((s) => s.hidden);
 
+      // The same recovery `deck-service.ts` does: LibreOffice's PPTX export
+      // only writes `<p:transition>` (and with it `advTm`) when the slide has
+      // a visual effect, so a legacy deck's timings have to be re-read from
+      // the source binary. Reported separately here so the smoke run SHOWS
+      // how many the conversion lost.
+      let recovered = 0;
+      if (kind === "binary") {
+        const binary = readBinarySlideTimings(file);
+        if (binary && binary.length === meta.slides.length) {
+          meta.slides.forEach((slide, i) => {
+            const fromBinary = binary[i]?.autoAdvanceMs ?? null;
+            if (slide.autoAdvanceMs === null && fromBinary !== null) {
+              slide.autoAdvanceMs = fromBinary;
+              recovered += 1;
+            }
+          });
+        } else {
+          console.log(`   ⚠ no se pudieron leer timings del binario de origen`);
+        }
+      }
+      const timed = meta.slides.filter((s) => s.autoAdvanceMs !== null);
+
       console.log(`   diapositivas: ${meta.slideCount} (fuente de timings: ${timingsSource})`);
+      if (recovered > 0) {
+        console.log(`   recuperados del binario (el .pptx los perdió): ${recovered}`);
+      }
       console.log(`   con auto-avance: ${timed.length}${
         timed.length > 0
           ? ` [${timed.slice(0, 6).map((s) => `${s.slideIndex}:${s.autoAdvanceMs}ms`).join(", ")}${timed.length > 6 ? ", …" : ""}]`

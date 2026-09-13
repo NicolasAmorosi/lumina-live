@@ -95,6 +95,42 @@ export function mediaTargetKey(target: MediaTarget): string {
   return target.kind === "video" ? "video" : `audio:${target.trackId}`;
 }
 
+/** Which element of the projection window failed. "scene" is the still image
+ *  of an image/slide/logo output — the only one without a `MediaTarget`,
+ *  because nothing ever commands it. */
+export type MediaErrorTarget = MediaTarget | { kind: "scene" };
+
+/** The key `mediaErrors` is indexed by. Deliberately shares the namespace of
+ *  `mediaTargetKey` — "video"/"audio:<id>" mean the same element in both
+ *  records, so one prune pass can keep status and error in step. */
+export function mediaErrorKey(target: MediaErrorTarget): string {
+  return target.kind === "scene" ? "scene" : mediaTargetKey(target);
+}
+
+/**
+ * Something the projector was told to show could not be loaded or decoded —
+ * a file deleted or a drive unplugged mid-service, a codec Chromium refuses.
+ * Reported by the failing element itself, exactly like `MediaStatus`: the
+ * element is describing itself, nothing is inferred.
+ *
+ * Without this the projection just goes black and, because the confidence
+ * monitors render the very same `ProjectionOutput` through the very same
+ * component, they repeat the lie — the one thing the monitors are not allowed
+ * to do.
+ *
+ * `url` is what makes the notice self-expiring: the control window only
+ * paints it while what is live still IS that url, so moving to the next slide
+ * or sending anything else live drops it with no explicit clearing and no
+ * chance of a stale warning outliving the content it describes.
+ */
+export type ProjectionMediaError = {
+  target: MediaErrorTarget;
+  url: string;
+  /** `HTMLMediaElement.error.code` when there is one; `null` for an `<img>`,
+   *  which reports no reason at all. Diagnostic only — nothing branches on it. */
+  code: number | null;
+};
+
 /** Play/pause are declarative now (`VideoUnderlay.paused`, `AudioTrackPush.paused`)
  *  so they survive a projection-window reload the same way "what's on screen"
  *  does. Only actions that are genuinely one-shot commands remain here. */

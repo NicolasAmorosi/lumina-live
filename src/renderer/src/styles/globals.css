@@ -17,10 +17,15 @@
 
 /* The programs modal's side panel (`components/pages/programs/`) expands the
  * dialog itself sideways rather than compressing the list column — see
- * `.claude/knowledge/` for the rationale. */
-@utility modal-expand {
-  transition: max-width 200ms ease;
+ * `.claude/knowledge/` for the rationale. The dialog itself resizes
+ * instantly (animating its `max-width` stretched the header's empty middle,
+ * since the header spans the full dialog width but its title/close button
+ * don't grow with it) — only the panel's own mount animates, below. */
+@keyframes program-panel-enter {
+  from { opacity: 0; transform: translate3d(-0.75rem, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
 }
+.wa-program-panel-enter { animation: program-panel-enter 50ms ease-out; }
 @keyframes linear-loader-slide {
   0% { transform: translateX(-120%); }
   60%  { transform: translateX(320%); }
@@ -74,7 +79,8 @@
   @keyframes button-loading-shimmer { from { opacity: 0.45; } to { opacity: 0.8; } }
   .wa-button-loading-shimmer { animation: button-loading-shimmer 1.4s ease-in-out infinite alternate; will-change: opacity; }
   .wa-toast-enter { animation-duration: 1ms; }
-  .modal-expand { transition-duration: 1ms; }
+  @keyframes program-panel-enter { from { opacity: 0; } to { opacity: 1; } }
+  .wa-program-panel-enter { animation-duration: 1ms; }
 }
 
 /*

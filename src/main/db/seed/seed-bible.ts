@@ -25,7 +25,10 @@ export function seedBibleFromFile(
   name: string,
   isBuiltin: boolean,
 ): { versionId: number; verseCount: number } | null {
-  const raw = fs.readFileSync(filePath, "utf-8");
+  // Read as bytes, not as a string: the unchanged case (every launch after
+  // the first) only needs the digest, and decoding 4 MB of UTF-8 into a JS
+  // string just to throw it away is the larger half of the cost.
+  const raw = fs.readFileSync(filePath);
   const sourceHash = crypto.createHash("sha256").update(raw).digest("hex");
 
   const existing = db.select().from(bibleVersions).where(eq(bibleVersions.code, code)).get();
@@ -33,7 +36,7 @@ export function seedBibleFromFile(
     return { versionId: existing.id, verseCount: existing.verseCount };
   }
 
-  const parsedBooks = parseBibleSource(JSON.parse(raw));
+  const parsedBooks = parseBibleSource(JSON.parse(raw.toString("utf-8")));
   const now = Date.now();
 
   const run = sqlite.transaction(() => {

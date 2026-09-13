@@ -190,7 +190,10 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
   }
 
   return (
-    <div className="flex w-80 shrink-0 flex-col border-l border-border" onKeyDown={handleKeyDown}>
+    <div
+      className="wa-program-panel-enter flex w-80 shrink-0 flex-col border-l border-border"
+      onKeyDown={handleKeyDown}
+    >
       {/* `h-13` is shared with the list's search/filter bar in `ProgramsModal`
           so both seams line up when the panel expands the dialog sideways —
           change one and the other has to follow. */}

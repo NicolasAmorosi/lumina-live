@@ -3,6 +3,7 @@ import type { AssetKind } from "@shared/constants";
 import type {
   AudioTrackPush,
   MediaCommand,
+  ProjectionMediaError,
   ProjectionOutput,
 } from "@shared/types/projection";
 import type { ProgramDuplicateInput, ProgramMetaUpsert, ProgramUpsert } from "@shared/types/program";
@@ -22,10 +23,10 @@ export const api = {
     mediaCommand: (command: MediaCommand) => invoke("projection:mediaCommand", command),
     setAudioTracks: (tracks: AudioTrackPush[]) => invoke("projection:setAudioTracks", tracks),
     getSnapshot: () => invoke("projection:getSnapshot", undefined),
+    reportMediaError: (error: ProjectionMediaError) => invoke("projection:reportMediaError", error),
   },
   files: {
     pick: (kind: AssetKind | "all", multiple: boolean) => invoke("files:pick", { kind, multiple }),
-    probe: (path: string) => invoke("files:probe", { path }),
     setLogo: () => invoke("files:setLogo", undefined),
     pickFolder: () => invoke("files:pickFolder", undefined),
   },
@@ -37,6 +38,11 @@ export const api = {
     progress: (assetId: number) => invoke("deck:progress", { assetId }),
     environment: () => invoke("deck:environment", undefined),
     locateSoffice: () => invoke("deck:locateSoffice", undefined),
+    prewarm: (assetIds: number[], scope: "program" | "explicit" | "visible") =>
+      invoke("deck:prewarm", { assetIds, scope }),
+    prewarmBatch: (assetIds: number[], label: string) => invoke("deck:prewarmBatch", { assetIds, label }),
+    cancelPrewarmBatch: (jobId: string) => invoke("deck:cancelPrewarmBatch", { jobId }),
+    statuses: (assetIds: number[]) => invoke("deck:statuses", { assetIds }),
   },
   bible: {
     versions: () => invoke("bible:versions", undefined),
@@ -63,6 +69,7 @@ export const api = {
     load: (id: number) => invoke("programs:load", { id }),
     save: (input: ProgramUpsert) => invoke("programs:save", input),
     delete: (id: number) => invoke("programs:delete", { id }),
+    releaseCurrent: () => invoke("programs:releaseCurrent", undefined),
     updateMeta: (input: ProgramMetaUpsert) => invoke("programs:updateMeta", input),
     duplicate: (input: ProgramDuplicateInput) => invoke("programs:duplicate", input),
     setFavorite: (input: { id: number; favorite: boolean }) => invoke("programs:setFavorite", input),

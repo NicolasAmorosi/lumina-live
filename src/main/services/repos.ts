@@ -23,7 +23,7 @@ let dbHandle: { db: Db; sqlite: Database.Database } | null = null;
 
 export function initRepos(db: Db, sqlite: Database.Database): void {
   settingsRepo = new SettingsRepo(db);
-  mediaRepo = new MediaRepo(db);
+  mediaRepo = new MediaRepo(db, sqlite);
   bibleRepo = new BibleRepo(db, sqlite);
   programsRepo = new ProgramsRepo(db, sqlite);
   historyRepo = new HistoryRepo(db);

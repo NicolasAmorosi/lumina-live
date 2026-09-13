@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { Monitor } from "@renderer/components/ui";
 import { OutputView } from "@renderer/components/shared/output-view";
@@ -27,12 +28,29 @@ export function LiveMonitor() {
   const output = useProjectionStore(selectOutputMemo);
   const presentationOpen = useProjectionStore((s) => s.presentationOpen);
   const liveVideoStatus = useProjectionStore((s) => s.mediaStatus[VIDEO_TARGET_KEY] ?? null);
+  // The record, not a derived array: a selector returning a fresh array on
+  // every call makes `useSyncExternalStore` see a new snapshot each render and
+  // loop. `mediaErrors` only changes when the projector actually reports
+  // something, so the memo below runs approximately never.
+  const mediaErrors = useProjectionStore((s) => s.mediaErrors);
+  const reportedErrorUrls = useMemo(
+    () => Object.values(mediaErrors).map((error) => error.url),
+    [mediaErrors],
+  );
 
   return (
     <Monitor empty={presentationOpen ? t("live.noSignal") : t("live.disconnected")}>
       {/* `black` and a logo-less LOGO both render as an empty stage, which is
-          exactly right — that IS what the projector is showing. */}
-      <OutputView liveVideoStatus={liveVideoStatus} mode="monitor" output={output} />
+          exactly right — that IS what the projector is showing. A failure is
+          the one case where an empty stage would NOT be the truth, which is
+          what `errorLabel`/`reportedErrorUrls` exist to say out loud. */}
+      <OutputView
+        errorLabel={t("media.loadError")}
+        liveVideoStatus={liveVideoStatus}
+        mode="monitor"
+        output={output}
+        reportedErrorUrls={reportedErrorUrls}
+      />
     </Monitor>
   );
 }

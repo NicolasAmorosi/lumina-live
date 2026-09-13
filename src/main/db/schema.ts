@@ -37,6 +37,20 @@ export const mediaAssets = sqliteTable(
      *  the folder/file on every deck open, while still forcing one re-check
      *  per asset when the matching rules change. */
     linkedAudioResolvedVersion: integer("linked_audio_resolved_version").notNull().default(0),
+    /** SHA-256 of the file's bytes — the same identity `slide_decks` is keyed
+     *  by. It lives here so a question about an asset ("is this converted?",
+     *  "which deck is its first slide in?") can be answered by CONTENT rather
+     *  than by which asset happens to own the deck row: `slide_decks`
+     *  .`media_asset_id` is exclusive and `relinkDeck` moves it, so with the
+     *  same file present twice only the last one opened looked converted.
+     *  See `N3` in `auditorias/reports/2026-09-11-cadena-de-media.md` §5.2. */
+    contentHash: text("content_hash"),
+    /** The `(size, mtime)` the hash was computed over. `contentHash` is only
+     *  trustworthy while these still match `sizeBytes`/`mtimeMs` — the same
+     *  invalidation rule `tryCacheHit` already applies to a deck row, and the
+     *  reason the hash never has to be recomputed just to be used. */
+    contentHashSize: integer("content_hash_size"),
+    contentHashMtimeMs: integer("content_hash_mtime_ms"),
     inLibrary: integer("in_library").notNull().default(1),
     lastSeenAt: integer("last_seen_at"),
     missingSince: integer("missing_since"),
@@ -46,6 +60,10 @@ export const mediaAssets = sqliteTable(
   (t) => [
     uniqueIndex("ux_media_path").on(t.pathKey),
     index("ix_media_kind").on(t.kind, t.inLibrary, t.name),
+    /** Both directions of the content join: `statusesByAsset` looks decks up
+     *  by an asset's hash, and the backfill scans for assets that still have
+     *  none. */
+    index("ix_media_content_hash").on(t.contentHash),
   ],
 );
 

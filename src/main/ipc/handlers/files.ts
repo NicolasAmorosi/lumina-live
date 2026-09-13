@@ -2,7 +2,6 @@ import { dialog } from "electron";
 import path from "node:path";
 import type { Handlers } from "../register";
 import { ASSET_EXTENSIONS, ASSET_KINDS, type AssetKind } from "@shared/constants";
-import { findLinkedAudio } from "../../db/repositories/media.repo";
 import { getSettingsRepo } from "../../services/repos";
 
 function filtersFor(kind: AssetKind | "all") {
@@ -14,7 +13,7 @@ function filtersFor(kind: AssetKind | "all") {
 
 export const filesHandlers: Pick<
   Handlers,
-  "files:pick" | "files:probe" | "files:setLogo" | "files:pickFolder"
+  "files:pick" | "files:setLogo" | "files:pickFolder"
 > = {
   "files:pick": async ({ kind, multiple }) => {
     const settingsRepo = getSettingsRepo();
@@ -27,19 +26,6 @@ export const filesHandlers: Pick<
     if (result.canceled || result.filePaths.length === 0) return [];
     settingsRepo.setMany({ "files.lastFolder": path.dirname(result.filePaths[0]!) });
     return result.filePaths;
-  },
-
-  "files:probe": ({ path: filePath }) => {
-    const ext = path.extname(filePath).slice(1).toLowerCase();
-    const audioPath = findLinkedAudio(filePath);
-    return {
-      path: filePath,
-      name: path.basename(filePath, path.extname(filePath)),
-      ext,
-      dir: path.dirname(filePath),
-      hasAudio: audioPath !== null,
-      audioPath,
-    };
   },
 
   "files:pickFolder": async () => {

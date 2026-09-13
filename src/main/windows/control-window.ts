@@ -1,5 +1,7 @@
 import { app, BrowserWindow, screen } from "electron";
 import path from "node:path";
+import { trustWindow } from "../ipc/trusted-senders";
+import { registerBroadcastTarget } from "../services/broadcast";
 
 const PRELOAD = path.join(__dirname, "../preload/index.js");
 
@@ -20,6 +22,11 @@ export function createControlWindow(): BrowserWindow {
       webSecurity: true,
     },
   });
+
+  trustWindow(win);
+  // Control-side events (`deck-progress`, `library-changed`, …) go to this
+  // window and only this one — see `broadcast.ts`.
+  registerBroadcastTarget(win);
 
   // electron-vite sets ELECTRON_RENDERER_URL in `electron-vite dev`; app.isPackaged
   // is the production check. Both paths avoid the church-presenter bug of NODE_ENV
