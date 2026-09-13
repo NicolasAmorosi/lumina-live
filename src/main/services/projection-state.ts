@@ -22,7 +22,10 @@ class ProjectionState {
   }
 
   /**
-   * Drops the reference only if `win` is still the current window.
+   * Drops the reference only if `win` is still the current window, and reports
+   * whether it did — the caller broadcasts "the projector is gone" on the
+   * strength of that answer, so a `false` here is what stops a reopen from
+   * announcing the OLD window's death over the NEW window that is on screen.
    *
    * A `closed` listener must never clear this unconditionally: `close()` is
    * asynchronous, so a reopen (`projection:open` → close the old one, create a
@@ -33,8 +36,10 @@ class ProjectionState {
    * current window it is already destroyed, so `getWindow()` answers `null`
    * and would never match.
    */
-  clearWindowIf(win: BrowserWindow): void {
-    if (this.window === win) this.window = null;
+  clearWindowIf(win: BrowserWindow): boolean {
+    if (this.window !== win) return false;
+    this.window = null;
+    return true;
   }
 
   getWindow(): BrowserWindow | null {

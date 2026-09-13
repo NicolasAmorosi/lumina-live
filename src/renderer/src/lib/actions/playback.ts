@@ -14,6 +14,7 @@ import type { MediaAsset } from "@shared/types/media";
 import type { DeckDTO } from "@shared/types/deck";
 import type { LiveDeck } from "@renderer/stores/projection.store";
 import type { OverlayState } from "@shared/types/projection";
+import { claimLiveIntent, isCurrentLiveIntent } from "@renderer/lib/actions/live-intent";
 import type { AssetKind } from "@shared/constants";
 
 let videoEpoch = 0;
@@ -66,8 +67,12 @@ function toLiveDeck(deck: DeckDTO): LiveDeck {
  * hitting EN VIVO on a not-yet-converted file leaves whatever is currently on
  * the projector untouched instead of cutting to black for the length of a
  * conversion.
+ *
+ * That same ordering is what makes `intent` necessary: waiting for the
+ * conversion means the commit lands at a moment the operator has had time to
+ * act on. See `liveIntent`.
  */
-async function goLiveWithDeck(assetId: number, startSlideIndex: number): Promise<boolean> {
+async function goLiveWithDeck(assetId: number, startSlideIndex: number, intent: number): Promise<boolean> {
   const deckStore = useDeckStore.getState();
   const cached = deckStore.byAssetId[assetId];
   let deck: DeckDTO | null;
@@ -85,6 +90,9 @@ async function goLiveWithDeck(assetId: number, startSlideIndex: number): Promise
     deck = await deckStore.ensure(assetId);
   }
   if (!deck || deck.status !== "ready" || deck.slides.length === 0) return false;
+  // The conversion above may have taken seconds. Anything the operator did to
+  // the projector in the meantime outranks this deck.
+  if (!isCurrentLiveIntent(intent)) return false;
 
   const store = useProjectionStore.getState();
   // Begins the new scene right here, at the commit — not before the `await`
@@ -119,7 +127,7 @@ async function goLiveWithDeck(assetId: number, startSlideIndex: number): Promise
   return true;
 }
 
-type MediaLiveResult = "base" | "audio" | "failed";
+type MediaLiveResult = "base" | "audio" | "failed" | "superseded";
 
 /**
  * Video and image replace `base` like everything else. Audio never does —
@@ -127,9 +135,18 @@ type MediaLiveResult = "base" | "audio" | "failed";
  * instead (see `goLiveWithAudioAsset`) and the projector keeps showing
  * whatever it already was.
  */
-async function goLiveWithMediaAsset(assetId: number, startAtSeconds: number): Promise<MediaLiveResult> {
+async function goLiveWithMediaAsset(
+  assetId: number,
+  startAtSeconds: number,
+  intent: number,
+): Promise<MediaLiveResult> {
   const asset = await api.library.get(assetId);
   if (!asset) return "failed";
+  // A DB read, so a far narrower window than a conversion — but the audio
+  // branch below is guarded by the same check on purpose: LIMPIAR means
+  // silence, and a track that starts just after it would outlive the button
+  // that was meant to kill it.
+  if (!isCurrentLiveIntent(intent)) return "superseded";
 
   if (asset.kind === "audio") {
     goLiveWithAudioAsset(asset, startAtSeconds);
@@ -154,21 +171,26 @@ async function goLiveWithMediaAsset(assetId: number, startAtSeconds: number): Pr
   return "base";
 }
 
-async function goLiveWithScheduleItem(index: number, startSlideIndex: number, startAtSeconds: number): Promise<void> {
+async function goLiveWithScheduleItem(
+  index: number,
+  startSlideIndex: number,
+  startAtSeconds: number,
+  intent: number,
+): Promise<void> {
   const { items, setActive } = useProgramStore.getState();
   const item = items[index];
   if (!item) return;
 
   switch (item.kind) {
     case "ppt": {
-      if (await goLiveWithDeck(item.mediaAssetId, startSlideIndex)) setActive(index);
+      if (await goLiveWithDeck(item.mediaAssetId, startSlideIndex, intent)) setActive(index);
       return;
     }
     case "media": {
       // Audio never claims the on-air rail — that rail means "this is what's
       // on the projector", and audio never is. Its own "sounding" indicator
       // (schedule-row.tsx) is driven by the audio store instead.
-      const result = await goLiveWithMediaAsset(item.mediaAssetId, startAtSeconds);
+      const result = await goLiveWithMediaAsset(item.mediaAssetId, startAtSeconds, intent);
       if (result === "base") setActive(index);
       return;
     }
@@ -203,13 +225,14 @@ async function goLiveWithAsset(
   assetKind: AssetKind,
   startSlideIndex: number,
   startAtSeconds: number,
+  intent: number,
 ): Promise<void> {
   const result =
     assetKind === "ppt"
-      ? (await goLiveWithDeck(assetId, startSlideIndex))
+      ? (await goLiveWithDeck(assetId, startSlideIndex, intent))
         ? "base"
         : "failed"
-      : await goLiveWithMediaAsset(assetId, startAtSeconds);
+      : await goLiveWithMediaAsset(assetId, startAtSeconds, intent);
   // Live content that isn't in the schedule: no row can claim the on-air rail.
   if (result === "base") useProgramStore.getState().setActive(null);
 }
@@ -222,6 +245,12 @@ async function goLiveWithAsset(
 export async function goLive(): Promise<void> {
   const { slideIndex, positionSeconds, target } = usePreviewStore.getState();
   if (!target) return;
+
+  // Claimed before the first `await` below, so this press supersedes anything
+  // still in flight — typically an earlier EN VIVO on a deck that is still
+  // converting — and is in turn superseded by whatever the operator does
+  // next. See `liveIntent`.
+  const intent = claimLiveIntent();
 
   // `beginScene()` is NOT called here at the top: `goLiveWithDeck`/
   // `goLiveWithMediaAsset` below can fail (asset missing, deck not yet
@@ -238,13 +267,17 @@ export async function goLive(): Promise<void> {
   // If nothing is projected yet, the very act of going live is what turns the
   // projector on — the app itself never opens it on launch any more.
   await useDisplayStore.getState().openIfNeeded();
+  // Opening the projector is an IPC round-trip of its own, and the verse
+  // branch below commits with no further await — so it is checked here rather
+  // than inside each branch.
+  if (!isCurrentLiveIntent(intent)) return;
 
   switch (target.kind) {
     case "scheduleItem":
-      await goLiveWithScheduleItem(target.index, slideIndex, positionSeconds);
+      await goLiveWithScheduleItem(target.index, slideIndex, positionSeconds, intent);
       return;
     case "asset":
-      await goLiveWithAsset(target.assetId, target.assetKind, slideIndex, positionSeconds);
+      await goLiveWithAsset(target.assetId, target.assetKind, slideIndex, positionSeconds, intent);
       return;
     case "verse":
       useProgramStore.getState().setActive(null);
@@ -255,10 +288,13 @@ export async function goLive(): Promise<void> {
   }
 }
 
-/** Takes everything off the projector — the LIMPIAR button. The projection
+/** Takes everything off the projector — the LIMPIAR row in Ajustes ->
+ *  Contenido en vivo (it is destructive, so it does not sit in the toolbar).
+ *  The projection
  *  window is never hidden, so "nothing live" is just the logo output. Cuts
  *  every audio track too, not just the deck's — LIMPIAR means silence. */
 export function clearLive(): void {
+  claimLiveIntent();
   const store = useProjectionStore.getState();
   store.beginScene();
   store.setOverlay("none");
@@ -276,6 +312,9 @@ export function advanceSlide(direction: 1 | -1): void {
   if (base?.kind !== "deck" || !liveDeck) return;
   const next = base.slideIndex + direction;
   if (next < 1 || next > liveDeck.slides.length) return;
+  // Claimed here and not at the top: a keypress that bails out above changed
+  // nothing on the projector, so it must not cancel a conversion in flight.
+  claimLiveIntent();
   setSlideIndex(next);
   notifyManualNavigation();
 }
@@ -283,6 +322,7 @@ export function advanceSlide(direction: 1 | -1): void {
 export function gotoSlide(index: number): void {
   const { base, liveDeck, setSlideIndex } = useProjectionStore.getState();
   if (base?.kind !== "deck" || !liveDeck) return;
+  claimLiveIntent();
   setSlideIndex(index);
   notifyManualNavigation();
 }
@@ -302,6 +342,11 @@ export function gotoSlide(index: number): void {
  *  no base left, NEGRO/LOGO/VIVO would otherwise keep showing VIVO selected
  *  while the projector is actually rendering the logo fallback. */
 export function clearBaseContent(): void {
+  // Claimed even when this runs unattended (`end-of-playback.ts`, a video that
+  // reached its end): the rule is about the projector changing, not about who
+  // changed it, and a deck landing on top of an auto-cleared stage is exactly
+  // as unexplainable to the operator as one landing on top of NEGRO.
+  claimLiveIntent();
   const store = useProjectionStore.getState();
   const wasLive = store.overlay === "none";
   if (wasLive) store.beginScene();
@@ -321,6 +366,7 @@ export function clearBaseContent(): void {
  *  A deck's soundtrack deliberately keeps playing underneath. Also opens the
  *  projection window on demand, the same as `goLive()`. */
 export async function toggleOverlay(kind: Extract<OverlayState, "black" | "logo">): Promise<void> {
+  claimLiveIntent();
   await useDisplayStore.getState().openIfNeeded();
   const { beginScene, overlay, setOverlay } = useProjectionStore.getState();
   beginScene();
@@ -333,6 +379,11 @@ export async function toggleOverlay(kind: Extract<OverlayState, "black" | "logo"
  *  `goLive()`, and begins a new scene so switching overlays fades like every
  *  other "send something new" action. */
 export async function setOverlayDirect(kind: OverlayState): Promise<void> {
+  // Claimed before the early return below, unlike `advanceSlide`: pressing
+  // LOGO while the logo is already up changes no pixels, but it is still the
+  // operator saying "keep showing this", and a deck that finished converting
+  // must not overrule it.
+  claimLiveIntent();
   await useDisplayStore.getState().openIfNeeded();
   const store = useProjectionStore.getState();
   // Pressing a button for the state that's already showing must not fade —

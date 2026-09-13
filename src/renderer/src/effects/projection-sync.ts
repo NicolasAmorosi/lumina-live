@@ -102,6 +102,14 @@ export function startProjectionEffects(): () => void {
     pushAudioTracks,
   );
 
+  // The projector went away without this window asking (Cmd+W on it, a crash).
+  // Nothing else can tell: `presentationOpen` is otherwise only ever written by
+  // the actions that open and close it deliberately, so it would stay `true`
+  // forever and make `openIfNeeded()` a silent no-op.
+  const unsubscribeProjectionClosed = onIpc("projection-closed", () => {
+    useProjectionStore.getState().setPresentationOpen(false);
+  });
+
   const unsubscribeStatus = onIpc("media-status", (status) => {
     useProjectionStore.getState().setMediaStatus(status);
 
@@ -156,6 +164,7 @@ export function startProjectionEffects(): () => void {
     unsubscribeOutput();
     unsubscribeAudioTracks();
     unsubscribeOverlayForAudio();
+    unsubscribeProjectionClosed();
     unsubscribeStatus();
     unsubscribeError();
     unsubscribeProgress();

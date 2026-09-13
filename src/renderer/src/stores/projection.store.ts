@@ -67,7 +67,8 @@ export type ProjectionStoreState = {
   mediaErrors: Record<string, ProjectionMediaError>;
 
   /** Bumped exactly once per "send something new live" action — `goLive()`,
-   *  `clearLive()`, `clearBaseContent()`, `setOverlayDirect()` — never by
+   *  `clearLive()`, `clearBaseContent()`, `toggleOverlay()`,
+   *  `setOverlayDirect()` — never by
    *  `setBase`/`setSlideIndex`/`projectVerse` themselves. That asymmetry is
    *  what makes advancing a slide or a verse an instant cut while sending a
    *  new scene live fades: the projection window fades only when this

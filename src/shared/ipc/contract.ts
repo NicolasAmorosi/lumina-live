@@ -182,6 +182,14 @@ export type IpcEvents = {
   "media-command": MediaCommand;
   "audio-tracks": AudioTrackPush[];
   /** -> control window */
+  /** The projection window is gone and the control window did not ask for it:
+   *  the OS closed it (the default Electron menu binds Cmd+W and nothing calls
+   *  `Menu.setApplicationMenu`), the projection renderer crashed, or it was
+   *  force-closed. Without this the control keeps `presentationOpen: true`
+   *  forever, and that flag is what `openIfNeeded()` short-circuits on — so EN
+   *  VIVO, NEGRO and LOGO would all stop reaching any projector in complete
+   *  silence while the LIVE header kept claiming to be on air. */
+  "projection-closed": void;
   "media-status": MediaStatus;
   "media-error": ProjectionMediaError;
   "deck-progress": DeckProgress;

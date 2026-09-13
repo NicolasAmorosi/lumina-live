@@ -6,13 +6,37 @@ import { toggleAutoplay } from "@renderer/effects/deck-autoplay";
 import { advanceVerse } from "@renderer/lib/actions/bible";
 import { removeSelected } from "@renderer/lib/actions/remove-selected";
 
-// Native controls that should keep handling their own Enter/Delete/Arrow keys
-// instead of triggering an app-wide shortcut underneath them.
-const INTERACTIVE_TAGS = new Set(["INPUT", "SELECT", "TEXTAREA", "BUTTON", "A"]);
+// A text field consumes every keystroke — anything else would type into it.
+const TEXT_ENTRY_TAGS = new Set(["INPUT", "SELECT", "TEXTAREA"]);
+// A button or a link consumes only the keys that actually do something to it:
+// Enter and Space activate it, and the arrows drive the roving tabindex of the
+// resource grid.
+const ACTIVATION_TAGS = new Set(["BUTTON", "A"]);
+const KEYS_A_CONTROL_CONSUMES = new Set([
+  "Enter",
+  " ",
+  "ArrowUp",
+  "ArrowDown",
+  "ArrowLeft",
+  "ArrowRight",
+]);
 
-function isInteractiveTarget(target: EventTarget | null): boolean {
+/**
+ * Per KEY, not per element.
+ *
+ * Suppressing every shortcut whenever a `<button>` had focus looked harmless
+ * and was not: Chromium focuses a button when you click it, so after a single
+ * click on ANY button in the app — EN VIVO, LOGO, save, any `IconButton` — the
+ * `b` and `l` shortcuts stopped working, with nothing on screen to say why.
+ * NEGRO is the control an operator reaches for when something appears that the
+ * congregation should not see, and it was dead for the rest of the service
+ * unless they happened to click on empty space. `b`, `l`, Delete and Backspace
+ * mean nothing to a button, so there was never anything to protect.
+ */
+function suppressesKey(target: EventTarget | null, key: string): boolean {
   if (!(target instanceof HTMLElement)) return false;
-  return INTERACTIVE_TAGS.has(target.tagName) || target.isContentEditable;
+  if (target.isContentEditable || TEXT_ENTRY_TAGS.has(target.tagName)) return true;
+  return ACTIVATION_TAGS.has(target.tagName) && KEYS_A_CONTROL_CONSUMES.has(key);
 }
 
 /**
@@ -29,8 +53,10 @@ function isInteractiveTarget(target: EventTarget | null): boolean {
  * - B/L: toggle NEGRO/LOGO overlay.
  * - Delete/Backspace: remove the selected library or schedule item.
  *
- * Suppressed while `suspended` (any modal open — see `useAnyModalOpen`) or
- * when the focused element is an input/select/textarea/button/link.
+ * Suppressed entirely while `suspended` (any modal open — see
+ * `useAnyModalOpen`) or while a text field has focus. On a focused button or
+ * link only the keys that control actually consumes are suppressed — see
+ * `suppressesKey`.
  */
 export function useGlobalShortcuts(suspended: boolean): void {
   useEffect(() => {
@@ -38,7 +64,7 @@ export function useGlobalShortcuts(suspended: boolean): void {
 
     function onKeyDown(e: KeyboardEvent): void {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (isInteractiveTarget(e.target)) return;
+      if (suppressesKey(e.target, e.key)) return;
 
       switch (e.key) {
         case "Delete":

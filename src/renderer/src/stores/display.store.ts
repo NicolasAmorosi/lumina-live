@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { api } from "@renderer/lib/api";
 import { useProjectionStore } from "@renderer/stores/projection.store";
+import { claimLiveIntent } from "@renderer/lib/actions/live-intent";
 import { useSettingsStore } from "@renderer/stores/settings.store";
 import type { DisplayInfo } from "@shared/types/display";
 
@@ -47,12 +48,24 @@ export const useDisplayStore = create<DisplayStoreState>((set, get) => ({
   setDisplayId: async (id) => {
     set({ displayId: id });
     await useSettingsStore.getState().update({ "projection.displayId": id });
+    // Moving the projector IS what picking a screen means. Nothing else in the
+    // renderer reacts to `displayId`, so without this the window stayed on the
+    // old display while the Select looked like it had done something — with no
+    // hint that the fix was to close and reopen the window from the row below.
+    // `projection:open` already closes the existing window and recreates it on
+    // the chosen display, and the new one repaints itself from
+    // `projection:getSnapshot`.
+    if (useProjectionStore.getState().presentationOpen) await api.projection.open(id);
   },
 
   open: async () => {
     const { displayId } = get();
     if (displayId === null) return;
     await api.projection.open(displayId);
+    // Opening onto NEGRO changes what the projector shows, so it claims an
+    // intent like every other such action — otherwise a deck still converting
+    // would lift the black the moment it finished. See `live-intent.ts`.
+    claimLiveIntent();
     useProjectionStore.getState().setOverlay("black");
     useProjectionStore.getState().setPresentationOpen(true);
   },

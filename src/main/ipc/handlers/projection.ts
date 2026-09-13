@@ -38,7 +38,17 @@ export const projectionHandlers: Pick<
     // window sat on screen, very much alive — after which no
     // `projection:show` ever reached the projector again (it froze on
     // whatever was last on it) and `projection:close` closed nothing.
-    win.on("closed", () => projectionState.clearWindowIf(win));
+    win.on("closed", () => {
+      // The broadcast is gated on `clearWindowIf` having actually fired, for
+      // the identity reason spelled out above: during a reopen the OLD
+      // window's `closed` arrives after the new one is registered, and
+      // announcing that as "the projector is gone" would switch the control
+      // window's live state off while a perfectly alive projector sits on
+      // screen. A close the control window asked for (`projection:close`) has
+      // already nulled the reference too, so it stays silent as well — the
+      // control window does not need to be told what it just did.
+      if (projectionState.clearWindowIf(win)) broadcast("projection-closed", undefined);
+    });
   },
 
   "projection:close": () => {

@@ -1,3 +1,4 @@
+import { claimLiveIntent } from "@renderer/lib/actions/live-intent";
 import { useBibleStore } from "@renderer/stores/bible.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { useProgramStore } from "@renderer/stores/program.store";
@@ -13,6 +14,11 @@ export function projectVerse(index: number): void {
   const verse = verses[index];
   if (!verse) return;
   const reference = `${verse.bookName} ${verse.chapter}:${verse.verse}`;
+  // Claimed here rather than in `goLive()` alone, because `advanceVerse` is a
+  // second entry point: ←/→ moves what the congregation is reading, exactly
+  // like `advanceSlide` does for a deck, and a deck finishing its conversion
+  // must not land on top of it. See `live-intent.ts`.
+  claimLiveIntent();
   useProjectionStore.getState().setBase({ kind: "bible", text: verse.text, reference });
   setCurrentVerseIndex(index);
 }
