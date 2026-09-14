@@ -57,6 +57,13 @@
       "when": 1789300239797,
       "tag": "0007_media_content_hash",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1789390959225,
+      "tag": "0008_program_draft",
+      "breakpoints": true
     }
   ]
 }

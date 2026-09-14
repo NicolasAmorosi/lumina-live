@@ -5,7 +5,13 @@ import { registerWorshipScheme, registerWorshipProtocolHandler } from "./protoco
 import { openDatabase } from "./db/client";
 import { backupBeforeMigrate, runMigrations } from "./db/migrate";
 import { seedBuiltinBibles } from "./db/seed/seed-bible";
-import { initRepos, getHistoryRepo, getMediaRepo, getSettingsRepo } from "./services/repos";
+import {
+  initRepos,
+  closeDatabase,
+  getHistoryRepo,
+  getMediaRepo,
+  getSettingsRepo,
+} from "./services/repos";
 import {
   migrateLegacySettingsIfPresent,
   migrateLegacyMediaIfPresent,
@@ -14,6 +20,8 @@ import { setBibleDb } from "./ipc/handlers/bible";
 import { registerAllIpcHandlers } from "./ipc";
 import { createControlWindow } from "./windows/control-window";
 import { installNavigationGuards } from "./windows/navigation-guards";
+import { installApplicationMenu } from "./windows/app-menu";
+import { installCloseGuard, markQuitRequested } from "./windows/close-guard";
 import { projectionState } from "./services/projection-state";
 import { dbBackupDir, dbPath, biblesDir, migrationsDir, userDataDir } from "./paths";
 import { initSlidesSubsystem, shutdownSlides } from "./slides/deck-service";
@@ -54,7 +62,12 @@ if (!gotSingleInstanceLock) {
 }
 
 function initDatabase(): void {
-  backupBeforeMigrate(dbPath, dbBackupDir, migrationsDir);
+  // Kept and reported rather than assumed: the error box below used to promise
+  // a backup unconditionally, which on the one morning it matters sends the
+  // operator looking for a file that may not be there.
+  const backup = backupBeforeMigrate(dbPath, dbBackupDir, migrationsDir);
+  if (backup.status === "failed") console.warn("[db] pre-migration backup failed:", backup.reason);
+
   const { sqlite, db } = openDatabase(dbPath);
 
   try {
@@ -62,7 +75,13 @@ function initDatabase(): void {
   } catch (error) {
     dialog.showErrorBox(
       "Error al iniciar la base de datos",
-      `No se pudieron aplicar las migraciones. Se conservó una copia de seguridad en\n${dbBackupDir}\n\n${String(error)}`,
+      [
+        "No se pudieron aplicar las migraciones.",
+        backup.status === "ok"
+          ? `Se conservó una copia de seguridad verificada en\n${backup.path}`
+          : "No hay una copia de seguridad previa a esta migración.",
+        String(error),
+      ].join("\n\n"),
     );
     throw error;
   }
@@ -104,6 +123,9 @@ function userFacingWindows(): BrowserWindow[] {
 function openControlWindow(): BrowserWindow {
   const win = createControlWindow();
   wireMinimizeRestoreSync(win);
+  // Vetoes the first close and asks the control window instead — the unsaved
+  // schedule is the renderer's to speak for. See `close-guard.ts`.
+  installCloseGuard(win);
   win.on("closed", () => {
     // `window-all-closed` only fires when NO window is left, rasterizer
     // included — so on Windows/Linux a recent conversion could leave the app
@@ -134,6 +156,9 @@ if (gotSingleInstanceLock) {
 
     registerWorshipProtocolHandler(getMediaRepo());
     registerAllIpcHandlers();
+    // Before the first window: the default menu's Cmd+W (which closes the
+    // PROJECTOR) and Cmd+R must never be reachable, not even for one frame.
+    installApplicationMenu();
 
     // Non-blocking: creates the cache dirs, sweeps anything a crash left
     // half-converted, locates LibreOffice and warms its profile. A failure
@@ -208,7 +233,27 @@ app.on("window-all-closed", () => {
 // Cancels in-flight jobs and kills soffice/the rasterizer. The deck cache is
 // deliberately NOT deleted — persisting it is the point of the pipeline.
 app.on("before-quit", () => {
+  // Recorded BEFORE the windows get their `close`: the guard vetoes that
+  // close, which cancels the whole quit, and this is what tells it to resume
+  // the quit rather than merely close the window once the operator answers.
+  markQuitRequested();
   shutdownSlides();
+});
+
+// `will-quit`, not `before-quit`, for two reasons. It runs after every window
+// is gone, so no in-flight `projection:show` can reach `HistoryRepo.record()`
+// on a connection that was just closed — and more importantly, `before-quit`
+// now fires while the close guard may still be ASKING the operator, who is
+// free to answer "cancel": closing the database there would leave a perfectly
+// alive app with no database. Synchronous by necessity either way — see
+// `.claude/knowledge/nothing-asynchronous-survives-before-quit.md`.
+//
+// Reaching it at all depends on the close guard resuming the quit with
+// `app.quit()` rather than `win.close()`: vetoing a window's close during a
+// quit cancels the quit outright, and `will-quit` never comes. See
+// `windows/close-guard.ts`.
+app.on("will-quit", () => {
+  closeDatabase();
 });
 
 /** At most one crash dialog per run. `showErrorBox` is modal and blocking, so

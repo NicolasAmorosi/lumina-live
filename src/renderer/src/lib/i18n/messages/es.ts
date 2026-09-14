@@ -34,6 +34,11 @@ const es = {
     clearHint: "Quitar todos los elementos del programa",
     addAll: "Agregar medios",
     addAllHint: "Agregar PPT, video, imagen o audio al programa (podés elegir varios archivos de distinto tipo a la vez)",
+    draftRestored: "Se recuperó el programa que estabas armando",
+    closeConfirmTitle: "¿Cerrar sin guardar?",
+    closeConfirmBody:
+      "El programa tiene cambios sin guardar. Se va a recuperar solo la próxima vez que abras la app, pero no va a quedar en \"Programas guardados\".",
+    closeAnyway: "Cerrar igualmente",
   },
   resources: {
     title: "Recursos",

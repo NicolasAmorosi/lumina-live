@@ -6,8 +6,14 @@ import type {
   ProjectionMediaError,
   ProjectionOutput,
 } from "@shared/types/projection";
-import type { ProgramDuplicateInput, ProgramMetaUpsert, ProgramUpsert } from "@shared/types/program";
+import type {
+  ProgramDraft,
+  ProgramDuplicateInput,
+  ProgramMetaUpsert,
+  ProgramUpsert,
+} from "@shared/types/program";
 import type { SettingsMap } from "@shared/types/settings";
+import type { CloseDecision } from "@shared/types/window";
 
 /** Thin per-domain facade over `invoke` — pure readability sugar in the
  *  renderer, not a second definition of the contract: every method's types
@@ -77,6 +83,15 @@ export const api = {
     duplicate: (input: ProgramDuplicateInput) => invoke("programs:duplicate", input),
     setFavorite: (input: { id: number; favorite: boolean }) => invoke("programs:setFavorite", input),
     reorder: (ids: number[]) => invoke("programs:reorder", { ids }),
+  },
+  /** The unsaved schedule, mirrored to disk — see `effects/draft-autosave.ts`. */
+  draft: {
+    save: (draft: ProgramDraft | null) => invoke("program:saveDraft", draft),
+    load: () => invoke("program:loadDraft", undefined),
+  },
+  window: {
+    /** Answers main's `close-requested` — see `CloseDecision`. */
+    closeDecision: (decision: CloseDecision) => invoke("window:closeDecision", { decision }),
   },
   settings: {
     get: () => invoke("settings:get", undefined),

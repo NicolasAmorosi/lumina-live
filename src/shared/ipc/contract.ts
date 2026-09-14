@@ -23,12 +23,14 @@ import type {
 } from "../types/deck";
 import type {
   ProgramDTO,
+  ProgramDraft,
   ProgramDuplicateInput,
   ProgramMetaUpsert,
   ProgramSummary,
   ProgramUpsert,
 } from "../types/program";
 import type { SettingsMap } from "../types/settings";
+import type { CloseDecision } from "../types/window";
 
 /**
  * The single source of truth for every main<->renderer call. Add a channel here
@@ -177,6 +179,19 @@ export type IpcContract = {
    *  its optimistic guess. */
   "programs:reorder": { req: { ids: number[] }; res: ProgramSummary[] };
 
+  /** Mirrors the unsaved schedule to disk. `null` clears it — sent as soon as
+   *  the schedule is saved or emptied, so a stale draft never comes back over
+   *  a service the operator already filed. */
+  "program:saveDraft": { req: ProgramDraft | null; res: void };
+  /** Read once at launch. Already filtered to items whose media assets still
+   *  exist (`DraftRepo.load`). */
+  "program:loadDraft": { req: void; res: ProgramDraft | null };
+
+  /** The control window's answer to `close-requested`. Main never decides on
+   *  its own whether unsaved work may be discarded — `CLAUDE.md`: that
+   *  decision belongs to the control window. See `CloseDecision`. */
+  "window:closeDecision": { req: { decision: CloseDecision }; res: void };
+
   "settings:get": { req: void; res: SettingsMap };
   "settings:set": { req: Partial<SettingsMap>; res: void };
 };
@@ -215,6 +230,12 @@ export type IpcEvents = {
    *  (`library-import.ts`'s `PROGRESS_THRESHOLD`), throttled to a few per
    *  second — never one event per file. */
   "library-import-progress": ImportProgress;
+  /** The operator asked to close the control window and the schedule has
+   *  unsaved changes. Main has already vetoed the close and is asking the
+   *  control window what to do; the answer comes back as
+   *  `window:confirmClose`, or never, in which case main closes anyway after
+   *  a short grace — a wedged renderer must not make the app unquittable. */
+  "close-requested": void;
 };
 
 export type IpcEventName = keyof IpcEvents;

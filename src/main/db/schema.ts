@@ -302,3 +302,32 @@ export const deckAudio = sqliteTable(
 // schema builder has no FTS5 primitive. It is added by hand in drizzle/0000_init.sql, right
 // after this schema's generated CREATE TABLE statements. See db/migrate.ts for the seed step
 // that follows migrations.
+
+/**
+ * The unsaved order of service, mirrored out of the control window.
+ *
+ * Everything else this app holds reaches SQLite the moment it changes; the
+ * schedule being edited lived ONLY in `program.store`, so a reload, a window
+ * close, a renderer crash or a power cut threw away what is typically 15-40
+ * minutes of work done before the service — the one piece of user data with no
+ * backing store at all.
+ *
+ * A single row (`id = 1`), rewritten wholesale: a draft has no history worth
+ * keeping and exactly one reader, the next launch.
+ *
+ * `items` is a JSON blob rather than rows in `program_items` on purpose. A
+ * draft has to be able to hold a row pointing at an asset the operator is
+ * about to delete, which is precisely what that table's `onDelete: "restrict"`
+ * FK exists to forbid — and a draft must never be the thing that blocks a
+ * deletion. `DraftRepo.load()` drops whatever no longer resolves instead.
+ */
+export const programDraft = sqliteTable("program_draft", {
+  id: integer("id").primaryKey(),
+  /** The saved program this draft is an edit OF, or null for a brand new one. */
+  programId: integer("program_id"),
+  name: text("name").notNull(),
+  notes: text("notes"),
+  /** JSON: `ProgramItemUpsert[]`. */
+  items: text("items").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});

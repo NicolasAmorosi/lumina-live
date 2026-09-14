@@ -1,5 +1,10 @@
 import { create } from "zustand";
-import type { ProgramDTO, ProgramItemDTO, ProgramItemUpsert } from "@shared/types/program";
+import type {
+  ProgramDraft,
+  ProgramDTO,
+  ProgramItemDTO,
+  ProgramItemUpsert,
+} from "@shared/types/program";
 import { api } from "@renderer/lib/api";
 
 type ProgramMeta = {
@@ -21,6 +26,10 @@ type ProgramStoreState = {
   dirty: boolean;
 
   loadProgram: (program: ProgramDTO) => void;
+  /** Puts back the schedule the operator was editing when the window last
+   *  went away. Unlike `loadProgram` this leaves `dirty` true: a draft is by
+   *  definition work that was never saved. */
+  restoreDraft: (draft: ProgramDraft) => void;
   newProgram: () => void;
   setProgramMeta: (meta: ProgramMeta) => void;
   /** `insertAt` places the item before that position; omitted (or past the end)
@@ -106,6 +115,27 @@ export const useProgramStore = create<ProgramStoreState>((set, get) => ({
       selectedIndex: null,
       activeIndex: null,
       dirty: false,
+    });
+  },
+
+  restoreDraft: (draft) => {
+    // Same reasoning as `loadProgram`: the decks in a restored schedule are
+    // the ones about to be needed, and the operator has just reopened the app
+    // — usually well before the service.
+    const deckIds = draft.items.flatMap((item) => (item.kind === "ppt" ? [item.mediaAssetId] : []));
+    if (deckIds.length > 0) void api.deck.prewarm(deckIds, "program");
+
+    set({
+      currentProgramId: draft.programId,
+      currentProgramName: draft.name,
+      currentProgramNotes: draft.notes,
+      // Fresh provisional ids: the ones from the previous session were negative
+      // counters that only ever had to be unique within that session, and the
+      // draft deliberately does not carry them (see `ProgramDraft`).
+      items: reindex(draft.items.map((item) => ({ ...item, id: nextProvisionalId() }) as ProgramItemDTO)),
+      selectedIndex: null,
+      activeIndex: null,
+      dirty: true,
     });
   },
 

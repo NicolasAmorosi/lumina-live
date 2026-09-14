@@ -6,6 +6,7 @@ import { BibleRepo } from "../db/repositories/bible.repo";
 import { ProgramsRepo } from "../db/repositories/programs.repo";
 import { HistoryRepo } from "../db/repositories/history.repo";
 import { SlidesRepo } from "../db/repositories/slides.repo";
+import { DraftRepo } from "../db/repositories/draft.repo";
 
 /**
  * Small process-wide registry so modules that can't easily receive constructor
@@ -19,6 +20,7 @@ let bibleRepo: BibleRepo | null = null;
 let programsRepo: ProgramsRepo | null = null;
 let historyRepo: HistoryRepo | null = null;
 let slidesRepo: SlidesRepo | null = null;
+let draftRepo: DraftRepo | null = null;
 let dbHandle: { db: Db; sqlite: Database.Database } | null = null;
 
 export function initRepos(db: Db, sqlite: Database.Database): void {
@@ -28,10 +30,36 @@ export function initRepos(db: Db, sqlite: Database.Database): void {
   programsRepo = new ProgramsRepo(db, sqlite);
   historyRepo = new HistoryRepo(db);
   slidesRepo = new SlidesRepo(db, sqlite);
+  draftRepo = new DraftRepo(db);
   dbHandle = { db, sqlite };
 }
 
 export const getDbHandle = () => assertInit(dbHandle, "Database");
+
+/**
+ * Closes the database on the way out, from `will-quit`.
+ *
+ * `close()` on the last connection already checkpoints, but the explicit
+ * TRUNCATE is what actually empties `worship.db-wal` instead of leaving it to
+ * grow across sessions — and a fat, un-checkpointed WAL is exactly the state
+ * that used to make `backupBeforeMigrate`'s snapshot incomplete.
+ *
+ * Synchronous, because nothing else survives there
+ * (`.claude/knowledge/nothing-asynchronous-survives-before-quit.md`), and
+ * never throws: a failure here must not keep the process from exiting.
+ */
+export function closeDatabase(): void {
+  const handle = dbHandle;
+  if (!handle) return;
+  // Cleared first, so a second call is a no-op rather than a double close.
+  dbHandle = null;
+  try {
+    handle.sqlite.pragma("wal_checkpoint(TRUNCATE)");
+    handle.sqlite.close();
+  } catch (error) {
+    console.warn("[db] close failed", error);
+  }
+}
 
 function assertInit<T>(value: T | null, name: string): T {
   if (!value) throw new Error(`${name} accessed before initRepos() ran`);
@@ -44,3 +72,4 @@ export const getBibleRepo = () => assertInit(bibleRepo, "BibleRepo");
 export const getProgramsRepo = () => assertInit(programsRepo, "ProgramsRepo");
 export const getHistoryRepo = () => assertInit(historyRepo, "HistoryRepo");
 export const getSlidesRepo = () => assertInit(slidesRepo, "SlidesRepo");
+export const getDraftRepo = () => assertInit(draftRepo, "DraftRepo");
