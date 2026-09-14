@@ -205,6 +205,58 @@ producto `M1`/`M2`/`M3`/`M5`. La §10 de abajo sigue valiendo como orden para lo
 
 ---
 
+## 1.quinquies Estado — Tanda 3 aplicada (2026-09-14, undécima sesión)
+
+**2 hallazgos más cerrados**, los dos "features cableadas sin punto de entrada" de §6.1 — las que
+no eran deuda sino huecos de producto, con la pieza cara ya construida y sin control que la
+alcanzara. Total acumulado: **14 de 76 + los 2 de campo**. Elegidos por el usuario sobre
+`C2`/`H9`/`M9`-`M10` en esta sesión.
+
+Antes de esto, **las seis sesiones de trabajo sin commitear entraron al repo en 13 commits
+temáticos**, y cada uno de los 13 se verificó compilando la historia commit por commit
+(`git rebase --exec 'npm run typecheck'`).
+
+| # | Hallazgo | Qué se hizo |
+|---|---|---|
+| 🟡 `M1` | `library:relocate` no tenía ningún call site: un archivo faltante no tenía camino de recuperación | El botón **Relocalizar…** va en `PreviewMissingState`, donde el operador se entera del problema. Se eligió reparar en vez de reimportar porque la fila conserva su id — y con él los programas guardados que la usan, su audio vinculado y su lugar en el orden de culto. De paso se endureció el handler, que era código alcanzable y nunca ejercido: el diálogo ahora filtra por el `kind` de la fila y abre en la carpeta del propio archivo, la elección se **vuelve a validar** al volver (un filtro es una sugerencia: cualquier plataforma deja escribir un nombre), y un relocate exitoso emite `library-changed`, que antes no emitía |
+| 🟡 `M2` | `media.volume` nunca se leía y `setVolume` no tenía emisores | Un slider **por pista** en `LiveMediaPanel` — el panel que ya lista todo lo que suena — porque el caso que motivó el hallazgo es bajar la música sin tocar el video. **El nivel es declarativo, no un comando**: viaja en `VideoUnderlay`/`AudioTrackPush` como `paused`, y `MediaCommand.setVolume` se eliminó. Cada pista arranca en `media.volume`, ahora editable en Ajustes → Proyección → Sonido; no se persiste por pista. `VolumeControl` es un `<input type="range">` nativo (color por `accent-color` desde los tokens), lo que obligó a un arreglo en `use-global-shortcuts`: un range no es entrada de texto, así que consume las flechas y Home/End y nada más — si no, `b` y `l` (NEGRO y LOGO) quedaban muertos mientras el slider tuviera el foco |
+
+**El defecto que apareció verificando, y que vale más que las dos features:** la caché
+módulo-global `id → MediaAsset` de `useMediaAsset` es una **segunda copia de la biblioteca que
+nada invalidaba**. Su efecto de fetch depende de `[id]`, así que una fila que cambiaba por debajo
+seguía pintándose vieja. Medido: un archivo que desaparecía del disco con la app abierta **nunca
+mostraba** el panel "Media no encontrada" (o sea, nunca ofrecía el botón nuevo), y después de un
+relocate exitoso el panel seguía diciendo que faltaba. Ahora la caché lleva un contador de
+generación al que cada consumidor se suscribe, y `library-changed` la vacía. Diagnóstico en
+[`.claude/knowledge/the-media-asset-cache-is-a-second-copy-of-the-library-that-nothing-invalidated.md`](../../.claude/knowledge/the-media-asset-cache-is-a-second-copy-of-the-library-that-nothing-invalidated.md).
+Queda abierto `M26`, el otro defecto de la misma caché (desalojo FIFO sobre 500 entradas).
+
+### Verificación de esta tanda — corrida contra la app real
+
+```
+npm run typecheck ✅   npm run lint ✅ (los mismos 5 warnings)   npm run db:smoke ✅ 18/18
+npm run build     ✅   i18n-check   ✅ 265 definidas, 238 usadas, 0 FALTANTES
+```
+
+| Qué | Cómo se midió | Resultado |
+|---|---|---|
+| `M2` slider | slider al 20% con la biblioteca real del usuario | `videoUnderlay.volume` 0,2 **y** `<video>.volume` del proyector 0,2 |
+| `M2` silenciar | botón de mute y otra vez | 0 y de vuelta **0,2** — el nivel anterior, no el default |
+| `M2` remonte | ventana de proyección cerrada y reabierta con el nivel en 0,2 | el `<video>` de la ventana nueva vuelve en **0,2**. Es el caso que un comando perdía |
+| `M1` aviso | asset importado y movido de carpeta, barrido marcándolo faltante | el panel muestra "Media no encontrada" + **Relocalizar…** |
+| `M1` reparación | elegir el archivo en su carpeta nueva | mismo id (1583), `missingSince` → `null`, el panel **deja de avisar solo** y la duración resuelve (3:12) |
+| `M1` toast | sondeo del `aria-live` durante la reparación | «clip-de-prueba» quedó apuntando al archivo nuevo |
+| `M1` cancelar | Cancel en el diálogo | nada cambia y **ningún toast** |
+| limpieza | asset de prueba eliminado, salida a LOGO, ⌘Q con el guard | biblioteca de vuelta en 3 videos; `worship.db-wal`/`-shm` borrados al salir |
+
+**No se pudo ejercer** la validación de extensión del handler (elegir un `.mp3` para una fila de
+video): el filtro del diálogo nativo justamente lo impide, y forzarlo pedía escribir una ruta a
+mano en un panel que descarta caracteres (ver
+[`.claude/knowledge/driving-a-native-open-panel-from-a-verification-script.md`](../../.claude/knowledge/driving-a-native-open-panel-from-a-verification-script.md)).
+Queda como la única línea de estas dos features sin ejecutar en la app real.
+
+---
+
 ## 2. Qué estaba cubierto y qué no
 
 Reconstruido leyendo los dos informes previos y el índice, antes de decidir el alcance.

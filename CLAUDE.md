@@ -382,6 +382,12 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   diapositiva del reloj de audio, así que volvía a la **diapositiva 1** en pleno culto. Diagnóstico
   en
   [`.claude/knowledge/startatseconds-is-a-mount-time-seek-so-a-rebuilt-projector-restarts-everything.md`](.claude/knowledge/startatseconds-is-a-mount-time-seek-so-a-rebuilt-projector-restarts-everything.md).
+- **Todo lo que el proyector tiene que SOSTENER viaja dentro del `ProjectionOutput`; un
+  `MediaCommand` es solo para lo que pasa una vez.** `paused`, `startAtSeconds` y `volume` son
+  estado (`VideoUnderlay`/`AudioTrackPush`); `seek` y `restart` son órdenes. La prueba está en el
+  remonte: un comando se pierde en cada epoch nuevo y en cada reconstrucción de la ventana, y deja
+  al operador con un panel que muestra un nivel que la sala no escucha. Por eso el volumen de
+  `M2` no se implementó sobre el `setVolume` que ya existía — ese comando se borró.
 - **NEGRO/LOGO pausa un video en vivo y mantiene su posición; la pista de audio de un deck sigue
   sonando.** El `<video>` no se desmonta al taparlo (`videoUnderlay` en `ProjectionOutput` +
   `LiveVideo` en `output-view.tsx`) — solo se oculta y se pausa, y al destapar reanuda donde
