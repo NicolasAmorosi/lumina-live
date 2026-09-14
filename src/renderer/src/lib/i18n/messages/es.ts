@@ -75,6 +75,8 @@ const es = {
     remove: "Quitar",
     removeHint: "Quitar de la biblioteca el elemento seleccionado",
     removeBlocked: "No se puede quitar: se usa en un programa guardado.",
+    relocated: "«{name}» quedó apuntando al archivo nuevo",
+    relocateFailed: "No se pudo relocalizar el archivo",
     removeUndo: "Se quitó «{name}» de la biblioteca.",
     removeUndoGeneric: "Se quitó el recurso de la biblioteca.",
     removeAnyway: "Eliminar igualmente",

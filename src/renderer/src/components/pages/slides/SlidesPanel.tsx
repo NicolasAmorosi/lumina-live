@@ -78,7 +78,7 @@ export function SlidesPanel() {
     }
 
     if (content.kind === "media" && content.asset.missingSince !== null) {
-      return <PreviewMissingState />;
+      return <PreviewMissingState assetId={content.asset.id} />;
     }
 
     // A live image needs no grid content of its own — the preview monitor

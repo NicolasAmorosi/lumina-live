@@ -1,5 +1,6 @@
 import { onIpc } from "@renderer/lib/ipc";
 import { useLibraryStore } from "@renderer/stores/library.store";
+import { forgetAllMediaAssets } from "@renderer/lib/hooks/use-media-asset";
 
 /**
  * Keeps the library in sync with changes this window didn't cause itself —
@@ -18,6 +19,12 @@ export function startLibrarySyncEffects(): () => void {
   // broadcasts (see `library-import.ts`), so this handler staying "dumb" is
   // now safe — but the fix that actually matters is there, not here.
   const unsubscribeChanged = onIpc("library-changed", ({ kind }) => {
+    // The id -> asset cache behind `useMediaAsset` is a second copy of these
+    // same rows, read by everything that only stores a `mediaAssetId` (the
+    // schedule, the preview). Refreshing the grids and leaving it alone left
+    // a file that the sweep had just marked missing still rendering as
+    // present — see `forgetAllMediaAssets`.
+    forgetAllMediaAssets();
     const { activeView } = useLibraryStore.getState();
     void useLibraryStore.getState().refresh(kind);
     const view = activeView[kind];

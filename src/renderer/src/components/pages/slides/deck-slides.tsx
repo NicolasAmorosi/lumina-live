@@ -94,7 +94,7 @@ export function DeckSlides({ assetId, missingSince }: { assetId: number; missing
   const liveIndex = isLive ? base.slideIndex : null;
 
   if (missingSince !== null) {
-    return <PreviewMissingState />;
+    return <PreviewMissingState assetId={assetId} />;
   }
 
   if (environment && !environment.available) {
