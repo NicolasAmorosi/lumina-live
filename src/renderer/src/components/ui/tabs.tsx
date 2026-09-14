@@ -52,8 +52,8 @@ const tabVariants: Record<TabsVariant, string> = {
 };
 
 const activeVariants: Record<TabsVariant, string> = {
-  underline: "border-primary text-primary",
-  folder: "border-border bg-surface text-primary",
+  underline: "border-primary text-primary-ink",
+  folder: "border-border bg-surface text-primary-ink",
   sidebar: "bg-active font-medium text-foreground",
 };
 

@@ -63,7 +63,7 @@ export function RemoveAssetConfirm({ assetId, assetMissing, onOpenChange }: Remo
           </ul>
           <p>{t("library.removeConfirmWarning")}</p>
           {assetMissing ? (
-            <p className="flex items-start gap-1.5 text-warning">
+            <p className="flex items-start gap-1.5 text-warning-ink">
               <Icon className="mt-0.5 shrink-0" name="alert" />
               <span>{t("library.removeMissingNote")}</span>
             </p>

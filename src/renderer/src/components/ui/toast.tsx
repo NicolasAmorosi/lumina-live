@@ -7,7 +7,7 @@ import { IconButton } from "./icon-button";
 const toneClassName: Record<ToastTone, string> = {
   info: "border-border-light bg-card text-foreground",
   success: "border-success/40 bg-card text-foreground",
-  warning: "border-badge-ppt/40 bg-card text-foreground",
+  warning: "border-warning/40 bg-card text-foreground",
   danger: "border-danger/40 bg-card text-foreground",
 };
 const toneIcon: Record<ToastTone, "check" | "alert"> = {
@@ -17,10 +17,10 @@ const toneIcon: Record<ToastTone, "check" | "alert"> = {
   danger: "alert",
 };
 const toneIconClassName: Record<ToastTone, string> = {
-  info: "text-primary",
-  success: "text-success",
-  warning: "text-badge-ppt",
-  danger: "text-danger",
+  info: "text-primary-ink",
+  success: "text-success-ink",
+  warning: "text-warning-ink",
+  danger: "text-danger-ink",
 };
 
 function Toast({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }) {
@@ -38,7 +38,7 @@ function Toast({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }) 
         <p>{item.message}</p>
         {item.action ? (
           <button
-            className="mt-1 text-sm font-medium text-primary hover:underline"
+            className="mt-1 text-sm font-medium text-primary-ink hover:underline"
             onClick={() => {
               item.action!.onClick();
               onDismiss();

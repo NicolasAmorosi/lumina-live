@@ -285,7 +285,7 @@ export function Select({ className, disabled, onChange, options, placeholder, si
                   role="option"
                 >
                   <span className="truncate">{option.label}</span>
-                  {option.value === value ? <Icon className="shrink-0 text-primary" name="check" /> : null}
+                  {option.value === value ? <Icon className="shrink-0 text-primary-ink" name="check" /> : null}
                 </li>
               ))}
             </ul>,

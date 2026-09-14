@@ -17,14 +17,14 @@ type CalloutProps = HTMLAttributes<HTMLDivElement> & {
 
 const toneClassName: Record<Tone, string> = {
   info: "border-border-light bg-muted text-foreground",
-  warning: "border-badge-ppt/40 bg-badge-ppt/10 text-foreground",
+  warning: "border-warning/40 bg-warning/10 text-foreground",
   danger: "border-danger/40 bg-danger/10 text-foreground",
 };
 const toneIcon: Record<Tone, "alert"> = { info: "alert", warning: "alert", danger: "alert" };
 const toneIconClassName: Record<Tone, string> = {
-  info: "text-primary",
-  warning: "text-badge-ppt",
-  danger: "text-danger",
+  info: "text-primary-ink",
+  warning: "text-warning-ink",
+  danger: "text-danger-ink",
 };
 
 export function Callout({

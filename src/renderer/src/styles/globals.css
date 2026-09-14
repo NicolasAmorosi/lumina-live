@@ -112,7 +112,9 @@
   --wa-bg-active: #2f557f;
   --wa-text-primary: #f5f5f5;
   --wa-text-secondary: #a9c0dd;
-  --wa-text-muted: #7089a8;
+  /* 60% of the way to --wa-text-secondary along the same Denim ramp: 3.70 ->
+   * 5.59 on bg-card, while staying a visible step below it (7.15). */
+  --wa-text-muted: #92aac8;
   --wa-accent-primary: #2e6de7;
   --wa-accent-hover: #5589ee;
   --wa-accent-light: #84adfc;
@@ -128,6 +130,33 @@
   --wa-badge-image: #2b8500;
   --wa-badge-audio: #007f98;
   --wa-badge-bible: #2e6de7;
+
+  /*
+   * "ink" = this hue as TEXT/ICON on one of the app's own surfaces, as opposed
+   * to the plain token, which is a FILL (bg-danger, bg-primary, ... with white
+   * on top). They cannot be one value: on the dark theme a red readable on
+   * #123054 is a light red, and white on a light red is unreadable — the two
+   * roles pull in opposite directions.
+   *
+   * Measured on `bg-card` (#123054), the worst surface any of these lands on:
+   *   text-danger      2.35 -> 5.01     text-primary     2.83 -> 5.94
+   *   text-success     2.83 -> 5.58     text-badge-audio 2.85 -> 5.52
+   *   text-warning     2.89 -> 6.33     text-subtle      3.70 -> 5.59
+   * WCAG AA asks 4.5 for small text; every one of them used to fail even the
+   * 3.0 asked of a graphical object.
+   *
+   * Hues are not invented: each is its own ALPS colour tinted toward white,
+   * the same way this file already interpolates the Denim ramp for dark
+   * surfaces ALPS does not define. `primary-ink` is literally Denim #84adfc.
+   * Only the five hues that actually appear as bare text or a bare icon get
+   * one — the other badge colours are only ever a `Badge` tint, which the
+   * badge's own `text-foreground` already made readable.
+   */
+  --wa-danger-ink: #e8808d;        /* Scarlett  #d0021b + 50% white */
+  --wa-accent-ink: #84adfc;        /* Denim     #84adfc, straight from ALPS */
+  --wa-success-ink: #80b666;       /* Tree Frog #2b8500 + 40% white */
+  --wa-warning-ink: #e6a480;       /* Campfire  #cd4900 + 50% white */
+  --wa-badge-audio-ink: #66b2c1;   /* Ming      #007f98 + 40% white */
 }
 
 [data-theme="light"] {
@@ -155,6 +184,14 @@
   --wa-badge-image: #355724;
   --wa-badge-audio: #255760;
   --wa-badge-bible: #2f557f;
+  /* The light theme already passes on every surface these land on, so ink ==
+   * fill here. Split anyway, so a component never has to know which theme it
+   * is in — which is the whole point of the token layer. */
+  --wa-danger-ink: #d0021b;
+  --wa-accent-ink: #2f557f;
+  --wa-success-ink: #355724;
+  --wa-warning-ink: #cd4900;
+  --wa-badge-audio-ink: #255760;
 }
 
 @theme inline {
@@ -192,6 +229,13 @@
   --color-badge-image: var(--wa-badge-image);
   --color-badge-audio: var(--wa-badge-audio);
   --color-badge-bible: var(--wa-badge-bible);
+
+  /* Text/icon counterparts of the fills above — see the note by the palette. */
+  --color-danger-ink: var(--wa-danger-ink);
+  --color-primary-ink: var(--wa-accent-ink);
+  --color-success-ink: var(--wa-success-ink);
+  --color-warning-ink: var(--wa-warning-ink);
+  --color-badge-audio-ink: var(--wa-badge-audio-ink);
 
   /* Noto Sans is the church's official typeface (Advent Sans is logo-only). */
   --font-sans: "Noto Sans Variable", "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;

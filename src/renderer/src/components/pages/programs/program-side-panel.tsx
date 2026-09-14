@@ -239,7 +239,7 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
                   onClick={() => setFavorite((v) => !v)}
                   variant="ghost"
                 >
-                  <Icon className={cn(favorite ? "fill-current text-primary" : "text-subtle")} name="favorite" />
+                  <Icon className={cn(favorite ? "fill-current text-primary-ink" : "text-subtle")} name="favorite" />
                 </IconButton>
               </Tooltip>
             </div>
@@ -262,7 +262,7 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
         ) : mode.kind === "delete" ? (
           <div className="flex flex-col gap-2 text-sm">
             <p className="text-foreground">{t("programs.deleteWarning", { name: mode.program.name })}</p>
-            <p className="flex items-start gap-1.5 text-warning">
+            <p className="flex items-start gap-1.5 text-warning-ink">
               <Icon className="mt-0.5 shrink-0" name="alert" />
               <span>{t("programs.itemCount", { count: mode.program.itemCount })}</span>
             </p>

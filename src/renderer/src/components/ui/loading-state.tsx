@@ -37,9 +37,9 @@ const surfaceTrackClassName: Record<LoadingStateSurface, string> = {
   panel: "bg-muted",
 };
 const toneIconClassName: Record<LoadingStateTone, string> = {
-  busy: "text-primary",
+  busy: "text-primary-ink",
   queued: "text-muted-foreground",
-  failed: "text-danger",
+  failed: "text-danger-ink",
 };
 const toneBarTone: Record<LoadingStateTone, "primary" | "danger"> = {
   busy: "primary",

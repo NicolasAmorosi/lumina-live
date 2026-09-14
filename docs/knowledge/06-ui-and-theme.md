@@ -50,6 +50,42 @@ Dos consecuencias que importan al tocar la paleta:
 Los badges por tipo de contenido también son colores de la tabla (ppt = Campfire, video = Iris /
 Emperor, image = Tree Frog / Forest, audio = Ming / Cave, bible = Bluejay / Denim).
 
+### Un color no puede ser relleno y texto a la vez — la rampa `-ink`
+
+Un token de color tiene **dos roles incompatibles** y el tema oscuro los enfrenta: como **relleno**
+(`bg-danger` con blanco encima) tiene que ser oscuro para que el blanco se lea; como **texto** sobre
+`bg-card` (#123054) tiene que ser claro para leerse él. Con un solo valor, uno de los dos falla — y
+el que fallaba era el texto: medido sobre los valores reales, `text-danger` daba **2,35:1**,
+`text-primary` 2,83, `text-success` 2,83, `text-badge-audio` 2,85 y `text-warning` 2,89, todos por
+debajo del 3:1 que WCAG pide hasta para un objeto gráfico, y muy lejos del 4,5:1 de texto chico.
+El peor caso no era decorativo: era el aviso de "este archivo no se pudo reproducir" en
+`MediaTrackRow`, justo lo que el operador tiene que leer a oscuras y de reojo.
+
+Por eso hay una segunda familia, `--color-<tono>-ink`, para los **cinco tonos que aparecen como
+texto o ícono suelto**. Mismo hue, aclarado hacia blanco — igual que el tema oscuro ya interpola
+Denim para superficies que ALPS no define:
+
+| Token | Oscuro | Derivación | Sobre `bg-card` |
+|---|---|---|---|
+| `--color-danger-ink` | `#e8808d` | Scarlett `#d0021b` + 50 % blanco | 2,35 → **5,01** |
+| `--color-primary-ink` | `#84adfc` | Denim `#84adfc`, tal cual de ALPS | 2,83 → **5,94** |
+| `--color-success-ink` | `#80b666` | Tree Frog `#2b8500` + 40 % | 2,83 → **5,58** |
+| `--color-warning-ink` | `#e6a480` | Campfire `#cd4900` + 50 % | 2,89 → **6,33** |
+| `--color-badge-audio-ink` | `#66b2c1` | Ming `#007f98` + 40 % | 2,85 → **5,52** |
+
+En el tema claro `-ink` vale lo mismo que el relleno: ahí ya pasaba en todos los pares donde se usa.
+Se parten igual, para que ningún componente tenga que saber en qué tema está.
+
+Los otros badges **no** tienen `-ink` a propósito: solo se pintan como tinte de `Badge`, que desde
+el arreglo `H7` lleva `text-foreground` (2,18–3,19 → 12,5–13,8). `--wa-text-muted` del tema oscuro
+se subió en su lugar, de `#7089a8` a `#92aac8` (3,70 → 5,59 sobre `bg-card`), porque `text-subtle`
+es texto y nada más — 32 usos, ninguno como fondo ni borde.
+
+**Lo que queda abierto:** el tema **claro** roza el límite en dos pares que nadie había medido —
+`--wa-warning` sobre `bg-muted` a 4,00 y `--wa-text-muted` sobre `bg-muted` a 4,22. No se tocó:
+subirlos significa mover neutros de ALPS y colapsaría la jerarquía contra `--wa-text-secondary`
+(`#4a4a4a`), que es una decisión de diseño, no un ajuste.
+
 Oscuro es el default (`DEFAULT_SETTINGS['ui.theme']` en `shared/types/settings.ts`) — pensado
 para operarse en una cabina de proyección a oscuras, igual que la versión legacy.
 

@@ -64,7 +64,7 @@ export function DeckTransport() {
   return (
     <MediaPanel className="shrink-0">
       <div className="flex items-center gap-2 px-2 py-1">
-        <Icon className="size-4 shrink-0 text-primary" name="ppt" />
+        <Icon className="size-4 shrink-0 text-primary-ink" name="ppt" />
 
         <span className="min-w-0 flex-1 truncate text-sm text-foreground">{heading ?? ""}</span>
 
@@ -118,7 +118,7 @@ export function DeckTransport() {
           <ProgressBar className={cn("flex-1", isDesynced && "opacity-40")} value={elapsedRatio ?? 0} />
           {isDesynced ? (
             <button
-              className="shrink-0 whitespace-nowrap text-xs font-medium text-primary hover:underline"
+              className="shrink-0 whitespace-nowrap text-xs font-medium text-primary-ink hover:underline"
               onClick={() => resyncDeck()}
               type="button"
             >

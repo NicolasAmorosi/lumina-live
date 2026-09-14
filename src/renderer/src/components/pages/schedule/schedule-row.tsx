@@ -55,7 +55,7 @@ export function ScheduleRow({
       onDoubleClick={onDoubleClick}
       onDragStart={onDragStart}
       selected={selected}
-      trailing={sounding ? <Icon className="size-3.5 animate-pulse text-badge-audio" name="audio" /> : undefined}
+      trailing={sounding ? <Icon className="size-3.5 animate-pulse text-badge-audio-ink" name="audio" /> : undefined}
     >
       {label}
     </ListRow>

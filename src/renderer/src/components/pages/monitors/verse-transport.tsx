@@ -27,7 +27,7 @@ export function VerseTransport() {
   return (
     <MediaPanel className="shrink-0">
       <div className="flex items-center gap-2 px-2 py-1">
-        <Icon className="size-4 shrink-0 text-primary" name="bible" />
+        <Icon className="size-4 shrink-0 text-primary-ink" name="bible" />
 
         <span className="min-w-0 flex-1 truncate text-sm text-foreground">{heading ?? ""}</span>
 

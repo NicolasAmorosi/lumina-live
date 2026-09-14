@@ -114,7 +114,7 @@ export function MediaTrackRow({
         <Icon
           className={cn(
             "size-4 shrink-0",
-            error ? "text-danger" : kind === "audio" ? "text-badge-audio" : "text-primary",
+            error ? "text-danger-ink" : kind === "audio" ? "text-badge-audio-ink" : "text-primary-ink",
           )}
           name={error ? "alert" : kindIcon[kind]}
         />
@@ -175,7 +175,7 @@ export function MediaTrackRow({
       </div>
 
       {error ? (
-        <p className="truncate pl-6 text-xs text-danger">{error}</p>
+        <p className="truncate pl-6 text-xs text-danger-ink">{error}</p>
       ) : hint ? (
         <p className="truncate pl-6 text-xs text-subtle">{hint}</p>
       ) : null}
