@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { cn } from "@renderer/lib/utils";
 import { useToastStore, type ToastItem, type ToastTone } from "@renderer/stores/toast.store";
@@ -56,19 +57,33 @@ function Toast({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }) 
   );
 }
 
-/** Mounted once in `App.tsx`, hermano of the modals. `z-[60]` sits above the
- *  `z-50` modal stack so a toast fired from inside a modal is still visible. */
+/**
+ * Mounted once in `App.tsx`. `z-[60]` sits above the `z-50` modal stack so a
+ * toast fired from inside a modal is still visible.
+ *
+ * Portaled to `document.body`, like the modals and for the same reason: a
+ * modal marks `#root` `inert` (see `shared/modal/modal-stack.ts`), and a toast
+ * rendered inside it would still be readable but its action — "Deshacer",
+ * "Eliminar igualmente" — would silently stop being clickable.
+ *
+ * The container is always mounted, empty or not: a screen reader generally
+ * does not announce content inserted into a live region that was created in
+ * the same tick, so a host that appears together with its first toast
+ * announces nothing at all.
+ */
 export function ToastHost() {
   const toasts = useToastStore((s) => s.toasts);
   const dismiss = useToastStore((s) => s.dismiss);
 
-  if (toasts.length === 0) return null;
-
-  return (
-    <div className="pointer-events-none fixed bottom-4 left-1/2 z-[60] flex w-full max-w-sm -translate-x-1/2 flex-col gap-2 px-4">
+  return createPortal(
+    <div
+      aria-live="polite"
+      className="pointer-events-none fixed bottom-4 left-1/2 z-[60] flex w-full max-w-sm -translate-x-1/2 flex-col gap-2 px-4"
+    >
       {toasts.map((item) => (
         <Toast item={item} key={item.id} onDismiss={() => dismiss(item.id)} />
       ))}
-    </div>
+    </div>,
+    document.body,
   );
 }

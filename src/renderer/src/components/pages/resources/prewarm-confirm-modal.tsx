@@ -1,5 +1,5 @@
-import { Button, Callout, DialogContent, DialogFooter, DialogHeader, Title } from "@renderer/components/ui";
-import { Modal } from "@renderer/components/shared/modal/Modal";
+import { Button, Callout, DialogContent, DialogFooter, DialogHeader } from "@renderer/components/ui";
+import { Modal, ModalTitle } from "@renderer/components/shared/modal";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 
 type PrewarmConfirmModalProps = {
@@ -27,7 +27,7 @@ export function PrewarmConfirmModal({
   return (
     <Modal onOpenChange={onOpenChange} open={open} size="sm">
       <DialogHeader>
-        <Title as="h3">{t("prewarm.title")}</Title>
+        <ModalTitle>{t("prewarm.title")}</ModalTitle>
       </DialogHeader>
       <DialogContent>
         <Callout tone="warning">

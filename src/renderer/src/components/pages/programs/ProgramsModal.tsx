@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
-import { Modal } from "@renderer/components/shared/modal";
+import { Modal, ModalTitle } from "@renderer/components/shared/modal";
 import {
   Callout,
   DialogHeader,
@@ -12,7 +12,6 @@ import {
   ListRow,
   Select,
   Skeleton,
-  Title,
   Tooltip,
 } from "@renderer/components/ui";
 import { cn } from "@renderer/lib/utils";
@@ -291,7 +290,7 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
       size="2xl"
     >
       <DialogHeader className="border-b border-border">
-        <Title as="h3">{t("programs.title")}</Title>
+        <ModalTitle>{t("programs.title")}</ModalTitle>
         <IconButton onClick={requestClose} size="xs" title={t("settings.close")} variant="ghost">
           <Icon name="close" />
         </IconButton>

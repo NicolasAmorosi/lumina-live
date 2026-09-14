@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { Button, DialogContent, DialogFooter, DialogHeader, Title } from "@renderer/components/ui";
+import { Button, DialogContent, DialogFooter, DialogHeader } from "@renderer/components/ui";
+import { ModalTitle } from "./ModalTitle";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { Modal } from "./Modal";
 
@@ -40,7 +41,7 @@ export function ConfirmModal({
   return (
     <Modal onOpenChange={onOpenChange} open={open} size="sm">
       <DialogHeader>
-        <Title as="h3">{title}</Title>
+        <ModalTitle>{title}</ModalTitle>
       </DialogHeader>
       {description ? <DialogContent className="text-sm text-muted-foreground">{description}</DialogContent> : null}
       <DialogFooter>

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { Modal } from "@renderer/components/shared/modal/Modal";
-import { DialogHeader, IconButton, Icon, Tabs, Title, type TabItem } from "@renderer/components/ui";
+import { DialogHeader, IconButton, Icon, Tabs, type TabItem } from "@renderer/components/ui";
+import { ModalTitle } from "@renderer/components/shared/modal";
 import { ProjectionSection } from "./sections/projection-section";
 import { BibleSection } from "./sections/bible-section";
 import { SystemSection } from "./sections/system-section";
@@ -34,7 +35,7 @@ export function SettingsModal({ onOpenChange, open }: { onOpenChange: (open: boo
       size="2xl"
     >
       <DialogHeader className="border-b border-border">
-        <Title as="h3">{t("settings.title")}</Title>
+        <ModalTitle>{t("settings.title")}</ModalTitle>
         <IconButton onClick={() => onOpenChange(false)} size="xs" title={t("settings.close")} variant="ghost">
           <Icon name="close" />
         </IconButton>
