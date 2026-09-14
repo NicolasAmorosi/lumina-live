@@ -1,5 +1,5 @@
 import { useT } from "@renderer/lib/i18n/i18n-provider";
-import { Button, Icon, Select, Tooltip } from "@renderer/components/ui";
+import { Button, Icon, Select, Tooltip, VolumeControl } from "@renderer/components/ui";
 import { useDisplayStore } from "@renderer/stores/display.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { useSettingsStore } from "@renderer/stores/settings.store";
@@ -27,6 +27,7 @@ export function ProjectionSection() {
   const logoPath = useSettingsStore((s) => s.settings["logo.path"]);
   const transitionStyle = useSettingsStore((s) => s.settings["projection.transition.style"]);
   const transitionDurationMs = useSettingsStore((s) => s.settings["projection.transition.durationMs"]);
+  const startVolume = useSettingsStore((s) => s.settings["media.volume"]);
   const updateSettings = useSettingsStore((s) => s.update);
 
   // The URL carries the logo's own path as a cache-buster: it's the same
@@ -94,6 +95,20 @@ export function ProjectionSection() {
           <Button disabled={base === null} onClick={clearLive} variant="outline">
             <Icon name="close" /> {t("footer.clear")}
           </Button>
+        </SettingsRow>
+      </SettingsGroup>
+
+      <SettingsGroup title={t("settings.groups.audio")}>
+        <SettingsRow description={t("settings.startVolumeDesc")} label={t("settings.startVolume")}>
+          <span className="w-10 text-right text-sm tabular-nums text-muted-foreground">
+            {Math.round(startVolume * 100)}%
+          </span>
+          <VolumeControl
+            label={t("settings.startVolume")}
+            muteLabel={startVolume === 0 ? t("media.unmute") : t("media.mute")}
+            onChange={(volume) => void updateSettings({ "media.volume": volume })}
+            value={startVolume}
+          />
         </SettingsRow>
       </SettingsGroup>
 

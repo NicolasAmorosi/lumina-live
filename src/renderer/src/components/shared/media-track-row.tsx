@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { IconButton, Icon, MediaScrubber, type IconName } from "@renderer/components/ui";
+import { IconButton, Icon, MediaScrubber, VolumeControl, type IconName } from "@renderer/components/ui";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { cn, formatClock } from "@renderer/lib/utils";
 
@@ -37,6 +37,11 @@ type MediaTrackRowProps = {
    *  Absent in the preview bar, which only picks a start point. */
   onTogglePause?: (() => void) | undefined;
   paused?: boolean;
+  /** Omit the pair to render the row without a level control — an image or a
+   *  verse has nothing to turn down, and the preview bar reaches no speaker. */
+  onVolumeChange?: ((volume: number) => void) | undefined;
+  /** 0..1. Required whenever `onVolumeChange` is given. */
+  volume?: number | undefined;
 };
 
 const kindIcon: Record<MediaTrackKind, IconName> = {
@@ -98,6 +103,8 @@ export function MediaTrackRow({
   onStop,
   onTogglePause,
   paused = false,
+  onVolumeChange,
+  volume,
 }: MediaTrackRowProps) {
   const t = useT();
   const hasTiming = durationSeconds !== undefined;
@@ -155,6 +162,16 @@ export function MediaTrackRow({
               {formatClock(durationSeconds)}
             </span>
           </>
+        ) : null}
+
+        {onVolumeChange && volume !== undefined ? (
+          <VolumeControl
+            label={t("media.volumeFor", { name: label })}
+            muteLabel={volume === 0 ? t("media.unmute") : t("media.mute")}
+            onChange={onVolumeChange}
+            tone={kindTone[kind]}
+            value={volume}
+          />
         ) : null}
 
         {onStop ? (

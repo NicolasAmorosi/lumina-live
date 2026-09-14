@@ -47,3 +47,16 @@ export const useSettingsStore = create<SettingsStoreState>((set, get) => ({
     }
   },
 }));
+
+/**
+ * What anything newly sent live starts at, 0..1.
+ *
+ * Read at the moment a track is created rather than subscribed to: changing
+ * the default in Ajustes mid-service must not yank the level of something the
+ * operator has already balanced by hand. It lives here, next to the store it
+ * reads, so `projection.store` does not have to import an action module and
+ * close a cycle around itself.
+ */
+export function defaultMediaVolume(): number {
+  return useSettingsStore.getState().settings["media.volume"];
+}

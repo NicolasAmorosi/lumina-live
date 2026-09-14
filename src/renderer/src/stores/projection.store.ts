@@ -14,6 +14,7 @@ import type {
 } from "@shared/types/projection";
 import type { DeckSlide, DeckSoundtrack } from "@shared/types/deck";
 import { assetUrl, LOGO_URL } from "@shared/urls";
+import { defaultMediaVolume } from "@renderer/stores/settings.store";
 
 /** The deck currently loaded for projection — slide urls are durable, DB-backed
  *  and stable across restarts, so this is plain data with no session lifecycle. */
@@ -47,6 +48,11 @@ export type ProjectionStoreState = {
    *  Reset to `false` whenever `base` changes, so a fresh EN VIVO always
    *  starts playing. */
   videoPaused: boolean;
+  /** 0..1 for the live video — the counterpart of `videoPaused`, and pushed
+   *  the same way (inside `VideoUnderlay`). Reset by `setBase` to the
+   *  `media.volume` default, so a level balanced for one clip never carries
+   *  into the next one silently. */
+  videoVolume: number;
 
   liveDeck: LiveDeck | null;
   autoplay: AutoplayState;
@@ -89,6 +95,9 @@ export type ProjectionStoreState = {
    *  new is live"; nothing about what the projector shows changes here, and
    *  `epoch` deliberately stays put so no `<video>` remounts. */
   setVideoResumeAt: (startAtSeconds: number) => void;
+  /** Clamped here, not at the call sites: `HTMLMediaElement.volume` throws on
+   *  an out-of-range value, and a slider can overshoot by a rounding error. */
+  setVideoVolume: (volume: number) => void;
 
   setLiveDeck: (deck: LiveDeck | null) => void;
   setSlideIndex: (index: number) => void;
@@ -128,6 +137,7 @@ export const useProjectionStore = create<ProjectionStoreState>()(
     logoUrl: null,
     presentationOpen: false,
     videoPaused: false,
+    videoVolume: defaultMediaVolume(),
 
     liveDeck: null,
     autoplay: "off",
@@ -140,11 +150,18 @@ export const useProjectionStore = create<ProjectionStoreState>()(
     transitionStyle: "crossfade",
     transitionDurationMs: 300,
 
-    setBase: (base) => set({ base, videoPaused: false }),
+    setBase: (base) => set({ base, videoPaused: false, videoVolume: defaultMediaVolume() }),
     setOverlay: (overlay) => set({ overlay }),
     setLogoUrl: (logoUrl) => set({ logoUrl }),
     setPresentationOpen: (presentationOpen) => set({ presentationOpen }),
     setVideoPaused: (videoPaused) => set({ videoPaused }),
+    setVideoVolume: (volume) =>
+      set((state) => {
+        const clamped = Math.min(1, Math.max(0, volume));
+        // No-op when nothing moved: this field is an input of `selectOutput`,
+        // and a slider drag reports the same rounded value many times over.
+        return state.videoVolume === clamped ? state : { videoVolume: clamped };
+      }),
     setVideoResumeAt: (startAtSeconds) =>
       set((state) => {
         const { base } = state;
@@ -240,6 +257,7 @@ function selectVideoUnderlay(state: ProjectionStoreState): VideoUnderlay {
     epoch: state.base.epoch,
     paused: state.videoPaused,
     startAtSeconds: state.base.startAtSeconds,
+    volume: state.videoVolume,
   };
 }
 
@@ -328,6 +346,7 @@ type OutputInputs = readonly [
   ProjectionStoreState["overlay"],
   ProjectionStoreState["logoUrl"],
   ProjectionStoreState["videoPaused"],
+  ProjectionStoreState["videoVolume"],
   ProjectionStoreState["liveDeck"],
   ProjectionStoreState["sceneEpoch"],
   ProjectionStoreState["transitionStyle"],
@@ -340,6 +359,7 @@ function outputInputs(state: ProjectionStoreState): OutputInputs {
     state.overlay,
     state.logoUrl,
     state.videoPaused,
+    state.videoVolume,
     state.liveDeck,
     state.sceneEpoch,
     state.transitionStyle,

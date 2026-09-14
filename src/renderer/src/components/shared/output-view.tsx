@@ -118,6 +118,10 @@ type LiveVideoProps = {
   transition: SceneTransition;
   url: string;
   videoRef?: Ref<HTMLVideoElement> | undefined;
+  /** 0..1, and only ever honored in "live" mode — the monitors are muted by
+   *  construction, and a confidence monitor that could make noise is a way to
+   *  put two copies of the same soundtrack in the room. */
+  volume: number;
 };
 
 /**
@@ -162,6 +166,7 @@ function LiveVideo({
   transition,
   url,
   videoRef,
+  volume,
 }: LiveVideoProps) {
   const elementRef = useRef<HTMLVideoElement | null>(null);
   /** Never cleared, unlike `elementRef`: the unmount hook below has to reach
@@ -204,6 +209,15 @@ function LiveVideo({
     if (shouldPlay) element.play().catch(() => undefined);
     else element.pause();
   }, [shouldPlay]);
+
+  // Declarative, like `paused`: re-applied whenever the operator moves the
+  // level AND on every remount, so a video that survives a rebuilt projection
+  // window comes back at the level it was playing at. Never in a monitor mode
+  // — `attach` pins those to 0 and the element also carries `muted`.
+  useEffect(() => {
+    const element = elementRef.current;
+    if (element && mode === "live") element.volume = volume;
+  }, [mode, volume]);
 
   // Resyncs the LIVE monitor's independently decoding video to the
   // projector's real position whenever a fresh `mediaStatus` report arrives
@@ -824,6 +838,7 @@ export function OutputView({
           startAtSeconds={output.videoUnderlay.startAtSeconds}
           transition={transition}
           url={output.videoUnderlay.url}
+          volume={output.videoUnderlay.volume}
           videoRef={videoRef}
         />
       ) : null}

@@ -26,6 +26,12 @@ export type VideoUnderlay = {
   epoch: number;
   paused: boolean;
   startAtSeconds: number;
+  /** 0..1, straight onto `HTMLMediaElement.volume`. Declarative, like
+   *  `paused` and for the same reason: a one-shot command would be lost by
+   *  every remount — a new epoch, or the projection window being rebuilt onto
+   *  another screen — and the operator would be left with a level the app
+   *  believes it is at and the room cannot hear. */
+  volume: number;
 } | null;
 
 export type ProjectionOutputKind =
@@ -132,13 +138,13 @@ export type ProjectionMediaError = {
   code: number | null;
 };
 
-/** Play/pause are declarative now (`VideoUnderlay.paused`, `AudioTrackPush.paused`)
+/** Play/pause and volume are declarative (`VideoUnderlay`, `AudioTrackPush`)
  *  so they survive a projection-window reload the same way "what's on screen"
- *  does. Only actions that are genuinely one-shot commands remain here. */
+ *  does. Only actions that are genuinely one-shot commands remain here — a
+ *  seek and a restart say "move now", they do not describe a state to hold. */
 export type MediaCommand =
   | { target: MediaTarget; action: "seek"; timeSeconds: number }
-  | { target: MediaTarget; action: "restart" }
-  | { target: MediaTarget; action: "setVolume"; volume: number };
+  | { target: MediaTarget; action: "restart" };
 
 /** Reported by whichever media element is playing in the projection window.
  *  Generalizes the never-implemented `video-status`: it now drives both the
@@ -173,6 +179,8 @@ export type AudioTrackPush = {
   epoch: number;
   paused: boolean;
   startAtSeconds: number;
+  /** 0..1 — see `VideoUnderlay.volume`. */
+  volume: number;
 };
 
 /** What the control window has selected as "base" content (before black/logo overlay). */

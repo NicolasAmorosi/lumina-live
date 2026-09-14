@@ -5,7 +5,13 @@ import { MediaTrackRow } from "@renderer/components/shared/media-track-row";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { useAudioStore } from "@renderer/stores/audio.store";
 import { useLiveHeading } from "@renderer/lib/hooks/use-live";
-import { seekMedia, stopAudioTrack, toggleAudioTrackPause, toggleVideoPause } from "@renderer/lib/actions/media";
+import {
+  seekMedia,
+  setMediaVolume,
+  stopAudioTrack,
+  toggleAudioTrackPause,
+  toggleVideoPause,
+} from "@renderer/lib/actions/media";
 import { clearBaseContent } from "@renderer/lib/actions/playback";
 import { mediaErrorKey, mediaTargetKey } from "@shared/types/projection";
 import { assetUrl } from "@shared/urls";
@@ -29,6 +35,7 @@ export function LiveMediaPanel() {
   const t = useT();
   const base = useProjectionStore((s) => s.base);
   const videoPaused = useProjectionStore((s) => s.videoPaused);
+  const videoVolume = useProjectionStore((s) => s.videoVolume);
   // The whole record, not a per-target selector: the number of rows below is
   // dynamic (0..N audio tracks), so there is no fixed set of hooks to call
   // one-per-track — see the Rules of Hooks. Indexing a single subscribed
@@ -60,7 +67,9 @@ export function LiveMediaPanel() {
         onDelete={clearBaseContent}
         onSeek={(seconds) => seekMedia({ kind: "video" }, seconds)}
         onTogglePause={toggleVideoPause}
+        onVolumeChange={(volume) => setMediaVolume({ kind: "video" }, volume)}
         paused={videoPaused}
+        volume={videoVolume}
       />,
     );
   }
@@ -91,7 +100,9 @@ export function LiveMediaPanel() {
         onSeek={(seconds) => seekMedia({ kind: "audio", trackId: track.trackId }, seconds)}
         onStop={isDeck ? undefined : () => stopAudioTrack(track.trackId)}
         onTogglePause={() => toggleAudioTrackPause(track.trackId)}
+        onVolumeChange={(volume) => setMediaVolume({ kind: "audio", trackId: track.trackId }, volume)}
         paused={track.paused}
+        volume={track.volume}
       />,
     );
   }

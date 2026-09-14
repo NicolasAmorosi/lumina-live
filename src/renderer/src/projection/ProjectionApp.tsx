@@ -53,6 +53,16 @@ function AudioTrackElement({ registry, track }: AudioTrackElementProps) {
     else element.play().catch(() => undefined);
   }, [track.paused]);
 
+  // Declarative, exactly like `paused` above: re-applied on every render of
+  // this element, so a remount (a new epoch, this whole window rebuilt onto
+  // another screen) comes back at the level the operator set rather than at
+  // the default. Assignment throws outside 0..1, which is why both stores
+  // clamp before it ever gets here.
+  useEffect(() => {
+    const element = elementRef.current;
+    if (element) element.volume = track.volume;
+  }, [track.volume]);
+
   // Applied once, the moment metadata is available — after that the operator
   // scrubs through the panel's own `seek` command, not this.
   useEffect(() => {
@@ -176,9 +186,6 @@ export function ProjectionApp() {
           case "restart":
             el.currentTime = 0;
             void el.play();
-            break;
-          case "setVolume":
-            el.volume = command.volume;
             break;
         }
       }),

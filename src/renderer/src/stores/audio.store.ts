@@ -17,6 +17,11 @@ export type LiveAudioTrack = {
   epoch: number;
   paused: boolean;
   startAtSeconds: number;
+  /** 0..1. Starts at `media.volume` (Ajustes) for every new track and is the
+   *  operator's for as long as the track lives; it is deliberately not
+   *  persisted, so nothing ever starts at a level left over from another
+   *  service. */
+  volume: number;
 };
 
 /** Stable id for the one deck-soundtrack slot — at most one at a time,
@@ -49,6 +54,10 @@ type AudioStoreState = {
   addTrack: (track: LiveAudioTrack) => void;
   removeTrack: (trackId: string) => void;
   setPaused: (trackId: string, paused: boolean) => void;
+  /** Clamped to 0..1 here rather than at the call sites, so a slider that
+   *  overshoots by a rounding error can never push an out-of-range value into
+   *  `HTMLMediaElement.volume`, which throws on one. */
+  setVolume: (trackId: string, volume: number) => void;
   /** Restarts an already-live track in place: bumps its epoch (remounting
    *  the `<audio>` element so `startAtSeconds` re-applies) and unpauses it,
    *  without touching `trackId` — used when EN VIVO targets an asset that is
@@ -81,6 +90,20 @@ export const useAudioStore = create<AudioStoreState>()(
       set((state) => ({
         tracks: state.tracks.map((t) => (t.trackId === trackId ? { ...t, paused } : t)),
       })),
+
+    setVolume: (trackId, volume) =>
+      set((state) => {
+        const clamped = Math.min(1, Math.max(0, volume));
+        const track = state.tracks.find((t) => t.trackId === trackId);
+        // No-op when the level did not actually move: this list is what
+        // `projection-sync` subscribes to, and a slider drag reports the same
+        // rounded value many times over — each identical array would be one
+        // more push of every live track to main for nothing.
+        if (!track || track.volume === clamped) return state;
+        return {
+          tracks: state.tracks.map((t) => (t.trackId === trackId ? { ...t, volume: clamped } : t)),
+        };
+      }),
 
     restartTrack: (trackId, startAtSeconds) =>
       set((state) => ({

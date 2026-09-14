@@ -28,6 +28,7 @@ function toAudioTrackPush(track: LiveAudioTrack, covered: boolean): AudioTrackPu
     epoch: track.epoch,
     paused: track.paused || (track.source === "deck" && covered),
     startAtSeconds: track.startAtSeconds,
+    volume: track.volume,
   };
 }
 

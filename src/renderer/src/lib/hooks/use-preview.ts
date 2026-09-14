@@ -133,7 +133,11 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
         // too: re-applying it as a prop would fight the element's own clock
         // on every re-render, so a scrub goes through `seekPreview` imperatively
         // instead, exactly like the live video's own seek.
-        const underlay = { url: assetUrl(content.asset.id), epoch: 0, paused: !playing, startAtSeconds: 0 };
+        // `volume: 0` because this output only ever reaches the PREVIEW
+        // monitor, which `OutputView` mutes by construction (every mode but
+        // "live"). The field is here because the shape requires it, not
+        // because anything reads it.
+        const underlay = { url: assetUrl(content.asset.id), epoch: 0, paused: !playing, startAtSeconds: 0, volume: 0 };
         return {
           kind: "video",
           url: underlay.url,

@@ -8,6 +8,7 @@ import { useAudioStore, nextAssetTrack } from "@renderer/stores/audio.store";
 import { notifyManualNavigation } from "@renderer/effects/deck-autoplay";
 import { projectVerse } from "@renderer/lib/actions/bible";
 import { stopPreviewPlayback } from "@renderer/lib/actions/preview-playback";
+import { defaultMediaVolume } from "@renderer/stores/settings.store";
 import { api } from "@renderer/lib/api";
 import { assetUrl } from "@shared/urls";
 import type { MediaAsset } from "@shared/types/media";
@@ -48,6 +49,7 @@ function goLiveWithAudioAsset(asset: MediaAsset, startAtSeconds: number): void {
     epoch,
     paused: false,
     startAtSeconds,
+    volume: defaultMediaVolume(),
   });
 }
 
@@ -117,7 +119,14 @@ async function goLiveWithDeck(assetId: number, startSlideIndex: number, intent: 
     .getState()
     .setDeckTrack(
       deck.soundtrack
-        ? { url: deck.soundtrack.url, epoch, paused: false, startAtSeconds: 0, label: "" }
+        ? {
+            url: deck.soundtrack.url,
+            epoch,
+            paused: false,
+            startAtSeconds: 0,
+            label: "",
+            volume: defaultMediaVolume(),
+          }
         : null,
     );
 

@@ -47,6 +47,7 @@ import {
   Trash2,
   Upload,
   Volume2,
+  VolumeX,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -101,6 +102,7 @@ const icons = {
   remove: Trash2,
   upload: Upload,
   volume: Volume2,
+  volumeOff: VolumeX,
   close: X,
 } satisfies Record<string, LucideIcon>;
 

@@ -6,13 +6,23 @@ import { toggleAutoplay } from "@renderer/effects/deck-autoplay";
 import { advanceVerse } from "@renderer/lib/actions/bible";
 import { removeSelected } from "@renderer/lib/actions/remove-selected";
 
+const ARROW_KEYS_LIST: string[] = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+
 // A text field consumes every keystroke — anything else would type into it.
 const TEXT_ENTRY_TAGS = new Set(["INPUT", "SELECT", "TEXTAREA"]);
+// ...except the `<input>` types that are not text entry at all. A range is a
+// slider: it owns the arrows (and Home/End/PageUp/PageDown) and nothing else.
+// Treating it as a text field would have made `b` and `l` — NEGRO and LOGO,
+// the controls an operator reaches for when something appears the
+// congregation should not see — dead for as long as a volume slider kept
+// focus, which is right after they touched one. Same defect the comment on
+// `suppressesKey` describes for buttons, by a different route.
+const SLIDER_INPUT_KEYS = new Set([...ARROW_KEYS_LIST, "Home", "End", "PageUp", "PageDown"]);
 // A button or a link consumes only the keys that actually do something to it:
 // Enter and Space activate it, and the arrows drive the roving tabindex of the
 // resource grid.
 const ACTIVATION_TAGS = new Set(["BUTTON", "A"]);
-const ARROW_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
+const ARROW_KEYS = new Set(ARROW_KEYS_LIST);
 const KEYS_A_CONTROL_CONSUMES = new Set(["Enter", " ", ...ARROW_KEYS]);
 // Widgets whose arrows belong to them, declared by role instead of implied by
 // a tag. `MediaScrubber` is what forced this: a `<div role="slider">` with its
@@ -50,6 +60,9 @@ const ARROW_CONSUMING_ROLES = new Set([
  */
 function suppressesKey(target: EventTarget | null, key: string): boolean {
   if (!(target instanceof HTMLElement)) return false;
+  if (target instanceof HTMLInputElement && target.type === "range") {
+    return SLIDER_INPUT_KEYS.has(key);
+  }
   if (target.isContentEditable || TEXT_ENTRY_TAGS.has(target.tagName)) return true;
   if (ACTIVATION_TAGS.has(target.tagName) && KEYS_A_CONTROL_CONSUMES.has(key)) return true;
   const role = target.getAttribute("role");

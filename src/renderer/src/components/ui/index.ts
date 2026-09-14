@@ -11,6 +11,7 @@ export { LinearLoader, Skeleton } from "./linear-loader";
 export { ProgressBar } from "./progress-bar";
 export { LoadingState } from "./loading-state";
 export { MediaScrubber } from "./media-scrubber";
+export { VolumeControl } from "./volume-control";
 export { Title, Label } from "./title";
 export { HighlightedText, type TextSegment } from "./highlighted-text";
 export { Dialog, DialogHeader, DialogContent, DialogFooter } from "./dialog";
