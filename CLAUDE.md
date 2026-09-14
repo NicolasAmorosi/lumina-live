@@ -273,7 +273,10 @@ allowlist.
 ## Comandos esenciales
 
 ```bash
-npm install              # instala deps — better-sqlite3 trae binarios precompilados, no compila nada
+npm install              # instala deps — better-sqlite3 trae binarios precompilados, no compila nada.
+                          #   El `postinstall` baja además el binario de Electron: desde la v42 el
+                          #   paquete ya NO lo hace solo, y sin él `npm run dev` muere con
+                          #   `Error: Electron uninstall` mientras build/typecheck/lint pasan igual
 npm run dev               # electron-vite dev (HMR en renderer, restart de main en watch)
 npm run typecheck          # tsc --noEmit sobre node (main+preload+shared) y web (renderer+shared)
 npm run lint                # eslint .
