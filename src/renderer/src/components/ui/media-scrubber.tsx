@@ -143,6 +143,16 @@ export function MediaScrubber({
     commit(next);
   }
 
+  /** The drag ended without a release the bar can read a position from — the
+   *  OS took the pointer over for a gesture, the window lost focus, the touch
+   *  was cancelled. `handlePointerUp` was the only thing that ever cleared
+   *  `dragSeconds`, so this left the bar following the cursor with no button
+   *  held down, forever, never painting the reported position again. Nothing
+   *  is committed: no release means no seek the operator actually asked for. */
+  function abandonDrag() {
+    setDragSeconds(null);
+  }
+
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (!seekable) return;
     switch (event.key) {
@@ -180,6 +190,8 @@ export function MediaScrubber({
         className,
       )}
       onKeyDown={handleKeyDown}
+      onLostPointerCapture={abandonDrag}
+      onPointerCancel={abandonDrag}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}

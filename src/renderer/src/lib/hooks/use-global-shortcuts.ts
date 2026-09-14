@@ -12,13 +12,28 @@ const TEXT_ENTRY_TAGS = new Set(["INPUT", "SELECT", "TEXTAREA"]);
 // Enter and Space activate it, and the arrows drive the roving tabindex of the
 // resource grid.
 const ACTIVATION_TAGS = new Set(["BUTTON", "A"]);
-const KEYS_A_CONTROL_CONSUMES = new Set([
-  "Enter",
-  " ",
-  "ArrowUp",
-  "ArrowDown",
-  "ArrowLeft",
-  "ArrowRight",
+const ARROW_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]);
+const KEYS_A_CONTROL_CONSUMES = new Set(["Enter", " ", ...ARROW_KEYS]);
+// Widgets whose arrows belong to them, declared by role instead of implied by
+// a tag. `MediaScrubber` is what forced this: a `<div role="slider">` with its
+// own arrow handling, so on a focused scrubber ArrowRight seeked five seconds
+// AND advanced the live slide — in the same keypress, with the operator only
+// asking for one of them. A `<div>` is not in `ACTIVATION_TAGS`, so nothing
+// caught it; the role is exactly the declaration that says it should be.
+const ARROW_CONSUMING_ROLES = new Set([
+  "slider",
+  "spinbutton",
+  "listbox",
+  "option",
+  "combobox",
+  "menu",
+  "menubar",
+  "menuitem",
+  "tab",
+  "tablist",
+  "tree",
+  "treeitem",
+  "grid",
 ]);
 
 /**
@@ -36,7 +51,9 @@ const KEYS_A_CONTROL_CONSUMES = new Set([
 function suppressesKey(target: EventTarget | null, key: string): boolean {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable || TEXT_ENTRY_TAGS.has(target.tagName)) return true;
-  return ACTIVATION_TAGS.has(target.tagName) && KEYS_A_CONTROL_CONSUMES.has(key);
+  if (ACTIVATION_TAGS.has(target.tagName) && KEYS_A_CONTROL_CONSUMES.has(key)) return true;
+  const role = target.getAttribute("role");
+  return role !== null && ARROW_CONSUMING_ROLES.has(role) && ARROW_KEYS.has(key);
 }
 
 /**
@@ -54,9 +71,9 @@ function suppressesKey(target: EventTarget | null, key: string): boolean {
  * - Delete/Backspace: remove the selected library or schedule item.
  *
  * Suppressed entirely while `suspended` (any modal open — see
- * `useAnyModalOpen`) or while a text field has focus. On a focused button or
- * link only the keys that control actually consumes are suppressed — see
- * `suppressesKey`.
+ * `useAnyModalOpen`) or while a text field has focus. On a focused button,
+ * link, or element carrying a widget role, only the keys that control actually
+ * consumes are suppressed — see `suppressesKey`.
  */
 export function useGlobalShortcuts(suspended: boolean): void {
   useEffect(() => {
