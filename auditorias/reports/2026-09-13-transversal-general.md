@@ -257,6 +257,88 @@ Queda como la única línea de estas dos features sin ejecutar en la app real.
 
 ---
 
+## 1.sexies Estado — Tanda 4 aplicada (2026-09-14, duodécima sesión)
+
+**El bloqueante `C2` está cerrado.** Era el único 🔴 abierto del proyecto y el que la §10 pone
+primero en su tercera tanda. Total acumulado: **15 de 76 + los 2 de campo**, y **ningún bloqueante
+abierto**.
+
+| Paquete | Antes | Ahora | Por qué se movió |
+|---|---|---|---|
+| `electron` | 36.4.0 | **44.3.0** (Chromium 152.0.7977.78) | el hallazgo mismo: la 36 quedó sin parches |
+| `electron-builder` | 25.1.8 | **26.15.3** | la 25 no conoce la 44 |
+| `electron-vite` | 3.1.0 | **5.0.0** | la 3.1 topea en Vite 6 |
+| `vite` | 6.4.3, transitivo | **7.3.6, explícito** | era un peer resuelto por azar entre tres paquetes |
+
+**El salto no necesitó ni una línea de código de la app.** `npm run typecheck` pasó limpio contra
+los `.d.ts` de la 44 en el primer intento, y `lint` quedó con los mismos 5 warnings de siempre. El
+barrido previo de APIs contra las notas de ruptura de la 37 a la 44 explica por qué: de todo lo que
+esas ocho versiones rompieron, **este proyecto no usa nada** — ni `clipboard` (borrado del renderer
+en la 44), ni `webFrame` (`routingId` deprecado en la 38), ni `nativeImage.toBitmap()` (cambió a
+sRGB en la 43), ni `plugin-crashed` (borrado en la 38), ni `isUnityRunning` (borrado en la 44). Y el
+único target de Windows configurado ya era `x64`, justo lo que la 44 conservó al borrar `ia32`.
+
+**Lo que sí rompió, y no está en la página de rupturas donde uno la busca:** desde la **v42 el
+paquete `electron` dejó de bajar su binario en `postinstall`**. Un `npm install` limpio deja
+`node_modules/electron` sin `dist/` ni `path.txt`, y `typecheck`, `lint`, `db:smoke` y **hasta
+`electron-vite build` siguen pasando** — porque ninguno necesita el binario. Solo muere `npm run
+dev`, con un `Error: Electron uninstall` de cuatro palabras, porque `electron-vite` resuelve la ruta
+por su cuenta en vez de pasar por el CLI que dispararía la descarga perezosa. Se resolvió haciendo
+la descarga explícita: `"postinstall": "install-electron"` en `package.json`, que es el bin que el
+propio paquete trae, es idempotente y reusa la caché de `@electron/get`. Diagnóstico en
+[`.claude/knowledge/electron-42-stopped-downloading-its-own-binary.md`](../../.claude/knowledge/electron-42-stopped-downloading-its-own-binary.md).
+
+### Verificación de esta tanda — corrida contra la app real, en dev y empaquetada
+
+```
+npm run typecheck ✅   npm run lint ✅ (los mismos 5 warnings)   npm run db:smoke ✅ 18/18
+npm run build     ✅   npm run package:dir ✅ (darwin-arm64, firmado)
+```
+
+Cada cosa que la ficha de `C2` mandaba revalidar, medida:
+
+| Qué | Cómo se midió | Resultado |
+|---|---|---|
+| preload CJS en sandbox | claves del puente en la ventana de control | `["getPathForFile","invoke","on"]` y `window.require` **undefined** — el sandbox sigue en pie |
+| `webUtils.getPathForFile` | llamado con un `File` sintético | devuelve `""` sin lanzar: llega a `webUtils`, y un `File` sin ruta de disco no tiene ruta que dar |
+| prebuilds N-API de better-sqlite3 | `settings:get` en dev y en el `.app` | 17 claves las dos veces, sin ningún rebuild nativo |
+| ciclo de vida de las dos ventanas | targets CDP | control + proyección arriba; `projection:show` de una diapositiva la pintó (`1920x1440`, `complete`), NEGRO la borró, y el snapshot de main quedó en `"black"` |
+| `worship://` + `Range` | `<video>` real sobre `worship://asset/1485`, seek al 75% | 51,24 s, 2688×1512, **pedido 38,43 s → aterrizó en 38,43 s**: el 206 sigue vivo |
+| miniaturas (`nativeImage`) | `<img>` sobre `…/thumb` | 320×180 |
+| FTS5 | `bible:search` sobre la base real | 5 hits sobre 31.102 versículos |
+| LibreOffice → PDF → WebP | `deck:ensure` con `force: true` | 5 diapositivas en **3.325 ms**, `autoAdvance: true`, y la imagen decodifica a 1920×1440 |
+| `.app` empaquetado | lanzado y sondeado por CDP | SQLite, FTS5 y LibreOffice 26.8.0.3 respondiendo desde el bundle |
+
+### Lo que esta tanda NO pudo cerrar, y no es culpa del upgrade
+
+**El instalador de Windows no se puede generar en esta máquina.** `npm run package:win` empaqueta
+todo bien y muere recién en el último paso, envolviendo el payload en NSIS:
+`spawn Unknown system error -86`, que es `EBADARCH` — el `makensis` que trae electron-builder es un
+Mach-O **x86_64 de 2019** y esta es una M3 sin el runtime de Rosetta. **No es una regresión**: la
+electron-builder 25 ya había bajado el mismo NSIS 3.0.4.1 el 7 de septiembre, y ese `makensis`
+también es x86_64. Lo que sí quedó completo es `release/win-unpacked/` — `WorshipApp.exe` PE32+
+x86-64 con Electron 44.3.0, `bibles/` y `migrations/` en `resources/`, y el `win32-x64.node` de
+better-sqlite3 desempaquetado del asar — más el payload de 132 MB. O sea: **hay build de Windows
+entregable como carpeta; no hay `Setup.exe`.** Se destraba con `softwareupdate --install-rosetta`,
+que pide admin y acepta una licencia, así que lo corre el usuario. Diagnóstico en
+[`.claude/knowledge/windows-installer-needs-rosetta-on-apple-silicon.md`](../../.claude/knowledge/windows-installer-needs-rosetta-on-apple-silicon.md).
+
+**Un cambio de comportamiento heredado de la v43, anotado y no tocado:** un `showOpenDialog` sin
+`defaultPath` ahora abre en Descargas en vez de donde el sistema venía recordando. Nos toca en tres:
+vincular una carpeta (`files.ts:32`), elegir el logo (`files.ts:38`) e importar una Biblia
+(`bible.ts:25`). Para los dos últimos Descargas es un default razonable; para "vincular una carpeta"
+no lo es — la biblioteca del operador no vive ahí. No se cambió porque a dónde debe abrir cada
+diálogo es una decisión de producto, no un ajuste. Los otros tres diálogos ya pasan `defaultPath`
+explícito y no se enteran.
+
+### Lo que esta tanda NO tocó
+
+`H9` (ESLint con tipos + a11y), `M9`/`M10` (virtualizar las dos grillas), `M7`/`M8` (el N+1 de
+`ProgramsRepo`), el contraste del tema claro, y las decisiones de producto `M3`/`M5`. La §10 sigue
+valiendo como orden para lo que queda, sin su punto 13.
+
+---
+
 ## 2. Qué estaba cubierto y qué no
 
 Reconstruido leyendo los dos informes previos y el índice, antes de decidir el alcance.
