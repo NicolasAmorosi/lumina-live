@@ -42,6 +42,7 @@ export const programsHandlers: Pick<
   Handlers,
   | "programs:list"
   | "programs:load"
+  | "programs:peek"
   | "programs:save"
   | "programs:delete"
   | "programs:releaseCurrent"
@@ -52,6 +53,13 @@ export const programsHandlers: Pick<
 > = {
   "programs:list": () => getProgramsRepo().list(),
   "programs:load": ({ id }) => adoptProgram(getProgramsRepo().load(id)),
+  // Deliberately NOT `adoptProgram`: the programs modal opens its preview
+  // panel on a single click, and routing that through `programs:load` moved
+  // history attribution and the anti-eviction deck pins onto a program the
+  // operator was only looking at — while `program.store.currentProgramId` in
+  // the renderer never changed, leaving main and renderer disagreeing about
+  // which program is open.
+  "programs:peek": ({ id }) => getProgramsRepo().peek(id),
   "programs:save": (input) => {
     const summary = getProgramsRepo().save(input);
     // Saving is also how an unsaved service first gets an id, so the history

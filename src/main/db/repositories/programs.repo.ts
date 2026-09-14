@@ -73,14 +73,19 @@ export class ProgramsRepo {
     );
   }
 
+  /** Opening a program for real: stamps `lastOpenedAt`. */
   load(id: number): ProgramDTO {
+    const now = Date.now();
+    this.db.update(programs).set({ lastOpenedAt: now }).where(eq(programs.id, id)).run();
+    return { ...this.peek(id), lastOpenedAt: now };
+  }
+
+  /** Reading a program without opening it — the programs modal's preview panel.
+   *  Writes nothing at all, which is the whole point: `lastOpenedAt` is what
+   *  the list means by "last opened", and a glance is not an opening. */
+  peek(id: number): ProgramDTO {
     const p = this.db.select().from(programs).where(eq(programs.id, id)).get();
     if (!p) throw new Error(`Program ${id} not found`);
-    this.db
-      .update(programs)
-      .set({ lastOpenedAt: Date.now() })
-      .where(eq(programs.id, id))
-      .run();
     const items = this.db
       .select()
       .from(programItems)
@@ -88,7 +93,7 @@ export class ProgramsRepo {
       .orderBy(programItems.position)
       .all()
       .map(toItemDTO);
-    return { ...toSummary(p, items.length), lastOpenedAt: Date.now(), items };
+    return { ...toSummary(p, items.length), items };
   }
 
   /** Replaces a program's items wholesale inside one transaction — reordering,

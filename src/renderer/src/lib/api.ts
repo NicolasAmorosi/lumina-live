@@ -67,6 +67,9 @@ export const api = {
   programs: {
     list: () => invoke("programs:list", undefined),
     load: (id: number) => invoke("programs:load", { id }),
+    /** Read-only: use this anywhere the operator is looking at a program
+     *  rather than opening one. `load` adopts it in main. */
+    peek: (id: number) => invoke("programs:peek", { id }),
     save: (input: ProgramUpsert) => invoke("programs:save", input),
     delete: (id: number) => invoke("programs:delete", { id }),
     releaseCurrent: () => invoke("programs:releaseCurrent", undefined),

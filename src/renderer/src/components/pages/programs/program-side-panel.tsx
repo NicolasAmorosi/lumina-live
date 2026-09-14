@@ -125,7 +125,9 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
     setPreviewError(false);
     setPreviewLoading(true);
     void api.programs
-      .load(mode.program.id)
+      // `peek`, never `load`: this panel opens on a single click, and loading
+      // adopts the program in main (history attribution + deck pins).
+      .peek(mode.program.id)
       .then((full) => {
         if (!cancelled) setPreviewProgram(full);
       })
