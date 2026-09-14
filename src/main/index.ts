@@ -13,6 +13,7 @@ import {
 import { setBibleDb } from "./ipc/handlers/bible";
 import { registerAllIpcHandlers } from "./ipc";
 import { createControlWindow } from "./windows/control-window";
+import { installNavigationGuards } from "./windows/navigation-guards";
 import { projectionState } from "./services/projection-state";
 import { dbBackupDir, dbPath, biblesDir, migrationsDir, userDataDir } from "./paths";
 import { initSlidesSubsystem, shutdownSlides } from "./slides/deck-service";
@@ -35,6 +36,13 @@ const CONTENT_HASH_BACKFILL_DELAY_MS = 2_000;
 
 // Must run before app.whenReady().
 registerWorshipScheme();
+
+// Every window this app will ever create — control, projection, and the
+// offscreen rasterizer — hardened from one place, before any of them exists.
+// Registering it per-window instead would mean remembering to do it in the
+// next `new BrowserWindow`, which is exactly the kind of thing that gets
+// forgotten. See `windows/navigation-guards.ts` for what it stops.
+app.on("web-contents-created", (_event, contents) => installNavigationGuards(contents));
 
 // Two instances writing the same SQLite file (and fighting over which one
 // owns the projection window) is a real scenario — a user double-clicking
