@@ -1,5 +1,5 @@
 import { useT } from "@renderer/lib/i18n/i18n-provider";
-import { cn } from "@renderer/lib/utils";
+import { cn, formatClock } from "@renderer/lib/utils";
 import { IconButton, Icon, MediaPanel, ProgressBar } from "@renderer/components/ui";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { useLiveHeading } from "@renderer/lib/hooks/use-live";
@@ -16,9 +16,11 @@ const DECK_AUDIO_STATUS_KEY = mediaTargetKey({ kind: "audio", trackId: DECK_SOUN
  * "change what the congregation sees". That is the selected-vs-projected
  * confusion the COM version had.
  *
- * Styled as the same kind of row as `MediaTrackRow` (icon, truncated title,
- * fixed-size trailing buttons) so a PPT in flight reads as one more media
- * player instead of a one-off button bar — see `MediaPanel`.
+ * Styled as the same kind of row as `MediaTrackRow`, down to its geometry:
+ * icon, truncated title and fixed-size buttons on the first line, and the
+ * position bar spanning the full width below with a clock on the left — so a
+ * PPT in flight reads as one more media player stacked under the monitor
+ * instead of a one-off button bar. See `MediaPanel`.
  */
 export function DeckTransport() {
   const t = useT();
@@ -49,6 +51,7 @@ export function DeckTransport() {
   // timestamp (the reporter stops firing `timeupdate` once the element is
   // paused), so the same calculation just yields a frozen ratio/countdown.
   let elapsedRatio: number | null = null;
+  let elapsedSeconds: number | null = null;
   let secondsLeft: number | null = null;
   if (!isDesynced && advanceMs !== null && autoplayActive) {
     const boundary = liveDeck.cumulativeMs[current + 1];
@@ -57,78 +60,97 @@ export function DeckTransport() {
       const now = mediaStatus.currentTimeSeconds * 1000;
       const ratio = (now - start) / Math.max(1, boundary - start);
       elapsedRatio = Math.min(1, Math.max(0, ratio));
+      // Time spent on THIS slide, not the soundtrack's absolute position:
+      // the clock has to measure whatever the bar beside it measures, or the
+      // two halves of the same line describe different things.
+      elapsedSeconds = Math.max(0, (now - start) / 1000);
       secondsLeft = Math.max(0, Math.round((boundary - now) / 1000));
     }
   }
 
   return (
     <MediaPanel className="shrink-0">
-      <div className="flex items-center gap-2 px-2 py-1">
-        <Icon className="size-4 shrink-0 text-primary-ink" name="ppt" />
+      {/* Both lines are ONE child of `MediaPanel`, never two: the panel
+          divides its children with a border, and a rule between a transport's
+          controls and its own progress bar would split one row in half.
+          Same two-line shape as `MediaTrackRow` — controls on top, position
+          across the full width below. */}
+      <div className="flex flex-col gap-1 px-2 py-1.5">
+        <div className="flex items-center gap-2">
+          <Icon className="size-4 shrink-0 text-primary-ink" name="ppt" />
 
-        <span className="min-w-0 flex-1 truncate text-sm text-foreground">{heading ?? ""}</span>
+          <span className="min-w-0 flex-1 truncate text-sm text-foreground">{heading ?? ""}</span>
 
-        <IconButton
-          aria-label={t("deck.previous")}
-          disabled={current <= 1}
-          onClick={() => advanceSlide(-1)}
-          size="xs"
-          variant="ghost"
-        >
-          <Icon name="prev" />
-        </IconButton>
+          <IconButton
+            aria-label={t("deck.previous")}
+            disabled={current <= 1}
+            onClick={() => advanceSlide(-1)}
+            size="xs"
+            variant="ghost"
+          >
+            <Icon name="prev" />
+          </IconButton>
 
-        {liveDeck.autoAdvance ? (
-          <>
-            <IconButton
-              aria-label={autoplay === "playing" ? t("deck.pause") : t("deck.play")}
-              onClick={() => toggleAutoplay()}
-              size="xs"
-              variant="ghost"
-            >
-              <Icon name={autoplay === "playing" ? "pause" : "play"} />
-            </IconButton>
-            <IconButton aria-label={t("deck.restart")} onClick={() => restartDeck()} size="xs" variant="ghost">
-              <Icon name="restart" />
-            </IconButton>
-          </>
-        ) : null}
-
-        <IconButton
-          aria-label={t("deck.next")}
-          disabled={current >= total}
-          onClick={() => advanceSlide(1)}
-          size="xs"
-          variant="ghost"
-        >
-          <Icon name="next" />
-        </IconButton>
-
-        <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-subtle">
-          {t("deck.counter", { current, total })}
-        </span>
-
-        <IconButton aria-label={t("common.delete")} onClick={clearBaseContent} size="xs" variant="ghost">
-          <Icon name="close" />
-        </IconButton>
-      </div>
-
-      {elapsedRatio !== null || isDesynced ? (
-        <div className="flex items-center gap-2 px-2 py-1">
-          <ProgressBar className={cn("flex-1", isDesynced && "opacity-40")} value={elapsedRatio ?? 0} />
-          {isDesynced ? (
-            <button
-              className="shrink-0 whitespace-nowrap text-xs font-medium text-primary-ink hover:underline"
-              onClick={() => resyncDeck()}
-              type="button"
-            >
-              {t("deck.resync")}
-            </button>
-          ) : secondsLeft !== null ? (
-            <span className="shrink-0 text-xs text-subtle">{t("deck.nextIn", { seconds: secondsLeft })}</span>
+          {liveDeck.autoAdvance ? (
+            <>
+              <IconButton
+                aria-label={autoplay === "playing" ? t("deck.pause") : t("deck.play")}
+                onClick={() => toggleAutoplay()}
+                size="xs"
+                variant="ghost"
+              >
+                <Icon name={autoplay === "playing" ? "pause" : "play"} />
+              </IconButton>
+              <IconButton aria-label={t("deck.restart")} onClick={() => restartDeck()} size="xs" variant="ghost">
+                <Icon name="restart" />
+              </IconButton>
+            </>
           ) : null}
+
+          <IconButton
+            aria-label={t("deck.next")}
+            disabled={current >= total}
+            onClick={() => advanceSlide(1)}
+            size="xs"
+            variant="ghost"
+          >
+            <Icon name="next" />
+          </IconButton>
+
+          <span className="shrink-0 whitespace-nowrap text-xs tabular-nums text-subtle">
+            {t("deck.counter", { current, total })}
+          </span>
+
+          <IconButton aria-label={t("common.delete")} onClick={clearBaseContent} size="xs" variant="ghost">
+            <Icon name="close" />
+          </IconButton>
         </div>
-      ) : null}
+
+        {elapsedRatio !== null || isDesynced ? (
+          <div className="flex items-center gap-2">
+            {/* Keeps its box while desynced (when there is no honest number to
+                print) so the bar starts on the same pixel as every scrubber
+                stacked above and below it. */}
+            <span className="w-[4ch] shrink-0 text-xs tabular-nums text-subtle">
+              {elapsedSeconds === null ? "" : formatClock(elapsedSeconds)}
+            </span>
+            <ProgressBar className={cn("min-w-0 flex-1", isDesynced && "opacity-40")} value={elapsedRatio ?? 0} />
+            {isDesynced ? (
+              <button
+                className="shrink-0 whitespace-nowrap text-xs font-medium text-primary-ink hover:underline"
+                onClick={() => resyncDeck()}
+                type="button"
+              >
+                {t("deck.resync")}
+              </button>
+            ) : secondsLeft !== null ? (
+              <span className="shrink-0 whitespace-nowrap text-xs text-subtle">
+                {t("deck.nextIn", { seconds: secondsLeft })}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
     </MediaPanel>
   );
 }

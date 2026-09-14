@@ -46,7 +46,7 @@ function DeckAudioStrip({ assetId, deck }: { assetId: number; deck: DeckDTO }) {
 
   return (
     <MediaPanel>
-      <div className="flex items-center gap-2 px-2 py-1 text-sm">
+      <div className="flex items-center gap-2 px-2 py-1.5 text-sm">
         <Icon className="size-4 shrink-0 text-muted-foreground" name="audio" />
         <span className="min-w-0 flex-1 truncate text-foreground">
           {deck.soundtrack?.name ?? t("deck.audio.none")}

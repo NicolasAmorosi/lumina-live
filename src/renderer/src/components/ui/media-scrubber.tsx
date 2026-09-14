@@ -66,6 +66,11 @@ function clamp(value: number, min: number, max: number): number {
  * the same code and simply confirms on its very next render: `seekPreview()`
  * writes its store synchronously, which is why it never flicked in the first
  * place.
+ *
+ * Width belongs to the caller: the bar spans a transport row's whole width
+ * between its two clocks (`min-w-0 flex-1` from `MediaTrackRow`), so the base
+ * classes deliberately carry no `shrink-0` — it has to be able to give width
+ * back to the fixed-size clocks instead of overflowing the row.
  */
 export function MediaScrubber({
   className,
@@ -185,7 +190,7 @@ export function MediaScrubber({
       aria-valuemin={0}
       aria-valuenow={pct}
       className={cn(
-        "group/scrubber relative flex h-4 w-full shrink-0 touch-none items-center",
+        "group/scrubber relative flex h-4 w-full touch-none items-center",
         seekable ? "cursor-pointer" : "cursor-default opacity-50",
         className,
       )}
