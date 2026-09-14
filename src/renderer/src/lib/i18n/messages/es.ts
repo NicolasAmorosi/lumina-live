@@ -177,6 +177,12 @@ const es = {
   },
   live: { title: "En Vivo", disconnected: "Sin pantalla", noSignal: "Sin señal" },
   footer: { black: "NEGRO", logo: "LOGO", live: "VIVO", clear: "LIMPIAR" },
+  projector: {
+    closedUnexpectedly: "Se cerró la ventana de proyección",
+    reopen: "Reabrir",
+    noScreen: "No hay ninguna pantalla para proyectar",
+    chooseScreen: "Elegir pantalla",
+  },
   programs: {
     title: "Programas",
     manage: "Administrar programas",

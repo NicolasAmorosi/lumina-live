@@ -3,6 +3,8 @@ import { onIpc } from "@renderer/lib/ipc";
 import { selectOutputMemo, useProjectionStore } from "@renderer/stores/projection.store";
 import { useAudioStore, type LiveAudioTrack } from "@renderer/stores/audio.store";
 import { useDeckStore } from "@renderer/stores/deck.store";
+import { useDisplayStore } from "@renderer/stores/display.store";
+import { freezeLivePositions } from "@renderer/lib/actions/live-positions";
 import { getCachedMediaAsset } from "@renderer/lib/hooks/use-media-asset";
 import { t } from "@renderer/lib/i18n/i18n-provider";
 import { toast } from "@renderer/lib/toast";
@@ -106,9 +108,40 @@ export function startProjectionEffects(): () => void {
   // Nothing else can tell: `presentationOpen` is otherwise only ever written by
   // the actions that open and close it deliberately, so it would stay `true`
   // forever and make `openIfNeeded()` a silent no-op.
+  let closedToastId: string | null = null;
   const unsubscribeProjectionClosed = onIpc("projection-closed", () => {
+    // Every media element that was playing has just ceased to exist, so its
+    // position is folded back into where it would resume before anything can
+    // reopen the window. See `live-positions.ts`.
+    freezeLivePositions();
     useProjectionStore.getState().setPresentationOpen(false);
+    // The header quietly switching to "Sin pantalla" is not a signal an
+    // operator sees: mid-service they are looking at the room, not at the
+    // chrome. The toast never auto-dismisses (toast.store gives any toast with
+    // an `action` a `durationMs` of null), and its action reopens onto
+    // whatever was live, replayed from main's snapshot — routing it through
+    // `open()` instead would land on NEGRO and force a second EN VIVO, which
+    // re-sends the PREVIEW target rather than what the congregation was
+    // watching.
+    closedToastId = toast.danger(t("projector.closedUnexpectedly"), {
+      action: {
+        label: t("projector.reopen"),
+        onClick: () => void useDisplayStore.getState().openIfNeeded(),
+      },
+    });
   });
+
+  // Retires that toast once the projector is back by any route — its own
+  // action, EN VIVO, NEGRO/LOGO or Ajustes. A permanent notice offering to
+  // reopen something that is already open is pure noise in a dark booth.
+  const unsubscribePresentationOpen = useProjectionStore.subscribe(
+    (state) => state.presentationOpen,
+    (open) => {
+      if (!open || closedToastId === null) return;
+      toast.dismiss(closedToastId);
+      closedToastId = null;
+    },
+  );
 
   const unsubscribeStatus = onIpc("media-status", (status) => {
     useProjectionStore.getState().setMediaStatus(status);
@@ -165,6 +198,7 @@ export function startProjectionEffects(): () => void {
     unsubscribeAudioTracks();
     unsubscribeOverlayForAudio();
     unsubscribeProjectionClosed();
+    unsubscribePresentationOpen();
     unsubscribeStatus();
     unsubscribeError();
     unsubscribeProgress();

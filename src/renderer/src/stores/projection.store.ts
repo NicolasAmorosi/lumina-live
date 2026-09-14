@@ -82,6 +82,13 @@ export type ProjectionStoreState = {
   setLogoUrl: (url: string | null) => void;
   setPresentationOpen: (open: boolean) => void;
   setVideoPaused: (paused: boolean) => void;
+  /** Moves where the live video would resume from if its element had to be
+   *  mounted again — a projection window that died or is about to be recreated
+   *  (see `lib/actions/live-positions.ts`). Patches `base` in place instead of
+   *  going through `setBase`, which resets `videoPaused` and means "something
+   *  new is live"; nothing about what the projector shows changes here, and
+   *  `epoch` deliberately stays put so no `<video>` remounts. */
+  setVideoResumeAt: (startAtSeconds: number) => void;
 
   setLiveDeck: (deck: LiveDeck | null) => void;
   setSlideIndex: (index: number) => void;
@@ -138,6 +145,12 @@ export const useProjectionStore = create<ProjectionStoreState>()(
     setLogoUrl: (logoUrl) => set({ logoUrl }),
     setPresentationOpen: (presentationOpen) => set({ presentationOpen }),
     setVideoPaused: (videoPaused) => set({ videoPaused }),
+    setVideoResumeAt: (startAtSeconds) =>
+      set((state) => {
+        const { base } = state;
+        if (base?.kind !== "video" || base.startAtSeconds === startAtSeconds) return state;
+        return { base: { ...base, startAtSeconds } };
+      }),
 
     setLiveDeck: (liveDeck) =>
       set((state) => ({

@@ -55,6 +55,12 @@ type AudioStoreState = {
    *  already in the list but paused, so it plays again instead of stacking a
    *  second instance of the same audio. */
   restartTrack: (trackId: string, startAtSeconds: number) => void;
+  /** Rewrites where the named tracks would resume from if their elements had
+   *  to be mounted again — see `lib/actions/live-positions.ts`. Deliberately
+   *  does NOT bump `epoch`: nothing should remount while the projection window
+   *  this describes is still on screen, and the value is only ever read by the
+   *  NEXT mount. Tracks absent from the map keep the point they had. */
+  setStartPositions: (positions: ReadonlyMap<string, number>) => void;
   /** Replaces the single deck-soundtrack slot; `null` clears it. Every other
    *  track (standalone audio assets) is untouched — a deck change never cuts
    *  audio the operator sent live independently. */
@@ -82,6 +88,22 @@ export const useAudioStore = create<AudioStoreState>()(
           t.trackId === trackId ? { ...t, epoch: nextEpoch(), paused: false, startAtSeconds } : t,
         ),
       })),
+
+    setStartPositions: (positions) =>
+      set((state) => {
+        let changed = false;
+        const tracks = state.tracks.map((track) => {
+          const at = positions.get(track.trackId);
+          if (at === undefined || at === track.startAtSeconds) return track;
+          changed = true;
+          return { ...track, startAtSeconds: at };
+        });
+        // No-op when nothing moved, for the same reason as
+        // `pruneMediaStatus`: this list is subscribed to by the push to main,
+        // and a fresh array with identical contents would re-send every track
+        // for nothing.
+        return changed ? { tracks } : state;
+      }),
 
     setDeckTrack: (track) =>
       set((state) => {
