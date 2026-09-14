@@ -56,7 +56,8 @@ export type ProjectionOutputKind =
  *  in over the old one without ever going fully black; "fade-through-black"
  *  fades out to black first, then in. Configurable from Settings →
  *  Projection. */
-export type TransitionStyle = "none" | "crossfade" | "fade-through-black";
+export const TRANSITION_STYLES = ["none", "crossfade", "fade-through-black"] as const;
+export type TransitionStyle = (typeof TRANSITION_STYLES)[number];
 
 /** Carried on every `ProjectionOutput` so the projection window (and the
  *  LIVE monitor) can tell "the same scene, re-sent" from "a genuinely new

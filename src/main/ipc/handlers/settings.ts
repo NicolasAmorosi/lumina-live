@@ -1,9 +1,39 @@
 import type { Handlers } from "../register";
 import { getSettingsRepo } from "../../services/repos";
+import { IpcError } from "@shared/ipc/result";
+import { SETTINGS_VALIDATORS, isSettingsKey, type SettingsMap } from "@shared/types/settings";
+
+/**
+ * The IPC contract is a compile-time guarantee, and this is the one channel
+ * where that is not enough: it writes durable rows. `registerHandlers` casts
+ * `req: unknown` to the declared type and `SettingsRepo.setMany` inserts
+ * whatever it is handed — its `if (key in current)` guard protects the
+ * in-memory cache, not the table.
+ *
+ * Rejected as a whole rather than filtered down to the good keys: a caller
+ * sending a bad value is a bug, and half-applying its batch would leave the
+ * renderer's optimistic state disagreeing with the database in a way nobody
+ * ever sees. `settings.store.update` re-reads from main on a rejection, so the
+ * UI snaps back to the truth.
+ */
+function assertValidSettings(partial: Partial<SettingsMap>): void {
+  for (const [key, value] of Object.entries(partial)) {
+    if (!isSettingsKey(key)) {
+      throw new IpcError({ code: "INVALID_SETTING", message: `Clave de ajuste desconocida: ${key}` });
+    }
+    if (!SETTINGS_VALIDATORS[key](value)) {
+      throw new IpcError({
+        code: "INVALID_SETTING",
+        message: `Valor inválido para el ajuste ${key}: ${JSON.stringify(value)}`,
+      });
+    }
+  }
+}
 
 export const settingsHandlers: Pick<Handlers, "settings:get" | "settings:set"> = {
   "settings:get": () => getSettingsRepo().getAll(),
   "settings:set": (partial) => {
+    assertValidSettings(partial);
     getSettingsRepo().setMany(partial);
   },
 };
