@@ -17,7 +17,6 @@ import { useProgramStore } from "@renderer/stores/program.store";
 import { useSettingsStore } from "@renderer/stores/settings.store";
 import { useDeckStore } from "@renderer/stores/deck.store";
 import { api } from "@renderer/lib/api";
-import { toast } from "@renderer/lib/toast";
 import { readOsFilesDrag, setMediaAssetDrag } from "@renderer/lib/dnd";
 import { previewAsset } from "@renderer/lib/actions/preview";
 import { goLive } from "@renderer/lib/actions/playback";
@@ -26,7 +25,6 @@ import { addLinkedFolder, removeLinkedFolder, selectMediaSourceView } from "@ren
 import { useDebouncedCallback } from "@renderer/lib/hooks/use-debounced-callback";
 import { AssetTile } from "./asset-tile";
 import { MediaSourceBar } from "./media-source-bar";
-import { RemoveAssetConfirm } from "./remove-asset-confirm";
 import { PanelProgressRow } from "./panel-progress-row";
 import { PrewarmConfirmModal } from "./prewarm-confirm-modal";
 import { PREWARM_VISIBLE_MAX, type AssetKind } from "@shared/constants";
@@ -71,17 +69,27 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
   const selectedId = useLibraryStore((s) => s.selectedId);
   const refresh = useLibraryStore((s) => s.refresh);
   const addFiles = useLibraryStore((s) => s.addFiles);
-  const blockedAssetId = useLibraryStore((s) => s.blockedAssetId);
-  const dismissBlocked = useLibraryStore((s) => s.dismissBlocked);
+  const pendingRemovalIds = useLibraryStore((s) => s.pendingRemovalIds);
   const addItem = useProgramStore((s) => s.addItem);
-  const [confirmAssetId, setConfirmAssetId] = useState<number | null>(null);
   const activeView = useLibraryStore((s) => s.activeView[kind]);
   const refreshFolder = useLibraryStore((s) => s.refreshFolder);
   const folders = useSettingsStore((s) => s.settings["library.linkedFolders"][kind]);
   const folderAssets = useLibraryStore((s) => s.folderAssets[folderAssetsKey(kind, activeView)]);
 
   const isFolderView = activeView !== "recent";
-  const assets = isFolderView ? (folderAssets ?? EMPTY_ASSETS) : recentAssets;
+  const visibleAssets = isFolderView ? (folderAssets ?? EMPTY_ASSETS) : recentAssets;
+  // An asset the operator has just removed is gone from the grid immediately,
+  // even though its delete has not been sent yet — the undo window in
+  // `lib/actions/remove-asset.ts`. Filtering here rather than in the store
+  // keeps `byKind`/`folderAssets` a faithful copy of what main holds, which is
+  // what every refresh rewrites.
+  const assets = useMemo(
+    () =>
+      pendingRemovalIds.length === 0
+        ? visibleAssets
+        : visibleAssets.filter((asset) => !pendingRemovalIds.includes(asset.id)),
+    [pendingRemovalIds, visibleAssets],
+  );
   // "Empty" and "not read yet" are different answers and the grid used to
   // give the same one for both — a linked folder with 600 files showed "no hay
   // recursos" for as long as the listing took, which on a share is seconds.
@@ -265,21 +273,6 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
   );
   const pendingDeckCount = pendingDeckAssetIds.length;
 
-  // Surfaced as a toast (rather than an in-panel Callout) — the store's
-  // `blockedAssetId` only needs to live long enough to hand the id off here.
-  // It still auto-dismisses like every other toast: the action stays
-  // reachable through the library's own remove flow, so nothing is lost once
-  // it disappears.
-  useEffect(() => {
-    if (blockedAssetId === null) return;
-    const id = blockedAssetId;
-    toast.danger(t("library.removeBlocked"), {
-      action: { label: t("library.removeAnyway"), onClick: () => setConfirmAssetId(id) },
-      durationMs: 6000,
-    });
-    dismissBlocked();
-  }, [blockedAssetId, dismissBlocked, t]);
-
   async function handleAdd() {
     const paths = await api.files.pick(kind, true);
     if (paths.length > 0) await addFiles(paths, kind);
@@ -362,13 +355,6 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
           />
         )}
       </PanelBody>
-      <RemoveAssetConfirm
-        assetId={confirmAssetId}
-        assetMissing={recentAssets.find((a) => a.id === confirmAssetId)?.missingSince != null}
-        onOpenChange={(open) => {
-          if (!open) setConfirmAssetId(null);
-        }}
-      />
       <ConfirmModal
         confirmLabel={t("resources.removeFolder")}
         description={t("resources.removeFolderConfirmBody", { folder: confirmRemoveFolder ?? "" })}

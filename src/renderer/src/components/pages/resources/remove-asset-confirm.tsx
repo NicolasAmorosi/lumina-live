@@ -9,16 +9,21 @@ import type { MediaAssetUsage } from "@shared/types/media";
 type RemoveAssetConfirmProps = {
   /** `null` means closed — also the target asset, so no separate `open` flag. */
   assetId: number | null;
-  assetMissing: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
-/** "Eliminar igualmente" — the escape hatch from the in-use Callout. Confirms,
+/** "Eliminar igualmente" — the escape hatch from the in-use toast. Confirms,
  *  then force-deletes: the asset AND every saved-program item pointing at it
- *  (see `forceRemoveAsset` / `main/services/media-asset-removal.ts`). */
-export function RemoveAssetConfirm({ assetId, assetMissing, onOpenChange }: RemoveAssetConfirmProps) {
+ *  (see `forceRemoveAsset` / `main/services/media-asset-removal.ts`).
+ *
+ *  Mounted exactly once, by `App` — the offer is a toast action raised from
+ *  `lib/actions/remove-asset.ts` and its target lives in `ui.store`. Rendering
+ *  it per `MediaBrowser` would put one dialog on screen per resource tab the
+ *  operator has visited. */
+export function RemoveAssetConfirm({ assetId, onOpenChange }: RemoveAssetConfirmProps) {
   const t = useT();
   const [usages, setUsages] = useState<MediaAssetUsage[]>([]);
+  const [assetMissing, setAssetMissing] = useState(false);
 
   // Cleared and re-read per asset, with a cancellation guard. Without it the
   // dialog could list the programs of a PREVIOUSLY targeted asset while
@@ -27,14 +32,21 @@ export function RemoveAssetConfirm({ assetId, assetMissing, onOpenChange }: Remo
   // someone else's data is the worst possible failure here. The early
   // `return` on `null` also used to leave the last list on screen for the
   // first instant of the next opening.
+  //
+  // `missingSince` is asked of main too, rather than taken as a prop: the
+  // caller is now `App`, which has no library grid to look the asset up in —
+  // and the grid was the wrong source anyway, since the Delete shortcut can
+  // target a linked-folder row that was never in `byKind`.
   useEffect(() => {
     setUsages([]);
+    setAssetMissing(false);
     if (assetId === null) return;
     let cancelled = false;
-    void api.library
-      .usages(assetId)
-      .then((rows) => {
-        if (!cancelled) setUsages(rows);
+    void Promise.all([api.library.usages(assetId), api.library.get(assetId)])
+      .then(([rows, asset]) => {
+        if (cancelled) return;
+        setUsages(rows);
+        setAssetMissing(asset?.missingSince != null);
       })
       .catch(() => undefined);
     return () => {

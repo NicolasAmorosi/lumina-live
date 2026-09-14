@@ -31,10 +31,13 @@ type LibraryStoreState = {
   /** Keyed by `kind` (library list) or `folderAssetsKey(...)` (linked folder). */
   viewStatus: Record<string, ViewStatus>;
   selectedId: number | null;
-  /** Set (to the asset's id) when a delete fails because it's still used by a
-   *  saved program (`MEDIA_ASSET_IN_USE`, handled in `lib/actions/remove-asset.ts`)
-   *  — cleared on the next selection change, or explicitly via `dismissBlocked`. */
-  blockedAssetId: number | null;
+  /** Assets the operator has deleted but whose delete has NOT been sent yet —
+   *  see `lib/actions/remove-asset.ts`. They are hidden from every grid while
+   *  the undo toast is up, so the removal LOOKS immediate while remaining
+   *  free to cancel: nothing is destroyed until the window closes. An array
+   *  rather than a Set so the store stays comparable by reference for
+   *  Zustand's default equality. */
+  pendingRemovalIds: number[];
   /** Only surfaced for a batch big enough that it needs it — see
    *  `library-import.ts`'s `PROGRESS_THRESHOLD` on the main side. */
   imports: ImportProgress | null;
@@ -43,8 +46,8 @@ type LibraryStoreState = {
   addFiles: (paths: string[], kind: AssetKind) => Promise<void>;
   applyImportProgress: (progress: ImportProgress) => void;
   clearImportProgress: () => void;
-  setBlockedAssetId: (id: number | null) => void;
-  dismissBlocked: () => void;
+  beginPendingRemoval: (id: number) => void;
+  endPendingRemoval: (id: number) => void;
   select: (id: number | null) => void;
   setActiveView: (kind: AssetKind, view: MediaSourceView) => void;
   refreshFolder: (kind: AssetKind, folderPath: string) => Promise<void>;
@@ -88,10 +91,10 @@ export const useLibraryStore = create<LibraryStoreState>((set, get) => ({
   folderAssets: {},
   viewStatus: {},
   selectedId: null,
-  blockedAssetId: null,
+  pendingRemovalIds: [],
   imports: null,
 
-  setActiveTab: (activeTab) => set({ activeTab, selectedId: null, blockedAssetId: null }),
+  setActiveTab: (activeTab) => set({ activeTab, selectedId: null }),
 
   refresh: async (kind) => {
     const seq = nextSeq(kind);
@@ -121,10 +124,22 @@ export const useLibraryStore = create<LibraryStoreState>((set, get) => ({
   applyImportProgress: (progress) => set({ imports: progress }),
   clearImportProgress: () => set({ imports: null }),
 
-  setBlockedAssetId: (blockedAssetId) => set({ blockedAssetId }),
-  dismissBlocked: () => set({ blockedAssetId: null }),
 
-  select: (selectedId) => set({ selectedId, blockedAssetId: null }),
+  beginPendingRemoval: (id) =>
+    set((state) =>
+      state.pendingRemovalIds.includes(id)
+        ? state
+        : { pendingRemovalIds: [...state.pendingRemovalIds, id] },
+    ),
+
+  endPendingRemoval: (id) =>
+    set((state) =>
+      state.pendingRemovalIds.includes(id)
+        ? { pendingRemovalIds: state.pendingRemovalIds.filter((pending) => pending !== id) }
+        : state,
+    ),
+
+  select: (selectedId) => set({ selectedId }),
 
   setActiveView: (kind, view) =>
     set((state) => ({ activeView: { ...state.activeView, [kind]: view }, selectedId: null })),

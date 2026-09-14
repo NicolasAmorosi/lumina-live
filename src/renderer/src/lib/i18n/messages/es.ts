@@ -70,6 +70,8 @@ const es = {
     remove: "Quitar",
     removeHint: "Quitar de la biblioteca el elemento seleccionado",
     removeBlocked: "No se puede quitar: se usa en un programa guardado.",
+    removeUndo: "Se quitó «{name}» de la biblioteca.",
+    removeUndoGeneric: "Se quitó el recurso de la biblioteca.",
     removeAnyway: "Eliminar igualmente",
     removeConfirmTitle: "¿Eliminar igualmente?",
     removeConfirmIntro: "Este elemento se usa en:",
@@ -296,6 +298,7 @@ const es = {
     delete: "Eliminar",
     dismiss: "Cerrar aviso",
     retry: "Reintentar",
+    undo: "Deshacer",
   },
 };
 

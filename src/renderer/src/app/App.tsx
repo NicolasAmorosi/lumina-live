@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@renderer/components/pages/layout/AppShell";
 import { ProgramsModal } from "@renderer/components/pages/programs/ProgramsModal";
 import { SettingsModal } from "@renderer/components/pages/settings/SettingsModal";
+import { RemoveAssetConfirm } from "@renderer/components/pages/resources/remove-asset-confirm";
 import { useAnyModalOpen } from "@renderer/components/shared/modal";
 import { ErrorBoundary } from "@renderer/components/shared/error-boundary";
 import { Button, LoadingState, ToastHost } from "@renderer/components/ui";
@@ -13,6 +14,7 @@ import { useSettingsStore } from "@renderer/stores/settings.store";
 import { useDeckStore } from "@renderer/stores/deck.store";
 import { useDisplayStore } from "@renderer/stores/display.store";
 import { useLibraryStore } from "@renderer/stores/library.store";
+import { useUiStore } from "@renderer/stores/ui.store";
 import { startProjectionEffects } from "@renderer/effects/projection-sync";
 import { startLibrarySyncEffects } from "@renderer/effects/library-sync";
 import { useGlobalShortcuts } from "@renderer/lib/hooks/use-global-shortcuts";
@@ -25,7 +27,17 @@ export function App() {
   const [programsInitialMode, setProgramsInitialMode] = useState<{ kind: "create" } | undefined>(
     undefined,
   );
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  // The only modal flags that live outside this component: a toast raised
+  // from `display.store` (no screen to project on) offers to open Ajustes ->
+  // Pantalla, and a toast action has no component tree under it. See
+  // `ui.store.ts`.
+  const settingsOpen = useUiStore((s) => s.settingsOpen);
+  const setSettingsOpen = useUiStore((s) => s.setSettingsOpen);
+  // Same reasoning, and one more: mounted here it exists ONCE. Rendered by
+  // `MediaBrowser` it was one dialog per resource tab the operator had
+  // visited, since those panels stay mounted after their first visit.
+  const removeAssetConfirmId = useUiStore((s) => s.removeAssetConfirmId);
+  const setRemoveAssetConfirmId = useUiStore((s) => s.setRemoveAssetConfirmId);
   const loadSettings = useSettingsStore((s) => s.load);
   const logoPath = useSettingsStore((s) => s.settings["logo.path"]);
   const setLogoUrl = useProjectionStore((s) => s.setLogoUrl);
@@ -111,6 +123,12 @@ export function App() {
       </ErrorBoundary>
       <ProgramsModal initialMode={programsInitialMode} onOpenChange={setProgramsOpen} open={programsOpen} />
       <SettingsModal onOpenChange={setSettingsOpen} open={settingsOpen} />
+      <RemoveAssetConfirm
+        assetId={removeAssetConfirmId}
+        onOpenChange={(open) => {
+          if (!open) setRemoveAssetConfirmId(null);
+        }}
+      />
       <ToastHost />
     </>
   );
