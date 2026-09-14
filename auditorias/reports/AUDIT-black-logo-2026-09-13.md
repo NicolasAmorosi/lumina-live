@@ -46,6 +46,59 @@ una segunda pantalla.
 
 ---
 
+## Estado — segunda pasada (2026-09-13, misma fecha)
+
+Se cerraron los hallazgos que habían quedado abiertos y **se corrió el checklist manual** contra
+la app real por CDP, con un `userData` aislado (la biblioteca real del usuario no se tocó).
+
+| Hallazgo | Archivos | Qué se hizo |
+|---|---|---|
+| 🟡 `M1` | `lib/actions/live-positions.ts` **(nuevo)**, `audio.store.ts`, `projection.store.ts`, `display.store.ts`, `effects/projection-sync.ts` | `freezeLivePositions()` pliega la última posición reportada (`mediaStatus`) dentro del `startAtSeconds` de cada pista de audio **y del video en vivo**, en los tres caminos que destruyen la ventana: el `projection-closed` (⌘W/crash), `display.store.close()` y el reopen de `setDisplayId`. El guard de epoch es el mismo de `end-of-playback.ts`. `epoch` NO se toca: nada debe remontar mientras el proyector que se está describiendo sigue en pantalla |
+| 🔵 `L1` | `display.store.ts`, `stores/ui.store.ts` **(nuevo)**, `App.tsx`, `lib/i18n/messages/es.ts` | `openIfNeeded()` ahora espera a `load()` si todavía no corrió (dedupeado con una promesa in-flight, porque el primer EN VIVO le puede ganar al arranque) y, si aun así no hay pantalla, levanta un toast con acción que abre Ajustes → Pantalla. La bandera del modal de Ajustes subió a un store mínimo porque una acción de toast no tiene árbol de React debajo |
+| ⚪ LIMPIAR | — | **Decisión deliberada del usuario: se queda dentro de Ajustes.** Es destructiva y el modal la protege de un clic accidental en la cabina. El ⚪ queda cerrado, no pendiente |
+| ➕ `N2` (fuera del informe) | `effects/projection-sync.ts`, `lib/toast.ts` | El cierre de `C1` era mudo: la cabecera pasaba a «Sin pantalla» y nada más, y el operador mira a la congregación, no al chrome. Ahora el `projection-closed` levanta un toast persistente («Se cerró la ventana de proyección» + **Reabrir**) que se retira solo en cuanto el proyector vuelve por cualquier vía. Reabre con `openIfNeeded()`, no con `open()`: `open()` cae en NEGRO y obligaría a un segundo EN VIVO, que reenvía el target de **preview**, no lo que la congregación estaba viendo |
+
+### Lo que `M1` escondía: el deck no solo reiniciaba la música, volvía a la diapositiva 1
+
+El informe describía `M1` como «el audio vuelve al segundo 0» y daba por cubierto el caso del deck
+(«el audio del deck se re-sincroniza solo con `deck-autoplay`»). **No se re-sincroniza.** El
+`seededEpoch` de `deck-autoplay.ts:260` se consume en el primer `media-status` de la primera
+reproducción del deck, y reabrir la ventana no toca `soundtrackEpoch` — así que el bloque de
+recuperación («reopening the projection window mid-deck gives us a fresh `<audio>` that starts at
+0») **nunca vuelve a entrar**. Con la pista de vuelta en 0 y el modo «synced» derivando el cursor
+del reloj de audio, `slideAtAudioTime` devolvía 1 y arrastraba el deck a la primera diapositiva
+delante de la congregación.
+
+Verificado como A/B en la app real: con el congelado desactivado, un deck en la diapositiva 4 con
+la banda sonora en 95 s volvió a **la diapositiva 1** y al segundo ~6,8; con el congelado puesto,
+se quedó en la 4 con el audio en 104 s.
+
+### Checklist manual — ejecutado por CDP
+
+App real (`electron-vite dev -- --remote-debugging-port=9222 --user-data-dir=<aislado>`), decks y
+media reales del usuario (`~/Downloads/PPT test/`, un mp3 de 9 min, un mp4 de 2 min).
+
+| # | Caso | Resultado |
+|---|---|---|
+| 1 | `C1` — matar la ventana de proyección desde el sistema | ✅ la cabecera pasa a «Sin pantalla», aparece el toast con **Reabrir**, y reabrir restaura lo que estaba en vivo. El toast se retira solo |
+| 2 | `H1` — clic en LOGO (con foco real en el `<button>`) y después `B` | ✅ `b`/`l` llegan al proyector (`logo → black → logo → black`); `ArrowDown` sigue suprimido sobre el botón, como debe |
+| 3 | `H2` — cambiar de pantalla con la ventana abierta | ⛔ **no verificable**: una sola pantalla física |
+| 4 | `M1` audio — pista suelta | ✅ 8,29 s → congelada en 8,28 → retoma en 12,07 tras reabrir |
+| 4b | `M1` video — video en vivo + pista suelta a la vez | ✅ video 10,92 → 10,81 → 14,75; audio 45,16 → 45,12 → 49,11, independientes |
+| 4c | `M1` deck — banda sonora enlazada, modo «synced» | ✅ diapositiva 4 y 97,3 s congelados; tras reabrir, diapositiva **4** y 104,1 s (A/B sin el fix: diapositiva **1**) |
+| 5 | `N1`/`H3` — NEGRO durante una conversión | ✅ EN VIVO sobre un `.pptx` de bytes nuevos + NEGRO 300 ms después: el deck llegó a `ready` y el proyector siguió en NEGRO 25 s más. El commit superado se descartó |
+| — | `L1` — EN VIVO sin pantalla resuelta | ⛔ **no verificable**: `displays.list()` nunca vuelve vacío en una máquina real. El camino quedó razonado y con typecheck, no ejercitado |
+
+Barra mínima tras esta pasada: `typecheck` limpio, `lint` 5 warnings preexistentes, `db:smoke`
+15/15, `build` 3 bundles.
+
+**Nota de paso, sin arreglar:** con un `userData` recién creado (sin logo configurado) el output
+LOGO reporta `media error scene worship://logo`, porque `LOGO_URL` no resuelve a ningún archivo.
+No pertenece a esta auditoría y no rompe nada — el proyector queda en negro y el aviso solo lo ve
+el operador — pero es la primera impresión de una instalación nueva.
+
+---
+
 ## Surface inventory
 
 | Capa | Archivos |

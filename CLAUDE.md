@@ -124,8 +124,10 @@ src/
         │       ├── slides/     # grilla central de diapositivas/versículos del ítem en preview
         │       ├── monitors/   # columna der.: LIVE arriba, PREVIEW abajo, transporte del deck
         │       └── programs/   # modal de programas guardados
-        ├── stores/          # Zustand: program, toast, preview, projection, deck, bible, library, settings
-        ├── effects/         # projection-sync.ts + deck-autoplay.ts — la lógica "con orden"
+        ├── stores/          # Zustand: program, toast, preview, projection, deck, bible,
+        │                    #   library, settings, audio, display, ui
+        ├── effects/         # projection-sync.ts + deck-autoplay.ts + end-of-playback.ts —
+        │                    #   la lógica "con orden"
         └── lib/             # api.ts, ipc.ts, i18n/, utils.ts, hooks/, actions/ (cruza stores)
 ```
 
@@ -174,10 +176,20 @@ Esta es la regla central del sistema de componentes, calcado de
 | `bg-danger` / `bg-success` | estados |
 | `bg-on-air` / `border-on-air` | **reservado**: esto está en el proyector AHORA (monitor LIVE, riel de la fila activa) |
 | `bg-badge-{ppt,video,image,audio,bible}` | color por tipo de contenido en playlist/biblioteca |
+| `text-{danger,primary,success,warning,badge-audio}-ink` | **ese color como TEXTO o ÍCONO** sobre una superficie de la app. No es lo mismo que el token pelado, que es un RELLENO (`bg-danger` + blanco encima): en el tema oscuro un rojo legible sobre `bg-card` es un rojo claro, y blanco sobre un rojo claro no se lee. Los dos roles tiran para lados opuestos y **no pueden ser un solo valor** |
 | `shadow-surface` / `shadow-raised` / `shadow-overlay` | los ÚNICOS 3 niveles de elevación — cards / dropdowns-tooltips / modales-toasts |
 
 El tema (`ui.theme` en `settings`, `data-theme` en `<html>`) redefine los `--wa-*`; los
 componentes nunca necesitan saber en qué tema están.
+
+**Regla derivada, no negociable: un color que se escribe como texto va siempre por su `-ink`.**
+`text-danger`, `text-primary`, `text-success`, `text-warning` y `text-badge-audio` **no existen**
+como clases de texto — quedaron entre 2,18:1 y 2,89:1 sobre `bg-card` en el tema oscuro, por debajo
+del 3:1 que WCAG pide hasta para un ícono. Solo los cinco tonos que aparecen como texto o ícono
+suelto tienen `-ink`; el resto de los badges únicamente pintan el tinte de `Badge`, que ya lleva
+`text-foreground`. Cada `-ink` es su propio color de ALPS aclarado hacia blanco, igual que este
+archivo ya interpola la rampa Denim para superficies oscuras que ALPS no define — `primary-ink` es
+literalmente el Denim `#84adfc`.
 
 Todos los valores de color salen del sistema de identidad oficial de la iglesia (familia **Denim**
 + colores de acento de ALPS) y la tipografía es **Noto Sans** self-hosted. Antes de agregar un
@@ -266,7 +278,8 @@ npm run dev               # electron-vite dev (HMR en renderer, restart de main 
 npm run typecheck          # tsc --noEmit sobre node (main+preload+shared) y web (renderer+shared)
 npm run lint                # eslint .
 npm run db:generate          # drizzle-kit generate — nueva migración tras editar db/schema.ts
-npm run db:smoke              # smoke test de la capa de datos SIN Electron (migraciones+seed+FTS5+CRUD)
+npm run db:smoke              # smoke test de la capa de datos SIN Electron (18 casos: migraciones, seed,
+                              #   FTS5, CRUD, borrador de programa, validadores de settings, respaldo WAL)
 npm run slides:smoke -- x.pptx # conversión + parseo OOXML (timings/audio) SIN Electron
 npm run build                 # electron-vite build
 npm run package:win|mac|linux  # build + electron-builder para esa plataforma
@@ -299,6 +312,20 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   crudo del versículo, que sale de un JSON que importa el usuario, y el renderer tiene el puente
   IPC genérico. Ver
   [`.claude/knowledge/fts5-snippet-is-markup-wrapped-around-user-supplied-text.md`](.claude/knowledge/fts5-snippet-is-markup-wrapped-around-user-supplied-text.md).
+- **El orden de culto sin guardar se espeja a SQLite solo (`program_draft`), y cerrar la ventana lo
+  decide el control, no main.** `effects/draft-autosave.ts` escribe el borrador con debounce y
+  `App` lo recupera al arrancar; era el único dato de usuario sin respaldo. Main **nunca** infiere
+  si hay trabajo sin guardar: `windows/close-guard.ts` veta el primer `close`, emite
+  `close-requested` y espera un `window:closeDecision`, con una gracia de 4 s para que un renderer
+  colgado no vuelva la app incerrable. Ojo con el ciclo de vida: vetar un `close` durante un quit
+  **cancela el quit entero** y `will-quit` no llega, así que reanudarlo es `app.quit()` y no
+  `win.close()` — diagnóstico en
+  [`.claude/knowledge/vetoing-a-close-during-a-quit-cancels-the-quit.md`](.claude/knowledge/vetoing-a-close-during-a-quit-cancels-the-quit.md).
+- **El respaldo previo a una migración se toma con `VACUUM INTO` + `PRAGMA integrity_check`, nunca
+  con `copyFileSync`.** La base corre en WAL: copiar solo `worship.db` pierde en silencio todo lo
+  posterior al último checkpoint — medido, 5000 filas contra 4977 con un `-wal` caliente. Y la base
+  se cierra en `will-quit` (`closeDatabase()`), que es lo que vacía el `-wal` en vez de dejarlo
+  crecer entre sesiones.
 - **La ventana de proyección no tiene lógica de dominio.** Es una función pura del último
   `ProjectionOutput` recibido (`src/shared/types/projection.ts`). Si necesitás que "sepa" algo del
   culto, calculalo en el control y mandalo por `projection:show`.
@@ -345,6 +372,16 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   el proceso ya se fue. La limpieza de salida es sincrónica y punto — por eso el SIGKILL de respaldo
   de `soffice` va en la misma llamada que el SIGTERM. Ver
   [`.claude/knowledge/nothing-asynchronous-survives-before-quit.md`](.claude/knowledge/nothing-asynchronous-survives-before-quit.md).
+- **Lo que el proyector aplica UNA vez al montar hay que recalcularlo antes de reconstruir la
+  ventana.** `startAtSeconds` (de `AudioTrackPush` y de `VideoUnderlay`) es un seek de montaje, no
+  una posición: replicar el snapshot de main en una ventana nueva remonta cada elemento en el punto
+  que el operador eligió al principio. `freezeLivePositions()` (`lib/actions/live-positions.ts`)
+  pliega la última `mediaStatus` reportada ahí adentro, y lo llaman los tres caminos que destruyen
+  la ventana (`projection-closed`, `display.store.close()`, el reopen de `setDisplayId`). Sin eso
+  un deck con banda sonora no solo reiniciaba la música: el modo "synced" deriva el cursor de
+  diapositiva del reloj de audio, así que volvía a la **diapositiva 1** en pleno culto. Diagnóstico
+  en
+  [`.claude/knowledge/startatseconds-is-a-mount-time-seek-so-a-rebuilt-projector-restarts-everything.md`](.claude/knowledge/startatseconds-is-a-mount-time-seek-so-a-rebuilt-projector-restarts-everything.md).
 - **NEGRO/LOGO pausa un video en vivo y mantiene su posición; la pista de audio de un deck sigue
   sonando.** El `<video>` no se desmonta al taparlo (`videoUnderlay` en `ProjectionOutput` +
   `LiveVideo` en `output-view.tsx`) — solo se oculta y se pausa, y al destapar reanuda donde
