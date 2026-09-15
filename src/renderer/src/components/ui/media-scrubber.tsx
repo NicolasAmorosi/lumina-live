@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
-import { cn } from "@renderer/lib/utils";
+import { cn, formatClock } from "@renderer/lib/utils";
 
 type MediaScrubberTone = "primary" | "audio";
 
@@ -17,9 +17,18 @@ type MediaScrubberProps = {
    *  Must be identity-stable (a `useState` setter, a `useCallback`): it is an
    *  effect dependency. */
   onPositionChange?: ((seconds: number | null) => void) | undefined;
+  /** What this bar seeks — the track's name, not "barra de progreso". It is
+   *  the slider's accessible name, and a panel can hold several of them
+   *  (a video, a deck soundtrack, a stray audio), so without it a screen
+   *  reader announces three identical unnamed sliders. Required for that
+   *  reason: there is no sensible default. */
+  label: string;
   /** Fires once, on release (pointer up) or on a keyboard nudge — never mid-drag,
    *  so scrubbing a live video doesn't flood the projector with seek commands. */
   onSeek?: ((seconds: number) => void) | undefined;
+  /** Reads the clock pair out for a screen reader: `(current, total)` formatted
+   *  the way the two clocks flanking the bar already are. */
+  valueTextFormatter?: ((current: string, total: string) => string) | undefined;
   tone?: MediaScrubberTone;
 };
 
@@ -77,9 +86,11 @@ export function MediaScrubber({
   currentSeconds,
   disabled = false,
   durationSeconds,
+  label,
   onPositionChange,
   onSeek,
   tone = "primary",
+  valueTextFormatter,
 }: MediaScrubberProps) {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [dragSeconds, setDragSeconds] = useState<number | null>(null);
@@ -186,9 +197,19 @@ export function MediaScrubber({
   return (
     <div
       aria-disabled={!seekable || undefined}
-      aria-valuemax={100}
+      aria-label={label}
+      // In SECONDS, not the percentage the bar happens to paint: "37" with no
+      // unit and no total is not a position, and `aria-valuetext` is what
+      // turns it into the clock the sighted operator reads off the two spans
+      // either side of this bar.
+      aria-valuemax={Math.round(duration)}
       aria-valuemin={0}
-      aria-valuenow={pct}
+      aria-valuenow={Math.round(seconds)}
+      aria-valuetext={
+        valueTextFormatter
+          ? valueTextFormatter(formatClock(seconds), formatClock(duration))
+          : `${formatClock(seconds)} / ${formatClock(duration)}`
+      }
       className={cn(
         "group/scrubber relative flex h-4 w-full touch-none items-center",
         seekable ? "cursor-pointer" : "cursor-default opacity-50",

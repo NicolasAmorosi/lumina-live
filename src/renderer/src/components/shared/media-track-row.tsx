@@ -200,9 +200,11 @@ export function MediaTrackRow({
             className="min-w-0 flex-1"
             currentSeconds={currentSeconds}
             durationSeconds={durationSeconds}
+            label={t("media.scrubberLabel", { name: label })}
             onPositionChange={setScrubSeconds}
             onSeek={onSeek}
             tone={kindTone[kind]}
+            valueTextFormatter={(current, total) => t("media.scrubberValue", { current, total })}
           />
 
           <span

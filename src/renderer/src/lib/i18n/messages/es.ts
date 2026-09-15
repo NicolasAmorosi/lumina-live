@@ -188,6 +188,8 @@ const es = {
     loadErrorToast: "No se pudo reproducir «{name}» en el proyector",
     loadErrorToastGeneric: "No se pudo reproducir un archivo en el proyector",
     volumeFor: "Volumen de {name}",
+    scrubberLabel: "Posición de {name}",
+    scrubberValue: "{current} de {total}",
     mute: "Silenciar",
     unmute: "Activar sonido",
   },
