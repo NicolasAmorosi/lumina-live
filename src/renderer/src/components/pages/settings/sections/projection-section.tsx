@@ -5,6 +5,8 @@ import { useProjectionStore } from "@renderer/stores/projection.store";
 import { useSettingsStore } from "@renderer/stores/settings.store";
 import { clearLive } from "@renderer/lib/actions/playback";
 import { api } from "@renderer/lib/api";
+import { toast } from "@renderer/lib/toast";
+import { IpcError } from "@shared/ipc/result";
 import { LOGO_URL } from "@shared/urls";
 import type { TransitionStyle } from "@shared/types/projection";
 import { SettingsGroup, SettingsRow } from "../settings-row";
@@ -38,7 +40,18 @@ export function ProjectionSection() {
   const logoUrl = logoPath ? `${LOGO_URL}?p=${encodeURIComponent(logoPath)}` : null;
 
   async function changeLogo() {
-    await api.files.setLogo();
+    try {
+      await api.files.setLogo();
+    } catch (error) {
+      // Main refuses an image it cannot decode rather than persisting one that
+      // would leave LOGO black on the projector, so there is nothing to
+      // reload: the previous logo is still the one in the database.
+      if (error instanceof IpcError && error.code === "LOGO_UNREADABLE") {
+        toast.danger(t("settings.logoUnreadable"));
+        return;
+      }
+      throw error;
+    }
     // Refreshes `settings.store` from the DB — this drives both this
     // thumbnail and (via App.tsx) the logo actually shown on the projector.
     await useSettingsStore.getState().load();

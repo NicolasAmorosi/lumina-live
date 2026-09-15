@@ -298,6 +298,7 @@ const es = {
     logo: "Imagen del logo",
     logoDesc: "Se muestra en el proyector cuando no hay nada en vivo.",
     logoFormats: "Formatos aceptados: JPG, PNG, GIF, WEBP, BMP.",
+    logoUnreadable: "Esa imagen no se pudo leer. Se conserva el logo anterior.",
     chooseFile: "Elegir archivo…",
     clearLive: "Limpiar contenido en vivo",
     clearLiveDesc: "Saca lo que está proyectado ahora y vuelve al logo.",
