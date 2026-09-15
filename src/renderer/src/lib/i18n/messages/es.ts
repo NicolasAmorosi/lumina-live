@@ -4,7 +4,6 @@
  *  ~40 components again. */
 const es = {
   app: {
-    title: "WorshipApp",
     crashed: "Algo falló en la interfaz",
     modalCrashed: "Algo falló en esa ventana y se cerró",
     reload: "Recargar",
@@ -42,7 +41,6 @@ const es = {
     closeAnyway: "Cerrar igualmente",
   },
   resources: {
-    title: "Recursos",
     empty: "No hay archivos",
     emptyHint: "Agregá archivos o arrastralos acá",
     addToSchedule: "Agregar al programa",
@@ -86,7 +84,6 @@ const es = {
     removeUsedInCount: "{count} elementos",
     removeConfirmWarning: "Se va a quitar también de esos programas guardados.",
     removeMissingNote: "El archivo original ya no está disponible en el disco.",
-    files: "archivos",
     missing: "No encontrado",
     relocate: "Relocalizar…",
     importing: "Importando {done} de {total}…",
@@ -94,22 +91,18 @@ const es = {
     loadFailed: "No se pudo leer la biblioteca",
   },
   preview: {
-    title: "Vista Previa",
     placeholder: "Nada en vista previa",
-    placeholderHint: "Elegí un elemento del programa o de los recursos",
     missing: "Media no encontrada",
     missingHint: "El archivo original ya no está disponible en el disco",
   },
   bible: {
     title: "Biblia",
-    version: "Versión",
     import: "+ Importar",
     importing: "Importando…",
     importSucceeded: "Se importó {name} ({verses} versículos)",
     importFailed: "No se pudo importar esa Biblia: el archivo no tiene un formato reconocido",
     book: "Libro...",
     chapter: "Cap...",
-    showChapter: "Mostrar Capítulo",
     search: "Buscar texto…",
     referenceSearch: "Buscar libro y capítulo…",
     searchModeToggleHint: "Cambiar a búsqueda de texto completo (busca una palabra en todos los versículos)",
@@ -120,7 +113,6 @@ const es = {
     previous: "Anterior",
     next: "Siguiente",
     counter: "{current}/{total}",
-    addToList: "Agregar a Lista",
   },
   deck: {
     title: "Presentación",
@@ -133,7 +125,6 @@ const es = {
     restart: "Reiniciar",
     nextIn: "Próxima en {seconds}s",
     resync: "Resincronizar",
-    notLive: "No está en vivo",
     converting: "Convirtiendo diapositivas… {done} de {total}",
     convertingHint: "Se hace una sola vez por archivo",
     preparing: "Preparando la conversión…",
@@ -146,7 +137,6 @@ const es = {
     reconvert: "Volver a convertir",
     reconvertBlockedLive:
       "No se puede volver a convertir la presentación que está EN VIVO. Sacala del proyector primero.",
-    evicted: "Las diapositivas ya no están en caché",
     noSlides: "La presentación no tiene diapositivas",
     noLibreOffice: {
       title: "LibreOffice no está instalado",
@@ -175,12 +165,10 @@ const es = {
     cancel: "Cancelar",
   },
   media: {
-    title: "Medios",
     play: "Reproducir",
     pause: "Pausar",
     stop: "Detener",
     deckMusic: "{title} (música)",
-    startAt: "Empieza en",
     previewHint: "No suena hasta EN VIVO",
     previewMuted: "Sin sonido — no interrumpe la proyección",
     loadError: "No se pudo reproducir el archivo",
@@ -207,11 +195,9 @@ const es = {
     save: "Guardar",
     saveHint: "Guardar los cambios en este programa",
     saveNoChanges: "Sin cambios",
-    saveAs: "Guardar como…",
     duplicate: "Duplicar",
     duplicateTitle: "Duplicar programa",
     duplicateName: "{name} (copia)",
-    previewOpenHint: "Abrir este programa en el culto actual",
     edit: "Editar",
     delete: "Eliminar",
     new: "Nuevo programa",
