@@ -262,13 +262,30 @@ app.on("will-quit", () => {
  *  during a service. Everything after the first still reaches `crash.log`. */
 let crashDialogShown = false;
 
+/** Past this, `crash.log` is rotated onto `crash.log.1`. A stack is ~1 KB, so
+ *  this holds hundreds of them — and a repeating fault writes one per
+ *  occurrence, forever, which is what used to grow the file without bound. */
+const CRASH_LOG_MAX_BYTES = 1_000_000;
+
+/** Rotation rather than truncation: the crash that matters is almost always
+ *  the FIRST one, and a fault that repeats would otherwise erase exactly the
+ *  entry worth reading. At most two files, so the ceiling stays ~2 MB. */
+function rotateCrashLog(file: string): void {
+  try {
+    if (fs.statSync(file).size < CRASH_LOG_MAX_BYTES) return;
+    fs.renameSync(file, `${file}.1`);
+  } catch {
+    // No file yet (the common case), or a rename we cannot do. Either way the
+    // append below is still worth attempting.
+  }
+}
+
 function reportCrash(label: string, error: unknown): void {
   const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
   try {
-    fs.appendFileSync(
-      path.join(userDataDir, "crash.log"),
-      `${new Date().toISOString()} [${label}] ${detail}\n`,
-    );
+    const file = path.join(userDataDir, "crash.log");
+    rotateCrashLog(file);
+    fs.appendFileSync(file, `${new Date().toISOString()} [${label}] ${detail}\n`);
   } catch {
     // A crash handler that itself throws (a full disk) would take the process
     // down with no trace at all.
