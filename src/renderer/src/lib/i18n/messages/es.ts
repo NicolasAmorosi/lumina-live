@@ -6,6 +6,7 @@ const es = {
   app: {
     crashed: "Algo falló en la interfaz",
     modalCrashed: "Algo falló en esa ventana y se cerró",
+    unexpectedError: "Ocurrió un error inesperado. La aplicación sigue funcionando.",
     reload: "Recargar",
   },
   header: {

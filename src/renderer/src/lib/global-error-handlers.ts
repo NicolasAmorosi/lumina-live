@@ -1,18 +1,29 @@
+import { t } from "@renderer/lib/i18n/i18n-provider";
 import { toast } from "@renderer/lib/toast";
 
 /** Consecutive failures collapse into one toast instead of stacking a wall of
  *  them over the workspace — a broken IPC channel fails on every retry. */
 const REPEAT_WINDOW_MS = 5_000;
 
-let lastMessage = "";
+let lastDetail = "";
 let lastShownAt = 0;
 
-function surface(message: string): void {
+/**
+ * The operator reads a translated, generic line; the technical detail goes to
+ * the console only.
+ *
+ * `error.message` here is whatever the failing layer happened to throw —
+ * English, often with a filesystem path in it, and meaningless to someone
+ * running a service in a dark booth. Deduplication still keys on that detail
+ * rather than on what is shown, so two *different* failures inside the same
+ * window each get their toast instead of collapsing into one.
+ */
+function surface(detail: string): void {
   const now = Date.now();
-  if (message === lastMessage && now - lastShownAt < REPEAT_WINDOW_MS) return;
-  lastMessage = message;
+  if (detail === lastDetail && now - lastShownAt < REPEAT_WINDOW_MS) return;
+  lastDetail = detail;
   lastShownAt = now;
-  toast.danger(message, { durationMs: 8000 });
+  toast.danger(t("app.unexpectedError"), { durationMs: 8000 });
 }
 
 function describe(reason: unknown): string {
