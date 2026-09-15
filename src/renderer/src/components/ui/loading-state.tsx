@@ -87,7 +87,11 @@ export function LoadingState({
           value={progress}
         />
       ) : null}
-      {hint ? <p className={cn("text-xs", surfaceHintClassName[surface])}>{hint}</p> : null}
+      {/* `select-text` against the app-wide `user-select: none`: a hint is
+          static prose, never a drag handle, and this is where the crash
+          screen prints `error.message` — the one string the operator has to
+          be able to copy to report what happened. */}
+      {hint ? <p className={cn("text-xs select-text", surfaceHintClassName[surface])}>{hint}</p> : null}
       {action ? <div className="mt-1">{action}</div> : null}
     </div>
   );

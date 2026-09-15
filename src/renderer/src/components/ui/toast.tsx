@@ -37,7 +37,10 @@ function Toast({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }) 
     >
       <Icon className={cn("mt-0.5 shrink-0", toneIconClassName[item.tone])} name={toneIcon[item.tone]} />
       <div className="min-w-0 flex-1">
-        <p>{item.message}</p>
+        {/* Selectable for the same reason as `LoadingState`'s hint: an
+            unhandled rejection surfaces here verbatim (see
+            `global-error-handlers`), and it is unreadable over the phone. */}
+        <p className="select-text">{item.message}</p>
         {item.action ? (
           <Button
             className="mt-1"
