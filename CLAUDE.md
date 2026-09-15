@@ -309,6 +309,14 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   salteándose incluso el cache-hit, que está guardado por `!inFlight.has()`. Un job **corriendo**
   no necesita nada de eso (lo settlea `pump`). Diagnóstico en
   [`.claude/knowledge/canceling-a-queued-job-must-settle-it-or-it-poisons-the-dedupe-map.md`](.claude/knowledge/canceling-a-queued-job-must-settle-it-or-it-poisons-the-dedupe-map.md).
+- **Un error de `jsx-a11y` sobre un contenedor que delega el teclado se suprime con su porqué, no
+  se "arregla".** `Tabs`, `VirtualGrid`, `Select` y los centinelas de `Modal` manejan las teclas en
+  el contenedor a propósito: el tab stop es la pestaña seleccionada, el tile enfocado o el
+  disparador, y la regla lee **un elemento por vez**. Hacer focusable el contenedor agrega un tab
+  stop que no lleva a nada, y un handler de teclado en un `role="option"` no puede dispararse
+  nunca. Ver
+  [`.claude/knowledge/jsx-a11y-reads-one-element-so-every-delegated-keyboard-pattern-is-an-error.md`](.claude/knowledge/jsx-a11y-reads-one-element-so-every-delegated-keyboard-pattern-is-an-error.md),
+  que además tiene las dos trampas de la sintaxis `-- razón` del directive.
 - **Nada de `dangerouslySetInnerHTML`, nunca.** Para resaltar coincidencias, la primitiva recibe
   **segmentos** (`{text, match}[]`), no un string con markup adentro — así la versión insegura ni
   siquiera se puede escribir. El caso que lo motivó: el `snippet()` de FTS5 envuelve el texto

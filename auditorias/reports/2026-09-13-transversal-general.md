@@ -390,6 +390,71 @@ accesibilidad y design system (`M14`–`M21`), y las decisiones de producto `M3`
 
 ---
 
+## 1.octies Estado — Tanda 6 aplicada (2026-09-15, decimocuarta sesión)
+
+**El último 🟠 abierto, y lo que encontró.** Cerrados: `H9` y `M18`. Total acumulado:
+**27 de 76 + los 2 de campo**. Ya no queda ningún hallazgo 🔴 ni 🟠 abierto en este informe.
+
+`H9` se aplicó escalonado, como el propio hallazgo recomendaba: primero `eslint-plugin-jsx-a11y`
+sobre `src/renderer/**`, después `tseslint.configs.recommendedTypeChecked` con `projectService`
+sobre todo el árbol. Entre las dos pasadas encontraron **30 cosas en un árbol que linteaba limpio**.
+La contrapartida que el hallazgo declaraba honestamente —"las reglas con tipos son notablemente más
+lentas"— resultó no cobrarse acá: **`eslint .` completo tarda ~4 s**. Y el patrón `void api.*`, que
+era la preocupación principal, **produjo cero falsos positivos**: `void` es exactamente el escape
+que `no-floating-promises` espera.
+
+| # | Qué se hizo |
+|---|---|
+| `H9` (a11y) | `jsxA11y.flatConfigs.recommended` sobre el renderer. `media-has-caption` va **apagada para todo el renderer**, no suprimida sitio por sitio: cada `<video>`/`<audio>` de esta app reproduce un archivo que el operador eligió de su propio disco segundos antes, no hay pista de subtítulos que adjuntar ni de dónde sacarla, así que la regla solo puede ser ruido |
+| `H9` (tipos) | `recommendedTypeChecked` + `parserOptions.projectService`, con `disableTypeChecked` para los `.js`/`.mjs` de configuración, que están fuera de los dos tsconfig |
+| `M18` | **El único defecto real que destapó el linter.** `ProgramSidePanel` ataba Escape y Enter a su propio `<div>`, así que Escape con el foco en la lista de programas cerraba **el modal entero** en vez del panel. Ahora es un listener de `document` en **fase de captura** — que es además lo que permite que su `stopPropagation` le gane al Escape de `Modal`, que está en fase de burbujeo. Enter sigue contando solo desde adentro del panel |
+
+**Las supresiones de a11y son todas la misma supresión, y vale decirlo una vez:** la regla lee **un
+elemento**, y este design system **delega**. El tab stop es la pestaña seleccionada o el tile
+enfocado; el `tablist` y el `role="list"` de `VirtualGrid` cazan las flechas solo porque burbujean
+desde ahí. Las opciones de `Select` no toman foco nunca —lo conserva el disparador, que apunta con
+`aria-activedescendant`—, así que un handler de teclado en una opción **no podría dispararse**. Y
+los centinelas de foco de `Modal` quieren un tab stop en un nodo no interactivo porque ser
+aterrizados es literalmente su función. Cada `eslint-disable-next-line` lleva ese porqué escrito.
+
+**Lo que las reglas con tipos encontraron, además de `M18`:**
+
+| Regla | Qué era |
+|---|---|
+| `no-base-to-string` | **Un defecto de verdad en el importador de Biblias**: un versículo con una forma inesperada se sembraba como el literal `"[object Object]"`. `asVerseText()` devuelve vacío — en un archivo cuyo trabajo entero es sobrevivir a un JSON que aporta el usuario |
+| `no-floating-promises` | Cinco promesas sueltas: los dos `loadURL`/`loadFile` de cada fábrica de ventana y el `whenReady`. El `unhandledRejection` global ya las escribía a `crash.log`, así que van con `void` y un comentario que lo dice, no con un `.catch` decorativo |
+| `no-misused-promises` | Un handler `async` pasado donde se esperaba retorno `void` (`ConfirmModal`) |
+| `no-unsafe-return` | Un `any` escapándose del replacer de `sceneContentKey` |
+| `no-unnecessary-type-assertion` | Nueve aserciones muertas, incluidas dos `slice(...) as number[]` sobre arrays que ya eran `number[]` |
+| `no-redundant-type-constituents` | `"recent" \| string` colapsaba a `string` y el literal dejaba de sugerirse. Ahora `"recent" \| (string & {})` |
+
+**Y uno que no vino de una regla sino de leerlas:** la leyenda de `PanelProgressRow` era un
+`<label>` que no nombraba ningún control. Pasó a una primitiva `Caption` nueva (la tipografía de
+`Label` sin su semántica) apuntada por el `aria-labelledby` del `progressbar` — que de paso le da a
+esa barra el nombre accesible que nunca tuvo, la mitad de `M14` que se podía cerrar sin tocar el
+scrubber.
+
+### Verificación de esta tanda — corrida contra la app real
+
+`npm run typecheck` ✅ · `npm run lint` ✅ **0 errores** (quedan los mismos 5 warnings de
+`react-refresh`, preexistentes) · `npm run db:smoke` ✅ 18/18 · `npm run build` ✅.
+`electron-vite dev --remote-debugging-port=9222`, medido por CDP:
+
+| Qué | Cómo se midió | Resultado |
+|---|---|---|
+| `M18` — Escape con el foco **fuera** del panel | panel de preview abierto, foco movido al buscador del modal, Escape | el panel se cerró y **el modal quedó abierto**; el segundo Escape cerró el modal |
+| `Tabs` tras la supresión | foco en la pestaña seleccionada, `→` | selección **y** foco pasaron de Biblia a Videos, y el `0` del roving tabindex con ellos |
+| `VirtualGrid` tras la supresión | `→ ↓ End Home` sobre un tile enfocado | `aria-posinset` 1 → 2 → 3 → 3 → 1, el foco siempre en un `BUTTON` |
+| `Select` tras la supresión | foco en el disparador, `↓`, Escape | el menú abrió, `aria-activedescendant` apuntó a la opción 0, Escape cerró **y devolvió el foco al disparador** |
+| salud | consola de las dos ventanas + log de dev | **cero eventos de consola**; el único error del log es el primer handshake CDP rechazado por origen, del propio arnés de prueba |
+
+**Lo que esta tanda NO tocó:** `I3` (Vitest + CI), el contraste del tema claro, el resto del bloque
+🟡 de a11y y design system (`M14` salvo su mitad de `ProgressBar`, `M17`, `M19`–`M21`), los 🟡 de
+corrección (`M25`, `M28`–`M30`, `M23`, `M4`, `M6`), los 20 🔵, y las decisiones de producto
+`M3`/`M5`.
+
+---
+
 ## 2. Qué estaba cubierto y qué no
 
 Reconstruido leyendo los dos informes previos y el índice, antes de decidir el alcance.
