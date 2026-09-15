@@ -569,6 +569,53 @@ ni 🟡 abierto**; lo que resta del informe son los bajos y los informativos.
 
 ---
 
+## 1.undecies Estado — Tanda 9 aplicada (2026-09-15, decimoséptima sesión)
+
+**`I3` a medias por decisión del usuario, e `I4` entero.** Cerrado: `I4`. `I3` queda **cerrado en
+su mitad de pruebas automatizadas y cerrado-por-decisión en su mitad de CI**: preguntado
+explícitamente, el usuario eligió **no** montar GitHub Actions ni un hook de pre-push, así que la
+barra mínima se sigue corriendo a mano. Eso ya no es un pendiente del informe: es cómo se trabaja
+en este repo, y `CLAUDE.md` lo dice así ahora. Total acumulado: **44 de 76 + los 2 de campo**.
+
+| # | Qué se hizo |
+|---|---|
+| `I3` (pruebas) | **Vitest 5 con dos proyectos**, `main` (Node) y `renderer` (jsdom), y los mismos dos alias que usa la app — los tests importan los módulos reales por los especificadores reales, nunca una copia. **95 casos en 8 archivos, 2,3 s.** El límite del suite es explícito y es lo que lo mantiene sin mocks: **nada de lo que se prueba importa `electron`**. Un módulo que necesita `electron` es un módulo que este suite no cubre |
+| `I3` (`db:smoke`) | Portado **assert por assert** a `tests/main/data-layer.test.ts` (23 casos) y el script borrado. Los casos comparten UNA base construida en orden, porque varios afirman sobre lo que dejó el anterior (el orden manual de la lista, el deck de bytes duplicados, la referencia muerta del borrador); Vitest corre los tests de un archivo en orden de declaración, que es lo que sostiene esa cadena. La fixture OLE2 de 157 líneas salió a `tests/fixtures/legacy-ppt.ts`. `slides:smoke` **se queda como script**: necesita LibreOffice y un `.pptx` real |
+| `I3` (cobertura nueva) | Cuatro áreas que nunca tuvieron una sola prueba: **`readZipEntries`** (incluida la que importa de verdad: espía `fs.readSync` y **mide** que leer el XML de un `.pptx` de 2 MB cuesta 5437 bytes, no 2 MB), **`resolveLinkedAudio`** (con los dos negativos: el audio solo en la carpeta que NO se adopta, y la carpeta sin audio), **`shared/urls`** (el cache-buster de miniaturas) y, del lado del renderer, **`selectOutput`** (26 casos: precedencia del overlay, los tres caminos por los que un deck no listo es NEGRO, y el `videoUnderlay` que sobrevive a NEGRO con su `paused`/`volume`/`startAtSeconds`), **`freezeLivePositions`** (9 casos, incluidos los dos que no deben pasar: el reporte de un epoch viejo y el `paused` del operador) y **`live-intent`**, **`cn`**, **`normalizeForSearch`**, **`formatClock`**, **`formatBytes`**, **`createBoundedSet`** |
+| `I4` | `build.sourcemap: true` en **main y preload**. No en el renderer a propósito: `reportCrash` escribe `error.stack` en `crash.log` desde los handlers a nivel de proceso, y ese archivo es lo único que una máquina en una cabina puede mandar de vuelta; el renderer reporta por toast y por consola, que ya tiene el mapa en dev. Verificado: `out/main/index.js.map` (561 kB) e `out/preload/index.js.map` se emiten en `npm run build` |
+| barra mínima | `npm run db:smoke` deja de existir: la barra es **`npm run typecheck && npm run lint && npm run test`**. Actualizados `package.json`, `CLAUDE.md`, `README.md`, `docs/knowledge/05-data-and-persistence.md`, el allowlist de `.claude/settings.json` y el hook `session-start-context.sh` — los informes de auditoría y los `HANDOFF` viejos **no**, que son fotos de su fecha |
+
+### Verificación de esta tanda
+
+`npm run typecheck` ✅ · `npm run lint` ✅ 0 errores (los mismos 5 warnings de `react-refresh`) ·
+`npm run test` ✅ **95/95 en 2,3 s** · `npm run build` ✅ con los dos `.map` en `out/`.
+
+Los 23 casos portados pasan sin que se les tocara una sola afirmación, que es la única prueba
+válida de que el port fue fiel. El resto se escribió contra el código como está: **ninguno de los
+72 casos nuevos falló por un defecto del código** — este suite es una red para lo que viene, no un
+hallazgo disfrazado.
+
+### Lo que deliberadamente NO se probó, y por qué
+
+- **La cola de `deck-service`** (cancelar un trabajo encolado tiene que settlearlo, y no envenenar
+  el mapa de dedupe). Es una regla no negociable de `CLAUDE.md` y merecería una prueba, pero
+  `deck-service.ts` importa `electron`, `paths`, los repos, LibreOffice y el rasterizador: probar
+  la cola pide cinco mocks de módulo, y un test sostenido por cinco mocks se rompe con cada cambio
+  de vecindario sin decir nada sobre la cola. **Queda anotado como el hueco conocido del suite**;
+  cerrarlo de verdad es extraer la cola a su propio módulo sin dependencias, que es un refactor, no
+  un test.
+- **Las geometrías** (`thumb-tile.geometry.ts`, `slide-grid.geometry.ts`). Sus números están
+  *impuestos por el CSS*, y ningún test que no renderice puede ver el CSS: una prueba ahí sólo
+  repetiría la fórmula. Un test tautológico es peor que ninguno.
+- **Componentes React.** Decisión del usuario al elegir el alcance: son los que más se rompen con
+  cada cambio visual, y esta UI cambia seguido.
+
+**Lo que esta tanda NO tocó:** los 19 🔵 restantes (`L1`–`L10`, `L12`–`L20`), el contraste del
+**tema claro**, `I1`/`I2` (firma y auto-update, que cuestan dinero y cuentas) y la checklist manual
+de §9.2 — de la que sigue sin poder hacerse `M29`, que necesita dos pantallas físicas.
+
+---
+
 ## 2. Qué estaba cubierto y qué no
 
 Reconstruido leyendo los dos informes previos y el índice, antes de decidir el alcance.
