@@ -9,7 +9,6 @@ import {
   clearCache,
   getDeck,
   prepareDeck,
-  currentProgress,
   prewarmExplicit,
   setVisiblePrewarm,
 } from "../../slides/deck-service";
@@ -27,7 +26,6 @@ export const slidesHandlers: Pick<
   | "deck:get"
   | "deck:ensure"
   | "deck:cancel"
-  | "deck:progress"
   | "deck:environment"
   | "deck:locateSoffice"
   | "deck:prewarm"
@@ -45,8 +43,6 @@ export const slidesHandlers: Pick<
   "deck:cancel": ({ assetId }) => {
     cancel(assetId);
   },
-
-  "deck:progress": ({ assetId }) => currentProgress(assetId),
 
   "deck:prewarm": ({ assetIds, scope }) => {
     if (scope === "visible") setVisiblePrewarm(assetIds);

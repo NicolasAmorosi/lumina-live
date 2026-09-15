@@ -100,16 +100,12 @@ function assertFreeSpace(sourceSize: number): void {
 // Progress
 // ---------------------------------------------------------------------------
 
-/** Last known progress per asset. Bounded: a `ready`/`failed` deck's number
- *  is already in its DTO (and in `deck:statuses`), so keeping the terminal
- *  entry here forever only served to grow one map entry per deck ever touched
- *  in the process's life — a folder batch of several hundred left several
- *  hundred behind. Only genuinely in-flight work stays. */
-const progressByAsset = new Map<number, DeckProgress>();
-
+/** Progress is a push, and only a push. The last value per asset used to be
+ *  kept in a map here so `deck:progress` could be asked for it — a channel
+ *  with no consumer anywhere in the renderer, which left this process holding
+ *  a write-only map. The renderer's deck store is fed by `deck-progress` and
+ *  is the only place that value is read. */
 function emitProgress(next: DeckProgress): void {
-  if (next.status === "converting") progressByAsset.set(next.assetId, next);
-  else progressByAsset.delete(next.assetId);
   broadcast("deck-progress", next);
 }
 
@@ -127,10 +123,6 @@ function emitProgress(next: DeckProgress): void {
 function emitPageProgress(job: Job, next: DeckProgress): void {
   if (job.priority === "background") return;
   emitProgress(next);
-}
-
-export function currentProgress(assetId: number): DeckProgress | null {
-  return progressByAsset.get(assetId) ?? null;
 }
 
 // ---------------------------------------------------------------------------

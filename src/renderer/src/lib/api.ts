@@ -41,7 +41,6 @@ export const api = {
     ensure: (assetId: number, force?: boolean) =>
       invoke("deck:ensure", { assetId, ...(force !== undefined ? { force } : {}) }),
     cancel: (assetId: number) => invoke("deck:cancel", { assetId }),
-    progress: (assetId: number) => invoke("deck:progress", { assetId }),
     environment: () => invoke("deck:environment", undefined),
     locateSoffice: () => invoke("deck:locateSoffice", undefined),
     prewarm: (assetIds: number[], scope: "program" | "explicit" | "visible") =>

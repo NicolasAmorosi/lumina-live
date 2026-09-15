@@ -82,7 +82,6 @@ export type IpcContract = {
    *  conversion is in flight joins the same job instead of queuing another. */
   "deck:ensure": { req: { assetId: number; force?: boolean }; res: DeckDTO };
   "deck:cancel": { req: { assetId: number }; res: void };
-  "deck:progress": { req: { assetId: number }; res: DeckProgress | null };
   "deck:environment": { req: void; res: DeckEnvironment };
   /** Opens a native file picker so the user can point at soffice by hand. */
   "deck:locateSoffice": { req: void; res: DeckEnvironment };
