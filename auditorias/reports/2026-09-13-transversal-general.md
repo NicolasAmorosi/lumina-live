@@ -616,6 +616,27 @@ de §9.2 — de la que sigue sin poder hacerse `M29`, que necesita dos pantallas
 
 ---
 
+## 1.duodecies Estado — Tanda 10 aplicada (2026-09-15, decimoctava sesión)
+
+**Los cuatro 🔵 con consecuencia visible para el operador**, elegidos por el usuario sobre los 19.
+Cerrados: `L8`, `L9`, `L10` y `L12`. Total acumulado: **48 de 76 + los 2 de campo**. Quedan
+**15 🔵** (`L1`–`L7`, `L13`–`L20`) e `I1`/`I2`.
+
+| # | Qué se hizo |
+|---|---|
+| `L12` | **Decisión del usuario: rechazar, no advertir.** `files:setLogo` valida con `nativeImage.createFromPath(...).isEmpty()` **antes** de persistir y lanza `IpcError("LOGO_UNREADABLE")`; el logo anterior sobrevive intacto y `ProjectionSection` pinta un toast traducido. La validación vive en main y no necesita ninguna ventana — **medido con el binario de Electron del repo**: un PNG con cabecera válida y cuerpo basura, un archivo que no es imagen y una ruta inexistente dan los tres `isEmpty=true`, un PNG real da `1024×1024`. Sin esto, el logo roto se persistía y LOGO quedaba **negro en el proyector**, sin explicación y a mitad de culto |
+| `L9` | El toast de `installGlobalErrorHandlers` pasa a un texto traducido y genérico (`app.unexpectedError`); el `error.message` crudo —inglés, con rutas de filesystem— se queda **solo en la consola**. La deduplicación sigue clavada en el **detalle técnico**, no en lo que se muestra: si el texto visible fuera la clave, dos fallas distintas dentro de la misma ventana de 5 s colapsarían en un solo aviso |
+| `L8` | `crash.log` rota sobre `crash.log.1` al pasar 1 MB (~2 MB de techo). **Rotación y no truncado**: el crash que importa es casi siempre el primero, y una falla que se repite borraría justo esa entrada. El `statSync` va dentro de un `try` que no interrumpe el append — el caso común es que el archivo todavía no exista |
+| `L10` | `removeMediaAsset` cancela el trabajo de conversión también en el camino **no forzado**, pero **después** del `remove()` y no antes: ese camino lanza `MEDIA_ASSET_IN_USE` cuando un programa guardado referencia el asset, así que cancelar primero mataría la conversión de un PPT que no se borra. En el camino forzado sigue yendo antes de la transacción, por la razón opuesta |
+
+### Verificación de esta tanda
+
+`npm run typecheck` ✅ · `npm run lint` ✅ 0 errores (los mismos 5 warnings de `react-refresh`) ·
+`npm run test` ✅ 95/95 · `npm run build` ✅ · `nativeImage` probado contra los cuatro archivos
+reales descritos arriba.
+
+---
+
 ## 2. Qué estaba cubierto y qué no
 
 Reconstruido leyendo los dos informes previos y el índice, antes de decidir el alcance.
