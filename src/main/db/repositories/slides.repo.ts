@@ -500,6 +500,17 @@ export class SlidesRepo {
       .all();
   }
 
+  /** Every deck, rows and cache directories alike — the "Vaciar caché" button.
+   *  Goes through `deleteDeck` one by one rather than a single `DELETE FROM`
+   *  so each cache directory is removed with its row; a bulk delete would
+   *  leave the whole `slides-cache` on disk with nothing left pointing at it.
+   *  Returns how many decks went. */
+  deleteAllDecks(): number {
+    const rows = this.db.select({ id: slideDecks.id }).from(slideDecks).all();
+    for (const row of rows) this.deleteDeck(row.id);
+    return rows.length;
+  }
+
   /** Drops decks left mid-conversion by a crash — a crash skips before-quit,
    *  so this runs at startup instead. */
   deleteUnfinished(): void {

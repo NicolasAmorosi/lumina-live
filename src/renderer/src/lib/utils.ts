@@ -64,3 +64,19 @@ export function formatClock(totalSeconds: number): string {
   const ss = String(s).padStart(2, "0");
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
+
+/** Disk sizes for the operator, not for a log: one decimal, binary units, and
+ *  the unit picked from the magnitude — a slide cache is quoted in GB, one
+ *  deck in MB. Locale-formatted, so the decimal separator is the comma the
+ *  rest of the Spanish UI uses. */
+export function formatBytes(bytes: number, locale = "es"): string {
+  const units = ["B", "kB", "MB", "GB", "TB"] as const;
+  let value = Math.max(0, bytes);
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const digits = unit === 0 ? 0 : 1;
+  return `${value.toLocaleString(locale, { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${units[unit]}`;
+}

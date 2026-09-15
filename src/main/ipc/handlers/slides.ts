@@ -4,7 +4,9 @@ import type { Handlers } from "../register";
 import type { DeckEnvironment } from "@shared/types/deck";
 import { getSettingsRepo } from "../../services/repos";
 import {
+  cacheStats,
   cancel,
+  clearCache,
   getDeck,
   prepareDeck,
   currentProgress,
@@ -32,6 +34,8 @@ export const slidesHandlers: Pick<
   | "deck:prewarmBatch"
   | "deck:cancelPrewarmBatch"
   | "deck:statuses"
+  | "deck:cacheStats"
+  | "deck:clearCache"
 > = {
   "deck:get": ({ assetId }) => getDeck(assetId),
 
@@ -56,6 +60,9 @@ export const slidesHandlers: Pick<
   },
 
   "deck:statuses": ({ assetIds }) => deckStatuses(assetIds),
+
+  "deck:cacheStats": () => cacheStats(),
+  "deck:clearCache": () => clearCache(),
 
   "deck:environment": async () => toEnvironment(await locateSoffice()),
 

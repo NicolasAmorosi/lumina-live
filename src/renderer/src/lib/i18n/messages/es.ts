@@ -249,8 +249,33 @@ const es = {
   settings: {
     title: "Configuración",
     close: "Cerrar",
+    slidesCacheUsage: "Espacio usado",
+    slidesCacheUsageDesc: "{decks} presentaciones convertidas y guardadas en disco",
+    slidesCacheLoading: "Calculando…",
+    slidesCacheOf: "{used} de {max}",
+    slidesCacheClear: "Vaciar caché",
+    slidesCacheClearTitle: "¿Vaciar la caché de diapositivas?",
+    slidesCacheClearBody:
+      "Se borran las {decks} presentaciones ya convertidas. No se borra ningún archivo de tu biblioteca: cada una se vuelve a convertir sola la próxima vez que la abras, y esa primera vez tarda.",
+    slidesCacheClearLiveBody:
+      "Hay una presentación EN VIVO en el proyector ahora mismo. Vaciar la caché borra también sus diapositivas y la pantalla se queda sin imagen hasta que se reconvierta. Esperá a que termine el culto.",
+    slidesCacheCleared: "Se vació la caché de diapositivas",
+    slidesCacheMax: "Tope de caché",
+    slidesCacheMaxDesc: "Cuánto disco puede ocupar antes de empezar a borrar las presentaciones más viejas",
+    slidesRenderWidth: "Ancho de render",
+    slidesRenderWidthDesc: "Resolución horizontal a la que se rasteriza cada diapositiva",
+    slidesImageFormat: "Formato de imagen",
+    slidesImageFormatDesc: "WebP pesa bastante menos; PNG no comprime con pérdida",
+    slidesImageFormats: {
+      webp: "WebP (recomendado)",
+      png: "PNG",
+    },
+    slidesQualityWarnTitle: "Cambiar estos dos obliga a reconvertir todo",
+    slidesQualityWarnBody:
+      "Cada presentación se guarda en caché bajo su contenido MÁS el ancho y el formato. Al cambiar cualquiera de los dos, ninguna de las ya convertidas se vuelve a encontrar: se reconvierten de a una, la primera vez que abrís cada una. No lo toques el mismo día del culto.",
     sections: {
       projection: "Proyección",
+      slides: "Diapositivas",
       bible: "Biblia",
       system: "Sistema",
     },
@@ -261,6 +286,8 @@ const es = {
       transition: "Transición",
       audio: "Sonido",
       versions: "Versiones",
+      slidesCache: "Caché de diapositivas",
+      slidesQuality: "Calidad de conversión",
       appearance: "Apariencia",
       language: "Idioma",
     },

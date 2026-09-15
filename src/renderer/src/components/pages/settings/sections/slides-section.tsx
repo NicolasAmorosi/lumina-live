@@ -1,0 +1,166 @@
+import { useCallback, useEffect, useState } from "react";
+import { useT } from "@renderer/lib/i18n/i18n-provider";
+import { Button, Callout, ProgressBar, Select } from "@renderer/components/ui";
+import { ConfirmModal } from "@renderer/components/shared/modal";
+import { useSettingsStore } from "@renderer/stores/settings.store";
+import { useProjectionStore } from "@renderer/stores/projection.store";
+import { api } from "@renderer/lib/api";
+import { toast } from "@renderer/lib/toast";
+import { formatBytes } from "@renderer/lib/utils";
+import { SLIDE_IMAGE_FORMATS, type SlideImageFormat } from "@shared/types/settings";
+import type { DeckCacheStats } from "@shared/types/deck";
+import { SettingsGroup, SettingsRow } from "../settings-row";
+
+/** Offered as a list rather than a free number field: every value here is
+ *  valid, and the validator's range (1 MB … 1 TB) contains plenty that are
+ *  technically accepted and practically absurd. */
+const CACHE_MB_OPTIONS = [1024, 2048, 4096, 8192, 16_384] as const;
+
+/** Bounded at the top by what a projector can actually show. 3840 is there for
+ *  a 4K house screen; past that the extra pixels only cost disk and decode. */
+const RENDER_WIDTH_OPTIONS = [1280, 1600, 1920, 2560, 3840] as const;
+
+/**
+ * The slide cache: what it costs, and the three knobs that shape it.
+ *
+ * Two of the three are destructive in a way that is not obvious from the
+ * control. A cached deck is addressed by `contentHash + renderWidth +
+ * imageFormat` (`main/paths.ts`), so changing the width or the format does not
+ * *convert* anything — it changes the address, and every deck the operator
+ * already prepared stops being found. With 1 500 assets that is the whole
+ * hymnal converting again, one deck at a time, the next time each is opened.
+ * Hence the callout: the cost is real, it is silent, and it is paid later.
+ */
+export function SlidesSection() {
+  const t = useT();
+  const cacheMaxMb = useSettingsStore((s) => s.settings["slides.cacheMaxMb"]);
+  const renderWidth = useSettingsStore((s) => s.settings["slides.maxRenderWidth"]);
+  const imageFormat = useSettingsStore((s) => s.settings["slides.imageFormat"]);
+  const updateSettings = useSettingsStore((s) => s.update);
+  const liveDeckAssetId = useProjectionStore((s) => (s.base?.kind === "deck" ? s.base.assetId : null));
+
+  const [stats, setStats] = useState<DeckCacheStats | null>(null);
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  const refresh = useCallback(async () => {
+    try {
+      setStats(await api.deck.cacheStats());
+    } catch (error) {
+      console.warn("[slides] cache stats failed", error);
+    }
+  }, []);
+
+  // Read once when the section mounts. The cache only grows through
+  // conversions the operator started, so a live-updating figure would be
+  // motion for its own sake; `refresh()` after a change is enough.
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  async function change(patch: Parameters<typeof updateSettings>[0]) {
+    await updateSettings(patch);
+    await refresh();
+  }
+
+  async function clearCache() {
+    const next = await api.deck.clearCache();
+    setStats(next);
+    toast.success(t("settings.slidesCacheCleared"));
+  }
+
+  const usedFraction = stats && stats.maxBytes > 0 ? stats.bytesOnDisk / stats.maxBytes : 0;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <SettingsGroup title={t("settings.groups.slidesCache")}>
+        <SettingsRow
+          description={
+            stats
+              ? t("settings.slidesCacheUsageDesc", { decks: stats.deckCount })
+              : t("settings.slidesCacheLoading")
+          }
+          label={t("settings.slidesCacheUsage")}
+        >
+          <div className="flex w-56 flex-col gap-1.5">
+            <span className="text-sm font-medium tabular-nums text-foreground">
+              {stats
+                ? t("settings.slidesCacheOf", {
+                    used: formatBytes(stats.bytesOnDisk),
+                    max: formatBytes(stats.maxBytes),
+                  })
+                : "—"}
+            </span>
+            <ProgressBar
+              aria-label={t("settings.slidesCacheUsage")}
+              // At the cap nothing is broken — eviction just starts taking the
+              // oldest decks. The colour says "this is why a deck you prepared
+              // last month is gone", which is the only question it ever raises.
+              tone={usedFraction >= 1 ? "danger" : "primary"}
+              value={usedFraction}
+            />
+          </div>
+          <Button disabled={!stats || stats.deckCount === 0} onClick={() => setConfirmClear(true)} variant="outline">
+            {t("settings.slidesCacheClear")}
+          </Button>
+        </SettingsRow>
+
+        <SettingsRow description={t("settings.slidesCacheMaxDesc")} label={t("settings.slidesCacheMax")}>
+          <Select
+            className="min-w-40"
+            onChange={(value) => void change({ "slides.cacheMaxMb": Number(value) })}
+            options={CACHE_MB_OPTIONS.map((mb) => ({
+              label: formatBytes(mb * 1024 * 1024),
+              value: String(mb),
+            }))}
+            size="md"
+            value={String(cacheMaxMb)}
+          />
+        </SettingsRow>
+      </SettingsGroup>
+
+      <SettingsGroup title={t("settings.groups.slidesQuality")}>
+        <SettingsRow description={t("settings.slidesRenderWidthDesc")} label={t("settings.slidesRenderWidth")}>
+          <Select
+            className="min-w-40"
+            onChange={(value) => void change({ "slides.maxRenderWidth": Number(value) })}
+            options={RENDER_WIDTH_OPTIONS.map((px) => ({ label: `${px} px`, value: String(px) }))}
+            size="md"
+            value={String(renderWidth)}
+          />
+        </SettingsRow>
+
+        <SettingsRow description={t("settings.slidesImageFormatDesc")} label={t("settings.slidesImageFormat")}>
+          <Select
+            className="min-w-40"
+            onChange={(value) => void change({ "slides.imageFormat": value as SlideImageFormat })}
+            options={SLIDE_IMAGE_FORMATS.map((format) => ({
+              label: t(`settings.slidesImageFormats.${format}`),
+              value: format,
+            }))}
+            size="md"
+            value={imageFormat}
+          />
+        </SettingsRow>
+      </SettingsGroup>
+
+      <Callout tone="warning">
+        <p className="font-medium">{t("settings.slidesQualityWarnTitle")}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t("settings.slidesQualityWarnBody")}</p>
+      </Callout>
+
+      <ConfirmModal
+        confirmLabel={t("settings.slidesCacheClear")}
+        danger
+        description={
+          liveDeckAssetId !== null
+            ? t("settings.slidesCacheClearLiveBody")
+            : t("settings.slidesCacheClearBody", { decks: stats?.deckCount ?? 0 })
+        }
+        onConfirm={clearCache}
+        onOpenChange={setConfirmClear}
+        open={confirmClear}
+        title={t("settings.slidesCacheClearTitle")}
+      />
+    </div>
+  );
+}

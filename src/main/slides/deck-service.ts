@@ -1210,6 +1210,25 @@ export function cacheStats(): { deckCount: number; bytesOnDisk: number; maxBytes
   };
 }
 
+/**
+ * Empties the slide cache completely and answers with what is left.
+ *
+ * Running conversions are cancelled first: a job that finishes after the wipe
+ * would insert a deck row pointing at a directory this just deleted, and the
+ * cache would come back non-empty seconds after the operator emptied it.
+ *
+ * Nothing is spared — not even a pinned deck. Pins exist to stop *eviction*
+ * from taking something out from under the projector; an explicit "empty the
+ * cache" is the operator saying to do exactly that, and main is in no position
+ * to second-guess it (it cannot tell what is live under an overlay). The
+ * control window is what warns, because it is the side that knows.
+ */
+export function clearCache(): { deckCount: number; bytesOnDisk: number; maxBytes: number } {
+  cancelBackgroundJobs();
+  getSlidesRepo().deleteAllDecks();
+  return cacheStats();
+}
+
 /** The half of `cacheStats` a background batch asks for between assets: two
  *  numbers, one aggregate query and an in-memory setting. `cacheStats` itself
  *  also counts rows, which that caller never reads. */

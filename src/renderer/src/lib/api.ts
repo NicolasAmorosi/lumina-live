@@ -49,6 +49,8 @@ export const api = {
     prewarmBatch: (assetIds: number[], label: string) => invoke("deck:prewarmBatch", { assetIds, label }),
     cancelPrewarmBatch: (jobId: string) => invoke("deck:cancelPrewarmBatch", { jobId }),
     statuses: (assetIds: number[]) => invoke("deck:statuses", { assetIds }),
+    cacheStats: () => invoke("deck:cacheStats", undefined),
+    clearCache: () => invoke("deck:clearCache", undefined),
   },
   bible: {
     versions: () => invoke("bible:versions", undefined),

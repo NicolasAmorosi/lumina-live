@@ -5,9 +5,10 @@ import { DialogHeader, IconButton, Icon, Tabs, type TabItem } from "@renderer/co
 import { ModalTitle } from "@renderer/components/shared/modal";
 import { ProjectionSection } from "./sections/projection-section";
 import { BibleSection } from "./sections/bible-section";
+import { SlidesSection } from "./sections/slides-section";
 import { SystemSection } from "./sections/system-section";
 
-type SettingsSection = "projection" | "bible" | "system";
+type SettingsSection = "projection" | "slides" | "bible" | "system";
 
 /** The app's settings surface: categories on the left (macOS System Settings
  *  style), a scrollable panel of grouped rows on the right. The dialog itself
@@ -20,6 +21,7 @@ export function SettingsModal({ onOpenChange, open }: { onOpenChange: (open: boo
 
   const sections: readonly TabItem<SettingsSection>[] = [
     { icon: "display", label: t("settings.sections.projection"), value: "projection" },
+    { icon: "ppt", label: t("settings.sections.slides"), value: "slides" },
     { icon: "bible", label: t("settings.sections.bible"), value: "bible" },
     { icon: "settings", label: t("settings.sections.system"), value: "system" },
   ];
@@ -45,6 +47,8 @@ export function SettingsModal({ onOpenChange, open }: { onOpenChange: (open: boo
         <div className="min-w-0 flex-1 overflow-y-auto p-6">
           {section === "projection" ? (
             <ProjectionSection />
+          ) : section === "slides" ? (
+            <SlidesSection />
           ) : section === "bible" ? (
             <BibleSection />
           ) : (

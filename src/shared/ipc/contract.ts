@@ -15,6 +15,7 @@ import type {
   ProjectionOutput,
 } from "../types/projection";
 import type {
+  DeckCacheStats,
   DeckDTO,
   DeckEnvironment,
   DeckProgress,
@@ -110,6 +111,17 @@ export type IpcContract = {
    *  without asking for its whole `DeckDTO`). Omits ids with no deck row at
    *  all; check `statuses[id] !== undefined` before assuming "ready". */
   "deck:statuses": { req: { assetIds: number[] }; res: Record<number, DeckStatusSummary> };
+
+  /** How much disk the slide cache is using against its budget. Read-only and
+   *  cheap (one aggregate query plus a setting), so Ajustes can poll it on
+   *  open without coordinating with the conversion queue. */
+  "deck:cacheStats": { req: void; res: DeckCacheStats };
+  /** Deletes EVERY cached deck — rows and rasterized files alike — and answers
+   *  with the usage that is left. Nothing is spared, including a deck that is
+   *  on the projector right now: main deliberately has no way to know what is
+   *  live (see `.claude/knowledge/main-cannot-know-what-is-live-under-an-overlay.md`),
+   *  so the confirmation belongs to the control window, which does. */
+  "deck:clearCache": { req: void; res: DeckCacheStats };
 
   "bible:versions": { req: void; res: BibleVersionDTO[] };
   "bible:books": { req: { versionId: number }; res: BibleBookDTO[] };
