@@ -1,6 +1,6 @@
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { cn, formatClock } from "@renderer/lib/utils";
-import { IconButton, Icon, MediaPanel, ProgressBar } from "@renderer/components/ui";
+import { Button, IconButton, Icon, MediaPanel, ProgressBar } from "@renderer/components/ui";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { useLiveHeading } from "@renderer/lib/hooks/use-live";
 import { DECK_SOUNDTRACK_TRACK_ID } from "@renderer/stores/audio.store";
@@ -136,13 +136,14 @@ export function DeckTransport() {
             </span>
             <ProgressBar className={cn("min-w-0 flex-1", isDesynced && "opacity-40")} value={elapsedRatio ?? 0} />
             {isDesynced ? (
-              <button
-                className="shrink-0 whitespace-nowrap text-xs font-medium text-primary-ink hover:underline"
+              <Button
+                className="shrink-0 whitespace-nowrap"
                 onClick={() => resyncDeck()}
-                type="button"
+                size="xs"
+                variant="link"
               >
                 {t("deck.resync")}
-              </button>
+              </Button>
             ) : secondsLeft !== null ? (
               <span className="shrink-0 whitespace-nowrap text-xs text-subtle">
                 {t("deck.nextIn", { seconds: secondsLeft })}

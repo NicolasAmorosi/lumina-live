@@ -5,6 +5,7 @@ export { Badge, type BadgeVariant } from "./badge";
 export { Card, CardHeader, CardContent, CardFooter } from "./card";
 export { Input } from "./input";
 export { Select, type SelectOption } from "./select";
+export { Textarea } from "./textarea";
 export { Switch } from "./checkbox";
 export { EmptyState } from "./empty-state";
 export { LinearLoader, Skeleton } from "./linear-loader";

@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { cn } from "@renderer/lib/utils";
 import { useToastStore, type ToastItem, type ToastTone } from "@renderer/stores/toast.store";
+import { Button } from "./button";
 import { Icon } from "./icon";
 import { IconButton } from "./icon-button";
 
@@ -38,16 +39,16 @@ function Toast({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }) 
       <div className="min-w-0 flex-1">
         <p>{item.message}</p>
         {item.action ? (
-          <button
-            className="mt-1 text-sm font-medium text-primary-ink hover:underline"
+          <Button
+            className="mt-1"
             onClick={() => {
               item.action!.onClick();
               onDismiss();
             }}
-            type="button"
+            variant="link"
           >
             {item.action.label}
-          </button>
+          </Button>
         ) : null}
       </div>
       <IconButton aria-label={t("common.dismiss")} onClick={onDismiss} size="xs" variant="ghost">

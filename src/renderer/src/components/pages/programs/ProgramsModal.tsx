@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { Modal, ModalTitle } from "@renderer/components/shared/modal";
 import {
+  Button,
   Callout,
   DialogHeader,
   EmptyState,
@@ -351,13 +352,11 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
             ) : loadError ? (
               <Callout tone="danger">
                 <p>{t("programs.loadError")}</p>
-                <button
-                  className="mt-1 text-sm font-medium underline"
-                  onClick={() => void refreshList()}
-                  type="button"
-                >
+                {/* `text-current` rather than the variant's own ink: a link
+                    inside a toned Callout reads as part of that message. */}
+                <Button className="mt-1 text-current" onClick={() => void refreshList()} variant="link">
                   {t("common.retry")}
-                </button>
+                </Button>
               </Callout>
             ) : programs.length === 0 && !showDraftRow ? (
               <EmptyState icon="folderOpen" title={t("programs.empty")} />

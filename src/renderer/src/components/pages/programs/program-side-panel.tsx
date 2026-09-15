@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useT, type TParams } from "@renderer/lib/i18n/i18n-provider";
-import { Button, Callout, EmptyState, Icon, IconButton, Input, Skeleton, Switch, Title, Tooltip } from "@renderer/components/ui";
+import { Button, Callout, EmptyState, Icon, IconButton, Input, Skeleton, Switch, Textarea, Title, Tooltip } from "@renderer/components/ui";
 import { cn } from "@renderer/lib/utils";
 import { api } from "@renderer/lib/api";
 import { toast } from "@renderer/lib/toast";
@@ -258,8 +258,8 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
             </div>
             <label className="flex flex-col gap-1">
               <span className="text-sm font-medium text-foreground">{t("programs.notes")}</span>
-              <textarea
-                className="min-h-24 w-full resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+              <Textarea
+                className="min-h-24"
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder={t("programs.notesPlaceholder")}
                 value={notes}
