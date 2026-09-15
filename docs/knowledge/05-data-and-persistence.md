@@ -91,7 +91,7 @@ en `load()` pero ya no ordena nada. Reglas del campo:
 se sincroniza con triggers `AFTER INSERT/UPDATE/DELETE`. El seed usa
 `INSERT INTO bible_verses_fts(bible_verses_fts) VALUES('rebuild')` una sola vez al final en vez
 de dejar que los triggers corran 31.102 veces — la carga completa mide ~550ms en esta máquina
-(`npm run db:smoke`).
+(`npm run test`, proyecto `main`).
 
 ## Archivos faltantes — nunca se borran filas
 
@@ -135,7 +135,7 @@ base corre en `journal_mode = WAL`: las transacciones recientes viven en `worshi
 archivo principal, así que copiarlo solo descarta en silencio todo lo posterior al último
 checkpoint. Normalmente salía completa —esta función corre antes de que la app abra la base, con el
 WAL ya checkpointeado— y fallaba justo cuando hacía falta: después de un cierre sucio, un corte de
-luz o un SIGKILL. Medido en `npm run db:smoke` (caso 18/18) con un `-wal` caliente de 4,1 MB:
+luz o un SIGKILL. Medido en `npm run test` (`tests/main/data-layer.test.ts`) con un `-wal` caliente de 4,1 MB:
 `VACUUM INTO` captura las 5000 filas, `copyFileSync` 4977. `backupBeforeMigrate` devuelve un
 `BackupResult` y el diálogo de error dice la verdad: promete una copia solo si de verdad la hay y
 pasó el `integrity_check`.

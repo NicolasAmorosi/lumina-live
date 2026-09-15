@@ -25,7 +25,7 @@ detalle de cada capa.
 npm install         # better-sqlite3 trae binarios precompilados, no compila nada
 npm run dev          # electron-vite dev
 npm run typecheck     # verificación de tipos
-npm run db:smoke       # smoke test de la capa de datos, sin levantar Electron
+npm run test           # Vitest: capa de datos, zip reader, audio vinculado y estado del renderer
 ```
 
 ## Empaquetado

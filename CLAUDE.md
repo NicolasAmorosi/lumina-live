@@ -280,9 +280,12 @@ npm install              # instala deps — better-sqlite3 trae binarios precomp
 npm run dev               # electron-vite dev (HMR en renderer, restart de main en watch)
 npm run typecheck          # tsc --noEmit sobre node (main+preload+shared) y web (renderer+shared)
 npm run lint                # eslint .
-npm run db:generate          # drizzle-kit generate — nueva migración tras editar db/schema.ts
-npm run db:smoke              # smoke test de la capa de datos SIN Electron (18 casos: migraciones, seed,
-                              #   FTS5, CRUD, borrador de programa, validadores de settings, respaldo WAL)
+npm run test                 # vitest run — 95 casos en dos proyectos: `main` (Node: migraciones, seed,
+                              #   FTS5, repos, borrador, validadores de settings, respaldo WAL, zip reader,
+                              #   audio vinculado, urls) y `renderer` (jsdom: selectOutput, freezeLivePositions,
+                              #   live-intent, utils). Nada importa `electron`: ese es el límite del suite
+npm run test:watch            # el mismo suite en watch, mientras se toca un módulo
+npm run db:generate            # drizzle-kit generate — nueva migración tras editar db/schema.ts
 npm run slides:smoke -- x.pptx # conversión + parseo OOXML (timings/audio) SIN Electron
 npm run build                 # electron-vite build
 npm run package:win|mac|linux  # build + electron-builder para esa plataforma
@@ -452,5 +455,6 @@ no reimplementando desde cero.
 - Requiere **LibreOffice instalado** para convertir presentaciones (`brew install --cask libreoffice`).
   No se empaqueta; la app lo detecta y guía la instalación si falta.
 - `git` está activo; commitea/pushea solo si el usuario lo pide.
-- No hay CI configurado. `npm run typecheck && npm run lint && npm run db:smoke` es la barra
-  mínima antes de dar por buena una tarea.
+- No hay CI configurado — es una decisión del usuario, no un pendiente.
+  `npm run typecheck && npm run lint && npm run test` es la barra mínima antes de dar por buena
+  una tarea, y corre a mano.

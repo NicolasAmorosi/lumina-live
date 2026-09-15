@@ -12,8 +12,9 @@
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
-    "db:smoke": "TSX_TSCONFIG_PATH=tsconfig.node.json tsx scripts/db-smoke.ts",
     "slides:smoke": "TSX_TSCONFIG_PATH=tsconfig.node.json tsx scripts/convert-smoke.ts",
     "package": "npm run build && electron-builder",
     "package:win": "npm run build && electron-builder --win",
@@ -52,11 +53,13 @@
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.14",
+    "jsdom": "^30.0.1",
     "tailwindcss": "^4.1.7",
     "tsx": "^4.19.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.18.0",
-    "vite": "^7.1.12"
+    "vite": "^7.1.12",
+    "vitest": "^5.0.1"
   },
   "build": {
     "appId": "com.worshipapp.app",
