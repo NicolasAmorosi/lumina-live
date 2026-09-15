@@ -248,6 +248,31 @@
   --shadow-surface: 0 1px 2px 0 rgb(0 0 0 / 0.25), 0 1px 3px 0 rgb(0 0 0 / 0.2);
   --shadow-raised: 0 2px 4px -2px rgb(0 0 0 / 0.3), 0 4px 12px -2px rgb(0 0 0 / 0.25);
   --shadow-overlay: 0 8px 16px -8px rgb(0 0 0 / 0.4), 0 20px 40px -8px rgb(0 0 0 / 0.5);
+
+  /*
+   * Stacking scale — the missing half of the elevation scale above. Until
+   * this existed, `z-50` (modal), `z-[60]` (toasts) and `z-[100]` (the Select
+   * menu, the floating tooltip AND the ProgramsModal drag clone) competed at
+   * numbers picked one at a time, with three different things sharing 100 and
+   * DOM order deciding which of them actually won.
+   *
+   * Read it top to bottom as "what may cover what". A floating tooltip and a
+   * dropdown are ABOVE the modal on purpose: both are opened from inside one,
+   * and one that renders underneath is worse than none. The drag clone is
+   * above everything because it is attached to the pointer — it has to be
+   * visible wherever the pointer goes — and the toast is last because a
+   * message the operator has to read during a service cannot be covered by
+   * anything, including a drag in progress.
+   *
+   * Steps of 100 so a level can be slotted between two without renumbering.
+   * Used as `z-[var(--z-modal)]`: Tailwind v4 has no z-index theme namespace.
+   */
+  --z-raised: 10;      /* sticky headers, in-flow overlays (an error banner) */
+  --z-sticky: 20;      /* a control revealed on hover over a row */
+  --z-modal: 100;      /* the modal stack and its backdrop */
+  --z-popover: 200;    /* Select menus and floating tooltips — opened FROM a modal */
+  --z-drag: 300;       /* the clone following the pointer */
+  --z-toast: 400;      /* never covered by anything */
 }
 
 * { box-sizing: border-box; }

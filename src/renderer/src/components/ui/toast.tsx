@@ -59,7 +59,7 @@ function Toast({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }) 
 }
 
 /**
- * Mounted once in `App.tsx`. `z-[60]` sits above the `z-50` modal stack so a
+ * Mounted once in `App.tsx`. `--z-toast` is the top of the stacking scale so a
  * toast fired from inside a modal is still visible.
  *
  * Portaled to `document.body`, like the modals and for the same reason: a
@@ -79,7 +79,7 @@ export function ToastHost() {
   return createPortal(
     <div
       aria-live="polite"
-      className="pointer-events-none fixed bottom-4 left-1/2 z-[60] flex w-full max-w-sm -translate-x-1/2 flex-col gap-2 px-4"
+      className="pointer-events-none fixed bottom-4 left-1/2 z-[var(--z-toast)] flex w-full max-w-sm -translate-x-1/2 flex-col gap-2 px-4"
     >
       {toasts.map((item) => (
         <Toast item={item} key={item.id} onDismiss={() => dismiss(item.id)} />

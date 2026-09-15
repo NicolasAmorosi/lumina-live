@@ -255,7 +255,7 @@ export function Select({ className, disabled, onChange, options, placeholder, si
       {open && position
         ? createPortal(
             <ul
-              className="fixed z-[100] overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-overlay focus:outline-none"
+              className="fixed z-[var(--z-popover)] overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-overlay focus:outline-none"
               id={listboxId}
               ref={menuRef}
               role="listbox"

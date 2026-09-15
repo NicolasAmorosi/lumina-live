@@ -49,7 +49,7 @@ export function Tooltip(props: TooltipProps) {
       {children}
       <span
         className={cn(
-          "pointer-events-none absolute z-10 w-64 rounded-lg border border-border bg-card p-2 text-xs text-foreground opacity-0 shadow-raised transition-opacity group-hover:opacity-100 group-has-[:focus-visible]:opacity-100",
+          "pointer-events-none absolute z-[var(--z-raised)] w-64 rounded-lg border border-border bg-card p-2 text-xs text-foreground opacity-0 shadow-raised transition-opacity group-hover:opacity-100 group-has-[:focus-visible]:opacity-100",
           placement === "top" ? "bottom-full mb-1.5" : "top-full mt-1.5",
           align === "start" ? "left-0" : "right-0",
         )}
@@ -125,7 +125,7 @@ function FloatingTooltip({ children, className, content }: TooltipProps) {
         ? createPortal(
             <span
               className={cn(
-                "pointer-events-none fixed z-[100] w-max max-w-[calc(100vw-1rem)] rounded-lg border border-border bg-card p-2 text-xs break-all text-foreground shadow-raised",
+                "pointer-events-none fixed z-[var(--z-popover)] w-max max-w-[calc(100vw-1rem)] rounded-lg border border-border bg-card p-2 text-xs break-all text-foreground shadow-raised",
                 !position && "invisible",
               )}
               ref={bubbleRef}

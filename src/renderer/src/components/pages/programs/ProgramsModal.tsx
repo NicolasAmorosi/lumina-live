@@ -450,7 +450,7 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
       {dragPreview
         ? createPortal(
             <div
-              className="pointer-events-none fixed z-[100] flex items-center gap-2 rounded-md border border-border bg-card px-4 text-sm text-foreground shadow-overlay"
+              className="pointer-events-none fixed z-[var(--z-drag)] flex items-center gap-2 rounded-md border border-border bg-card px-4 text-sm text-foreground shadow-overlay"
               style={{
                 height: dragPreview.height,
                 left: dragPreview.left,

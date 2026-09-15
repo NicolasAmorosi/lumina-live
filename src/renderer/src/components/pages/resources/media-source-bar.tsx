@@ -56,7 +56,7 @@ export function MediaSourceBar({ activeView, folders, onAddFolder, onRemoveFolde
             </Tooltip>
             <Tooltip
               align="end"
-              className="absolute top-1/2 right-0.5 z-20 hidden -translate-y-1/2 group-hover/folder:inline-flex"
+              className="absolute top-1/2 right-0.5 z-[var(--z-sticky)] hidden -translate-y-1/2 group-hover/folder:inline-flex"
               content={t("resources.removeFolderHint")}
               placement="bottom"
             >

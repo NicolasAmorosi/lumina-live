@@ -412,7 +412,7 @@ type OutputErrorNoticeProps = { label: string };
 function OutputErrorNotice({ label }: OutputErrorNoticeProps) {
   return (
     <div
-      className="absolute inset-x-0 bottom-0 z-10 flex items-center justify-center gap-[1.5cqw] bg-danger/90 px-[3cqw] py-[1.6cqw] text-center text-[3cqw] leading-tight font-semibold text-white"
+      className="absolute inset-x-0 bottom-0 z-[var(--z-raised)] flex items-center justify-center gap-[1.5cqw] bg-danger/90 px-[3cqw] py-[1.6cqw] text-center text-[3cqw] leading-tight font-semibold text-white"
       role="status"
     >
       <Icon className="size-[3.5cqw] shrink-0" name="alert" />
