@@ -455,6 +455,75 @@ corrección (`M25`, `M28`–`M30`, `M23`, `M4`, `M6`), los 20 🔵, y las decisi
 
 ---
 
+## 1.nonies Estado — Tanda 7 aplicada (2026-09-15, decimoquinta sesión)
+
+**El bloque de corrección 🟡, más las dos decisiones de producto que estaban frenadas.**
+Cerrados: `M25`, `M28`, `M29`, `M30`, `M3`, `M5` y `L11`. Total acumulado:
+**34 de 76 + los 2 de campo** (27 tras la Tanda 6, más estos 7). Verificado contra la app real, con la base y la biblioteca del
+usuario — la migración `0009` corrió de verdad.
+
+| # | Qué se hizo |
+|---|---|
+| `M25` | La causa raíz no era la insignia: era que `useLiveStatus` **reimplementaba a mano la precedencia** de `selectOutputWithoutUnderlay`. Ahora lee `selectOutputMemo(s).kind`, el mismo valor que pinta el monitor, así que no pueden volver a divergir. Se suscribe al `.kind` y no al output entero: un string es comparable por `Object.is`, de modo que la columna no re-renderiza en cada diapositiva |
+| `M28` | Primitiva nueva `ModalBoundary` y **un boundary por modal**, los cuatro (el hallazgo pedía dos). El boundary del shell reemplaza lo que envuelve por una pantalla de fallo, que es la respuesta correcta para el workspace y la equivocada para un diálogo: un throw en Ajustes se llevaría puesto el orden de culto, los monitores y los controles en vivo. Acá el modal desaparece con un toast y el shell no se entera. `ErrorBoundary` ganó `onError`, que corre en `componentDidCatch` (fase de commit) — hacerlo desde `fallback` sería un efecto durante el render. El guard de cierre lleva un trabajo extra: su `onCrash` manda `closeDecision("cancel")`, porque main está bloqueado esperando y un diálogo que se evapora sin contestar deja la app incerrable hasta que vence la gracia de 4 s |
+| `M29` | `displays:list` compone `Display.label` (el nombre real del dispositivo, Electron ≥ 22) **más** la resolución, con un ordinal de desempate si dos quedan idénticas; la resolución sola queda de respaldo, porque `label` vuelve vacío con regularidad en Linux. De paso, `getPrimaryDisplay()` salió de adentro del `map` |
+| `M30` | **Cerrado por medición, como `M11` — y el hallazgo diagnosticó mal la causa.** Medido sobre la RV1960 (3,81 MB, 31 102 versículos): 588 ms totales = **457 ms de INSERTs + 47 ms de rebuild de FTS5 + 11 ms** de `readFileSync`+sha256+`JSON.parse`+normalización. El parseo que el hallazgo culpa es el **2%**. Sacarlo de main pedía un `worker_thread` con una segunda conexión `better-sqlite3` escribiendo la misma base en WAL — riesgo de `SQLITE_BUSY` a cambio de medio segundo — y el import se dispara desde un selector de archivos en Ajustes, no en medio de una proyección |
+| `L11` | En su lugar, lo que el operador sí nota: botón deshabilitado con spinner mientras importa, toast de éxito con nombre y conteo de versículos, y toast de error para un JSON cuya forma `parseBibleSource` no reconoce — la alternativa era una versión que simplemente nunca aparece en la lista |
+| `M3` | **Decisión del usuario: borrar el tipo.** `kind: "text"` salió de `ProgramItemDTO`, `ProgramItemUpsert`, `BaseContent`, `ProjectionOutputKind`, `PROGRAM_ITEM_KINDS`, `ProgramsRepo`, `usePreviewContent`, `goLiveWithScheduleItem`, `selectOutput`, `OutputView`, `SlidesPanel`, `MediaTrackKind` y los dos `Record` exhaustivos de `use-program-item-display.ts` — que son los que convirtieron el borrado en errores de compilación en vez de huecos de runtime. `DraftRepo.load()` ahora **filtra kinds desconocidos**: el borrador es un blob JSON que sobrevive al esquema que lo escribió, y un ítem `text` de antes del upgrade volvería como una fila que ningún renderer sabe etiquetar y ningún `save()` puede persistir |
+| `M5` | **Decisión del usuario: los tres ajustes completos.** Sección **Diapositivas** nueva: uso actual con barra contra el tope y botón "Vaciar caché" con confirmación, tope en MB, ancho de render y formato de imagen, más un `Callout` que dice que los dos últimos reconvierten todo. Dos canales nuevos, `deck:cacheStats` y `deck:clearCache` — `cacheStats()` ya existía en main **sin un solo consumidor**, igual que `M4`. `clearCache()` cancela los trabajos en curso primero (una conversión que termina después del vaciado insertaría una fila apuntando a un directorio recién borrado) y **no respeta los pins**: los pins existen para que el desalojo no le saque algo al proyector, y "vaciar" es el operador pidiendo exactamente eso. El aviso es de la ventana de control, que es la que sabe si hay un deck en vivo |
+
+### La migración `0009_drop_text_program_items` — escrita a mano
+
+`drizzle-kit generate` emite `ALTER TABLE program_items DROP COLUMN text_body`, que **SQLite
+rechaza**: la columna está nombrada dentro del `CHECK` de la tabla. El `CHECK` no está en
+`schema.ts` (Drizzle no lo modela) sino escrito a mano en `0000_init.sql`, así que drizzle-kit no
+sabe que existe. La migración es un rebuild completo de la tabla —`__new_program_items`, copia,
+`DROP`, `RENAME`, índice— que de paso angosta el `CHECK` de tres ramas a dos. Nada referencia
+`program_items`, así que el `DROP` con FK activas es seguro. Lleva un `DELETE ... WHERE kind='text'`
+explícito antes de la copia: una fila sobreviviente violaría el `CHECK` nuevo y abortaría la
+migración entera en el arranque de otra máquina.
+
+### Verificación de esta tanda — corrida contra la app real y la base real
+
+`npm run typecheck` ✅ · `npm run lint` ✅ 0 errores (los mismos 5 warnings de `react-refresh`) ·
+`npm run db:smoke` ✅ 18/18 · `npm run build` ✅.
+
+| Qué | Cómo se midió | Resultado |
+|---|---|---|
+| `0009` contra una **copia** de la base real | `runMigrations` sobre un `VACUUM INTO` de `userData` | 35 ítems adentro / 35 afuera, mismo desglose por kind (7 bible, 20 media, 8 ppt), `text_body` fuera, `ix_items_program` recreado, `integrity_check` ok, **2 ms** |
+| `0009` contra la **base real** | arranque de la app | respaldo `worship-2026-09-15T22-58-27-527Z.db` (10 055 680 B) tomado antes; después: 1498 assets, 4 programas, 35 ítems, 682 decks, `integrity_check` ok |
+| `M25` | doble conexión CDP: insignia de la columna EN VIVO **contra el DOM del proyector** | sin overlay y sin nada seleccionado: proyector con el `<img>` del logo, insignia **LOGO** (antes: "Sin señal"). NEGRO: sin `<img>`, insignia NEGRO. LOGO: `<img>`, insignia LOGO. Los cuatro estados coinciden |
+| `M29` | Ajustes → Pantalla | `Built-in Retina Display · 1470x956`, antes `1470x956` |
+| `M5` | Ajustes → Diapositivas, con la biblioteca del usuario | "682 presentaciones convertidas", **1,1 GB de 4,0 GB**, barra al 28 % con nombre accesible, y los tres controles con sus valores reales (4,0 GB / 1920 px / WebP) |
+| `M3` | doble click en el programa guardado "Culto si" | 9 ítems (media + ppt + versículos) cargan y renderizan bien tras el rebuild de la tabla; los bíblicos muestran su referencia, que es la rama de `useItemLabel` que se simplificó |
+| salud | `Runtime.enable` + `Log.enable` en las dos ventanas, a través de un reload completo | **0 errores y 0 warnings de consola** |
+| cierre | SIGTERM | `will-quit` corrió: el `-wal` se vació, base en 10 285 056 B, `integrity_check` ok, 0 violaciones de FK |
+
+### Un defecto que esta tanda encontró y no estaba en ninguna de las tres auditorías
+
+`pragma foreign_key_check` sobre la base **viva** devolvía **184 filas huérfanas**: 183 en
+`deck_slides` y 1 en `deck_audio` (la única fila de esa tabla), apuntando a 35 `slide_decks`
+inexistentes — ids **692–725 contiguos** más un 4 viejo, contra `max(id) = 726`. O sea un borrado
+masivo reciente que no se llevó a sus hijos.
+
+Lo verificado: la FK declara `ON DELETE cascade` en el DDL real, `foreign_keys = ON` está en
+`client.ts` desde el primer commit, no hay ningún otro escritor ni ningún toggle del pragma en todo
+el repo, y un `DELETE FROM slide_decks` sobre una copia de la base **sí cascadea hoy**. **La causa
+no se reprodujo.**
+
+Arreglo aplicado (decisión del usuario): `SlidesRepo.deleteOrphanDeckChildren()`, llamado desde
+`sweepCache()` —que ya existe para exactamente esta clase de basura, y hasta ahora solo reconciliaba
+directorios— y que **loguea** el conteo, porque un número distinto de cero es la única señal de que
+lo que las produce sigue vivo. Medido sobre una copia: 184 → 0, `slide_decks` intacto en 682,
+`integrity_check` ok. Y después sobre la base real, en el arranque:
+`[slides] swept 184 orphan deck child row(s)`.
+
+**Lo que esta tanda NO tocó:** `I3` (Vitest + CI), el contraste del tema claro, el bloque 🟡 de
+a11y y design system (`M14` salvo su mitad de `ProgressBar`, `M15`, `M17`, `M19`–`M21`), `M23`,
+`M4`, `M6`, los 🔵 restantes, e `I1`/`I2`.
+
+---
+
 ## 2. Qué estaba cubierto y qué no
 
 Reconstruido leyendo los dos informes previos y el índice, antes de decidir el alcance.
