@@ -1295,6 +1295,13 @@ export function sweepCache(): void {
 
   repo.deleteUnfinished();
 
+  // Children whose deck row is gone. Never expected (the FK cascades), found
+  // in the wild anyway — see `deleteOrphanDeckChildren`. Logged rather than
+  // silent: a non-zero count here is the only signal that whatever produces
+  // them is still alive.
+  const orphans = repo.deleteOrphanDeckChildren();
+  if (orphans > 0) console.warn(`[slides] swept ${orphans} orphan deck child row(s)`);
+
   const known = new Set(repo.allDeckDirs());
   try {
     for (const entry of fs.readdirSync(slidesCacheDir, { withFileTypes: true })) {

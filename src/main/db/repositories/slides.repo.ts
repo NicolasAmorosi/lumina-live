@@ -511,6 +511,30 @@ export class SlidesRepo {
     return rows.length;
   }
 
+  /**
+   * Deletes `deck_slides`/`deck_audio` rows whose deck is gone.
+   *
+   * There should never be any: both tables declare `ON DELETE cascade`,
+   * `foreign_keys = ON` has been set in `client.ts` since the first commit,
+   * and a delete through `deleteDeck` does cascade — measured. And yet a real
+   * library was found carrying 184 of them, across 35 deck ids in one
+   * contiguous recent run, so *something* produced them and the cause has not
+   * been reproduced. This is the same bet `sweepCache` already makes about
+   * cache directories: reconcile the state at launch rather than trust that
+   * every path that could have broken it is gone. Returns how many rows went.
+   */
+  deleteOrphanDeckChildren(): number {
+    const slides = this.db
+      .delete(deckSlides)
+      .where(sql`${deckSlides.deckId} NOT IN (SELECT ${slideDecks.id} FROM ${slideDecks})`)
+      .run();
+    const audio = this.db
+      .delete(deckAudio)
+      .where(sql`${deckAudio.deckId} NOT IN (SELECT ${slideDecks.id} FROM ${slideDecks})`)
+      .run();
+    return Number(slides.changes) + Number(audio.changes);
+  }
+
   /** Drops decks left mid-conversion by a crash — a crash skips before-quit,
    *  so this runs at startup instead. */
   deleteUnfinished(): void {
