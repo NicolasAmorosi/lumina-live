@@ -6,6 +6,7 @@ const es = {
   app: {
     title: "WorshipApp",
     crashed: "Algo falló en la interfaz",
+    modalCrashed: "Algo falló en esa ventana y se cerró",
     reload: "Recargar",
   },
   header: {

@@ -3,12 +3,17 @@ import { AppShell } from "@renderer/components/pages/layout/AppShell";
 import { ProgramsModal } from "@renderer/components/pages/programs/ProgramsModal";
 import { SettingsModal } from "@renderer/components/pages/settings/SettingsModal";
 import { RemoveAssetConfirm } from "@renderer/components/pages/resources/remove-asset-confirm";
-import { ConfirmModal, useAnyModalOpen } from "@renderer/components/shared/modal";
+import {
+  ConfirmModal,
+  useAnyModalOpen,
+} from "@renderer/components/shared/modal";
 import { ErrorBoundary } from "@renderer/components/shared/error-boundary";
+import { ModalBoundary } from "@renderer/components/shared/modal-boundary";
 import { Button, LoadingState, ToastHost } from "@renderer/components/ui";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { installGlobalErrorHandlers } from "@renderer/lib/global-error-handlers";
 import { api } from "@renderer/lib/api";
+import { toast } from "@renderer/lib/toast";
 import { restoreDraft } from "@renderer/lib/actions/programs";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { LOGO_URL } from "@shared/urls";
@@ -40,9 +45,9 @@ let draftRestoreStarted = false;
 export function App() {
   const t = useT();
   const [programsOpen, setProgramsOpen] = useState(false);
-  const [programsInitialMode, setProgramsInitialMode] = useState<{ kind: "create" } | undefined>(
-    undefined,
-  );
+  const [programsInitialMode, setProgramsInitialMode] = useState<
+    { kind: "create" } | undefined
+  >(undefined);
   // The only modal whose flag lives outside this component: a toast raised
   // from `display.store` (no screen to project on) offers to open Ajustes ->
   // Pantalla, and a toast action has no component tree under it. See
@@ -64,9 +69,15 @@ export function App() {
   const loadSettings = useSettingsStore((s) => s.load);
   const logoPath = useSettingsStore((s) => s.settings["logo.path"]);
   const setLogoUrl = useProjectionStore((s) => s.setLogoUrl);
-  const transitionStyle = useSettingsStore((s) => s.settings["projection.transition.style"]);
-  const transitionDurationMs = useSettingsStore((s) => s.settings["projection.transition.durationMs"]);
-  const setTransitionSettings = useProjectionStore((s) => s.setTransitionSettings);
+  const transitionStyle = useSettingsStore(
+    (s) => s.settings["projection.transition.style"],
+  );
+  const transitionDurationMs = useSettingsStore(
+    (s) => s.settings["projection.transition.durationMs"],
+  );
+  const setTransitionSettings = useProjectionStore(
+    (s) => s.setTransitionSettings,
+  );
 
   useGlobalShortcuts(useAnyModalOpen());
 
@@ -78,7 +89,10 @@ export function App() {
       const { settings } = useSettingsStore.getState();
       useLibraryStore
         .getState()
-        .hydrateActiveViews(settings["library.activeView"], settings["library.linkedFolders"]);
+        .hydrateActiveViews(
+          settings["library.activeView"],
+          settings["library.linkedFolders"],
+        );
       // Nothing opens the projection window on launch any more — it was
       // unreliable. The operator's first tap on NEGRO, LOGO or EN VIVO opens
       // it on demand (see display.store's `openIfNeeded`).
@@ -118,7 +132,9 @@ export function App() {
     // The path itself is the cache-buster: `worship://logo` is always the
     // same host, so without something in the URL that changes along with the
     // file, the projector's <img> would keep the previous logo cached.
-    setLogoUrl(logoPath ? `${LOGO_URL}?p=${encodeURIComponent(logoPath)}` : null);
+    setLogoUrl(
+      logoPath ? `${LOGO_URL}?p=${encodeURIComponent(logoPath)}` : null,
+    );
   }, [logoPath, setLogoUrl]);
 
   // Mirrors the projection settings into the store the same way the logo
@@ -143,7 +159,11 @@ export function App() {
                   <Button onClick={reset} size="sm" variant="primary">
                     {t("common.retry")}
                   </Button>
-                  <Button onClick={() => window.location.reload()} size="sm" variant="outline">
+                  <Button
+                    onClick={() => window.location.reload()}
+                    size="sm"
+                    variant="outline"
+                  >
                     {t("app.reload")}
                   </Button>
                 </div>
@@ -159,40 +179,88 @@ export function App() {
       >
         <AppShell
           onOpenPrograms={(opts) => {
-            setProgramsInitialMode(opts?.mode === "create" ? { kind: "create" } : undefined);
+            setProgramsInitialMode(
+              opts?.mode === "create" ? { kind: "create" } : undefined,
+            );
             setProgramsOpen(true);
           }}
           onOpenSettings={() => setSettingsOpen(true)}
         />
       </ErrorBoundary>
-      <ProgramsModal initialMode={programsInitialMode} onOpenChange={setProgramsOpen} open={programsOpen} />
-      <SettingsModal onOpenChange={setSettingsOpen} open={settingsOpen} />
-      <RemoveAssetConfirm
-        assetId={removeAssetConfirmId}
-        onOpenChange={(open) => {
-          if (!open) setRemoveAssetConfirmId(null);
+      {/* One boundary per modal, deliberately NOT a share of the shell's:
+          a throw in a dialog must cost the operator that dialog, not the
+          order of service behind it. See `ModalBoundary`. */}
+      <ModalBoundary
+        onCrash={() => {
+          setProgramsOpen(false);
+          toast.danger(t("app.modalCrashed"));
         }}
-      />
+        open={programsOpen}
+      >
+        <ProgramsModal
+          initialMode={programsInitialMode}
+          onOpenChange={setProgramsOpen}
+          open={programsOpen}
+        />
+      </ModalBoundary>
+      <ModalBoundary
+        onCrash={() => {
+          setSettingsOpen(false);
+          toast.danger(t("app.modalCrashed"));
+        }}
+        open={settingsOpen}
+      >
+        <SettingsModal onOpenChange={setSettingsOpen} open={settingsOpen} />
+      </ModalBoundary>
+      <ModalBoundary
+        onCrash={() => {
+          setRemoveAssetConfirmId(null);
+          toast.danger(t("app.modalCrashed"));
+        }}
+        open={removeAssetConfirmId !== null}
+      >
+        <RemoveAssetConfirm
+          assetId={removeAssetConfirmId}
+          onOpenChange={(open) => {
+            if (!open) setRemoveAssetConfirmId(null);
+          }}
+        />
+      </ModalBoundary>
       {/* Main vetoed a close and asked the control window what to do — see
-          `main/windows/close-guard.ts` and `effects/draft-autosave.ts`. */}
-      <ConfirmModal
-        confirmLabel={t("schedule.closeAnyway")}
-        danger
-        description={t("schedule.closeConfirmBody")}
-        onConfirm={async () => {
-          closeConfirmedRef.current = true;
-          await api.window.closeDecision("close");
-        }}
-        onOpenChange={(open) => {
-          setCloseGuardOpen(open);
-          if (open) return;
-          const confirmed = closeConfirmedRef.current;
+          `main/windows/close-guard.ts` and `effects/draft-autosave.ts`.
+          Its boundary has one extra job: main is blocked waiting for a
+          decision, and a dialog that vanished without answering would leave
+          the app uncloseable until the 4 s grace expires. Crashing means
+          "cancel" — the safe answer, since the whole point of this dialog is
+          unsaved work. */}
+      <ModalBoundary
+        onCrash={() => {
           closeConfirmedRef.current = false;
-          if (!confirmed) void api.window.closeDecision("cancel");
+          setCloseGuardOpen(false);
+          void api.window.closeDecision("cancel");
+          toast.danger(t("app.modalCrashed"));
         }}
         open={closeGuardOpen}
-        title={t("schedule.closeConfirmTitle")}
-      />
+      >
+        <ConfirmModal
+          confirmLabel={t("schedule.closeAnyway")}
+          danger
+          description={t("schedule.closeConfirmBody")}
+          onConfirm={async () => {
+            closeConfirmedRef.current = true;
+            await api.window.closeDecision("close");
+          }}
+          onOpenChange={(open) => {
+            setCloseGuardOpen(open);
+            if (open) return;
+            const confirmed = closeConfirmedRef.current;
+            closeConfirmedRef.current = false;
+            if (!confirmed) void api.window.closeDecision("cancel");
+          }}
+          open={closeGuardOpen}
+          title={t("schedule.closeConfirmTitle")}
+        />
+      </ModalBoundary>
       <ToastHost />
     </>
   );

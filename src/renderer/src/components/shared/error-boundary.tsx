@@ -5,6 +5,12 @@ type ErrorBoundaryProps = {
   /** Rendered instead of `children` once something has thrown. Receives the
    *  error and a reset that clears the boundary and retries the subtree. */
   fallback: (state: { error: Error; reset: () => void }) => ReactNode;
+  /** Side effects a caught error has to trigger — closing the modal this
+   *  boundary wraps, raising a toast, answering main's pending close
+   *  decision. It runs from `componentDidCatch`, which is the commit phase:
+   *  the one place a boundary may do this. Doing it from `fallback` would be
+   *  a side effect during render, which React is free to run twice. */
+  onError?: ((error: Error) => void) | undefined;
 };
 
 type ErrorBoundaryState = { error: Error | null };
@@ -34,6 +40,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: unknown, info: ErrorInfo): void {
     console.error("[renderer] uncaught render error", error, info.componentStack);
+    this.props.onError?.(error instanceof Error ? error : new Error(String(error)));
   }
 
   private readonly reset = () => this.setState({ error: null });
