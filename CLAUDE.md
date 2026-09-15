@@ -349,6 +349,16 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   `components/shared/output-view.tsx` (`OutputView`) es lo que pinta la ventana de proyección Y
   los monitores LIVE y PREVIEW. Si el preview y lo proyectado se pintan distinto, un monitor puede
   mentirle al operador — por eso hay un solo componente y los tamaños van en `cqw`.
+- **Una grilla de contenido que puede crecer va por `VirtualGrid`, y si refleja algo en vivo tiene
+  que seguirlo.** Las diapositivas de un deck y los versículos de un capítulo (176 en el Salmo 119,
+  montados dos veces: preview y en vivo) usan `VirtualGrid` con la geometría de
+  `components/ui/slide-grid.geometry.ts`; `SlideGrid` quedó sólo para las grillas de un tile. La
+  segunda mitad no es opcional: virtualizar convierte "el tile quedó fuera de vista" en "el tile no
+  existe", así que la grilla en vivo sigue al proyector y la del centro al cursor de preview
+  (`scrollToIndex`), y sólo se mueve cuando ese índice cambia — un scroll manual del operador se
+  respeta hasta la próxima diapositiva. Ojo con el teclado: un salto que cruza la ventana montada
+  remonta el tile enfocado, ver
+  [`.claude/knowledge/a-keyboard-jump-across-the-mounted-window-remounts-the-tile-it-focused.md`](.claude/knowledge/a-keyboard-jump-across-the-mounted-window-remounts-the-tile-it-focused.md).
 - **Un archivo que el proyector no puede reproducir se reporta, nunca se pinta ahí.** El
   `<video>`/`<audio>`/`<img>` de la ventana de proyección tiene `onError` y manda
   `projection:reportMediaError`; el aviso (banda roja sobre el escenario, toast, fila marcada en el

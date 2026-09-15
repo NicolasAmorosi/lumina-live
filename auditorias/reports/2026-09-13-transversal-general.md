@@ -339,6 +339,57 @@ valiendo como orden para lo que queda, sin su punto 13.
 
 ---
 
+## 1.septies Estado — Tanda 5 aplicada (2026-09-14, decimotercera sesión)
+
+**Todo el bloque de rendimiento que quedaba abierto, más el callejón sin salida de teclado.**
+Cerrados: `M9`, `M10`, `M13`, `M26`, `M7` y `M8`. `M11` se midió y **se descartó**: ya no
+describe el código de hoy (abajo). Total acumulado: **25 de 76 + los 2 de campo**.
+
+| # | Qué se hizo |
+|---|---|
+| `M9`/`M10` | Las cuatro grillas de contenido (versículos y diapositivas, en preview y en vivo) pasaron de `SlideGrid` a `VirtualGrid`. La geometría —gap 12, ancho mínimo 144 para versículos, **2 columnas fijas** para un deck— vive en `components/ui/slide-grid.geometry.ts`, al lado de `thumb-tile.geometry.ts` y por la misma razón: la comparten dos features que **tienen** que verse idénticas, y un número copiado en las dos deriva la primera vez que alguien lo ajusta. `VirtualGrid` ganó `columns` (cuenta fija, excluyente con `minItemWidth` por tipo) porque las dos columnas de un deck son una decisión de lectura desde la cabina, no una consecuencia del ancho del panel |
+| `M13` | Sale de `VirtualGrid`, que ya trae flechas, `Home`/`End`, roving tabindex y `aria-setsize`/`aria-posinset`. No se escribió navegación nueva: el callejón sin salida existía porque `SlideGrid` era un `div` pelado |
+| **nuevo** | **Las grillas siguen solas a lo que marcan** (`scrollToIndex`): la de EN VIVO al proyector —auto-avance incluido—, la del centro al cursor de preview. Virtualizar lo volvió obligatorio: un tile fuera de la ventana montada ya no está "fuera de vista", **no existe**, y un deck en auto-avance dejaba la grilla en una parte del culto que ya pasó. Sólo se mueve cuando el índice seguido cambia, así que un scroll manual del operador se respeta hasta la próxima diapositiva |
+| `M26` | Contador de referencias en `use-media-asset.ts`: lo que está montado **no es candidato a desalojo**, pase lo que pase con el tope. El tope pasó de FIFO a LRU de verdad (se refresca al montar, no en el render). Y `makeRoom()` puede terminar sin liberar nada: si todo lo que queda está en uso, **cede el tope, no la fila que el operador está mirando** |
+| `M7`/`M8` | `list()` es un `LEFT JOIN … GROUP BY` (una consulta en vez de 1+n), y `reorder()` una sola sentencia con `json_each`, cuyo `key` **es** la posición que se está asignando. La transacción se fue con el bucle: una sentencia sola ya es atómica |
+| `M11` | **Descartado con medición, no implementado.** El hallazgo dice que `sceneContentKey` hace `JSON.stringify` "en cada render de cada `OutputView`"; hoy su único call site está dentro de un `useEffect` con deps `[output, shouldAnimate]`, y `selectOutputMemo` —que llegó con la auditoría de la cadena de media— mantiene estable la identidad de `output`. Corre **dos veces por push real**, sobre un objeto cuyo `preload` son 2 urls. Y el reemplazo que pedía sería peor: `JSON.stringify` no se puede olvidar de un campo, un comparador estructural a mano sí, y `ProjectionOutput` es una unión que crece |
+
+**Un defecto que apareció verificando, y que no estaba en ninguna auditoría:** un salto de teclado
+que cruza la ventana montada (`End`, `Home`, una flecha lejana) **perdía el foco**. `VirtualGrid`
+montaba el tile destino primero en su bloque de respaldo —el que existe justo para que el foco no
+se caiga— y después, cuando el frame del scroll recomputaba la ventana, en el bloque principal:
+React desmonta el nodo que acababa de recibir el foco y monta otro, con `pendingFocusRef` ya
+gastado. El foco terminaba en `<body>`. Se arregla recomputando la ventana **sincrónicamente**
+dentro de `moveFocus`, contra el `scrollTop` recién escrito, para que las dos actualizaciones de
+estado entren en un solo commit. Afectaba también a la grilla de la biblioteca desde que se
+virtualizó. Diagnóstico en
+[`.claude/knowledge/a-keyboard-jump-across-the-mounted-window-remounts-the-tile-it-focused.md`](../../.claude/knowledge/a-keyboard-jump-across-the-mounted-window-remounts-the-tile-it-focused.md).
+
+### Verificación de esta tanda — corrida contra la app real, con la biblioteca del usuario
+
+Copia de `userData` (1498 assets, 4 programas), `electron-vite dev --remote-debugging-port=9222`,
+todo medido por CDP. `npm run typecheck` ✅ · `npm run lint` ✅ (los mismos 5 warnings) ·
+`npm run db:smoke` ✅ **18/18 con dos aserciones nuevas** sobre `itemCount` (un programa vacío
+tiene que seguir listado, y en 0, que es justo lo que un `LEFT JOIN` mal escrito rompe en silencio).
+
+| Qué | Cómo se midió | Resultado |
+|---|---|---|
+| `M9` — Salmo 119 en preview | tiles montados vs. `aria-setsize` | **20 de 176** |
+| `M9` — el mismo capítulo además EN VIVO | las dos grillas a la vez | **40 tiles en total, no 352** |
+| geometría | alto real del tile vs. el que `itemHeight` asume | **117 px contra 117 px**, paso de fila 129 = 117 + 12, y **ni un warning** del chequeo de geometría que `VirtualGrid` hace en dev |
+| `M13` — teclado | `→ ↓ End Home ↓` sobre un tile enfocado | 90 → 91 → 93 (+2 = columnas) → **175** → **0** → 2, el foco siempre en un `BUTTON` |
+| `M10` — deck real (`567`, 22 diapositivas) | tiles montados | **14 de 22** en preview, 18 de 22 en vivo |
+| seguimiento en vivo | 16 × Siguiente sobre el deck en vivo | la grilla LIVE quedó en la diapositiva **17**, visible, `scrollTop` 820; la del centro no se movió — el cursor de preview no cambió |
+| respeto del scroll manual | scroll a 0 a mano → NEGRO on/off → una diapositiva | quedó en **0** después de los re-renders, y volvió a **949** recién con el cambio de diapositiva |
+| `M26` — desalojo | programa de 9 filas abierto, 30 previews distintos, y después un cambio que re-renderiza todas las filas. Con el tope bajado a 20 para llegar al mismo camino en 30 previews en vez de 500 | **antes: las 7 filas de media quedaron en "…"** (las 2 bíblicas no usan la caché). **Después: las 9 conservan su nombre**, con los 7 ids retenidos y el tope desalojando sólo lo que nadie mira |
+| salud | consola de las dos ventanas | **sin un solo error ni warning** |
+
+**Lo que esta tanda NO tocó:** `H9` (ESLint con tipos + a11y) e `I3` (Vitest + CI) — los dos
+puntos de tooling que quedan de la §10 —, el contraste del tema claro, el resto del bloque 🟡 de
+accesibilidad y design system (`M14`–`M21`), y las decisiones de producto `M3`/`M5`.
+
+---
+
 ## 2. Qué estaba cubierto y qué no
 
 Reconstruido leyendo los dos informes previos y el índice, antes de decidir el alcance.

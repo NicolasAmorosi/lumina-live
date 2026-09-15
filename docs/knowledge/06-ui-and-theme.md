@@ -169,17 +169,23 @@ manualmente desde el TopBar.
   programa — eso es lo que hace el área de recursos de EW.
 - **`slides/`**: la grilla de lo que el ítem en preview puede poner en pantalla — diapositivas de
   un deck, versículos de un capítulo, o el propio archivo si es uno solo. Es también el único
-  lugar que dispara conversiones (`useDeck`). `SlideGrid` (`slide-grid.tsx`) tiene dos variantes:
-  `flow` (auto-fill, para versículos/asset único) y `fixed-2` (siempre 2 columnas, la que usa
-  `deck-slides.tsx` para que las diapositivas de un PPT se vean grandes en vez de una grilla
-  chica de N columnas).
-- **`monitors/`**: LIVE arriba, PREVIEW abajo, ambos con la primitiva `Monitor`. Cuando lo que
-  está en vivo es un deck (`base.kind === 'deck'`), el footer del monitor LIVE apila dos cosas:
-  `deck-transport.tsx` (play/pausa/reiniciar el auto-avance) y `live-slide-strip.tsx` — una tira
-  horizontal con las miniaturas de **todas** las diapositivas del deck en vivo; click en cualquiera
-  llama `gotoSlide()` y salta ahí al instante (esto es vivo, no preview: no hay una segunda
-  etapa). Es un componente distinto de `deck-slides.tsx`, que navega el deck *en preview*, no el
-  que está en el aire.
+  lugar que dispara conversiones (`useDeck`). Todo lo que puede crecer —las diapositivas de un
+  deck, los versículos de un capítulo— se pinta con **`VirtualGrid`**, con la geometría en
+  `components/ui/slide-grid.geometry.ts`: gap 12, ancho mínimo 144 para versículos y **2 columnas
+  fijas** para un deck (`columns`, excluyente con `minItemWidth`), para que las diapositivas de un
+  PPT se vean grandes en vez de una grilla chica de N columnas. `SlideGrid` (`slide-grid.tsx`)
+  quedó sólo para las grillas de un tile que no crecen nunca: el versículo agendado, un ítem de
+  texto, un asset suelto.
+- **`monitors/`**: el monitor LIVE arriba (la primitiva `Monitor`; el de PREVIEW se mudó a la
+  columna del centro, al lado de lo que previsualiza), debajo los transportes `deck-transport.tsx`
+  y `verse-transport.tsx` como filas hermanas —nunca como footer del monitor, para que no puedan
+  encoger el escenario—, y al final `live-content-grid.tsx`: la misma grilla que el centro, pero
+  de lo que **está en el aire**. Click en un tile llama `gotoSlide()`/`projectVerse()` y salta ahí
+  al instante (esto es vivo, no preview: no hay segunda etapa), y la grilla **sigue sola** al
+  proyector (`scrollToIndex` de `VirtualGrid`), auto-avance incluido — virtualizada, un tile fuera
+  de la ventana montada no existe, así que sin eso un deck largo dejaría al operador mirando una
+  parte del culto que ya pasó. Es un componente distinto de `deck-slides.tsx`, que navega el deck
+  *en preview*, no el que está en el aire.
 
 ### Flujo de dos etapas (estricto)
 
