@@ -524,6 +524,51 @@ a11y y design system (`M14` salvo su mitad de `ProgressBar`, `M15`, `M17`, `M19`
 
 ---
 
+## 1.decies Estado — Tanda 8 aplicada (2026-09-15, decimosexta sesión)
+
+**El bloque 🟡 que quedaba: design system, accesibilidad y código muerto.** Cerrados: `M19`,
+`M20`, `M21`, `M17`, `M14` (su otra mitad), `M23`, `M4` y `M6`. Se verificó además que `M15` ya
+estaba cerrado por el trabajo de `H1` —`Modal` pasa `aria-modal="true"` y `aria-labelledby` al
+`Dialog`—, así que no queda ningún 🟡 abierto. Total acumulado: **43 de 76 + los 2 de campo**.
+
+Antes de esta tanda, **las siete sesiones de la Tanda 7 entraron al repo en 8 commits temáticos**,
+cada uno verificado compilando la historia commit por commit (`git rebase --exec 'npm run
+typecheck'`).
+
+| # | Qué se hizo |
+|---|---|
+| `M19` | `Button variant="link"`. Se había escrito a mano en **tres** features (toast, `deck-transport`, `ProgramsModal`), o sea una más que las dos que `CLAUDE.md` pone como umbral de promoción. La variante no puede usar `sizes`: no tiene caja, así que la escala se mapea a tamaño de tipografía en un `linkSizes` propio — un link y un botón del mismo `size` no miden lo mismo, y fingir que sí es como un call site termina empujándolo a mano |
+| `M20` | Primitiva `Textarea`, con **exactamente** las clases de `Input`: las dos conviven en el mismo formulario y ocho clases copiadas divergen la primera vez que alguien toca el anillo o el radio. `resize-none` es default de la primitiva, no decisión del call site |
+| `M21` | Escala de apilado `--z-raised/sticky/modal/popover/drag/toast`, en pasos de 100. Dos órdenes son deliberados: **dropdown y tooltip por encima del modal** (se abren desde adentro de uno) y **el toast por encima incluso del clon de arrastre**. Va como `z-[var(--z-modal)]` porque Tailwind v4 no tiene namespace de tema para z-index |
+| `M17` | `select-text` en las tres primitivas cuyo contenido entero es un mensaje y que nunca son un asa de arrastre: el hint de `LoadingState` (donde la pantalla de crash imprime `error.message`), el cuerpo del toast (donde aparece textual una promesa rechazada) y el contenido de `Callout`. **No** se abrió en los otros dos lugares que el hallazgo nombra: un tooltip flotante es `pointer-events-none` y su texto no se puede seleccionar de ninguna manera, y una fila de versículo es un target de click **arrastrable** al orden de culto, donde una selección pelearía con el arrastre — que es la razón por la que existe la regla global |
+| `M14` | El scrubber pide un `label` (no hay default sensato: un panel en vivo puede tener video, banda sonora del deck y un audio suelto a la vez), reporta `aria-valuenow`/`aria-valuemax` **en segundos** y lleva un `aria-valuetext` con el mismo par de relojes que ya muestran los dos spans que lo flanquean |
+| `M23` | Eran **tres** copias del mismo normalizador, no dos: `ProgramsModal`, `bible-browser` y `normalizeForSearch` en `lib/utils.ts` — que tenía **cero llamadores**, o sea que la versión compartida era ella misma código muerto. Sobrevive una, con `\p{Diacritic}` en vez del rango escrito con combinantes crudos |
+| `M4` | `deck:progress` borrado entero (contrato, handler, `currentProgress`, fachada). Se llevó puesto un mapa **de solo escritura**: `progressByAsset` existía únicamente para que ese canal pudiera consultarlo, y main lo mantenía para un lector que no existía |
+| `M6` | Las 14 claves realmente muertas, borradas. El cruce pasa de 27 sin usar a 13, y las 13 son legítimas: destinos de las cuatro claves dinámicas más `settings.locales.*`, que es un `Record` de claves en `system-section`. Sigue en **0 FALTANTES** |
+
+### Verificación de esta tanda — corrida contra la app real
+
+`npm run typecheck` ✅ · `npm run lint` ✅ 0 errores (los mismos 5 warnings de `react-refresh`) ·
+`npm run db:smoke` ✅ 18/18 · `npm run build` ✅ · `i18n-check` ✅ 279 definidas, 266 usadas,
+0 FALTANTES. `electron-vite dev --remote-debugging-port=9222`, medido por CDP:
+
+| Qué | Cómo se midió | Resultado |
+|---|---|---|
+| `M21` | tokens resueltos en `:root`, después modal abierto y `Select` abierto **adentro** de él | 10/20/100/200/300/400; capa del modal **100**, menú del Select **200** (encima), host de toasts **400** |
+| `M19` | toast real con acción ("Descartar y abrir", disparado con cambios sin guardar) | sin fondo, `padding: 0`, 20 px de alto, 14 px de tipografía y color `rgb(132,173,252)` = `#84adfc`, el Denim de `primary-ink` |
+| `M20` | panel de programa nuevo, `<textarea>` contra el `<input>` del mismo diálogo | radio 8px/8px, borde `rgb(18,41,74)` en los dos, fondo `rgb(8,28,57)` en los dos, 14px/14px, `resize: none` |
+| `M17` | toast de error real (rechazo de IPC no manejado) | `user-select: text` sobre el mensaje |
+| `M14` | audio real de la biblioteca del usuario | `Posición de Free Bird`, `aria-valuenow="0"`, `aria-valuemax="547"`, `aria-valuetext="0:00 de 9:07"` |
+| `M6` | barrido del DOM buscando texto con forma de clave (`a.b`) | 0 claves crudas en pantalla |
+| salud | `Runtime.enable` + `Log.enable` a través de un reload completo | **0 errores y 0 warnings** de consola |
+| cierre | SIGTERM | `will-quit` corrió: `-wal` vaciado, `integrity_check` ok, 1498 assets y 4 programas intactos |
+
+**Lo que esta tanda NO tocó:** `I3` (Vitest + CI), el contraste del **tema claro**, los 19 🔵
+restantes (`L1`–`L10`, `L12`–`L20`) e `I1`/`I2`/`I4`. Con esto **no queda ningún hallazgo 🔴, 🟠
+ni 🟡 abierto**; lo que resta del informe son los bajos y los informativos.
+
+---
+
 ## 2. Qué estaba cubierto y qué no
 
 Reconstruido leyendo los dos informes previos y el índice, antes de decidir el alcance.
