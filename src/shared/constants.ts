@@ -13,7 +13,11 @@ export const ASSET_EXTENSIONS: Record<AssetKind, readonly string[]> = {
   ppt: ["ppt", "pptx", "pptm", "pps", "ppsx", "ppsm", "odp"],
 };
 
-export const PROGRAM_ITEM_KINDS = ["media", "ppt", "bible", "text"] as const;
+// A `text` kind used to live here too: schema column, DTO, repo mapping,
+// preview, projector output — everything except a way to create one. It was
+// removed in 0009 rather than finished; an announcement is a PPT slide in
+// this church's workflow, and a half-wired kind is worse than no kind.
+export const PROGRAM_ITEM_KINDS = ["media", "ppt", "bible"] as const;
 export type ProgramItemKind = (typeof PROGRAM_ITEM_KINDS)[number];
 
 /** Bump to invalidate every cached deck at once when the conversion pipeline

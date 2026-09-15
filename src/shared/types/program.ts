@@ -26,8 +26,7 @@ export type ProgramItemDTO =
       verseTo: number | null;
       reference: string;
       text: string;
-    }
-  | { id: number; position: number; kind: "text"; body: string; title: string | null };
+    };
 
 export type ProgramDTO = ProgramSummary & {
   items: ProgramItemDTO[];
@@ -49,8 +48,7 @@ export type ProgramItemUpsert =
       verseTo: number | null;
       reference: string;
       text: string;
-    }
-  | { id?: number; kind: "text"; body: string; title: string | null };
+    };
 
 export type ProgramUpsert = {
   id?: number;

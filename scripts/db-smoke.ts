@@ -251,7 +251,9 @@ async function main() {
   const programsRepo = new ProgramsRepo(db, sqlite);
   const saved = programsRepo.save({
     name: "Culto de prueba",
-    items: [{ kind: "text", body: "Bienvenida", title: null }],
+    items: [
+      { kind: "bible", bibleVersionId: null, bibleBookId: null, chapter: null, verseFrom: null, verseTo: null, reference: "Juan 3:16", text: "Porque de tal manera…" },
+    ],
   });
   const loaded = programsRepo.load(saved.id);
   assert(loaded.items.length === 1, "program round-trip failed");
@@ -265,7 +267,9 @@ async function main() {
   const resavedWithoutFavorite = programsRepo.save({
     id: saved.id,
     name: "Culto de prueba",
-    items: [{ kind: "text", body: "Bienvenida", title: null }],
+    items: [
+      { kind: "bible", bibleVersionId: null, bibleBookId: null, chapter: null, verseFrom: null, verseTo: null, reference: "Juan 3:16", text: "Porque de tal manera…" },
+    ],
   });
   assert(resavedWithoutFavorite.favorite === true, "save() without favorite must not clobber it");
 
@@ -662,7 +666,7 @@ async function main() {
     items: [
       { kind: "ppt", mediaAssetId: liveAsset.id, title: null },
       { kind: "media", mediaAssetId: deadAssetId, title: null },
-      { kind: "text", body: "Anuncio", title: null },
+      { kind: "bible", bibleVersionId: null, bibleBookId: null, chapter: null, verseFrom: null, verseTo: null, reference: "Juan 3:16", text: "Porque de tal manera…" },
     ],
     updatedAt: Date.now(),
   });

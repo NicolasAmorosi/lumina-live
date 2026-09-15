@@ -2,6 +2,17 @@ import { eq, inArray } from "drizzle-orm";
 import type { Db } from "../client";
 import { mediaAssets, programDraft } from "../schema";
 import type { ProgramDraft, ProgramItemUpsert } from "@shared/types/program";
+import { PROGRAM_ITEM_KINDS } from "@shared/constants";
+
+const KNOWN_KINDS = new Set<string>(PROGRAM_ITEM_KINDS);
+
+function isKnownKind(item: unknown): item is ProgramItemUpsert {
+  return (
+    typeof item === "object" &&
+    item !== null &&
+    KNOWN_KINDS.has((item as { kind?: unknown }).kind as string)
+  );
+}
 
 /** One row, always. The table exists to answer exactly one question at launch:
  *  "was the operator in the middle of something?". */
@@ -59,7 +70,13 @@ export class DraftRepo {
       const value: unknown = JSON.parse(row.items);
       // A hand-edited or truncated blob must not take the launch down with it:
       // the draft is a convenience, never a dependency.
-      parsed = Array.isArray(value) ? (value as ProgramItemUpsert[]) : [];
+      // Kinds are filtered, not trusted: this blob outlives the schema that
+      // wrote it. `text` items were a real kind until 0009 dropped it, and a
+      // draft written before the upgrade would otherwise come back as a row
+      // no renderer knows how to label and no `save()` can persist — the
+      // CHECK constraint rejects it. Dropping it here is the same rule the
+      // dead-asset filter below already follows.
+      parsed = Array.isArray(value) ? value.filter(isKnownKind) : [];
     } catch {
       parsed = [];
     }

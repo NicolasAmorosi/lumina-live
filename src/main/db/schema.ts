@@ -100,7 +100,7 @@ export const programItems = sqliteTable(
       .notNull()
       .references(() => programs.id, { onDelete: "cascade" }),
     position: integer("position").notNull(),
-    kind: text("kind", { enum: ["media", "ppt", "bible", "text"] }).notNull(),
+    kind: text("kind", { enum: ["media", "ppt", "bible"] }).notNull(),
 
     mediaAssetId: integer("media_asset_id").references(() => mediaAssets.id, {
       onDelete: "restrict",
@@ -118,7 +118,6 @@ export const programItems = sqliteTable(
     bibleReference: text("bible_reference"),
     bibleText: text("bible_text"),
 
-    textBody: text("text_body"),
     title: text("title"),
     createdAt: integer("created_at").notNull(),
   },

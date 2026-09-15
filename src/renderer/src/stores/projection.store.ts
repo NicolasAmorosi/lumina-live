@@ -295,8 +295,6 @@ function selectOutputWithoutUnderlay(state: ProjectionStoreState): ProjectionOut
       return { kind: "image", url: assetUrl(state.base.assetId) };
     case "bible":
       return { kind: "bible", text: state.base.text, reference: state.base.reference };
-    case "text":
-      return { kind: "text", body: state.base.body };
   }
 }
 

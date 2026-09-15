@@ -64,6 +64,13 @@
       "when": 1789390959225,
       "tag": "0008_program_draft",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1789512582400,
+      "tag": "0009_drop_text_program_items",
+      "breakpoints": true
     }
   ]
 }

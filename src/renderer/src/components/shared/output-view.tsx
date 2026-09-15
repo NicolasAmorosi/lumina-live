@@ -348,15 +348,6 @@ function OutputScene({ frozenFrame, mode, onImageError, output }: OutputScenePro
           <p className="text-[2cqw] font-semibold">{output.reference}</p>
         </div>
       ) : null}
-
-      {output.kind === "text" ? (
-        <p
-          className="px-[6cqw] text-center text-[4cqw] leading-snug"
-          style={{ textShadow: "0 2px 8px rgba(0,0,0,0.8)" }}
-        >
-          {output.body}
-        </p>
-      ) : null}
     </>
   );
 }

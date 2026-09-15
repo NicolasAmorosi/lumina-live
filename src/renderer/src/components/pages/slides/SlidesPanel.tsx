@@ -87,14 +87,6 @@ export function SlidesPanel() {
       );
     }
 
-    if (content.kind === "text") {
-      return (
-        <SlideGrid>
-          <ThumbTile index={1} selected text={content.body} />
-        </SlideGrid>
-      );
-    }
-
     if (content.kind === "media" && content.asset.missingSince !== null) {
       return <PreviewMissingState assetId={content.asset.id} />;
     }
@@ -132,13 +124,6 @@ export function SlidesPanel() {
       return (
         <MediaPanel className="w-full">
           <MediaTrackRow kind="bible" label={content.reference} onDelete={clearPreview} />
-        </MediaPanel>
-      );
-    }
-    if (content.kind === "text") {
-      return (
-        <MediaPanel className="w-full">
-          <MediaTrackRow kind="text" label={content.body} onDelete={clearPreview} />
         </MediaPanel>
       );
     }

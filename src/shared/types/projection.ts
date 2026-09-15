@@ -40,7 +40,6 @@ export type ProjectionOutputKind =
   | { kind: "image"; url: string }
   | { kind: "video"; url: string; epoch: number }
   | { kind: "bible"; text: string; reference: string }
-  | { kind: "text"; body: string }
   | {
       kind: "slide";
       /** media_assets.id of the source deck — lets HistoryRepo coalesce a whole
@@ -188,7 +187,6 @@ export type BaseContent =
   | { kind: "deck"; assetId: number; slideIndex: number }
   | { kind: "video"; assetId: number; epoch: number; startAtSeconds: number }
   | { kind: "image"; assetId: number }
-  | { kind: "bible"; text: string; reference: string }
-  | { kind: "text"; body: string };
+  | { kind: "bible"; text: string; reference: string };
 
 export type OverlayState = "none" | "black" | "logo";

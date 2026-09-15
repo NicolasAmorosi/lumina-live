@@ -33,7 +33,5 @@ export function useLiveHeading(): string | null {
       return asset?.name ?? null;
     case "bible":
       return base.reference;
-    case "text":
-      return null;
   }
 }

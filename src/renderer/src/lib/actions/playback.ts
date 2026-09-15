@@ -219,13 +219,6 @@ async function goLiveWithScheduleItem(
       useProjectionStore.getState().setOverlay("none");
       return;
     }
-    case "text": {
-      setActive(index);
-      useAudioStore.getState().setDeckTrack(null);
-      useProjectionStore.getState().beginScene();
-      useProjectionStore.getState().setBase({ kind: "text", body: item.body });
-      useProjectionStore.getState().setOverlay("none");
-    }
   }
 }
 

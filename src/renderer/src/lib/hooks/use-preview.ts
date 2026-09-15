@@ -16,8 +16,7 @@ import type { ProjectionOutput } from "@shared/types/projection";
 export type PreviewContent =
   | { kind: "deck"; assetId: number; title: string; missingSince: number | null }
   | { kind: "media"; asset: MediaAsset }
-  | { kind: "bible"; reference: string; text: string; verseIndex: number | null }
-  | { kind: "text"; body: string };
+  | { kind: "bible"; reference: string; text: string; verseIndex: number | null };
 
 export function usePreviewContent(): PreviewContent | null {
   const target = usePreviewStore((s) => s.target);
@@ -72,8 +71,6 @@ export function usePreviewContent(): PreviewContent | null {
         text: scheduleItem.text,
         verseIndex: null,
       };
-    case "text":
-      return { kind: "text", body: scheduleItem.body };
   }
 }
 
@@ -153,13 +150,6 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
         kind: "bible",
         text: content.text,
         reference: content.reference,
-        videoUnderlay: null,
-        transition: INSTANT_TRANSITION,
-      };
-    case "text":
-      return {
-        kind: "text",
-        body: content.body,
         videoUnderlay: null,
         transition: INSTANT_TRANSITION,
       };

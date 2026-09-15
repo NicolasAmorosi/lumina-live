@@ -20,8 +20,6 @@ function toItemDTO(row: typeof programItems.$inferSelect): ProgramItemDTO {
       return { ...base, kind: "media", mediaAssetId: row.mediaAssetId! };
     case "ppt":
       return { ...base, kind: "ppt", mediaAssetId: row.mediaAssetId! };
-    case "text":
-      return { ...base, kind: "text", body: row.textBody ?? "" };
     case "bible":
     default:
       return {
@@ -301,8 +299,6 @@ function toRow(programId: number, position: number, item: ProgramItemUpsert, now
     case "media":
     case "ppt":
       return { ...common, kind: item.kind, mediaAssetId: item.mediaAssetId, title: item.title };
-    case "text":
-      return { ...common, kind: "text" as const, textBody: item.body, title: item.title };
     case "bible":
     default:
       return {
