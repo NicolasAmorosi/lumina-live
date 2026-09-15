@@ -47,9 +47,19 @@ export function createBoundedSet(max: number): BoundedSet {
   };
 }
 
-const COMBINING_DIACRITICAL_MARKS = /[̀-ͯ]/g;
+/** `\p{Diacritic}` rather than the U+0300–U+036F range written out: the two
+ *  features that search by name had each spelled that range as raw combining
+ *  characters, which render as invisible marks on the bracket before them and
+ *  are one careless copy-paste away from being silently wrong. */
+const DIACRITICS = /\p{Diacritic}/gu;
+
+/** Case- and accent-insensitive, and trimmed, because every caller is matching
+ *  what someone typed into a search box against a name: "  Éxodo " has to find
+ *  "exodo". The single implementation for the programs list and the Bible book
+ *  search — they were two copies with the same job and slightly different
+ *  bodies. */
 export function normalizeForSearch(value: string): string {
-  return value.normalize("NFD").replace(COMBINING_DIACRITICAL_MARKS, "").toLowerCase();
+  return value.trim().normalize("NFD").replace(DIACRITICS, "").toLowerCase();
 }
 
 /** `m:ss`, or `h:mm:ss` past the hour mark — the media transport bars' clock.

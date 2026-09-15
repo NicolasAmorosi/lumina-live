@@ -15,7 +15,7 @@ import {
   Skeleton,
   Tooltip,
 } from "@renderer/components/ui";
-import { cn } from "@renderer/lib/utils";
+import { cn, normalizeForSearch } from "@renderer/lib/utils";
 import { api } from "@renderer/lib/api";
 import { toast } from "@renderer/lib/toast";
 import { PROGRAM_ROW_MIME } from "@renderer/lib/dnd";
@@ -29,14 +29,6 @@ import {
 import { ProgramRow } from "./program-row";
 import { ProgramSidePanel, type PanelMode } from "./program-side-panel";
 import type { ProgramSummary } from "@shared/types/program";
-
-function normalize(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
-}
 
 type FavoriteFilter = "all" | "favorites" | "others";
 
@@ -176,9 +168,9 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
   const reorderEnabled = !filtersActive && programs.length > 1;
 
   const filtered = useMemo(() => {
-    const q = normalize(query);
+    const q = normalizeForSearch(query);
     return programs
-      .filter((p) => (q ? normalize(p.name).includes(q) : true))
+      .filter((p) => (q ? normalizeForSearch(p.name).includes(q) : true))
       .filter((p) => {
         if (favoriteFilter === "favorites") return p.favorite;
         if (favoriteFilter === "others") return !p.favorite;

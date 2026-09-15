@@ -20,6 +20,7 @@ import { previewVerse } from "@renderer/lib/actions/preview";
 import { goLive } from "@renderer/lib/actions/playback";
 import { setBibleVerseDrag } from "@renderer/lib/dnd";
 import { useDebouncedCallback } from "@renderer/lib/hooks/use-debounced-callback";
+import { normalizeForSearch } from "@renderer/lib/utils";
 import { parseSnippet, type BibleBookDTO, type BibleSearchHit } from "@shared/types/bible";
 
 const MIN_TEXT_QUERY_LENGTH = 3;
@@ -31,14 +32,6 @@ type SearchMode = "reference" | "text";
 
 type ReferenceMatch = { book: BibleBookDTO; chapter: number | null };
 
-function normalize(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
-}
-
 /** Splits "juan 3" into name="juan"/chapter=3, or "juan" into name="juan"/chapter=null. */
 function parseReferenceQuery(query: string): { chapter: number | null; name: string } {
   const match = /^(.+?)\s+(\d+)$/.exec(query.trim());
@@ -48,11 +41,13 @@ function parseReferenceQuery(query: string): { chapter: number | null; name: str
 
 function matchReference(books: BibleBookDTO[], query: string): ReferenceMatch[] {
   const { chapter, name } = parseReferenceQuery(query);
-  const normalizedName = normalize(name);
+  const normalizedName = normalizeForSearch(name);
   if (!normalizedName) return [];
 
   const matchingBooks = books.filter(
-    (b) => normalize(b.name).includes(normalizedName) || normalize(b.abbrev).includes(normalizedName),
+    (b) =>
+      normalizeForSearch(b.name).includes(normalizedName) ||
+      normalizeForSearch(b.abbrev).includes(normalizedName),
   );
 
   if (chapter === null) return matchingBooks.map((book) => ({ book, chapter: null }));
