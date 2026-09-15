@@ -64,13 +64,21 @@ export class ProgramsRepo {
    *  only breaks ties between rows that share a `sortOrder`, which can only
    *  happen before the first `reorder()` renormalizes them. */
   list(): ProgramSummary[] {
-    const rows = this.db.select().from(programs).orderBy(programs.sortOrder, desc(programs.updatedAt)).all();
-    return rows.map((p) =>
-      toSummary(
-        p,
-        this.db.select({ n: count() }).from(programItems).where(eq(programItems.programId, p.id)).get()?.n ?? 0,
-      ),
-    );
+    // One statement, not one per row. This used to run a `SELECT count(*)`
+    // inside the map — 41 queries for 40 programs — and it is not a rarely
+    // taken path: the modal calls it on open, after every save, delete and
+    // favourite toggle, and `reorder()` calls it after every single drag.
+    // `count(programItems.id)` (a column, not `*`) is what keeps a program
+    // with no items at 0 instead of the 1 that the LEFT JOIN's null row
+    // would otherwise count.
+    const rows = this.db
+      .select({ program: programs, itemCount: count(programItems.id) })
+      .from(programs)
+      .leftJoin(programItems, eq(programItems.programId, programs.id))
+      .groupBy(programs.id)
+      .orderBy(programs.sortOrder, desc(programs.updatedAt))
+      .all();
+    return rows.map((row) => toSummary(row.program, row.itemCount));
   }
 
   /** Opening a program for real: stamps `lastOpenedAt`. */
@@ -237,11 +245,22 @@ export class ProgramsRepo {
    *  from `ids` keeps whatever key it had — it stays in the list, just where
    *  that key happens to fall. */
   reorder(ids: number[]): ProgramSummary[] {
-    this.sqlite.transaction(() => {
-      ids.forEach((id, index) => {
-        this.db.update(programs).set({ sortOrder: index }).where(eq(programs.id, id)).run();
-      });
-    })();
+    if (ids.length > 0) {
+      // One statement for the whole drag, instead of an UPDATE per id inside a
+      // transaction. `json_each` turns the array into a (key, value) table
+      // whose `key` IS the 0-based position, which is exactly the sort order
+      // being assigned — so the mapping never has to be spelled out as SQL
+      // text, and a 40-program list costs one prepare instead of forty.
+      // A single statement is atomic on its own; the transaction it needed
+      // went away with the loop.
+      this.sqlite
+        .prepare(
+          `UPDATE programs
+              SET sort_order = (SELECT key FROM json_each(?) WHERE value = programs.id)
+            WHERE id IN (SELECT value FROM json_each(?))`,
+        )
+        .run(JSON.stringify(ids), JSON.stringify(ids));
+    }
     return this.list();
   }
 

@@ -9,6 +9,47 @@ const MAX_CACHED = 500;
 const cache = new Map<number, MediaAsset | null>();
 
 /**
+ * How many mounted consumers are reading each id right now.
+ *
+ * The cap alone was not safe. This cache is read straight from the map
+ * **during render** while the fetching effect only re-runs when `id` changes —
+ * so an entry evicted while its consumer stayed mounted made that consumer
+ * render `null` forever: a schedule row that silently lost its name and had no
+ * way left to ask for it again. It takes a library bigger than the cap for
+ * that to happen, and this operator's is: 1498 assets against a cap of 500.
+ *
+ * A reference count is what makes it impossible rather than unlikely: what is
+ * on screen is never a candidate for eviction, whatever the cap says. Kept in
+ * its own map rather than as a field of the entry because it outlives the
+ * entry — `forgetAllMediaAssets()` empties the cache while every consumer is
+ * still mounted and about to refetch.
+ */
+const refCounts = new Map<number, number>();
+
+function retain(id: number): void {
+  refCounts.set(id, (refCounts.get(id) ?? 0) + 1);
+  // Mounting a consumer is the one moment worth counting as "used": it makes
+  // eviction least-recently-USED rather than oldest-inserted, without the
+  // impurity of touching the map from a render.
+  touch(id);
+}
+
+function release(id: number): void {
+  const next = (refCounts.get(id) ?? 0) - 1;
+  if (next > 0) refCounts.set(id, next);
+  else refCounts.delete(id);
+}
+
+/** Moves an id back to the end of the insertion order — `Map` has no other
+ *  way to say "this one is the newest". */
+function touch(id: number): void {
+  if (!cache.has(id)) return;
+  const asset = cache.get(id) ?? null;
+  cache.delete(id);
+  cache.set(id, asset);
+}
+
+/**
  * Bumped whenever an entry is invalidated, and subscribed to by every mounted
  * consumer.
  *
@@ -30,12 +71,24 @@ function subscribeToInvalidations(listener: () => void): () => void {
 }
 
 function remember(id: number, asset: MediaAsset | null): void {
-  while (cache.size >= MAX_CACHED) {
-    const oldest = cache.keys().next();
-    if (oldest.done) break;
-    cache.delete(oldest.value);
-  }
+  if (!cache.has(id)) makeRoom();
   cache.set(id, asset);
+}
+
+/** Drops the least recently used entries that nothing is reading, until the
+ *  cap has room for one more.
+ *
+ *  It can finish without having made any: when every remaining entry is in
+ *  use, the cap is what gives way, not the entry someone is looking at. That
+ *  is bounded by what can be on screen at once, not by the size of the
+ *  library — a virtualized grid mounts tens of tiles, not hundreds. */
+function makeRoom(): void {
+  if (cache.size < MAX_CACHED) return;
+  for (const id of cache.keys()) {
+    if ((refCounts.get(id) ?? 0) > 0) continue;
+    cache.delete(id);
+    if (cache.size < MAX_CACHED) return;
+  }
 }
 
 /** Small id -> MediaAsset cache so playlist rows (which only store a
@@ -53,6 +106,16 @@ function remember(id: number, asset: MediaAsset | null): void {
 export function useMediaAsset(id: number | null): MediaAsset | null {
   const [, forceRerender] = useReducer((c: number) => c + 1, 0);
   const invalidation = useSyncExternalStore(subscribeToInvalidations, () => generation);
+
+  // Declared before the fetching effect so a consumer's id is protected from
+  // eviction from the moment it mounts, including by its own fetch below.
+  // Keyed on `id` alone: an invalidation must not churn the count, it only
+  // empties the cache these consumers are about to refill.
+  useEffect(() => {
+    if (id === null) return;
+    retain(id);
+    return () => release(id);
+  }, [id]);
 
   useEffect(() => {
     if (id === null || cache.has(id)) return;

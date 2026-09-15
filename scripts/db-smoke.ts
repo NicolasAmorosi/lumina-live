@@ -291,6 +291,16 @@ async function main() {
     `new programs should land on top, got ${byOrder.join()}`,
   );
 
+  // `itemCount` comes from a LEFT JOIN + GROUP BY, so the case that can break
+  // silently is the one with nothing to join against: an empty program must
+  // still be listed, and at 0 rather than at the 1 the join's null row counts.
+  const empty = programsRepo.save({ name: "Programa vacío", items: [] });
+  const counts = new Map(programsRepo.list().map((p) => [p.id, p.itemCount]));
+  assert(counts.get(empty.id) === 0, `an empty program should list with itemCount 0, got ${counts.get(empty.id)}`);
+  assert(counts.get(saved.id) === 1, `itemCount should count the program's items, got ${counts.get(saved.id)}`);
+  assert(counts.size === 4, `every program must survive the join, got ${counts.size} of 4`);
+  programsRepo.delete(empty.id);
+
   const desired = [saved.id, duplicateOverridden.id, duplicateInherited.id];
   const reordered = programsRepo.reorder(desired);
   assert(reordered.map((p) => p.id).join() === desired.join(), "reorder() did not apply the given order");

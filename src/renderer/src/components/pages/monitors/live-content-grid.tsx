@@ -1,5 +1,13 @@
 import { useT } from "@renderer/lib/i18n/i18n-provider";
-import { SlideGrid, ThumbTile } from "@renderer/components/ui";
+import {
+  DECK_GRID_COLUMNS,
+  SLIDE_GRID_GAP_PX,
+  SlideGrid,
+  ThumbTile,
+  VERSE_TILE_MIN_WIDTH_PX,
+  VirtualGrid,
+  thumbTileHeight,
+} from "@renderer/components/ui";
 import { useBibleStore } from "@renderer/stores/bible.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { gotoSlide } from "@renderer/lib/actions/playback";
@@ -19,20 +27,31 @@ export function LiveContentGrid() {
   const currentVerseIndex = useBibleStore((s) => s.currentVerseIndex);
 
   if (base?.kind === "deck" && liveDeck) {
+    const liveSlideIndex = base.slideIndex;
     return (
-      <SlideGrid variant="fixed-2">
-        {liveDeck.slides.map((slide) => (
+      <VirtualGrid
+        aria-label={t("deck.title")}
+        columns={DECK_GRID_COLUMNS}
+        gap={SLIDE_GRID_GAP_PX}
+        itemHeight={(columnWidth) => thumbTileHeight(columnWidth, { label: false })}
+        itemKey={(slide) => slide.index}
+        items={liveDeck.slides}
+        renderItem={(slide, _index, { tabIndex }) => (
           <ThumbTile
             index={slide.index}
-            key={slide.index}
-            live={base.slideIndex === slide.index}
+            live={liveSlideIndex === slide.index}
             onClick={() => gotoSlide(slide.index)}
-            selected={base.slideIndex === slide.index}
+            selected={liveSlideIndex === slide.index}
             src={slide.thumbUrl}
+            tabIndex={tabIndex}
             title={t("deck.slideAlt", { index: slide.index })}
           />
-        ))}
-      </SlideGrid>
+        )}
+        // This grid IS the live monitor's second half: it follows the
+        // projector, auto-advance included, or it stops being a monitor.
+        // `slideIndex` is 1-based; the grid works in array positions.
+        scrollToIndex={liveSlideIndex - 1}
+      />
     );
   }
 
@@ -40,19 +59,27 @@ export function LiveContentGrid() {
   // Bible browser (see playback.ts) do we have a passage to walk — otherwise
   // it's a single scheduled reference, same as the centre column's fallback.
   if (base?.kind === "bible" && currentVerseIndex !== null && verses.length > 0) {
+    const liveVerseIndex = currentVerseIndex;
     return (
-      <SlideGrid>
-        {verses.map((verse, index) => (
+      <VirtualGrid
+        aria-label={t("bible.title")}
+        gap={SLIDE_GRID_GAP_PX}
+        itemHeight={(columnWidth) => thumbTileHeight(columnWidth, { label: false })}
+        itemKey={(verse) => verse.id}
+        items={verses}
+        minItemWidth={VERSE_TILE_MIN_WIDTH_PX}
+        renderItem={(verse, index, { tabIndex }) => (
           <ThumbTile
             index={verse.verse}
-            key={verse.id}
-            live={currentVerseIndex === index}
+            live={liveVerseIndex === index}
             onClick={() => projectVerse(index)}
-            selected={currentVerseIndex === index}
+            selected={liveVerseIndex === index}
+            tabIndex={tabIndex}
             text={verse.text}
           />
-        ))}
-      </SlideGrid>
+        )}
+        scrollToIndex={liveVerseIndex}
+      />
     );
   }
 

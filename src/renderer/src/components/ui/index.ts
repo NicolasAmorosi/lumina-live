@@ -21,6 +21,7 @@ export { MediaPanel } from "./media-panel";
 export { ThumbTile } from "./thumb-tile";
 export { THUMB_TILE_BORDER_PX, THUMB_TILE_LABEL_PX, thumbTileHeight } from "./thumb-tile.geometry";
 export { SlideGrid } from "./slide-grid";
+export { DECK_GRID_COLUMNS, SLIDE_GRID_GAP_PX, VERSE_TILE_MIN_WIDTH_PX } from "./slide-grid.geometry";
 export { VirtualGrid } from "./virtual-grid";
 export { ListRow } from "./list-row";
 export { Toolbar, ToolbarGroup } from "./toolbar";

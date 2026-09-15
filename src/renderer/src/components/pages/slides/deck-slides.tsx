@@ -3,13 +3,16 @@ import {
   Badge,
   Button,
   Callout,
+  DECK_GRID_COLUMNS,
   EmptyState,
   Icon,
   IconButton,
   MediaPanel,
-  SlideGrid,
+  SLIDE_GRID_GAP_PX,
   ThumbTile,
   Tooltip,
+  VirtualGrid,
+  thumbTileHeight,
 } from "@renderer/components/ui";
 import { PreviewMissingState } from "@renderer/components/shared/preview-missing-state";
 import { DeckConversionStatus } from "@renderer/components/shared/deck-conversion-status";
@@ -164,11 +167,16 @@ export function DeckSlides({ assetId, missingSince }: { assetId: number; missing
       {entry?.status === "ready" && entry.deck ? (
         <DeckAudioStrip assetId={assetId} deck={entry.deck} />
       ) : null}
-      <SlideGrid variant="fixed-2">
-        {slides.map((slide) => (
+      <VirtualGrid
+        aria-label={t("deck.title")}
+        columns={DECK_GRID_COLUMNS}
+        gap={SLIDE_GRID_GAP_PX}
+        itemHeight={(columnWidth) => thumbTileHeight(columnWidth, { label: false })}
+        itemKey={(slide) => slide.index}
+        items={slides}
+        renderItem={(slide, _index, { tabIndex }) => (
           <ThumbTile
             index={slide.index}
-            key={slide.index}
             live={liveIndex === slide.index}
             onClick={() => setPreviewSlide(slide.index)}
             // The cache dir can be evicted under us; surface it instead of
@@ -183,10 +191,14 @@ export function DeckSlides({ assetId, missingSince }: { assetId: number; missing
             }}
             selected={previewIndex === slide.index}
             src={slide.thumbUrl}
+            tabIndex={tabIndex}
             title={t("deck.slideAlt", { index: slide.index })}
           />
-        ))}
-      </SlideGrid>
+        )}
+        // A slide's `index` is 1-based, the way EasyWorship numbers them; this
+        // grid works in array positions.
+        scrollToIndex={previewIndex - 1}
+      />
     </div>
   );
 }

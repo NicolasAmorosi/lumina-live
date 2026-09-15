@@ -5,7 +5,20 @@ import { cn } from "@renderer/lib/utils";
  *  tiles rather than blank space while the next frame is computed. */
 const DEFAULT_OVERSCAN_ROWS = 2;
 
-type VirtualGridProps<T> = {
+/**
+ * How the column count is decided — the two are mutually exclusive on purpose.
+ *
+ * `minItemWidth` is the `minmax(Npx,1fr)` + `auto-fill` behaviour: as many
+ * columns as fit. `columns` pins the count regardless of how wide the panel
+ * is, which is what a deck's grid needs — two slides across, each big enough
+ * to actually read from the booth, is a deliberate layout decision and not a
+ * consequence of the column being narrow that day.
+ */
+type ColumnSizing =
+  | { columns: number; minItemWidth?: undefined }
+  | { columns?: undefined; minItemWidth: number };
+
+type VirtualGridBaseProps<T> = {
   /** Accessible name for the grid as a whole (it is a `role="list"`). */
   "aria-label": string;
   className?: string;
@@ -20,9 +33,6 @@ type VirtualGridProps<T> = {
   itemHeight: (columnWidth: number) => number;
   itemKey: (item: T, index: number) => string | number;
   items: readonly T[];
-  /** Minimum tile width in px — the direct equivalent of the `minmax(Npx,1fr)`
-   *  in a plain `auto-fill` grid. */
-  minItemWidth: number;
   /** Fired (by row, not by pixel) whenever the mounted window changes. The
    *  library grid feeds this to `deck:prewarm` so only what is actually on
    *  screen gets pre-converted. `end` is exclusive. */
@@ -32,7 +42,22 @@ type VirtualGridProps<T> = {
    *  grid is 0, every other is -1. Spread it onto the item's focusable
    *  element (`ThumbTile` takes a `tabIndex` prop for this). */
   renderItem: (item: T, index: number, opts: { tabIndex: number }) => ReactNode;
+  /**
+   * The item this grid should keep in view on its own — the slide that is on
+   * the projector, the verse the preview cursor is on. Scrolled to (no more
+   * than `block: "nearest"` does: nothing moves while it is already visible)
+   * whenever the VALUE changes, never on a re-render, so the operator's own
+   * scroll survives until the followed item actually moves.
+   *
+   * It exists because virtualizing makes "the grid doesn't follow" a
+   * different problem than it was: an off-window tile is no longer just
+   * out of sight, it is not rendered at all, and a deck on auto-advance
+   * would leave the grid sitting on a part of the service that is over.
+   */
+  scrollToIndex?: number | null;
 };
+
+type VirtualGridProps<T> = VirtualGridBaseProps<T> & ColumnSizing;
 
 /**
  * Renders only the rows near the viewport, for grids that can hold hundreds of
@@ -56,6 +81,7 @@ type VirtualGridProps<T> = {
 export function VirtualGrid<T>({
   "aria-label": ariaLabel,
   className,
+  columns: fixedColumns,
   gap,
   itemHeight,
   itemKey,
@@ -64,6 +90,7 @@ export function VirtualGrid<T>({
   onVisibleRangeChange,
   overscanRows = DEFAULT_OVERSCAN_ROWS,
   renderItem,
+  scrollToIndex = null,
 }: VirtualGridProps<T>) {
   const containerRef = useRef<HTMLDivElement>(null);
   const scrollParentRef = useRef<HTMLElement | null>(null);
@@ -86,10 +113,11 @@ export function VirtualGrid<T>({
   // rendered until the layout effect below has measured, which happens before
   // the first paint.
   const measured = width > 0;
-  const columns = useMemo(
-    () => (width > 0 ? Math.max(1, Math.floor((width + gap) / (minItemWidth + gap))) : 1),
-    [width, gap, minItemWidth],
-  );
+  const columns = useMemo(() => {
+    if (fixedColumns !== undefined) return Math.max(1, fixedColumns);
+    if (minItemWidth === undefined || width <= 0) return 1;
+    return Math.max(1, Math.floor((width + gap) / (minItemWidth + gap)));
+  }, [fixedColumns, gap, minItemWidth, width]);
   const columnWidth = measured ? (width - gap * (columns - 1)) / columns : 0;
   const rowHeight = measured ? itemHeight(columnWidth) + gap : 0;
   const rowCount = measured ? Math.ceil(items.length / columns) : 0;
@@ -225,7 +253,34 @@ export function VirtualGrid<T>({
     pendingFocusRef.current = true;
     setFocusedIndex(clamped);
     scrollIndexIntoView(clamped);
+    // Recompute the mounted window HERE, against the scroll position that was
+    // just written, rather than leaving it to the scroll event's own frame.
+    //
+    // Measured (End on a 176-verse chapter): without this the move lands in
+    // two commits, and the target tile is mounted by a DIFFERENT block in each
+    // — the out-of-window fallback first, the main window after the scroll
+    // frame. React unmounts the node it focused and mounts a new one, so focus
+    // falls to <body> a frame after arriving, with `pendingFocusRef` already
+    // spent. Both state updates batch into one commit this way, and the tile
+    // that gets focus is the one that stays.
+    recomputeWindow();
   }
+
+  /** The index this grid last scrolled itself to. Compared against, rather
+   *  than recomputed, so a resize or a re-render never re-scrolls: only the
+   *  followed item moving does. */
+  const followedRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    // Nothing to follow, nothing to follow it to, or the geometry isn't known
+    // yet — in the last case this effect runs again the moment it is, because
+    // `rowHeight` is a dependency.
+    if (scrollToIndex === null || items.length === 0 || rowHeight <= 0) return;
+    const target = Math.max(0, Math.min(items.length - 1, scrollToIndex));
+    if (followedRef.current === target) return;
+    followedRef.current = target;
+    scrollIndexIntoView(target);
+  }, [items.length, rowHeight, scrollIndexIntoView, scrollToIndex]);
 
   /** Keeps the roving tabindex on whatever actually holds focus, however it
    *  got there. Without this a click on the 50th tile would leave the rover on
