@@ -267,6 +267,12 @@ export function Select({ className, disabled, onChange, options, placeholder, si
               }}
             >
               {options.map((option, index) => (
+                /* eslint-disable-next-line jsx-a11y/click-events-have-key-events --
+                   In the ARIA listbox pattern the options never take focus: the
+                   trigger keeps it and points at the active option with
+                   `aria-activedescendant`, so the keyboard equivalent of this
+                   click lives in the trigger's `onKeyDown`. A key handler here
+                   could never fire. */
                 <li
                   aria-disabled={option.disabled || undefined}
                   aria-selected={option.value === value}

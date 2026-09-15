@@ -6,7 +6,11 @@ import { api } from "@renderer/lib/api";
 /** A resource tab's source view: either the added-to-library list, or one of
  *  its linked folders (see `settings["library.linkedFolders"]`), addressed
  *  by its absolute path. */
-export type MediaSourceView = "recent" | string;
+// `string & {}` rather than a plain `string`: the union would otherwise
+// collapse and the literal would stop being suggested. It is the sentinel that
+// carries the meaning here, so losing it from autocomplete loses the type's
+// entire documentation value.
+export type MediaSourceView = "recent" | (string & {});
 
 export function folderAssetsKey(kind: AssetKind, folderPath: string): string {
   return `${kind}::${folderPath}`;

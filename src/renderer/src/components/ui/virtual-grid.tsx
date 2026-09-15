@@ -355,6 +355,11 @@ export function VirtualGrid<T>({
     !measured || items.length === 0 || (focusedRow >= rowWindow.startRow && focusedRow < rowWindow.endRow);
 
   return (
+    /* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions --
+       Same delegation as `Tabs`: the tab stop is the focused tile, and the
+       list catches the arrows only because they bubble from it. Handling them
+       here rather than per tile is what lets the window move the focus to a
+       row that is not mounted yet. */
     <div
       aria-label={ariaLabel}
       className={cn("relative w-full shrink-0", className)}

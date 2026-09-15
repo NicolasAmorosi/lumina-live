@@ -12,7 +12,7 @@ export { ProgressBar } from "./progress-bar";
 export { LoadingState } from "./loading-state";
 export { MediaScrubber } from "./media-scrubber";
 export { VolumeControl } from "./volume-control";
-export { Title, Label } from "./title";
+export { Title, Label, Caption } from "./title";
 export { HighlightedText, type TextSegment } from "./highlighted-text";
 export { Dialog, DialogHeader, DialogContent, DialogFooter } from "./dialog";
 export { Tabs, TabPanel, TabPanels, type TabItem, type TabsVariant } from "./tabs";

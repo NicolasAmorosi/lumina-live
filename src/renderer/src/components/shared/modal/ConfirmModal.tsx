@@ -48,7 +48,7 @@ export function ConfirmModal({
         <Button onClick={() => onOpenChange(false)} variant="ghost">
           {t("common.cancel")}
         </Button>
-        <Button loading={loading} onClick={handleConfirm} variant={danger ? "danger" : "primary"}>
+        <Button loading={loading} onClick={() => void handleConfirm()} variant={danger ? "danger" : "primary"}>
           {confirmLabel ?? t("common.confirm")}
         </Button>
       </DialogFooter>

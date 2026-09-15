@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useT, type TParams } from "@renderer/lib/i18n/i18n-provider";
 import { Button, Callout, EmptyState, Icon, IconButton, Input, Skeleton, Switch, Title, Tooltip } from "@renderer/components/ui";
 import { cn } from "@renderer/lib/utils";
@@ -94,6 +94,7 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
   // discard guard.
   const [confirmArmed, setConfirmArmed] = useState(false);
   const skipDisarmRef = useRef(true);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const dirty =
     isForm && (name !== initial.name || notes !== initial.notes || favorite !== initial.favorite);
@@ -142,17 +143,24 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
     };
   }, [mode]);
 
-  function handleKeyDown(e: KeyboardEvent) {
+  // Escape and Enter are bound to the document in the CAPTURE phase, not to
+  // the panel's own element. Two reasons, and neither is style: bound to the
+  // element they only fire while focus happens to be inside the panel, so
+  // Escape with focus on the program list closed the whole modal instead of
+  // the panel; and capture is what lets `stopPropagation` beat `Modal`'s own
+  // document-level Escape listener, which is in the bubble phase. Enter still
+  // only counts from inside — outside the panel it belongs to whatever has
+  // focus.
+  const keyHandlerRef = useRef<(e: globalThis.KeyboardEvent) => void>(() => {});
+  keyHandlerRef.current = (e: globalThis.KeyboardEvent) => {
+    const target = e.target instanceof HTMLElement ? e.target : null;
     if (e.key === "Escape") {
-      // Stop here so the modal's own document-level Escape listener never
-      // sees it — Escape closes the panel first, the modal only on a second
-      // press.
       e.stopPropagation();
       onClose();
       return;
     }
     if (e.key !== "Enter" || !isForm) return;
-    const target = e.target as HTMLElement;
+    if (!target || !panelRef.current?.contains(target)) return;
     // A focused button already handles its own Enter (Cancel closes, Save
     // calls handleConfirm below); Notes is multi-line, so Enter there has to
     // stay a plain newline.
@@ -160,7 +168,13 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
     if (busy || name.trim().length === 0) return;
     e.preventDefault();
     void handleConfirm();
-  }
+  };
+
+  useEffect(() => {
+    const onKeyDown = (e: globalThis.KeyboardEvent) => keyHandlerRef.current(e);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, []);
 
   async function handleConfirm() {
     setBusy(true);
@@ -192,10 +206,7 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
   }
 
   return (
-    <div
-      className="wa-program-panel-enter flex w-80 shrink-0 flex-col border-l border-border"
-      onKeyDown={handleKeyDown}
-    >
+    <div className="wa-program-panel-enter flex w-80 shrink-0 flex-col border-l border-border" ref={panelRef}>
       {/* `h-13` is shared with the list's search/filter bar in `ProgramsModal`
           so both seams line up when the panel expands the dialog sideways —
           change one and the other has to follow. */}

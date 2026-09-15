@@ -1,4 +1,5 @@
-import { Button, Label, LinearLoader, ProgressBar } from "@renderer/components/ui";
+import { useId } from "react";
+import { Button, Caption, LinearLoader, ProgressBar } from "@renderer/components/ui";
 
 type PanelProgressRowProps = {
   /** Omit both to show the row with no cancel action (a plain library import
@@ -16,10 +17,20 @@ type PanelProgressRowProps = {
  *  "Preparar vista/carpeta" batch (cancelable), both of which live in this
  *  same footer. */
 export function PanelProgressRow({ cancelLabel, label, onCancel, value }: PanelProgressRowProps) {
+  // The caption names the `progressbar`, it does not label a form control —
+  // so it is a span pointed at by `aria-labelledby`, not a `<label>`. Without
+  // this the bar announces a bare percentage with nothing to attach it to.
+  const labelId = useId();
   return (
     <div className="flex min-w-0 basis-full items-center gap-2">
-      <Label className="shrink-0 whitespace-nowrap">{label}</Label>
-      {value === null ? <LinearLoader className="w-full" /> : <ProgressBar className="w-full" value={value} />}
+      <Caption className="shrink-0 whitespace-nowrap" id={labelId}>
+        {label}
+      </Caption>
+      {value === null ? (
+        <LinearLoader className="w-full" />
+      ) : (
+        <ProgressBar aria-labelledby={labelId} className="w-full" value={value} />
+      )}
       {onCancel ? (
         <Button className="shrink-0" onClick={onCancel} size="xs" variant="ghost">
           {cancelLabel}

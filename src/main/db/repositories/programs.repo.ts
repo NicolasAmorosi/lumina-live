@@ -140,7 +140,7 @@ export class ProgramsRepo {
       }
 
       input.items.forEach((item: ProgramItemUpsert, index: number) => {
-        this.db.insert(programItems).values(toRow(programId!, index, item, now)).run();
+        this.db.insert(programItems).values(toRow(programId, index, item, now)).run();
       });
 
       return programId;

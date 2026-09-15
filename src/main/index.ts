@@ -146,7 +146,7 @@ app.on("second-instance", () => {
 });
 
 if (gotSingleInstanceLock) {
-  app.whenReady().then(async () => {
+  void app.whenReady().then(() => {
     try {
       initDatabase();
     } catch {

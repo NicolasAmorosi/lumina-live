@@ -312,7 +312,7 @@ export class MediaRepo {
     const result = new Map<number, string>();
     if (ids.length === 0) return result;
     for (let i = 0; i < ids.length; i += ID_CHUNK) {
-      const slice = ids.slice(i, i + ID_CHUNK) as number[];
+      const slice = ids.slice(i, i + ID_CHUNK);
       for (const row of this.db
         .select()
         .from(mediaAssets)

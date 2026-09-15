@@ -145,6 +145,11 @@ export function Modal({
         ) : null}
         {/* Only the top modal traps: a covered one is unreachable anyway,
             since the top modal's own backdrop paints over it. */}
+        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a
+            focus sentinel is the one case where a tab stop on a
+            non-interactive node is the point: it exists to be landed on for a
+            single frame and bounced back. `aria-hidden` keeps it out of the
+            accessibility tree, so nothing ever announces it. */}
         <span aria-hidden="true" onFocus={() => focusEdge("last")} tabIndex={isTop ? 0 : -1} />
         <Dialog
           aria-labelledby={titleId}
@@ -160,6 +165,7 @@ export function Modal({
         >
           {children}
         </Dialog>
+        {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- see above */}
         <span aria-hidden="true" onFocus={() => focusEdge("first")} tabIndex={isTop ? 0 : -1} />
       </div>
     </ModalTitleIdContext.Provider>,

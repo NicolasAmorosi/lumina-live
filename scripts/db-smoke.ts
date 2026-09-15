@@ -530,13 +530,13 @@ async function main() {
 
   const binaryTimings = readBinarySlideTimings(legacyPath);
   assert(binaryTimings !== null, "the synthetic legacy .ppt must parse");
-  assert(binaryTimings!.length === 2, `expected 2 slides, got ${binaryTimings!.length}`);
+  assert(binaryTimings.length === 2, `expected 2 slides, got ${binaryTimings.length}`);
   assert(
-    binaryTimings![0]!.autoAdvanceMs === 12345,
-    `slide 1 must carry its auto-advance time, got ${String(binaryTimings![0]!.autoAdvanceMs)}`,
+    binaryTimings[0]!.autoAdvanceMs === 12345,
+    `slide 1 must carry its auto-advance time, got ${String(binaryTimings[0]!.autoAdvanceMs)}`,
   );
   assert(
-    binaryTimings![1]!.autoAdvanceMs === null,
+    binaryTimings[1]!.autoAdvanceMs === null,
     "slide 2 has fAutoAdvance clear, so its stale slideTime must be ignored",
   );
 

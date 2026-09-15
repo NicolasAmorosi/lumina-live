@@ -95,6 +95,11 @@ export function Tabs<T extends string>({
   }
 
   return (
+    /* eslint-disable-next-line jsx-a11y/interactive-supports-focus -- The
+       tablist is the delegate, not the tab stop: roving tabindex puts the
+       single `0` on the selected tab button, and the arrows are caught here
+       only because they bubble from it. Making the container focusable would
+       add a stop that lands on nothing. */
     <div
       aria-orientation={vertical ? "vertical" : "horizontal"}
       className={cn(listVariants[variant], className)}

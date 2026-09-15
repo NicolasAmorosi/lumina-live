@@ -53,7 +53,7 @@ function isAnimatable(
  * itself, no matter which action produced it.
  */
 function sceneContentKey(output: ProjectionOutput): string {
-  return JSON.stringify(output, (key, value) => (key === "transition" ? undefined : value));
+  return JSON.stringify(output, (key: string, value: unknown) => (key === "transition" ? undefined : value));
 }
 
 /**

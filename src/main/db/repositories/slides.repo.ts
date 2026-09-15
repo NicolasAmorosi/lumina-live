@@ -200,7 +200,7 @@ export class SlidesRepo {
     };
 
     for (let i = 0; i < mediaAssetIds.length; i += ID_CHUNK) {
-      const slice = mediaAssetIds.slice(i, i + ID_CHUNK) as number[];
+      const slice = mediaAssetIds.slice(i, i + ID_CHUNK);
 
       // 1. By content. `IS` rather than `=` on purpose: both sides are
       //    nullable, and a row with no size/mtime recorded must not match a

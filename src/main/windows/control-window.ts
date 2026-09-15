@@ -32,10 +32,13 @@ export function createControlWindow(): BrowserWindow {
   // is the production check. Both paths avoid the church-presenter bug of NODE_ENV
   // never being set and dev always falling through to loadFile.
   const devServerUrl = process.env["ELECTRON_RENDERER_URL"];
+    // `void`, not a `.catch`: a failed load is a startup failure with nothing
+    // useful to do about it here, and `unhandledRejection` below already
+    // writes it to `crash.log`.
   if (!app.isPackaged && devServerUrl) {
-    win.loadURL(devServerUrl);
+    void win.loadURL(devServerUrl);
   } else {
-    win.loadFile(path.join(__dirname, "../renderer/index.html"));
+    void win.loadFile(path.join(__dirname, "../renderer/index.html"));
   }
 
   win.once("ready-to-show", () => win.show());
