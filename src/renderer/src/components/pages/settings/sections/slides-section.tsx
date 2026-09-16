@@ -31,7 +31,7 @@ const RENDER_WIDTH_OPTIONS = [1280, 1600, 1920, 2560, 3840] as const;
  * hymnal converting again, one deck at a time, the next time each is opened.
  * Hence the callout: the cost is real, it is silent, and it is paid later.
  */
-export function SlidesSection() {
+export function SlidesSection({ active }: { active: boolean }) {
   const t = useT();
   const cacheMaxMb = useSettingsStore((s) => s.settings["slides.cacheMaxMb"]);
   const renderWidth = useSettingsStore((s) => s.settings["slides.maxRenderWidth"]);
@@ -50,12 +50,15 @@ export function SlidesSection() {
     }
   }, []);
 
-  // Read once when the section mounts. The cache only grows through
-  // conversions the operator started, so a live-updating figure would be
-  // motion for its own sake; `refresh()` after a change is enough.
+  // Read whenever the section becomes the visible one. It stays mounted once
+  // visited (see `SettingsModal`), so reading only at mount would pin the
+  // figure to the first visit — across a conversion or a purge started from
+  // anywhere else in the app. Still not live: the cache only grows through
+  // conversions the operator started, so polling would be motion for its own
+  // sake.
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    if (active) void refresh();
+  }, [active, refresh]);
 
   async function change(patch: Parameters<typeof updateSettings>[0]) {
     await updateSettings(patch);
