@@ -69,12 +69,23 @@ export class HistoryRepo {
    *  full materialization and a bound-parameter list large enough to hit
    *  SQLite's limit — the prune would throw exactly when it was most needed. */
   prune(): void {
+    // `id < (the MAX_ROWS-th newest id)` rather than `NOT IN (that set)`: the
+    // subquery yields ONE value and the delete is a range scan on the primary
+    // key, instead of testing every surviving row against a 5000-element set.
+    // Ids are monotonic (`integer primary key`), so ordering by id is
+    // ordering by age.
+    //
+    // Strictly `<`: the row AT that offset is the oldest keeper. With `<=` the
+    // table settles at MAX_ROWS - 1, which is what the test caught. Under the
+    // cap the subquery yields NULL and `id < NULL` is NULL for every row, so
+    // nothing is deleted — the case that would otherwise empty the history on
+    // a fresh install, silently.
     this.db
       .delete(projectionHistory)
       .where(
-        sql`${projectionHistory.id} NOT IN (
+        sql`${projectionHistory.id} < (
           SELECT ${projectionHistory.id} FROM ${projectionHistory}
-          ORDER BY ${projectionHistory.id} DESC LIMIT ${MAX_ROWS}
+          ORDER BY ${projectionHistory.id} DESC LIMIT 1 OFFSET ${MAX_ROWS - 1}
         )`,
       )
       .run();
