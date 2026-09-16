@@ -63,6 +63,11 @@ export function startLibrarySweepScheduler(): void {
     scheduleSweep();
   });
 
+  // Never cleared, deliberately: this scheduler is started once at boot and
+  // is meant to run for the life of the process. There is no teardown path to
+  // hang it on — the app owns it, not a window — and it already costs nothing
+  // while the app is in the background, since it only sweeps when a window has
+  // focus.
   setInterval(() => {
     if (BrowserWindow.getAllWindows().some((win) => win.isFocused())) scheduleSweep();
   }, PERIODIC_MS);

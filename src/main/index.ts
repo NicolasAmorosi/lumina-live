@@ -300,6 +300,14 @@ function reportCrash(label: string, error: unknown): void {
 
 // Surface crashes as a dialog instead of a silent blank window — the health
 // check the design doc calls for around the native SQLite module.
+//
+// Registering this handler also overrides Node's default of ABORTING the
+// process, and that is the intended trade: a service with the app in a
+// questionable state beats a service with no app at all, and the operator
+// gets a dialog either way. The cost is real and is accepted here — after an
+// uncaught throw, main's state may be inconsistent (a half-applied
+// transaction, a queue entry that will never settle), so the honest advice to
+// an operator who sees this dialog is to restart once the service is over.
 process.on("uncaughtException", (error) => reportCrash("uncaughtException", error));
 
 // Without this an unhandled rejection is a silent no-op (Electron does not
