@@ -212,6 +212,11 @@ export function Select({ className, disabled, onChange, options, placeholder, si
       case "Escape":
         if (open) {
           e.preventDefault();
+          // No `triggerRef.focus()` here, unlike `selectOption`: this handler
+          // is on the trigger itself and the options are never focusable, so a
+          // keydown can only arrive while the trigger already has focus.
+          // `selectOption` needs it because a pointer press on an option blurs
+          // the button first.
           setOpen(false);
         }
         break;
@@ -223,7 +228,7 @@ export function Select({ className, disabled, onChange, options, placeholder, si
     }
   }
 
-  return (
+  const trigger = (
     <button
       aria-activedescendant={open && highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined}
       aria-controls={listboxId}
@@ -252,52 +257,65 @@ export function Select({ className, disabled, onChange, options, placeholder, si
         )}
         name="chevronDown"
       />
-      {open && position
-        ? createPortal(
-            <ul
-              className="fixed z-[var(--z-popover)] overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-overlay focus:outline-none"
-              id={listboxId}
-              ref={menuRef}
-              role="listbox"
-              style={{
-                left: position.left,
-                maxHeight: position.maxHeight,
-                width: position.width,
-                ...(position.top !== undefined ? { top: position.top } : { bottom: position.bottom }),
-              }}
-            >
-              {options.map((option, index) => (
-                /* eslint-disable-next-line jsx-a11y/click-events-have-key-events --
-                   In the ARIA listbox pattern the options never take focus: the
-                   trigger keeps it and points at the active option with
-                   `aria-activedescendant`, so the keyboard equivalent of this
-                   click lives in the trigger's `onKeyDown`. A key handler here
-                   could never fire. */
-                <li
-                  aria-disabled={option.disabled || undefined}
-                  aria-selected={option.value === value}
-                  className={cn(
-                    "flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm text-foreground",
-                    option.disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
-                    !option.disabled && index === highlightedIndex && "bg-hover",
-                  )}
-                  id={optionId(index)}
-                  key={option.value}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    selectOption(index);
-                  }}
-                  onMouseEnter={() => !option.disabled && setHighlightedIndex(index)}
-                  role="option"
-                >
-                  <span className="truncate">{option.label}</span>
-                  {option.value === value ? <Icon className="shrink-0 text-primary-ink" name="check" /> : null}
-                </li>
-              ))}
-            </ul>,
-            document.body,
-          )
-        : null}
     </button>
+  );
+
+  // The menu is the trigger's SIBLING, not its child. The portal takes it out
+  // of the DOM either way, but written inside the `<button>` it reads — to a
+  // person and to a linter — like a listbox full of interactive rows nested in
+  // a button, which is invalid HTML and is not what ships.
+  const menu =
+    open && position
+      ? createPortal(
+          <ul
+            className="fixed z-[var(--z-popover)] overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-overlay focus:outline-none"
+            id={listboxId}
+            ref={menuRef}
+            role="listbox"
+            style={{
+              left: position.left,
+              maxHeight: position.maxHeight,
+              width: position.width,
+              ...(position.top !== undefined ? { top: position.top } : { bottom: position.bottom }),
+            }}
+          >
+            {options.map((option, index) => (
+              /* eslint-disable-next-line jsx-a11y/click-events-have-key-events --
+                 In the ARIA listbox pattern the options never take focus: the
+                 trigger keeps it and points at the active option with
+                 `aria-activedescendant`, so the keyboard equivalent of this
+                 click lives in the trigger's `onKeyDown`. A key handler here
+                 could never fire. */
+              <li
+                aria-disabled={option.disabled || undefined}
+                aria-selected={option.value === value}
+                className={cn(
+                  "flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm text-foreground",
+                  option.disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+                  !option.disabled && index === highlightedIndex && "bg-hover",
+                )}
+                id={optionId(index)}
+                key={option.value}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  selectOption(index);
+                }}
+                onMouseEnter={() => !option.disabled && setHighlightedIndex(index)}
+                role="option"
+              >
+                <span className="truncate">{option.label}</span>
+                {option.value === value ? <Icon className="shrink-0 text-primary-ink" name="check" /> : null}
+              </li>
+            ))}
+        </ul>,
+          document.body,
+        )
+      : null;
+
+  return (
+    <>
+      {trigger}
+      {menu}
+    </>
   );
 }
