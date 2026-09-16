@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useT, type TParams } from "@renderer/lib/i18n/i18n-provider";
+import { useT, type Translate } from "@renderer/lib/i18n/i18n-provider";
 import { Button, Callout, EmptyState, Icon, IconButton, Input, Skeleton, Switch, Textarea, Title, Tooltip } from "@renderer/components/ui";
 import { cn } from "@renderer/lib/utils";
 import { api } from "@renderer/lib/api";
@@ -32,7 +32,7 @@ type FormValues = { favorite: boolean; name: string; notes: string };
  *  what's stored", not "the operator touched a field". Read once per mount —
  *  `ProgramsModal` keys the panel by mode + target id, so switching programs
  *  remounts it instead of leaving a stale form behind. */
-function initialForm(mode: PanelMode, t: (key: string, params?: TParams) => string): FormValues {
+function initialForm(mode: PanelMode, t: Translate): FormValues {
   if (mode.kind === "edit") {
     return { favorite: mode.program.favorite, name: mode.program.name, notes: mode.program.notes ?? "" };
   }

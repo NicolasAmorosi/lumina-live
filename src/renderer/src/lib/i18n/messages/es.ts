@@ -320,8 +320,14 @@ const es = {
     },
     language: "Idioma",
     languageDesc: "Idioma de la interfaz de control.",
+    // Endonyms: a language is named in itself, so the option is readable to
+    // whoever is looking for it. The three cover `Locale` in full — the
+    // picker only offers the ones with a dictionary (`availableLocales`),
+    // but the label map is typed over every `Locale`.
     locales: {
       es: "Español",
+      it: "Italiano",
+      en: "English",
     },
   },
   common: {

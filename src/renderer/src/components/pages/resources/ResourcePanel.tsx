@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useT } from "@renderer/lib/i18n/i18n-provider";
+import { useT, type MessageKey } from "@renderer/lib/i18n/i18n-provider";
 import { TabPanel, TabPanels, Tabs, type TabItem } from "@renderer/components/ui";
 import { useLibraryStore } from "@renderer/stores/library.store";
 import { BibleBrowser } from "./bible-browser";
@@ -8,7 +8,7 @@ import { ASSET_KINDS, type AssetKind } from "@shared/constants";
 
 type ResourceTab = "bible" | AssetKind;
 
-const LABEL_KEY: Record<ResourceTab, string> = {
+const LABEL_KEY: Record<ResourceTab, MessageKey> = {
   bible: "bible.title",
   video: "library.videos",
   image: "library.images",

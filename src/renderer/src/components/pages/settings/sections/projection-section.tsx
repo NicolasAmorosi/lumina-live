@@ -1,4 +1,4 @@
-import { useT } from "@renderer/lib/i18n/i18n-provider";
+import { useT, type MessageKey } from "@renderer/lib/i18n/i18n-provider";
 import { Button, Icon, Select, Tooltip, VolumeControl } from "@renderer/components/ui";
 import { useDisplayStore } from "@renderer/stores/display.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
@@ -11,7 +11,7 @@ import { LOGO_URL } from "@shared/urls";
 import type { TransitionStyle } from "@shared/types/projection";
 import { SettingsGroup, SettingsRow } from "../settings-row";
 
-const TRANSITION_STYLE_LABEL_KEYS: Record<TransitionStyle, string> = {
+const TRANSITION_STYLE_LABEL_KEYS: Record<TransitionStyle, MessageKey> = {
   none: "settings.transitionStyles.none",
   crossfade: "settings.transitionStyles.crossfade",
   "fade-through-black": "settings.transitionStyles.fadeThroughBlack",
