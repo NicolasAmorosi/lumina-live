@@ -2,6 +2,10 @@
 <html lang="es">
   <head>
     <meta charset="UTF-8" />
+    <!-- `ws://localhost:*` is the dev server's HMR socket and is stripped from
+         the packaged build by `stripDevCsp()` in electron.vite.config.ts. The
+         permissive form lives here so dev needs no transform; production is
+         always the narrower one. -->
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; img-src 'self' worship: data: blob:; media-src 'self' worship: blob:; font-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ws://localhost:*;"
