@@ -25,24 +25,32 @@ const iconOffsets: Record<InputSize, { icon: string; padding: string }> = {
 };
 
 export function Input({ className, icon, ref, size = "sm", ...props }: InputProps) {
+  const field = (
+    <input
+      className={cn(
+        "w-full rounded-lg border border-border bg-surface text-foreground placeholder:text-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-danger/80 aria-invalid:focus-visible:ring-danger/80",
+        sizes[size],
+        icon && iconOffsets[size].padding,
+        className,
+      )}
+      ref={ref}
+      {...props}
+    />
+  );
+
+  // The wrapper exists only to position the icon. Without one, an `<input>`
+  // wrapped anyway was never the element a caller's `className` width could
+  // control: the `<div>` is what takes up the room in a flex row, and it
+  // ignored the class.
+  if (!icon) return field;
+
   return (
     <div className="relative">
-      {icon ? (
-        <Icon
-          className={cn("pointer-events-none absolute top-1/2 -translate-y-1/2 text-subtle", iconOffsets[size].icon)}
-          name={icon}
-        />
-      ) : null}
-      <input
-        className={cn(
-          "w-full rounded-lg border border-border bg-surface text-foreground placeholder:text-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-danger/80 aria-invalid:focus-visible:ring-danger/80",
-          sizes[size],
-          icon && iconOffsets[size].padding,
-          className,
-        )}
-        ref={ref}
-        {...props}
+      <Icon
+        className={cn("pointer-events-none absolute top-1/2 -translate-y-1/2 text-subtle", iconOffsets[size].icon)}
+        name={icon}
       />
+      {field}
     </div>
   );
 }
