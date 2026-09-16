@@ -30,16 +30,20 @@ function Toast({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }) 
   return (
     <div
       className={cn(
-        "wa-toast-enter pointer-events-auto flex items-start gap-2 rounded-xl border p-3 text-sm shadow-overlay",
+        "flex items-start gap-2 rounded-xl border p-3 text-sm shadow-overlay",
         toneClassName[item.tone],
+        // A dismissed toast keeps its box while it fades, but stops taking
+        // clicks: its action button is on its way out and pressing it would
+        // fire whatever it offered a second time.
+        item.exiting ? "wa-toast-exit pointer-events-none" : "wa-toast-enter pointer-events-auto",
       )}
       role="status"
     >
       <Icon className={cn("mt-0.5 shrink-0", toneIconClassName[item.tone])} name={toneIcon[item.tone]} />
       <div className="min-w-0 flex-1">
-        {/* Selectable for the same reason as `LoadingState`'s hint: an
-            unhandled rejection surfaces here verbatim (see
-            `global-error-handlers`), and it is unreadable over the phone. */}
+        {/* Selectable for the same reason as `LoadingState`'s hint: some
+            messages carry a name or a count the operator needs to repeat over
+            the phone. */}
         <p className="select-text">{item.message}</p>
         {item.action ? (
           <Button

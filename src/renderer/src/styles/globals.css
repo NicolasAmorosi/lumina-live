@@ -14,6 +14,11 @@
   to   { opacity: 0; transform: translate3d(0.75rem, 0.5rem, 0) scale(0.94); }
 }
 .wa-toast-enter { animation: toast-enter 180ms ease-out; }
+/* `forwards`: the store removes the item when this ends (EXIT_MS in
+ * `toast.store.ts`), and without holding the last frame the toast snaps back
+ * to full opacity for the tick between the animation ending and the state
+ * update landing. */
+.wa-toast-exit { animation: toast-exit 180ms ease-in forwards; }
 
 /* The programs modal's side panel (`components/pages/programs/`) expands the
  * dialog itself sideways rather than compressing the list column — see
@@ -79,6 +84,9 @@
   @keyframes button-loading-shimmer { from { opacity: 0.45; } to { opacity: 0.8; } }
   .wa-button-loading-shimmer { animation: button-loading-shimmer 1.4s ease-in-out infinite alternate; will-change: opacity; }
   .wa-toast-enter { animation-duration: 1ms; }
+  /* The store still waits EXIT_MS before removing the item — it just spends
+   * that time already invisible, which is the point of the preference. */
+  .wa-toast-exit { animation-duration: 1ms; }
   @keyframes program-panel-enter { from { opacity: 0; } to { opacity: 1; } }
   .wa-program-panel-enter { animation-duration: 1ms; }
 }
