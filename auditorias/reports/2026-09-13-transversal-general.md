@@ -637,6 +637,41 @@ reales descritos arriba.
 
 ---
 
+## 1.terdecies Estado — Tanda 11 aplicada (2026-09-15, decimonovena sesión)
+
+**Los 15 🔵 que quedaban, de una.** Cerrados: `L1`–`L7`, `L13`–`L20`. Total acumulado:
+**63 de 76 + los 2 de campo**. En este informe ya no queda **ningún hallazgo abierto de ninguna
+severidad** salvo `I1`/`I2`, que son decisiones de plata, no de ingeniería.
+
+Dos de los quince se cerraron **distinto de como el informe los describía**, y las dos veces
+porque el código no decía lo que el informe leyó.
+
+| # | Qué se hizo |
+|---|---|
+| `L1`+`L2`+`L13` | `MessageKey` deriva del diccionario la unión de rutas con punto y `t()` la exige. **Las tres claves dinámicas no necesitaron `Record`s**: una plantilla sobre una unión literal (`library.${kind}s`, las duraciones, los formatos de imagen) resuelve a una unión de claves concretas, así que el compilador ya las verifica — y agregar una duración sin su mensaje pasa a ser un error de compilación, que es exactamente lo que `L13` pedía. **Encontró un hueco en la primera corrida**: `LOCALE_LABEL_KEYS` está tipado sobre todo `Locale` y el diccionario solo definía `settings.locales.es` |
+| `L4` | `prune()` pasa de `NOT IN (SELECT … LIMIT 5000)` a `id < (el 5000º id más nuevo)`: un valor de subconsulta y un barrido de rango sobre la clave primaria. Va **con tres pruebas**, y valieron: la primera versión usaba `<=` y dejaba la tabla en 4999. La otra prueba cubre el caso que no se ve: con menos filas que el tope la subconsulta da NULL, y `id < NULL` tiene que borrar **nada** en vez de todo |
+| `L3` | La animación de salida, cableada. El store marca `exiting` y saca el toast al terminar; mientras se desvanece **deja de tomar clicks**, porque su botón de acción ya se está yendo. La expulsión por `MAX_TOASTS` sigue siendo instantánea a propósito: ese camino retira un toast para hacer lugar, y desvanecerlo mantendría su altura justo mientras el lugar hace falta. **Las pruebas encontraron un segundo defecto**: `push()` resolvía la duración con `??`, así que un `durationMs: null` explícito —documentado como "sin auto-cierre"— recibía el default de 4 s |
+| `L5`+`L6`+`L17` | `ProgramsModal`: el array de refs se trunca al largo filtrado; `ArrowUp` desde "nada resaltado" entra por la **última** fila (y adentro de la lista sigue topando, igual que `ArrowDown`, en vez de dar la vuelta); el reordenamiento optimista tiene `.catch` y refresca desde lo guardado |
+| `L7` | La CSP de dev deja de embarcarse: un `transformIndexHtml` de solo-build saca `ws://localhost:*`. La forma permisiva queda en el HTML para que `npm run dev` no necesite ninguna transformación, y así el build **solo puede ser más estricto que dev**, nunca al revés. Verificado sobre `out/renderer/*.html`: `connect-src 'self';` |
+| `L14` | `SettingsModal` pasa a `TabPanels`/`TabPanel` con la misma forma de "solo lo visitado" que ya usa `ResourcePanel`. Quedar montada tiene una consecuencia que se atendió: `SlidesSection` lee el uso de la caché al montar, así que recibe `active` y vuelve a leer al volver a ser la visible; cerrar el diálogo suelta lo montado |
+| `L15`+`L16` | El `<ul role="listbox">` pasa a ser **hermano** del disparador, no su hijo. **`L15` se cierra como hallazgo que no se sostiene**: `handleKeyDown` está en el `<button>` y las opciones nunca toman foco, así que un `Escape` solo puede llegar con el foco ya en el disparador — `selectOption` necesita su `focus()` porque un click en una opción sí lo desenfoca primero. Queda escrito al lado del `case`, para que la próxima lectura no lo redescubra |
+| `L18` | `Input` envuelve **solo** cuando hay ícono que posicionar |
+| `L8`… | (cerrados en la Tanda 10) |
+| `L19`+`L20` | Las dos son notas, no código: el `setInterval` sin `clearInterval` es de por vida a propósito y no tiene teardown donde colgarse; registrar `uncaughtException` anula el aborto por defecto de Node, que es el canje buscado para una app que se usa en un culto. El costo —estado posiblemente inconsistente después— queda escrito al lado del handler |
+
+### Verificación de esta tanda
+
+`npm run typecheck` ✅ · `npm run lint` ✅ 0 errores (los mismos 5 warnings de `react-refresh`) ·
+`npm run test` ✅ **103/103** (8 casos nuevos: 3 de `prune`, 5 del store de toasts) ·
+`npm run build` ✅, y sobre su salida se verificó la CSP.
+
+**Lo que NO se verificó en pantalla:** el layout del modal de Ajustes tras pasar a `TabPanel`
+(`L14`). Compila, construye y replica la estructura que `ResourcePanel` ya usa en producción, pero
+no se confirmó a ojo: el intento de manejar la app por CDP no prosperó en esta sesión. Es la
+primera cosa para mirar al abrir la app.
+
+---
+
 ## 2. Qué estaba cubierto y qué no
 
 Reconstruido leyendo los dos informes previos y el índice, antes de decidir el alcance.
