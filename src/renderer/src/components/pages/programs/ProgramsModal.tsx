@@ -185,6 +185,11 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
 
   useEffect(() => {
     setHighlightedIndex(-1);
+    // Refs are written by index, so filtering a long list down to a short one
+    // leaves entries pointing at `<li>`s that are no longer mounted. Nothing
+    // reads past `highlightedIndex`, so this retains detached nodes rather
+    // than misbehaving — but it retains them for as long as the modal lives.
+    itemRefs.current.length = filtered.length;
   }, [filtered]);
 
   useEffect(() => {
@@ -239,10 +244,16 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
     if (!moved || insertAt === -1) return;
     next.splice(insertAt, 0, moved);
     setPrograms(next);
-    void reorderPrograms(next.map((p) => p.id)).then((stored) => {
-      if (stored) setPrograms(stored);
-      else void refreshList();
-    });
+    void reorderPrograms(next.map((p) => p.id))
+      .then((stored) => {
+        if (stored) setPrograms(stored);
+        else void refreshList();
+      })
+      // `reorderPrograms` already returns `null` on failure, so only a throw
+      // from the `then` itself lands here. Without this it would escape to the
+      // global `unhandledrejection` handler as a generic error toast, leaving
+      // the optimistic order on screen and the stored one unknown.
+      .catch(() => void refreshList());
   }
 
   function handleSearchKeyDown(e: KeyboardEvent<HTMLInputElement>) {
@@ -252,7 +263,12 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
       setHighlightedIndex((i) => Math.min(i + 1, filtered.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setHighlightedIndex((i) => Math.max(i - 1, 0));
+      // Only the "nothing highlighted" case (-1) differs: Up enters the list
+      // from the LAST row, mirroring Down entering it from the first.
+      // `Math.max(i - 1, 0)` entered from the first row in both directions,
+      // which reads as the list ignoring the key. Inside the list it still
+      // clamps rather than wrapping, exactly like Down.
+      setHighlightedIndex((i) => (i < 0 ? filtered.length - 1 : Math.max(i - 1, 0)));
     } else if (e.key === "Enter") {
       e.preventDefault();
       const target = filtered[highlightedIndex];
