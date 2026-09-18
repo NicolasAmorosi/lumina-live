@@ -1,6 +1,7 @@
 import { eq, inArray } from "drizzle-orm";
+import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
 import type { Db } from "../client";
-import { mediaAssets, programDraft } from "../schema";
+import { mediaAssets, programDraft, utilityScenes } from "../schema";
 import type { ProgramDraft, ProgramItemUpsert } from "@shared/types/program";
 import { PROGRAM_ITEM_KINDS } from "@shared/constants";
 
@@ -50,11 +51,11 @@ export class DraftRepo {
   /**
    * The draft as it can still be honoured today, or `null` when there is none.
    *
-   * Items whose media asset no longer exists are dropped here rather than in
-   * the renderer: main is the only side that can answer "does this asset row
-   * still exist" without one IPC round trip per item, and a schedule row whose
-   * asset is gone would otherwise come back as a tile that can never preview,
-   * never go live and never explain itself.
+   * Items whose target no longer exists — a media asset, a time scene — are
+   * dropped here rather than in the renderer: main is the only side that can
+   * answer "does this row still exist" without one IPC round trip per item.
+   * See `withLiveAssetsOnly` for why a draft is the only place a dead
+   * reference can outlive the thing it points at.
    *
    * A draft whose items ALL disappeared still comes back (with an empty list)
    * when it names a saved program, because its name and `programId` are
@@ -93,24 +94,48 @@ export class DraftRepo {
     };
   }
 
+  /**
+   * Drops the items whose target no longer exists — a media asset removed from
+   * the library, a time scene deleted in the «Escenas» editor.
+   *
+   * Both kinds of reference are checked, and neither is optional: a saved
+   * program is protected by an `ON DELETE restrict` FK, but a draft is a JSON
+   * blob that no constraint can reach, so it is the one place a dead reference
+   * can survive a delete. What it survives AS is the problem — a tile that can
+   * never preview, never go live and never explain itself.
+   */
   private withLiveAssetsOnly(items: ProgramItemUpsert[]): ProgramItemUpsert[] {
-    const referenced = [
-      ...new Set(
-        items.flatMap((item) => (item.kind === "media" || item.kind === "ppt" ? [item.mediaAssetId] : [])),
-      ),
+    const assetIds = [...new Set(items.flatMap((item) => (usesAsset(item) ? [item.mediaAssetId] : [])))];
+    const sceneIds = [
+      ...new Set(items.flatMap((item) => (item.kind === "utility" ? [item.utilitySceneId] : []))),
     ];
-    if (referenced.length === 0) return items;
+    if (assetIds.length === 0 && sceneIds.length === 0) return items;
 
-    const alive = new Set(
+    const liveAssets = this.aliveIds(mediaAssets.id, assetIds);
+    const liveScenes = this.aliveIds(utilityScenes.id, sceneIds);
+    return items.filter((item) => {
+      if (usesAsset(item)) return liveAssets.has(item.mediaAssetId);
+      if (item.kind === "utility") return liveScenes.has(item.utilitySceneId);
+      return true;
+    });
+  }
+
+  /** Which of `ids` still have a row, as a set. `inArray` with an empty list
+   *  compiles to a `WHERE false` that is pure overhead, so an empty ask is
+   *  answered without a query. */
+  private aliveIds(column: SQLiteColumn, ids: number[]): Set<number> {
+    if (ids.length === 0) return new Set();
+    return new Set(
       this.db
-        .select({ id: mediaAssets.id })
-        .from(mediaAssets)
-        .where(inArray(mediaAssets.id, referenced))
+        .select({ id: column })
+        .from(column.table)
+        .where(inArray(column, ids))
         .all()
-        .map((r) => r.id),
-    );
-    return items.filter(
-      (item) => !(item.kind === "media" || item.kind === "ppt") || alive.has(item.mediaAssetId),
+        .map((r) => r.id as number),
     );
   }
+}
+
+function usesAsset(item: ProgramItemUpsert): item is Extract<ProgramItemUpsert, { mediaAssetId: number }> {
+  return item.kind === "media" || item.kind === "ppt";
 }

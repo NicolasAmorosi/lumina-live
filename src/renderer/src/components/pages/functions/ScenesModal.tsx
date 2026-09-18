@@ -14,10 +14,10 @@ import {
 import { api } from "@renderer/lib/api";
 import { toast } from "@renderer/lib/toast";
 import { hideDragGhost, UTILITY_SCENE_MIME } from "@renderer/lib/dnd";
-import { deleteScene, duplicateScene, reorderScenes, saveScene } from "@renderer/lib/actions/utility";
+import { deleteScene, duplicateScene, reorderScenes, saveScene, sceneUsages } from "@renderer/lib/actions/utility";
 import { useUtilityStore } from "@renderer/stores/utility.store";
 import type { MediaAsset } from "@shared/types/media";
-import type { UtilityScene } from "@shared/types/utility";
+import type { UtilityScene, UtilitySceneUsage } from "@shared/types/utility";
 import { emptySceneDraft, isDraftSavable, toDraft, toUpsert, type SceneDraft } from "./scene-draft";
 import { SceneForm } from "./scene-form";
 import { ScenePreview } from "./scene-preview";
@@ -26,8 +26,14 @@ import { TOOL_ICON, TOOL_LABEL } from "./tool-display";
 /** Which row the form is editing. `null` = a scene that does not exist yet. */
 type Editing = { sceneId: number | null; draft: SceneDraft; baseline: SceneDraft };
 
-/** What a confirmation is about to do once the operator says yes. */
-type Pending = { kind: "discard"; go: () => void } | { kind: "delete"; sceneId: number };
+/** What a confirmation is about to do once the operator says yes. A delete
+ *  carries the saved programs it would break, read BEFORE the dialog opens: a
+ *  list that arrives while the operator is already reading would change the
+ *  question under them, and an empty one is the ordinary case rather than a
+ *  loading state. */
+type Pending =
+  | { kind: "discard"; go: () => void }
+  | { kind: "delete"; sceneId: number; usages: UtilitySceneUsage[] };
 
 /**
  * The scene editor: the list on the left, one scene's fields on the right,
@@ -130,8 +136,15 @@ export function ScenesModal({ onOpenChange, open }: { onOpenChange: (open: boole
     if (copy) setEditing({ sceneId: copy.id, draft: toDraft(copy), baseline: toDraft(copy) });
   }
 
-  async function handleDelete(sceneId: number) {
-    if (!(await deleteScene(sceneId))) return;
+  /** Opens the confirmation, having first asked which saved programs the
+   *  scene appears in — that answer is what turns a plain "are you sure" into
+   *  the forced delete, so it has to be in hand before the dialog is. */
+  async function askToDelete(sceneId: number) {
+    setPending({ kind: "delete", sceneId, usages: await sceneUsages(sceneId) });
+  }
+
+  async function handleDelete(sceneId: number, force: boolean) {
+    if (!(await deleteScene(sceneId, force))) return;
     // The list in the store has already been refreshed by `deleteScene`; this
     // reads the version this render closed over, which is why the next scene
     // is picked by position rather than by "whatever is first now".
@@ -287,7 +300,7 @@ export function ScenesModal({ onOpenChange, open }: { onOpenChange: (open: boole
                     <>
                       <Button
                         className="mr-auto"
-                        onClick={() => setPending({ kind: "delete", sceneId: editing.sceneId! })}
+                        onClick={() => void askToDelete(editing.sceneId!)}
                         size="sm"
                         variant="ghost"
                       >
@@ -319,12 +332,28 @@ export function ScenesModal({ onOpenChange, open }: { onOpenChange: (open: boole
       </Modal>
 
       <ConfirmModal
-        confirmLabel={pending?.kind === "delete" ? t("common.delete") : t("scenes.discard")}
+        confirmLabel={
+          pending?.kind !== "delete"
+            ? t("scenes.discard")
+            : pending.usages.length > 0
+              ? t("scenes.deleteAnyway")
+              : t("common.delete")
+        }
         danger={pending?.kind === "delete"}
-        description={pending?.kind === "delete" ? t("scenes.deleteBody") : t("scenes.discardBody")}
+        description={
+          pending?.kind !== "delete" ? (
+            t("scenes.discardBody")
+          ) : pending.usages.length > 0 ? (
+            <DeleteUsages usages={pending.usages} />
+          ) : (
+            t("scenes.deleteBody")
+          )
+        }
         onConfirm={async () => {
           if (!pending) return;
-          if (pending.kind === "delete") await handleDelete(pending.sceneId);
+          // `force` is exactly "the operator has just read which programs this
+          // breaks and said yes anyway" — never a flag the UI sets on its own.
+          if (pending.kind === "delete") await handleDelete(pending.sceneId, pending.usages.length > 0);
           else pending.go();
         }}
         onOpenChange={(next) => {
@@ -334,5 +363,28 @@ export function ScenesModal({ onOpenChange, open }: { onOpenChange: (open: boole
         title={pending?.kind === "delete" ? t("scenes.deleteTitle") : t("scenes.discardTitle")}
       />
     </>
+  );
+}
+
+/** The saved programs a forced delete is about to edit. Same shape and same
+ *  wording as the library's own `RemoveAssetConfirm`, because it is the same
+ *  decision about a different table — naming them is the whole point: an FK
+ *  rejection says "in use", which is not something the operator can act on. */
+function DeleteUsages({ usages }: { usages: readonly UtilitySceneUsage[] }) {
+  const t = useT();
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-foreground">{t("scenes.deleteInUseIntro")}</p>
+      <ul className="flex flex-col gap-1 rounded-lg border border-border bg-muted p-1.5">
+        {usages.map((usage) => (
+          <li className="flex items-center gap-2 rounded-md px-2 py-1.5 text-foreground" key={usage.programId}>
+            <Icon className="shrink-0 text-subtle" name="fileText" />
+            <span className="min-w-0 flex-1 truncate">{usage.programName}</span>
+            <Badge>{t("scenes.deleteInUseCount", { count: usage.itemCount })}</Badge>
+          </li>
+        ))}
+      </ul>
+      <p>{t("scenes.deleteInUseWarning")}</p>
+    </div>
   );
 }

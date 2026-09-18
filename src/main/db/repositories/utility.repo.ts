@@ -1,5 +1,6 @@
 import { eq, min } from "drizzle-orm";
-import type Database from "better-sqlite3";
+import Database from "better-sqlite3";
+import { IpcError } from "@shared/ipc/result";
 import type { Db } from "../client";
 import { utilityScenes } from "../schema";
 import { normalizeSceneStyle, normalizeTimerConfig } from "@shared/scene-validators";
@@ -111,8 +112,24 @@ export class UtilityRepo {
     return this.create({ ...rest, name });
   }
 
+  /** The `ON DELETE restrict` on `program_items.utility_scene_id` surfaces as
+   *  an error code rather than a raw SQLite failure, exactly like
+   *  `MediaRepo.remove`: the renderer's confirmation needs to tell the two
+   *  cases apart, and a saved program that still uses this scene is not an
+   *  error the operator can do nothing about — it is a question
+   *  (`utility:usages`) waiting to be asked. */
   delete(id: number): void {
-    this.db.delete(utilityScenes).where(eq(utilityScenes.id, id)).run();
+    try {
+      this.db.delete(utilityScenes).where(eq(utilityScenes.id, id)).run();
+    } catch (error) {
+      if (error instanceof Database.SqliteError && error.message.includes("FOREIGN KEY constraint failed")) {
+        throw new IpcError({
+          code: "UTILITY_SCENE_IN_USE",
+          message: `Utility scene ${id} is still referenced by a program item`,
+        });
+      }
+      throw error;
+    }
   }
 
   /** Sort key that puts a brand new scene on top without rewriting every other

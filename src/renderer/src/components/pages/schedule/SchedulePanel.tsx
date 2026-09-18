@@ -12,6 +12,7 @@ import {
   readBibleVerseDrag,
   readMediaAssetDrag,
   readOsFilesDrag,
+  readUtilitySceneDrag,
 } from "@renderer/lib/dnd";
 import { toast } from "@renderer/lib/toast";
 import { previewScheduleItem } from "@renderer/lib/actions/preview";
@@ -113,6 +114,7 @@ export function SchedulePanel() {
     const reorderFrom = e.dataTransfer.getData(SCHEDULE_INDEX_MIME);
     const draggedAsset = readMediaAssetDrag(e);
     const draggedVerse = readBibleVerseDrag(e);
+    const draggedScene = readUtilitySceneDrag(e);
     const osFiles = readOsFilesDrag(e);
     const targetIndex = dropTargetIndex(e);
     setDragOverIndex(null);
@@ -127,6 +129,10 @@ export function SchedulePanel() {
     }
     if (draggedVerse) {
       addItem({ kind: "bible", ...draggedVerse }, targetIndex);
+      return;
+    }
+    if (draggedScene !== null) {
+      addItem({ kind: "utility", utilitySceneId: draggedScene, title: null }, targetIndex);
       return;
     }
     const byKind = new Map<AssetKind, string[]>();

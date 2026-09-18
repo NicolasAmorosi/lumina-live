@@ -13,7 +13,11 @@ export const SCHEDULE_INDEX_MIME = "application/x-worship-schedule-index";
  *  refreshed mid-drag — and is kept distinct from `SCHEDULE_INDEX_MIME` so a
  *  program row can never be read as a playlist reorder. */
 export const PROGRAM_ROW_MIME = "application/x-worship-program-row";
-/** A row of the saved time scenes, dropped on another row to reorder the list.
+/** A saved time scene: dropped on another row inside the «Escenas» editor to
+ *  reorder the list, or onto the order of service to add it there — the same
+ *  two jobs `MEDIA_ASSET_MIME` does, and the reason one MIME covers both is
+ *  that the editor is a modal: while it is open the schedule cannot be a drop
+ *  target, and while it is closed its list does not exist.
  *  Carries the scene's **id** for the same reason the programs one does: the
  *  list is refreshed from main mid-drag, so an index would point at a
  *  different row by the time the drop lands. */
@@ -73,6 +77,20 @@ export function readBibleVerseDrag(e: DragEvent): DraggedVerse | null {
   } catch {
     return null;
   }
+}
+
+export function setUtilitySceneDrag(e: DragEvent, sceneId: number): void {
+  e.dataTransfer.effectAllowed = "copy";
+  e.dataTransfer.setData(UTILITY_SCENE_MIME, String(sceneId));
+}
+
+/** The dragged scene's id, or `null` when this drag is something else. A
+ *  non-numeric payload reads as "not a scene" rather than as scene `NaN`. */
+export function readUtilitySceneDrag(e: DragEvent): number | null {
+  const raw = e.dataTransfer.getData(UTILITY_SCENE_MIME);
+  if (!raw) return null;
+  const id = Number(raw);
+  return Number.isFinite(id) ? id : null;
 }
 
 export function classifyExt(ext: string): AssetKind | null {

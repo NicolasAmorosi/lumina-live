@@ -12,6 +12,7 @@ import type {
   ProgramUpsert,
 } from "@shared/types/program";
 import type { MediaAssetUsage } from "@shared/types/media";
+import type { UtilitySceneUsage } from "@shared/types/utility";
 
 function toItemDTO(row: typeof programItems.$inferSelect): ProgramItemDTO {
   const base = { id: row.id, position: row.position, title: row.title };
@@ -20,6 +21,8 @@ function toItemDTO(row: typeof programItems.$inferSelect): ProgramItemDTO {
       return { ...base, kind: "media", mediaAssetId: row.mediaAssetId! };
     case "ppt":
       return { ...base, kind: "ppt", mediaAssetId: row.mediaAssetId! };
+    case "utility":
+      return { ...base, kind: "utility", utilitySceneId: row.utilitySceneId! };
     case "bible":
     default:
       return {
@@ -283,6 +286,33 @@ export class ProgramsRepo {
     return rows;
   }
 
+  /** Which saved programs still reference the time scene `sceneId` — the same
+   *  question `findUsages` answers about a media asset, and asked for the same
+   *  reason: `utility_scene_id`'s `ON DELETE restrict` refuses the delete
+   *  without naming anything the operator could act on. */
+  findSceneUsages(sceneId: number): UtilitySceneUsage[] {
+    return this.db
+      .select({
+        programId: programs.id,
+        programName: programs.name,
+        itemCount: count(),
+      })
+      .from(programItems)
+      .innerJoin(programs, eq(programItems.programId, programs.id))
+      .where(eq(programItems.utilitySceneId, sceneId))
+      .groupBy(programs.id)
+      .all();
+  }
+
+  /** Frees the `restrict` FK on `program_items.utility_scene_id`, exactly like
+   *  `deleteItemsByMediaAsset` does for an asset: the CHECK constraint forbids
+   *  a `utility` item with a null scene, so the rows go rather than being
+   *  blanked. Leaves gaps in `position`, which `load()`'s ORDER BY and the
+   *  next `save()`'s reindex both tolerate. */
+  deleteItemsByUtilityScene(sceneId: number): void {
+    this.db.delete(programItems).where(eq(programItems.utilitySceneId, sceneId)).run();
+  }
+
   /** Removes every item pointing at `assetId` across all programs — the only
    *  way to free the `onDelete: "restrict"` FK on `program_items.media_asset_id`,
    *  since the table's CHECK constraint forbids a `media`/`ppt` item with a
@@ -299,6 +329,8 @@ function toRow(programId: number, position: number, item: ProgramItemUpsert, now
     case "media":
     case "ppt":
       return { ...common, kind: item.kind, mediaAssetId: item.mediaAssetId, title: item.title };
+    case "utility":
+      return { ...common, kind: "utility" as const, utilitySceneId: item.utilitySceneId, title: item.title };
     case "bible":
     default:
       return {

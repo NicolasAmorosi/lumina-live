@@ -1,4 +1,4 @@
-# HANDOFF — Funciones ▸ Utilidades (time scenes), phases F1 and F2 done
+# HANDOFF — Funciones ▸ Utilidades (time scenes), COMPLETE (F1, F2, F3)
 
 **Date:** 2026-09-18
 **Branch:** `feat/funciones-utilidades` (branched off `main` at `8481322`)
@@ -10,26 +10,26 @@ rounds of closed product decisions and the three-model architecture this code im
 
 ## 1. Executive summary
 
-The Utilities tab of the Funciones panel is a finished feature **except for F3**. Saved "time
-scenes" — a countdown by duration, a countdown to a time of day, a wall clock and a stopwatch —
-preview, go live through the normal two-stage flow, draw themselves on the projector from an
-absolute mark, and are now rows the operator owns: editable, reorderable, duplicable, deletable,
-and unchanged across a restart.
+The Utilities tab of the Funciones panel is **finished**. Saved "time scenes" — a countdown by
+duration, a countdown to a time of day, a wall clock and a stopwatch — preview, go live through
+the normal two-stage flow, draw themselves on the projector from an absolute mark, are rows the
+operator owns (editable, reorderable, duplicable, deletable, unchanged across a restart), and are
+now rows of the **order of service** like any other content.
 
 - **F1 (the contract and the projector) — done and verified.** Four built-in scenes, `TimerClock`
   as an absolute mark, the exhaustive `selectOutput` case, the transport, history exclusion.
 - **F2 (persistence and the editor) — done and verified.** `utility_scenes` + migration `0010`,
   a repository, six IPC channels, and the «Escenas» modal with a live 16:9 preview rendered by
   the projector's own `OutputView`.
-- **F3 (a scene as an order-of-service item) — NOT started.** Fully specified at the end of
-  `utilidades.md`; every decision it needs is already closed with the user.
+- **F3 (a scene as an order-of-service item) — done and verified.** `program_items.kind =
+  'utility'` + migration `0011` (a hand-written table rebuild), the DTO/upsert variants, the
+  draft's dead-reference filter generalized to scenes, the schedule row, the preview branch, the
+  go-live branch, and the delete guard (`utility:usages` + a forced delete).
 
-Both phases were verified by **driving the real app**, not just the suite. Everything is
-committed: five commits on this branch, each of which builds, and the working tree is clean.
+All three phases were verified by **driving the real app**, not just the suite.
 
-What deliberately does not exist yet: `program_items.kind = 'utility'` and everything behind it
-(the hand-written migration, the draft's dead-reference filter, the delete guard), and the
-`utility:usages` channel — see §4.
+Nothing of Utilidades is left. The next thing in `PLAN.md` is **Overlays**, which reuses
+`SceneStyle`, `ColorField` and the `FieldGroup`/`FieldRow` pair this feature built.
 
 ---
 
@@ -41,26 +41,29 @@ Run from the repo root. These are the numbers to check against; they were confir
 ```bash
 npm run typecheck   # PASS (tsc over the node and web projects)
 npm run lint        # 0 errors, 5 warnings
-npm run test        # 13 files, 176 tests
+npm run test        # 13 files, 181 tests
 npm run build       # electron-vite build, clean
 git status          # clean
-git log --oneline main..HEAD   # 5 commits
+git log --oneline main..HEAD   # 7 commits
 ```
 
 | Check | Expected | Note |
 |---|---|---|
-| `npm run test` | **176** passing, 13 files | **98** in `main`, **78** in `renderer` (`npx vitest run --project main`) |
+| `npm run test` | **181** passing, 13 files | **103** in `main`, **78** in `renderer` (`npx vitest run --project main`) |
 | `npm run lint` | 0 errors, **5** warnings | all 5 pre-existing (`react-refresh/only-export-components` in `icon.tsx` ×1 and `i18n-provider.tsx` ×4). **A 6th is yours.** |
-| `ls drizzle/*.sql \| wc -l` | **11**, last is `0010_utility_scenes.sql` | F2 added exactly one migration |
-| `git log --oneline main..HEAD` | 5 commits, top is `d93caee` | see below |
+| `ls drizzle/*.sql \| wc -l` | **12**, last is `0011_program_item_utility.sql` | F2 and F3 added exactly one migration each |
+| `git log --oneline main..HEAD` | 7 commits | see below |
 
-Test count history: **113** before this feature → **147** after F1 → **176** after F2. The 29
-cases F2 added are `tests/main/scene-validators.test.ts` (17), the `describe("Utility scenes")`
-block in `tests/main/data-layer.test.ts` (5), `describe("The editor's two text fields")` in
-`tests/main/timer.test.ts` (4) and `describe("editing the scene that is live")` in
-`tests/renderer/select-output.test.ts` (3). `CLAUDE.md`'s command table says 176.
+Test count history: **113** before this feature → **147** after F1 → **176** after F2 → **181**
+after F3. The 29 cases F2 added are `tests/main/scene-validators.test.ts` (17), the
+`describe("Utility scenes")` block in `tests/main/data-layer.test.ts` (5), `describe("The
+editor's two text fields")` in `tests/main/timer.test.ts` (4) and `describe("editing the scene
+that is live")` in `tests/renderer/select-output.test.ts` (3). F3's 5 are the
+`describe("A time scene as an order-of-service item")` block in `data-layer.test.ts`, which is
+where the widened CHECK, the `restrict` FK, the forced delete and the draft filter are asserted.
+`CLAUDE.md`'s command table says 181.
 
-The five commits:
+The commits:
 
 | | |
 |---|---|
@@ -69,6 +72,8 @@ The five commits:
 | `de0dd3e` | refactor(ui): promote the settings row primitives into the design system |
 | `6d7f1fb` | feat(functions): persist time scenes and add the «Escenas» editor — **F2** |
 | `d93caee` | docs: record the F2 rules and correct the CDP recipe's control-window match |
+| `a5e9f12` | docs(plans): rewrite the utilities handoff as an F2 runbook |
+| *(top of the branch)* | feat(functions): make a time scene a row of the order of service — **F3** |
 
 ---
 
@@ -80,11 +85,15 @@ The five commits:
   condition the tick design defends against — see
   [`a-self-drawing-clock-must-not-derive-its-own-dependency.md`](../../.claude/knowledge/a-self-drawing-clock-must-not-derive-its-own-dependency.md).
 - **LibreOffice is irrelevant to this feature.** Nothing here touches the slides pipeline.
-- **Database.** F2 adds the first migration of the feature, `drizzle/0010_utility_scenes.sql`
-  (one `CREATE TABLE` plus one index). It is purely additive — nothing existing is altered — so
-  the user's real database only gains a table, four seeded rows and one `settings` row on its
-  next launch. **All verification ran against a throwaway profile**, so the real library was
-  never opened; there is nothing to roll back.
+- **Database.** Two migrations. `drizzle/0010_utility_scenes.sql` (F2) is purely additive — one
+  `CREATE TABLE` plus one index — so the user's real database only gains a table, four seeded
+  rows and one `settings` row on its next launch. `drizzle/0011_program_item_utility.sql` (F3)
+  **rebuilds `program_items`**: it copies every row into a new table with `utility_scene_id` and
+  a three-branch `CHECK`. That was verified apart from the suite, on a database migrated to 0010
+  and filled with a `media` and a `bible` row: both survived with their ids and titles,
+  `integrity_check` returned `ok`, `foreign_key_check` was empty and `ix_items_program` was back.
+  **All verification ran against a throwaway profile**, so the real library was never opened;
+  there is nothing to roll back.
 
 **How to confirm the environment is the right/fresh one**, on a throwaway profile:
 
@@ -157,9 +166,21 @@ from `projection_history`, and above all **nothing that touches `base.clock` may
    normalizer (`normalizeSceneStyle`) is forgiving because the row is already stored and has to
    be shown anyway. A test asserts every normalizer output passes the validator.
 
-One deliberate omission: **`utility:usages` was not added.** Nothing references a scene until
-F3's foreign key exists, so the channel could only ever answer `[]`. It arrives with the thing it
-is meant to look at.
+F3 added two more rules that must not be "simplified" away:
+
+3. **Every migration touching `program_items` is hand-written, whatever the operation.** For F3
+   `drizzle-kit generate` emitted a single `ALTER TABLE … ADD COLUMN … REFERENCES utility_scenes(id)`
+   that SQLite **accepts** — while silently dropping the `ON DELETE restrict` and leaving the
+   CHECK ignorant of the new kind. Nothing fails; the guard simply is not there. Diagnosis in
+   [`sqlite-table-rename-must-alter-not-recreate.md`](../../.claude/knowledge/sqlite-table-rename-must-alter-not-recreate.md).
+4. **A deleted scene is cleaned out of the open schedule by the RENDERER.** An FK protects a
+   saved program and `DraftRepo.load` filters the persisted draft, but the order of service the
+   operator has open right now is neither — so `deleteScene` calls
+   `program.store.removeByUtilityScene` and clears a preview target pointing at it, exactly as
+   `purgeAsset` does for a deleted media asset.
+
+`utility:usages`, deliberately left out of F2 because nothing referenced a scene yet, landed with
+F3's foreign key — the thing it was meant to look at.
 
 ---
 
@@ -173,19 +194,24 @@ is meant to look at.
 | shared | `timer.ts` | every time calculation, pure `(clock, now)`; F2 appended the four parsers |
 | shared | `scene-validators.ts` | one predicate per field + the normalizers |
 | main | `db/schema.ts`, `drizzle/0010_utility_scenes.sql` | `tool` as a column, `config_json`/`style_json` as JSON |
+| main | `drizzle/0011_program_item_utility.sql` | F3: the hand-written `program_items` rebuild — new column, new FK, widened CHECK |
+| main | `db/repositories/programs.repo.ts` | F3: the `utility` case of `toItemDTO`/`toRow`, `findSceneUsages`, `deleteItemsByUtilityScene` |
+| main | `db/repositories/draft.repo.ts` | F3: `withLiveAssetsOnly` now drops dead scene references too |
+| main | `services/utility-scene-removal.ts` | F3: the forced delete, both tables in one transaction |
 | main | `db/repositories/utility.repo.ts` | CRUD + `reorder` (one `json_each` statement) + `insertMany` |
 | main | `db/seed/seed-utility-scenes.ts` | seeds the four defaults once, flag-guarded |
-| main | `ipc/handlers/utility.ts` | six channels, every write validated |
+| main | `ipc/handlers/utility.ts` | seven channels, every write validated |
 | renderer | `stores/utility.store.ts` | the scenes mirror + the ONE armed timer (`TimerRun`) |
 | renderer | `stores/projection.store.ts` | `setTimerClock` + `setLiveScene`, both `base` patches |
 | renderer | `lib/actions/utility.ts` | transport + `loadScenes`/`saveScene`/`duplicateScene`/`deleteScene`/`reorderScenes` |
 | renderer | `lib/utility-output.ts` | `timerOutputFor` — shared by `selectOutput` AND both previews |
 | renderer | `components/shared/timer-scene.tsx` | what the projector actually paints |
 | renderer | `components/ui/field.tsx`, `ui/color-field.tsx` | `FieldGroup`/`FieldRow`, `ColorField` |
-| renderer | `components/pages/functions/` | `utilities-panel`, `timer-transport`, `ScenesModal`, `scene-form`, `scene-draft`, `scene-preview` |
+| renderer | `components/pages/functions/` | `utilities-panel` (its footer adds to the schedule), `timer-transport`, `ScenesModal` (+ `DeleteUsages`), `scene-form`, `scene-draft`, `scene-preview` |
+| renderer | `lib/hooks/use-program-item-display.ts`, `lib/dnd.ts`, `pages/schedule/SchedulePanel.tsx` | F3: the schedule row's label/icon, the scene drag payload, the drop |
 | renderer | `lib/hooks/use-timer-now.ts`, `use-local-fonts.ts` | the self-correcting tick; `queryLocalFonts()` with a real fallback |
 
-### 5.2 Verify F2 still works before starting F3
+### 5.2 Verify the feature still works before touching it
 
 The suite does not prove the thing that matters — that editing a LIVE scene changes the projector
 **without a transition and without restarting the count**. Drive the real app.
@@ -226,6 +252,23 @@ the row reading `{ title: "EMPEZAMOS EN", color: "#cd4900", align: "top" }` afte
 create → 5 scenes, tool change countdown→stopwatch persisted, delete → 4; drag reorder persisted
 (`Cronómetro` moved to the top); wipe + restart → 0 scenes and the empty state.
 
+**The F3 gate**, once the above passes:
+
+8. Funciones ▸ Utilidades → click a scene → the footer's «Agregar al programa» → the row appears
+   in the order of service under the scene's name. Dragging the row there does the same.
+9. Save the program (the TopBar's «Guardar» → name it), **restart the app**, open it from
+   «Administrar programas» and send the row **EN VIVO**. The projector must show the scene,
+   counting, with the on-air rail on that row.
+10. «Escenas…» → that scene → **Eliminar**. The confirmation must NAME the program and count its
+    items, and «Eliminar igualmente» must leave: no scene, no item in the saved program, no row
+    in the open schedule — and the projector **still counting**, because `base` holds a resolved
+    copy and what is on screen is never the app's decision.
+
+**Measured on 2026-09-18:** the row saved as «Culto F3»; after a full restart, loading it and
+going live put the projector at `09:53` falling to `09:47` with the rail lit; the delete
+confirmation read «Culto F3 / 1 elementos»; the forced delete left 3 scenes, 0 items, an empty
+schedule and a projector at `09:26`.
+
 The **F1 gate** still applies and is cheaper to re-check: with a countdown live, run
 `window.worship.invoke("projection:close")` then
 `window.worship.invoke("projection:open", { displayId })`. **The count must CONTINUE**, not
@@ -235,45 +278,30 @@ restart.
 
 ## 6. Pending / next steps
 
-### F3 — the scene as an order-of-service item (the only thing left in Utilidades)
+**Nothing is left in Utilidades.** F1, F2 and F3 are done, verified against the real projector
+and committed.
 
-Every decision it needs is already closed. In order:
+`PLAN.md`'s order stands: **Overlays** next — it reuses `SceneStyle`, `ColorField` and the
+`FieldGroup`/`FieldRow` pair this feature built, and its genuinely new problem is composing a
+layer above the scene without touching the scene's transitions. Then **Entradas**, larger by an
+order of magnitude, with its own plan and its own spike gate.
 
-1. **The migration, by hand.** `program_items.kind = 'utility'` + `utility_scene_id` (FK
-   `ON DELETE restrict`). The table's `CHECK` constraint is **invisible to Drizzle**, so this is a
-   table rebuild written by hand — copy `drizzle/0009_drop_text_program_items.sql`, which did
-   exactly this (new table, copy, drop, rename, index), and widen the `CHECK` to three branches.
-   See [`sqlite-table-rename-must-alter-not-recreate.md`](../../.claude/knowledge/sqlite-table-rename-must-alter-not-recreate.md).
-2. `PROGRAM_ITEM_KINDS`, the DTO/upsert variants, `toItemDTO`/`toRow`.
-3. **`DraftRepo`'s dead-reference filter**: generalize `withLiveAssetsOnly` to cover scenes too,
-   or a draft row pointing at a deleted scene comes back as a tile that can neither preview nor
-   explain itself.
-4. `use-program-item-display`, the schedule row, the `goLiveWithScheduleItem` case,
-   `usePreviewContent`.
-5. **The delete guard.** A NEW `utility:usages` channel plus a confirmation that names the
-   programs, modelled on `library:remove`'s `force` path. Note that an FK `restrict` rejection
-   arrives as `SQLITE_CONSTRAINT_TRIGGER` and **a `void asyncCall()` swallows it** — see
-   [`fk-restrict-delete-is-silently-swallowed.md`](../../.claude/knowledge/fk-restrict-delete-is-silently-swallowed.md).
+Two things F3 deliberately did NOT do, both already decided rather than forgotten:
 
-**F3 gate:** save a program with a scene, close the app, reopen it, load the program and send the
-scene live. And deleting a scene that a saved program uses must name the program before it
-destroys anything.
-
-### After F3
-
-`PLAN.md`'s order stands: **Overlays** next (it reuses `SceneStyle`, `ColorField` and the
-`FieldGroup`/`FieldRow` pair that F2 already built), then **Entradas**, which is larger by an
-order of magnitude and has its own plan and its own spike gate.
+- **A per-item title override exists in the data (`program_items.title`) but has no UI.** A
+  `utility` row falls back to the scene's name, exactly like a `media` row falls back to the
+  asset's. Renaming a row in place is a schedule-wide feature, not this one's.
+- **No dedicated badge colour.** See open question 3 below.
 
 ### Open questions for the user
 
-1. **Merge this branch, or keep stacking F3 on it?** Five commits, each of which builds, tree
-   clean.
+1. **Merge this branch?** Utilidades is complete; seven commits, each of which builds, tree
+   clean. Overlays is a new area and would be cleaner off `main`.
 2. **`/HANDOFF.md` at the repo root is stale.** It belongs to the 2026-09-08 video↔PPT hang,
    whose work is merged and whose findings already graduated to `.claude/knowledge/`. Two
    handoffs invite the next session to read the wrong one. Delete it, or move it under its own
    plan folder? *(Raised at the end of F1, still unanswered.)*
-3. **Badge colour for utilities.** The list still uses the `neutral` badge: every ALPS hue is
-   already taken by another content type, and inventing one outside the palette is against the
-   rules in `docs/knowledge/06-ui-and-theme.md`. Say so if you want a dedicated colour and it
-   becomes a token. *(Same.)*
+3. ~~**Badge colour for utilities.**~~ **Closed 2026-09-18:** stays `neutral`, in the Utilidades
+   list and in the order of service. Every ALPS hue is already taken by another content type and
+   inventing one outside the palette is against `docs/knowledge/06-ui-and-theme.md`; the tool's
+   own icon is what tells a countdown from a clock.

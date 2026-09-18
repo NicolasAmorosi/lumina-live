@@ -17,7 +17,10 @@ export const ASSET_EXTENSIONS: Record<AssetKind, readonly string[]> = {
 // preview, projector output — everything except a way to create one. It was
 // removed in 0009 rather than finished; an announcement is a PPT slide in
 // this church's workflow, and a half-wired kind is worse than no kind.
-export const PROGRAM_ITEM_KINDS = ["media", "ppt", "bible"] as const;
+// `utility` (a saved time scene) joined them in F3 of the Funciones plan: it
+// is full-screen base content like any other, so it is a row of the order of
+// service like any other — the one thing Overlays deliberately will NOT be.
+export const PROGRAM_ITEM_KINDS = ["media", "ppt", "bible", "utility"] as const;
 export type ProgramItemKind = (typeof PROGRAM_ITEM_KINDS)[number];
 
 /** Bump to invalidate every cached deck at once when the conversion pipeline

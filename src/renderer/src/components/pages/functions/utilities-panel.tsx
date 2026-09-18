@@ -1,11 +1,13 @@
 import { useState } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
-import { Badge, Button, EmptyState, Icon, ListRow } from "@renderer/components/ui";
-import { PanelBody } from "@renderer/components/shared/panel";
+import { Badge, Button, EmptyState, Icon, IconButton, ListRow, Tooltip } from "@renderer/components/ui";
+import { PanelBody, PanelFooter } from "@renderer/components/shared/panel";
 import { ModalBoundary } from "@renderer/components/shared/modal-boundary";
 import { toast } from "@renderer/lib/toast";
 import { findScene, useUtilityStore } from "@renderer/stores/utility.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
+import { useProgramStore } from "@renderer/stores/program.store";
+import { setUtilitySceneDrag } from "@renderer/lib/dnd";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { previewUtilityScene } from "@renderer/lib/actions/preview";
 import { goLive } from "@renderer/lib/actions/playback";
@@ -26,6 +28,12 @@ import { TOOL_ICON, TOOL_LABEL } from "./tool-display";
  *
  * Creating and editing is a modal of its own rather than an inline form: a
  * scene has some thirty fields and this column is the narrowest in the app.
+ *
+ * A scene reaches the order of service the same two ways an asset does — the
+ * footer button for the selected row, and dragging the row onto the schedule.
+ * It belongs there because a time scene IS full-screen base content; an
+ * overlay, which only modifies what is projected, deliberately will not be
+ * (see `PLAN.md`).
  */
 export function UtilitiesPanel() {
   const t = useT();
@@ -34,6 +42,7 @@ export function UtilitiesPanel() {
   const runSceneId = useUtilityStore((s) => s.run?.sceneId ?? null);
   const target = usePreviewStore((s) => s.target);
   const liveSceneId = useProjectionStore((s) => (s.base?.kind === "utility" ? s.base.sceneId : null));
+  const addItem = useProgramStore((s) => s.addItem);
 
   const previewedId = target?.kind === "utility" ? target.sceneId : null;
   // The transport follows what the operator is looking at, and falls back to
@@ -70,11 +79,13 @@ export function UtilitiesPanel() {
                     <Icon className="size-3.5" name={TOOL_ICON[scene.tool]} />
                   </Badge>
                 }
+                draggable
                 onClick={() => previewUtilityScene(scene.id)}
                 onDoubleClick={() => {
                   previewUtilityScene(scene.id);
                   void goLive();
                 }}
+                onDragStart={(e) => setUtilitySceneDrag(e, scene.id)}
                 selected={previewedId === scene.id}
                 trailing={<span className="text-xs text-subtle">{t(TOOL_LABEL[scene.tool])}</span>}
               >
@@ -84,13 +95,37 @@ export function UtilitiesPanel() {
           </ul>
         )}
 
-        {scenes.length > 0 ? (
-          <Button className="mt-auto shrink-0" onClick={() => setEditorOpen(true)} size="xs" variant="ghost">
-            <Icon name="pencil" />
-            {t("utilities.manage")}
-          </Button>
-        ) : null}
       </PanelBody>
+
+      {/* The same footer every resource tab has, so the two buttons that act
+          on the selected row sit where the operator already looks for them —
+          «Escenas…» on the left like the tab's own tools, «Agregar al
+          programa» pinned right like the media browser's. */}
+      <PanelFooter>
+        <Tooltip content={t("utilities.manageHint")} placement="top">
+          <IconButton
+            aria-label={t("utilities.manage")}
+            onClick={() => setEditorOpen(true)}
+            size="sm"
+            variant="outline"
+          >
+            <Icon name="pencil" />
+          </IconButton>
+        </Tooltip>
+        <Tooltip className="ml-auto" content={t("resources.addToScheduleHint")} placement="top">
+          <IconButton
+            aria-label={t("resources.addToSchedule")}
+            disabled={previewedId === null}
+            onClick={() =>
+              previewedId !== null && addItem({ kind: "utility", utilitySceneId: previewedId, title: null })
+            }
+            size="sm"
+            variant="primary"
+          >
+            <Icon name="addToSchedule" />
+          </IconButton>
+        </Tooltip>
+      </PanelFooter>
 
       {/* Its own boundary, like every other dialog: a throw while rendering
           thirty form fields must cost the operator this dialog, never the

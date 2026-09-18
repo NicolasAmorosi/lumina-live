@@ -138,6 +138,7 @@ const es = {
     reset: "Reiniciar",
     finished: "Terminó",
     manage: "Escenas…",
+    manageHint: "Crear, editar y ordenar las escenas de tiempo",
     empty: "No hay escenas de tiempo",
     emptyHint: "Creá una cuenta regresiva, un reloj o un cronómetro para proyectar.",
     loadError: "No se pudieron cargar las escenas guardadas",
@@ -162,6 +163,10 @@ const es = {
     deleteTitle: "¿Eliminar esta escena?",
     deleteBody:
       "La escena se borra de la lista. Si está proyectada en este momento, sigue en pantalla hasta que mandes otra cosa EN VIVO.",
+    deleteInUseIntro: "Esta escena se usa en:",
+    deleteInUseCount: "{count} elementos",
+    deleteInUseWarning: "Se va a quitar también de esos programas guardados.",
+    deleteAnyway: "Eliminar igualmente",
     addImage: "Agregar…",
     addImageError: "No se pudieron agregar las imágenes",
     groups: {

@@ -37,6 +37,7 @@ type ProgramStoreState = {
   addItem: (item: ProgramItemUpsert, insertAt?: number) => void;
   removeAt: (index: number) => void;
   removeByMediaAsset: (assetId: number) => void;
+  removeByUtilityScene: (sceneId: number) => void;
   moveUp: (index: number) => void;
   moveDown: (index: number) => void;
   reorder: (from: number, to: number) => void;
@@ -64,6 +65,32 @@ let provisionalId = 0;
 function nextProvisionalId(): number {
   provisionalId += 1;
   return -provisionalId;
+}
+
+/**
+ * Drops every item `isTarget` matches, wherever it sits, and remaps both
+ * cursors to the survivors' new positions instead of just clearing them — an
+ * unrelated selection must not jump to null because something else was
+ * deleted. Shared by the two "the thing this row pointed at is gone" paths.
+ */
+function removeWhere(
+  state: { items: ProgramItemDTO[]; selectedIndex: number | null; activeIndex: number | null },
+  isTarget: (item: ProgramItemDTO) => boolean,
+) {
+  const remap = new Map<number, number>();
+  const survivors: ProgramItemDTO[] = [];
+  state.items.forEach((item, oldIndex) => {
+    if (isTarget(item)) return;
+    remap.set(oldIndex, survivors.length);
+    survivors.push(item);
+  });
+  const remapIndex = (index: number | null) => (index === null ? null : (remap.get(index) ?? null));
+  return {
+    items: reindex(survivors),
+    selectedIndex: remapIndex(state.selectedIndex),
+    activeIndex: remapIndex(state.activeIndex),
+    dirty: true,
+  };
 }
 
 /** Shifts a cursor to follow its row through an insertion at `at`. */
@@ -198,27 +225,21 @@ export const useProgramStore = create<ProgramStoreState>((set, get) => ({
   /** Used when a media/ppt asset is force-deleted from the library: every item
    *  pointing at it must go, wherever it sits in the schedule — unlike
    *  `removeAt`, which only ever removes one row by position and (as a known,
-   *  separate bug) doesn't remap `selectedIndex`/`activeIndex` either. This
-   *  remaps both cursors to the survivors' new positions instead of just
-   *  clearing them, so an unrelated selection doesn't jump to null. */
+   *  separate bug) doesn't remap `selectedIndex`/`activeIndex` either. */
   removeByMediaAsset: (assetId) =>
-    set((state) => {
-      const remap = new Map<number, number>();
-      const survivors: ProgramItemDTO[] = [];
-      state.items.forEach((item, oldIndex) => {
-        const isTarget = (item.kind === "media" || item.kind === "ppt") && item.mediaAssetId === assetId;
-        if (isTarget) return;
-        remap.set(oldIndex, survivors.length);
-        survivors.push(item);
-      });
-      const remapIndex = (index: number | null) => (index === null ? null : (remap.get(index) ?? null));
-      return {
-        items: reindex(survivors),
-        selectedIndex: remapIndex(state.selectedIndex),
-        activeIndex: remapIndex(state.activeIndex),
-        dirty: true,
-      };
-    }),
+    set((state) =>
+      removeWhere(
+        state,
+        (item) => (item.kind === "media" || item.kind === "ppt") && item.mediaAssetId === assetId,
+      ),
+    ),
+
+  /** The same thing for a time scene force-deleted from the «Escenas» editor.
+   *  The unsaved schedule is the one place main's `ON DELETE restrict` cannot
+   *  reach — it is not a row, it is a draft — so the renderer has to drop the
+   *  items itself, exactly as it does for an asset. */
+  removeByUtilityScene: (sceneId) =>
+    set((state) => removeWhere(state, (item) => item.kind === "utility" && item.utilitySceneId === sceneId)),
 
   moveUp: (index) => {
     if (index <= 0) return;

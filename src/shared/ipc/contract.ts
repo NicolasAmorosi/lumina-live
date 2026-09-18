@@ -31,7 +31,7 @@ import type {
   ProgramUpsert,
 } from "../types/program";
 import type { SettingsMap } from "../types/settings";
-import type { UtilityScene, UtilitySceneUpsert } from "../types/utility";
+import type { UtilityScene, UtilitySceneUpsert, UtilitySceneUsage } from "../types/utility";
 import type { CloseDecision } from "../types/window";
 
 /**
@@ -206,12 +206,7 @@ export type IpcContract = {
 
   /** The saved time scenes, in the operator's manual order. Read once at boot
    *  by `utility.store`, and re-read after every write — the list is small and
-   *  main is the only writer, so the store mirrors it rather than patching it.
-   *
-   *  There is deliberately no `utility:usages` yet: nothing references a scene
-   *  until `program_items.kind = 'utility'` lands in F3, so a channel here
-   *  could only ever answer with an empty array. It arrives with the FK that
-   *  gives it something to look at. */
+   *  main is the only writer, so the store mirrors it rather than patching it. */
   "utility:list": { req: void; res: UtilityScene[] };
   /** `id` is ignored on create and required on update — the two are separate
    *  channels rather than one upsert so main never has to guess which one the
@@ -221,7 +216,15 @@ export type IpcContract = {
   "utility:create": { req: UtilitySceneUpsert; res: UtilityScene };
   "utility:update": { req: UtilitySceneUpsert & { id: number }; res: UtilityScene };
   "utility:duplicate": { req: { id: number; name: string }; res: UtilityScene };
-  "utility:delete": { req: { id: number }; res: void };
+  /** Without `force`, a scene a saved program still uses is refused with
+   *  `UTILITY_SCENE_IN_USE` — the FK's job, surfaced as an error code. With
+   *  it, the referencing `program_items` go first, in the same transaction.
+   *  Exactly `library:remove`'s shape, for exactly its reason: the operator
+   *  has to be told what else this breaks before it breaks. */
+  "utility:delete": { req: { id: number; force?: boolean }; res: void };
+  /** Which saved programs reference a scene, for that confirmation — the FK
+   *  violation itself does not name them. Mirrors `library:usages`. */
+  "utility:usages": { req: { id: number }; res: UtilitySceneUsage[] };
   /** `ids` is the whole list in the order it should appear. Answers with the
    *  re-sorted list, so the caller replaces its state with what was actually
    *  persisted instead of trusting its optimistic guess. */

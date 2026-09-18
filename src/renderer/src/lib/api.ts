@@ -103,7 +103,8 @@ export const api = {
     create: (input: UtilitySceneUpsert) => invoke("utility:create", input),
     update: (input: UtilitySceneUpsert & { id: number }) => invoke("utility:update", input),
     duplicate: (id: number, name: string) => invoke("utility:duplicate", { id, name }),
-    remove: (id: number) => invoke("utility:delete", { id }),
+    remove: (id: number, force = false) => invoke("utility:delete", { id, force }),
+    usages: (id: number) => invoke("utility:usages", { id }),
     reorder: (ids: number[]) => invoke("utility:reorder", { ids }),
   },
   settings: {

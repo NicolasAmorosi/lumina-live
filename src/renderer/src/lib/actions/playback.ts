@@ -188,11 +188,17 @@ async function goLiveWithMediaAsset(
  * Synchronous, so the `isCurrentLiveIntent` check `goLive()` already made
  * after opening the projector still holds: there is no `await` between there
  * and the commit below.
+ *
+ * `scheduleIndex` is the row that claims the on-air rail — a scene sent from
+ * the Utilidades panel is live content that is not in the schedule, so it
+ * passes `null` and no row may claim it. Returns whether anything reached the
+ * projector: a scene whose row was deleted between the drag and the press
+ * changes nothing, and must not light up a rail either.
  */
-function goLiveWithUtilityScene(sceneId: number): void {
+function goLiveWithUtilityScene(sceneId: number, scheduleIndex: number | null): boolean {
   const utility = useUtilityStore.getState();
   const scene = findScene(utility.scenes, sceneId);
-  if (!scene) return;
+  if (!scene) return false;
 
   // EN VIVO on a countdown nobody started means "start it": projecting a
   // frozen 10:00 is never what the operator meant by pressing it. One they
@@ -200,8 +206,7 @@ function goLiveWithUtilityScene(sceneId: number): void {
   // declarative `paused`.
   const clock = utility.ensureStarted(scene);
 
-  // Live content that isn't in the schedule: no row may claim the on-air rail.
-  useProgramStore.getState().setActive(null);
+  useProgramStore.getState().setActive(scheduleIndex);
   useAudioStore.getState().setDeckTrack(null);
   useBibleStore.getState().setCurrentVerseIndex(null);
 
@@ -209,6 +214,7 @@ function goLiveWithUtilityScene(sceneId: number): void {
   store.beginScene();
   store.setBase({ kind: "utility", sceneId: scene.id, scene, clock });
   store.setOverlay("none");
+  return true;
 }
 
 async function goLiveWithScheduleItem(
@@ -248,6 +254,15 @@ async function goLiveWithScheduleItem(
         reference: item.reference,
       });
       useProjectionStore.getState().setOverlay("none");
+      return;
+    }
+    case "utility": {
+      // The same commit the Utilidades panel uses, with the row claiming the
+      // rail. `setActive` is inside it rather than here because the scene may
+      // be gone — a program saved months ago whose scene was force-deleted
+      // since — and a rail lit on a projector that never changed is the kind
+      // of lie the monitors exist to prevent.
+      goLiveWithUtilityScene(item.utilitySceneId, index);
       return;
     }
   }
@@ -320,7 +335,7 @@ export async function goLive(): Promise<void> {
       useProjectionStore.getState().setOverlay("none");
       return;
     case "utility":
-      goLiveWithUtilityScene(target.sceneId);
+      goLiveWithUtilityScene(target.sceneId, null);
   }
 }
 

@@ -17,7 +17,7 @@ empaquetado: `asarUnpack: ["**/node_modules/better-sqlite3/**"]` en `package.jso
 
 `settings` (key/value), `media_assets` (video/imagen/audio/PPT en una sola tabla — todos
 comparten el mismo problema de "el usuario movió el archivo"), `programs`+`program_items`
-(playlists guardadas, polimórfico con `CHECK`; renombradas desde `services`/`service_items` en la
+(playlists guardadas, polimórfico con `CHECK` sobre cuatro tipos de ítem; renombradas desde `services`/`service_items` en la
 migración `0004_rename_programs.sql` con `ALTER TABLE ... RENAME` — un recreate de tabla habría
 perdido el `CHECK`, que Drizzle no materializa en el snapshot), `bible_versions`+`bible_books`+`bible_verses`+
 `bible_verses_fts` (FTS5 external-content), `bible_favorites`, `projection_history`,
@@ -34,8 +34,26 @@ recupera al arrancar.
 Sus ítems son un **blob JSON**, no filas de `program_items`, y eso es deliberado: un borrador tiene
 que poder referenciar un asset que el operador está por borrar, que es exactamente lo que la FK
 `onDelete: "restrict"` de esa tabla existe para prohibir — un borrador nunca puede ser lo que
-bloquea un borrado. `DraftRepo.load()` filtra al leer los ítems cuyo asset ya no existe, del lado de
-main, que es el único que puede responder eso sin un round-trip IPC por ítem.
+bloquea un borrado. `DraftRepo.load()` filtra al leer los ítems cuyo destino ya no existe —un asset
+borrado de la biblioteca, una escena de tiempo borrada del editor—, del lado de main, que es el
+único que puede responder eso sin un round-trip IPC por ítem.
+
+### Los cuatro tipos de ítem, y por qué cada migración de `program_items` se escribe a mano
+
+`kind` es `media | ppt | bible | utility`, y el `CHECK` de la tabla exige que cada uno traiga
+exactamente su propia referencia y ninguna otra (`media_asset_id`, `bible_text`,
+`utility_scene_id`). Ese `CHECK` **no existe para Drizzle**: vive sólo en el SQL y el snapshot lo
+reporta vacío. Consecuencia práctica, ya cobrada tres veces: renombrar exige `ALTER TABLE`
+(`0004`), borrar una columna que el `CHECK` nombra exige una reconstrucción a mano (`0009`), y
+**agregar una columna también** (`0011`) — ahí `drizzle-kit` emite un `ADD COLUMN` que SQLite
+acepta, perdiendo en silencio el `ON DELETE restrict` de la FK y dejando el `CHECK` sin enterarse
+del tipo nuevo. El diagnóstico completo está en
+[`sqlite-table-rename-must-alter-not-recreate.md`](../../.claude/knowledge/sqlite-table-rename-must-alter-not-recreate.md).
+
+`utility_scene_id` es `ON DELETE restrict` por lo mismo que `media_asset_id`: borrar una escena que
+un programa guardado usa es una decisión del operador (`utility:usages` nombra los programas y
+«Eliminar igualmente» borra los ítems y la escena en una transacción), nunca una fila que
+desaparece sola.
 
 ## `utility_scenes` — `tool` en columna, el resto en JSON, y una siembra que ocurre UNA vez
 

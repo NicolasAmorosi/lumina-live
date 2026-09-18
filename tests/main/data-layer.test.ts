@@ -37,6 +37,9 @@ import { backfillDeckTimings } from "../../src/main/slides/backfill-timings";
 import { SNIPPET_MARK_END, SNIPPET_MARK_START, parseSnippet } from "../../src/shared/types/bible";
 import { SETTINGS_VALIDATORS, isSettingsKey } from "../../src/shared/types/settings";
 import { DEFAULT_UTILITY_SCENES } from "../../src/shared/types/utility";
+import { removeUtilityScene } from "../../src/main/services/utility-scene-removal";
+import { IpcError } from "../../src/shared/ipc/result";
+import type { UtilityScene } from "../../src/shared/types/utility";
 import { buildLegacyPpt } from "../fixtures/legacy-ppt";
 import type { ProgramSummary } from "../../src/shared/types/program";
 import type { MediaAsset } from "../../src/shared/types/media";
@@ -790,5 +793,100 @@ describe("Utility scenes", () => {
     // The half of the style that WAS valid is kept: falling back wholesale
     // would hand the operator back a scene they never built.
     assert(read.style.value.color === "#ff0000", "a valid field inside an invalid style must be preserved");
+  });
+});
+
+/**
+ * F3: a time scene as a row of the order of service.
+ *
+ * The three things only the database can answer — the widened CHECK
+ * constraint, the `ON DELETE restrict` FK and what a forced delete actually
+ * does — plus the draft's dead-reference filter, which is the one place a
+ * deleted scene can still be referenced (a draft is a JSON blob no constraint
+ * can reach).
+ */
+describe("A time scene as an order-of-service item", () => {
+  let scene: UtilityScene;
+  let program: ProgramSummary;
+
+  test("a program saves and reloads an item that points at a scene", () => {
+    initRepos(db, sqlite);
+    scene = utilityRepo.create({ ...DEFAULT_UTILITY_SCENES[0]!, name: "Cuenta del culto" });
+    program = programsRepo.save({
+      name: "Culto con cuenta regresiva",
+      items: [
+        { kind: "utility", utilitySceneId: scene.id, title: null },
+        { kind: "utility", utilitySceneId: scene.id, title: "Antes de empezar" },
+      ],
+    });
+
+    const [first, second] = programsRepo.load(program.id).items;
+    assert(
+      first?.kind === "utility" && first.utilitySceneId === scene.id,
+      `expected a utility item pointing at ${scene.id}, got ${JSON.stringify(first)}`,
+    );
+    // The row holds an id and NOT a copy: the scene the operator edits later is
+    // the scene this program projects.
+    assert(second?.kind === "utility" && second.title === "Antes de empezar", "a per-item title must survive");
+  });
+
+  test("the CHECK constraint refuses a utility row with no scene", () => {
+    // Invisible to Drizzle — it only ever lived in SQL — which is exactly why
+    // it is asserted here rather than trusted.
+    expect(() =>
+      sqlite
+        .prepare(
+          `INSERT INTO program_items (program_id, position, kind, created_at) VALUES (?, 99, 'utility', ?)`,
+        )
+        .run(program.id, Date.now()),
+    ).toThrow();
+  });
+
+  test("deleting a scene a saved program uses is refused, and names the program", () => {
+    const usages = programsRepo.findSceneUsages(scene.id);
+    assert(usages.length === 1, `expected exactly one program to use the scene, got ${usages.length}`);
+    assert(usages[0]!.programName === program.name, "the usage must carry the program's name, not just its id");
+    assert(usages[0]!.itemCount === 2, `expected both items counted, got ${usages[0]!.itemCount}`);
+
+    // The FK rejection surfaces as a code the renderer can act on, never as a
+    // raw SQLite error — the confirmation has to tell this case apart from a
+    // real failure.
+    expect(() => removeUtilityScene(scene.id, false)).toThrow(IpcError);
+    assert(utilityRepo.get(scene.id) !== null, "a refused delete must leave the scene exactly where it was");
+  });
+
+  test("a forced delete removes the referencing items and the scene together", () => {
+    removeUtilityScene(scene.id, true);
+    assert(utilityRepo.get(scene.id) === null, "a forced delete must remove the scene");
+    assert(
+      programsRepo.load(program.id).items.length === 0,
+      "a forced delete must take the items that referenced it with it",
+    );
+    assert(programsRepo.findSceneUsages(scene.id).length === 0, "nothing may still reference a deleted scene");
+  });
+
+  test("the draft drops an item pointing at a deleted scene", () => {
+    const draftRepo = new DraftRepo(db);
+    const liveScene = utilityRepo.list()[0]!;
+    draftRepo.save({
+      programId: null,
+      name: "Culto sin guardar",
+      notes: null,
+      items: [
+        { kind: "utility", utilitySceneId: liveScene.id, title: null },
+        // `scene` was force-deleted above: an FK protects a saved program, but
+        // a draft is JSON and nothing can protect it but this filter.
+        { kind: "utility", utilitySceneId: scene.id, title: null },
+      ],
+      updatedAt: Date.now(),
+    });
+
+    const restored = draftRepo.load();
+    assert(restored !== null, "a saved draft must come back");
+    assert(
+      restored.items.length === 1 && restored.items[0]?.kind === "utility",
+      `expected only the live scene to survive, got ${JSON.stringify(restored.items)}`,
+    );
+    draftRepo.clear();
   });
 });

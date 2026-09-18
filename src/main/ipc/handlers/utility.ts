@@ -1,5 +1,6 @@
 import type { Handlers } from "../register";
-import { getUtilityRepo } from "../../services/repos";
+import { getProgramsRepo, getUtilityRepo } from "../../services/repos";
+import { removeUtilityScene } from "../../services/utility-scene-removal";
 import { IpcError } from "@shared/ipc/result";
 import { isSceneName, isUtilitySceneUpsert } from "@shared/scene-validators";
 import type { UtilityScene } from "@shared/types/utility";
@@ -26,7 +27,13 @@ function assertValid(input: unknown): Omit<UtilityScene, "id"> {
 
 export const utilityHandlers: Pick<
   Handlers,
-  "utility:list" | "utility:create" | "utility:update" | "utility:duplicate" | "utility:delete" | "utility:reorder"
+  | "utility:list"
+  | "utility:create"
+  | "utility:update"
+  | "utility:duplicate"
+  | "utility:delete"
+  | "utility:usages"
+  | "utility:reorder"
 > = {
   "utility:list": () => getUtilityRepo().list(),
   "utility:create": (input) => getUtilityRepo().create(assertValid(input)),
@@ -37,8 +44,9 @@ export const utilityHandlers: Pick<
     }
     return getUtilityRepo().duplicate(id, name.trim());
   },
-  "utility:delete": ({ id }) => {
-    getUtilityRepo().delete(id);
+  "utility:delete": ({ id, force }) => {
+    removeUtilityScene(id, force ?? false);
   },
+  "utility:usages": ({ id }) => getProgramsRepo().findSceneUsages(id),
   "utility:reorder": ({ ids }) => getUtilityRepo().reorder(ids),
 };

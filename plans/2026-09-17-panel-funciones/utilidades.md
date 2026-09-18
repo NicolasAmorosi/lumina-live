@@ -1,8 +1,8 @@
 # Utilidades — escenas de tiempo: cuenta atrás, reloj y cronómetro
 
 **Fecha:** 2026-09-17 (decisiones ampliadas el 2026-09-17, segunda tanda)
-**Estado:** plan cerrado. **F1 y F2 entregadas y verificadas** contra el proyector real
-(2026-09-18); **F3 pendiente**.
+**Estado:** plan cerrado. **F1, F2 y F3 entregadas y verificadas** contra el proyector real
+(2026-09-18). Utilidades está completa.
 **Depende de:** [`PLAN.md`](PLAN.md) — sus cinco reglas comunes valen acá sin excepción.
 
 ## Qué resuelve
@@ -392,13 +392,27 @@ cuenta todavía corriendo. Reiniciar la app devolvió las cuatro escenas con la 
 volver a sembrar. Crear, cambiar la herramienta, duplicar, borrar (con confirmación) y reordenar por
 drag verificados por la UI; borrar las cuatro y reiniciar deja la lista vacía, como se decidió.
 
-### F3 — Ítem del orden de culto
+### F3 — Ítem del orden de culto ✅
 
-La migración a mano, `PROGRAM_ITEM_KINDS`, los DTO, el filtro del borrador, la fila del programa,
-la rama de preview, el guard de borrado con `usages`.
+La migración a mano (`0011_program_item_utility.sql`, reconstrucción de tabla), `PROGRAM_ITEM_KINDS`,
+los DTO, el filtro del borrador generalizado a escenas, la fila del programa, la rama de preview y
+el guard de borrado con `utility:usages`. Una escena entra al orden de culto con el botón del pie
+de la pestaña —el mismo de los demás paneles, ahora acompañado del de «Escenas…»— o arrastrando
+la fila, igual que un asset o un versículo.
 
 **Gate:** guardar un programa con una escena, cerrar la app, abrirla, cargar el programa y
 mandarla EN VIVO. Y borrar la escena que un programa guardado usa avisa en qué programa está.
+
+**Resultado (2026-09-18), medido sobre la app corriendo contra un perfil descartable:** elegir
+«Cuenta 10 minutos», agregarla con el botón del pie y guardar el programa como «Culto F3» dejó la
+fila en la base; cerrar y reabrir la app, cargar el programa con doble click y mandar la fila EN
+VIVO puso el proyector en `09:53` bajando a `09:47`, con el riel de aire encendido en la fila.
+Borrar esa escena desde «Escenas…» abrió la confirmación nombrando «Culto F3» con «1 elementos»,
+y «Eliminar igualmente» dejó la escena borrada, el programa guardado sin ese ítem, el orden
+abierto sin la fila — y el proyector **siguiendo la cuenta**, como está decidido. El arrastre de
+una fila al orden también verificado. La actualización 0010→0011 se probó aparte sobre una base
+con filas `media` y `bible`: sobreviven con su id y su título, `integrity_check` ok,
+`foreign_key_check` vacío y el índice recreado.
 
 ### Fuera de alcance, explícito
 
@@ -427,4 +441,4 @@ mandarla EN VIVO. Y borrar la escena que un programa guardado usa avisa en qué 
 - Mandar cualquier otra cosa EN VIVO reemplaza la escena; volver a ella la muestra tal como quedó.
 - El historial de proyección no tiene una fila por reloj.
 - Una escena creada en un culto sigue estando la semana siguiente, sin volver a configurarla (F2). ✅
-- Un programa guardado con una escena la recupera al abrirlo (F3).
+- Un programa guardado con una escena la recupera al abrirlo (F3). ✅

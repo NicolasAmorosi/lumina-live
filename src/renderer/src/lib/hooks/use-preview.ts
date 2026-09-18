@@ -83,6 +83,16 @@ export function usePreviewContent(): PreviewContent | null {
         text: scheduleItem.text,
         verseIndex: null,
       };
+    case "utility": {
+      // Resolved against the list for the same reason a `utility` preview
+      // target is: the row holds an id, so a scene edited since the program
+      // was saved previews the way it will project. A scene that is gone
+      // previews as nothing rather than as a broken tile — the draft's own
+      // filter (`DraftRepo.load`) and the delete guard between them make that
+      // a very narrow window, never an impossible one.
+      const scene = findScene(scenes, scheduleItem.utilitySceneId);
+      return scene ? { kind: "utility", scene } : null;
+    }
   }
 }
 

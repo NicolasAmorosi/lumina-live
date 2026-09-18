@@ -100,9 +100,18 @@ export const programItems = sqliteTable(
       .notNull()
       .references(() => programs.id, { onDelete: "cascade" }),
     position: integer("position").notNull(),
-    kind: text("kind", { enum: ["media", "ppt", "bible"] }).notNull(),
+    kind: text("kind", { enum: ["media", "ppt", "bible", "utility"] }).notNull(),
 
     mediaAssetId: integer("media_asset_id").references(() => mediaAssets.id, {
+      onDelete: "restrict",
+    }),
+
+    /** The saved time scene a `utility` row projects. `restrict` for the same
+     *  reason `media_asset_id` has it: a program that silently loses a row
+     *  when a list is tidied is worse than a delete the operator has to
+     *  confirm. Declared AFTER `utilityScenes` exists at module scope, which
+     *  is why the reference is a thunk. */
+    utilitySceneId: integer("utility_scene_id").references(() => utilityScenes.id, {
       onDelete: "restrict",
     }),
 

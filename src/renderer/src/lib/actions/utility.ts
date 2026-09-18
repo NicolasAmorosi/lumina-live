@@ -3,8 +3,10 @@ import { t } from "@renderer/lib/i18n/i18n-provider";
 import { toast } from "@renderer/lib/toast";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { findScene, useUtilityStore } from "@renderer/stores/utility.store";
+import { useProgramStore } from "@renderer/stores/program.store";
+import { usePreviewStore } from "@renderer/stores/preview.store";
 import type { TimerClock } from "@shared/types/timer";
-import type { UtilityScene, UtilitySceneUpsert } from "@shared/types/utility";
+import type { UtilityScene, UtilitySceneUpsert, UtilitySceneUsage } from "@shared/types/utility";
 
 /**
  * The transport: start, pause, resume and reset the one armed timer.
@@ -128,7 +130,11 @@ export async function duplicateScene(id: number, name: string): Promise<UtilityS
 }
 
 /**
- * Deletes a scene.
+ * Deletes a scene. With `force`, the items of every saved program that
+ * references it go too, in main's own transaction — the operator has just read
+ * the list of those programs and confirmed anyway (see `utility:usages`).
+ * Without it, main refuses with `UTILITY_SCENE_IN_USE`, which is what raises
+ * that confirmation in the first place.
  *
  * What is on the projector is deliberately left alone. `base` holds a RESOLVED
  * copy of the scene (see `BaseContent`'s `utility` variant), so a countdown
@@ -137,16 +143,38 @@ export async function duplicateScene(id: number, name: string): Promise<UtilityS
  * the app making a decision about the service. The armed timer does go, in
  * `setScenes`: a transport for a scene that no longer exists can neither be
  * restarted nor projected.
+ *
+ * The UNSAVED order of service is the one thing main cannot clean up, because
+ * a draft is a JSON blob and not rows an FK can reach — so its items are
+ * dropped here, the same way `purgeAsset` does it for a deleted asset. The
+ * preview follows: a target pointing at a scene that is gone would render a
+ * pane that can never explain itself.
  */
-export async function deleteScene(id: number): Promise<boolean> {
+export async function deleteScene(id: number, force = false): Promise<boolean> {
   try {
-    await api.utility.remove(id);
+    await api.utility.remove(id, force);
     await loadScenes();
+    useProgramStore.getState().removeByUtilityScene(id);
+    const target = usePreviewStore.getState().target;
+    if (target?.kind === "utility" && target.sceneId === id) usePreviewStore.getState().clear();
     return true;
   } catch (error) {
     console.warn("[utility] could not delete the scene", error);
     toast.danger(t("utilities.deleteError"));
     return false;
+  }
+}
+
+/** Which saved programs an about-to-be-deleted scene appears in. Never throws:
+ *  a confirmation that cannot list them still has to open — main refuses the
+ *  delete on its own either way, so the worst case is a dialog with less to
+ *  say, never a delete that slips through. */
+export async function sceneUsages(id: number): Promise<UtilitySceneUsage[]> {
+  try {
+    return await api.utility.usages(id);
+  } catch (error) {
+    console.warn("[utility] could not read the scene's usages", error);
+    return [];
   }
 }
 
