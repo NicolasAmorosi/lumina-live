@@ -112,7 +112,12 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
   }, [name, notes, favorite, openAfter]);
 
   const [previewProgram, setPreviewProgram] = useState<ProgramDTO | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
+  // Effects run after the first paint. Starting a preview as "not loading"
+  // briefly selected the real empty-state branch while `previewProgram` was
+  // still null, so switching programs flashed "Programa vacío" before the
+  // skeleton appeared. This component is keyed by panel mode/target, so the
+  // initializer is evaluated for every new preview target.
+  const [previewLoading, setPreviewLoading] = useState(mode.kind === "preview");
   const [previewError, setPreviewError] = useState(false);
 
   useEffect(() => {
@@ -206,7 +211,7 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
   }
 
   return (
-    <div className="wa-program-panel-enter flex w-80 shrink-0 flex-col border-l border-border" ref={panelRef}>
+    <div className="flex min-h-0 flex-1 flex-col" ref={panelRef}>
       {/* `h-13` is shared with the list's search/filter bar in `ProgramsModal`
           so both seams line up when the panel expands the dialog sideways —
           change one and the other has to follow. */}

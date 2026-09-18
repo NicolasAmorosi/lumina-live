@@ -287,7 +287,9 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
         // animating `max-width` stretched the header's empty middle (it
         // spans the full dialog width, but its title/close button don't grow
         // with it). The dialog jumps straight to its final size and only the
-        // panel itself animates in — see `.wa-program-panel-enter`.
+        // Its shell animates only when it opens — see
+        // `.wa-program-panel-enter`. The keyed content inside may still
+        // remount to reset its form state when the selected program changes.
         panelMode !== null && "max-w-[84rem]",
       )}
       height="tall"
@@ -433,25 +435,30 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
         </div>
 
         {panelMode ? (
-          <ProgramSidePanel
-            key={panelKey(panelMode)}
-            mode={panelMode}
-            onClose={() => setPanel(null)}
-            onDirtyChange={handlePanelDirtyChange}
-            onDone={(done, opened) => {
-              // A completed action is never "unsaved changes": the panel
-              // closes here without going through the guard.
-              setPanelDirty(false);
-              discardArmedRef.current = false;
-              setPanelMode(null);
-              void refreshList();
-              // `discard` always switches the schedule; `new` only does when
-              // "crear y abrir" was checked — either way, once the schedule
-              // has moved on there's nothing left to manage here.
-              if (done.kind === "discard" || opened) onOpenChange(false);
-            }}
-            onRequestOpen={requestOpen}
-          />
+          // This shell stays mounted when only `panelMode` changes, so its
+          // entrance animation runs once per opening. The child remains keyed:
+          // swapping modes must still reset form state to its new target.
+          <div className="wa-program-panel-enter flex w-80 shrink-0 flex-col border-l border-border">
+            <ProgramSidePanel
+              key={panelKey(panelMode)}
+              mode={panelMode}
+              onClose={() => setPanel(null)}
+              onDirtyChange={handlePanelDirtyChange}
+              onDone={(done, opened) => {
+                // A completed action is never "unsaved changes": the panel
+                // closes here without going through the guard.
+                setPanelDirty(false);
+                discardArmedRef.current = false;
+                setPanelMode(null);
+                void refreshList();
+                // `discard` always switches the schedule; `new` only does when
+                // "crear y abrir" was checked — either way, once the schedule
+                // has moved on there's nothing left to manage here.
+                if (done.kind === "discard" || opened) onOpenChange(false);
+              }}
+              onRequestOpen={requestOpen}
+            />
+          </div>
         ) : null}
       </div>
 
