@@ -439,21 +439,13 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
             value={prewarmBatch.total > 0 ? prewarmBatch.done / prewarmBatch.total : null}
           />
         ) : null}
-        <Tooltip align="start" content={t("library.addHint")} placement="top">
-          <IconButton aria-label={t("library.add")} onClick={() => void handleAdd()} size="sm" variant="success">
-            <Icon name="add" />
-          </IconButton>
-        </Tooltip>
-        {kind === "ppt" && pendingDeckCount > 0 && (!prewarmBatch || prewarmBatch.status !== "running") ? (
-          <Tooltip align="start" content={t("prewarm.actionHint")} placement="top">
-            <IconButton
-              aria-label={t("prewarm.action")}
-              disabled={deckEnvironment?.available === false}
-              onClick={() => setConfirmPrewarmOpen(true)}
-              size="sm"
-              variant="outline"
-            >
-              <Icon name="layers" />
+        {/* Adding files feeds the library list, which is the "recent" view — a
+            linked folder mirrors what is on disk, so there is nothing an
+            in-app picker could add to the view being browsed. */}
+        {!isFolderView ? (
+          <Tooltip align="start" content={t("library.addHint")} placement="top">
+            <IconButton aria-label={t("library.add")} onClick={() => void handleAdd()} size="sm" variant="success">
+              <Icon name="add" />
             </IconButton>
           </Tooltip>
         ) : null}
@@ -467,6 +459,19 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
               variant="warning"
             >
               <Icon name="close" />
+            </IconButton>
+          </Tooltip>
+        ) : null}
+        {kind === "ppt" && pendingDeckCount > 0 && (!prewarmBatch || prewarmBatch.status !== "running") ? (
+          <Tooltip align="start" content={t("prewarm.actionHint")} placement="top">
+            <IconButton
+              aria-label={t("prewarm.action")}
+              disabled={deckEnvironment?.available === false}
+              onClick={() => setConfirmPrewarmOpen(true)}
+              size="sm"
+              variant="outline"
+            >
+              <Icon name="layers" />
             </IconButton>
           </Tooltip>
         ) : null}
