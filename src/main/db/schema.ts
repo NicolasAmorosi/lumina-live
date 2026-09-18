@@ -330,3 +330,44 @@ export const programDraft = sqliteTable("program_draft", {
   items: text("items").notNull(),
   updatedAt: integer("updated_at").notNull(),
 });
+
+/**
+ * A saved, reusable time scene: a countdown, a clock or a stopwatch with its
+ * own background, typography, texts and colour triggers.
+ *
+ * `tool` is a COLUMN rather than a field of `config_json` because it is the
+ * discriminant: the list shows an icon and a label per scene, and it must not
+ * have to parse a JSON blob per row to do it. Everything else splits the way
+ * `plans/2026-09-17-panel-funciones/utilidades.md` argues it should —
+ * `config_json` is what the operator configured (`TimerConfig`) and
+ * `style_json` is how it looks (`SceneStyle`, deliberately shaped to be reused
+ * by Overlays and by the Bible/text projection settings later). Both are JSON
+ * and not thirty columns so a change of shape is a branch in
+ * `shared/scene-validators.ts`, not a migration.
+ *
+ * The enum is spelled out rather than imported from `@shared/types/timer`:
+ * drizzle-kit reads this file on its own, outside the app's path aliases, the
+ * same way `media_assets.kind` inlines `ASSET_KINDS`.
+ */
+export const utilityScenes = sqliteTable(
+  "utility_scenes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    tool: text("tool", { enum: ["countdown", "countdown-to-time", "clock", "stopwatch"] }).notNull(),
+    /** JSON: `TimerConfig`. */
+    configJson: text("config_json").notNull(),
+    /** JSON: `SceneStyle`. */
+    styleJson: text("style_json").notNull(),
+    /** The line above the number, and the one below it. `null` hides either. */
+    title: text("title"),
+    message: text("message"),
+    /** Manual list order, same scheme as `programs.sort_order`: lower comes
+     *  first, a new scene takes `MIN(sort_order) - 1` so it lands on top, and
+     *  `reorder()` renormalizes to `0..n-1`. */
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [index("ix_utility_scenes_order").on(t.sortOrder)],
+);

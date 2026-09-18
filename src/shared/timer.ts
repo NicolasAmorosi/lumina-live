@@ -239,3 +239,62 @@ export function msUntilNextTick(clock: TimerClock, now: number, format: TimerFor
 export function clampTickDelay(delay: number): number {
   return Math.max(16, Math.min(Math.round(delay), MS_PER_MINUTE));
 }
+
+/* -------------------------------------------------------------------------
+ * The editor's two text fields
+ *
+ * A duration and a time of day are stored as numbers (`durationMs`,
+ * `targetMinuteOfDay`) precisely so nothing downstream has to parse them — but
+ * the operator types them, so exactly one layer has to convert, and it is this
+ * one. Both parsers answer `null` rather than a guess: a field that cannot be
+ * read must refuse to save, not save something the operator did not mean.
+ * ---------------------------------------------------------------------- */
+
+/** `MM:SS`, or `H:MM:SS` from an hour up — the same shape the projector draws,
+ *  so what the operator types reads back the way they will see it. */
+export function formatDuration(durationMs: number): string {
+  return formatSignedSeconds(Math.max(0, Math.round(durationMs / MS_PER_SECOND)), { hideZeroHours: true });
+}
+
+/**
+ * `"10"` (ten minutes), `"10:00"` (`MM:SS`) or `"1:00:00"` (`H:MM:SS`) as
+ * milliseconds; `null` when it is not one of those.
+ *
+ * A bare number means MINUTES, not seconds: every use of this field is "the
+ * service starts in N minutes", and a 10 that meant ten seconds would be a
+ * countdown nobody notices was wrong until it is on the screen. The parts past
+ * the first are not range-checked individually — `90` seconds is read as a
+ * minute and a half, the way a stopwatch entry normally behaves — but the
+ * total is, by the caller, against `TIMER_MIN/MAX_DURATION_MS`.
+ */
+export function parseDuration(text: string): number | null {
+  const trimmed = text.trim();
+  if (trimmed === "") return null;
+  const parts = trimmed.split(":");
+  if (parts.length > 3) return null;
+  const numbers = parts.map((part) => (/^\d{1,3}$/.test(part.trim()) ? Number(part.trim()) : Number.NaN));
+  if (numbers.some((n) => !Number.isFinite(n))) return null;
+  if (numbers.length === 1) return numbers[0]! * MS_PER_MINUTE;
+  const seconds = numbers.reverse().reduce((total, value, index) => total + value * 60 ** index, 0);
+  return seconds * MS_PER_SECOND;
+}
+
+/** Minutes since local midnight as `HH:MM`, always zero-padded — it is going
+ *  into a field the operator edits, and a jumping width is the same nuisance
+ *  `tabular-nums` exists to stop. */
+export function formatMinuteOfDay(minuteOfDay: number): string {
+  const minute = Math.min(Math.max(Math.round(minuteOfDay), 0), MINUTES_PER_DAY - 1);
+  return `${pad2(Math.floor(minute / 60))}:${pad2(minute % 60)}`;
+}
+
+/** `"HH:MM"` (or `"H:MM"`) as minutes since midnight; `null` for anything
+ *  else, including an hour past 23 or a minute past 59 — a wall-clock time has
+ *  no reading in which `25:00` means something. */
+export function parseMinuteOfDay(text: string): number | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(text.trim());
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return hours * 60 + minutes;
+}

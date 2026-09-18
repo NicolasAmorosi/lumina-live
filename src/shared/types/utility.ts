@@ -45,12 +45,17 @@ const MINUTE_MS = 60_000;
  *
  * The Spanish literals here are SEED CONTENT, not UI text: they land in a row
  * the operator renames and edits like any program name, so they do not belong
- * in the `i18n` dictionary (main, which seeds them from F2 on, has no
- * dictionary either — the same reason a seeded Bible's book names are data).
+ * in the `i18n` dictionary (main, which seeds them, has no dictionary either —
+ * the same reason a seeded Bible's book names are data).
+ *
+ * No ids: these are an INPUT to the seed (`db/seed/seed-utility-scenes.ts`),
+ * which runs once ever and hands out real row ids. Seeding again whenever the
+ * table happens to be empty would mean an operator can never be rid of a scene
+ * they deleted — so "was this database seeded" is its own flag
+ * (`utility.seeded`), not a row count.
  */
-export const DEFAULT_UTILITY_SCENES: readonly UtilityScene[] = [
+export const DEFAULT_UTILITY_SCENES: readonly Omit<UtilityScene, "id">[] = [
   {
-    id: 1,
     name: "Cuenta 10 minutos",
     tool: "countdown",
     config: {
@@ -64,7 +69,6 @@ export const DEFAULT_UTILITY_SCENES: readonly UtilityScene[] = [
     message: null,
   },
   {
-    id: 2,
     name: "Comenzamos 10:00",
     tool: "countdown-to-time",
     config: {
@@ -78,7 +82,6 @@ export const DEFAULT_UTILITY_SCENES: readonly UtilityScene[] = [
     message: null,
   },
   {
-    id: 3,
     name: "Reloj",
     tool: "clock",
     config: {
@@ -92,7 +95,6 @@ export const DEFAULT_UTILITY_SCENES: readonly UtilityScene[] = [
     message: null,
   },
   {
-    id: 4,
     name: "Cronómetro",
     tool: "stopwatch",
     config: {

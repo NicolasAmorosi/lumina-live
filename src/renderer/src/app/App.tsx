@@ -15,6 +15,7 @@ import { installGlobalErrorHandlers } from "@renderer/lib/global-error-handlers"
 import { api } from "@renderer/lib/api";
 import { toast } from "@renderer/lib/toast";
 import { restoreDraft } from "@renderer/lib/actions/programs";
+import { loadScenes } from "@renderer/lib/actions/utility";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { LOGO_URL } from "@shared/urls";
 import { useSettingsStore } from "@renderer/stores/settings.store";
@@ -97,6 +98,11 @@ export function App() {
       // unreliable. The operator's first tap on NEGRO, LOGO or EN VIVO opens
       // it on demand (see display.store's `openIfNeeded`).
       await useDisplayStore.getState().load();
+      // The saved time scenes. Not awaited before the draft restore below and
+      // not blocking it either: nothing in the schedule references a scene
+      // yet (that is F3), and the Utilities panel is perfectly able to paint
+      // its empty state for the few milliseconds this takes.
+      void loadScenes();
 
       // Last, and only once the library is reachable: the draft's items point
       // at media assets, and main has already dropped the ones that no longer

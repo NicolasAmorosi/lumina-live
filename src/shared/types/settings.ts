@@ -57,6 +57,13 @@ export type SettingsMap = {
    *  a folder of hymn decks is browsed by name, a folder of sermon videos by
    *  date, and the operator should not have to re-pick on every switch. */
   "library.sort": Record<AssetKind, MediaSortOrder>;
+  /** Whether this database has ever been given the four built-in time scenes
+   *  (`DEFAULT_UTILITY_SCENES`). A flag and not a row count, deliberately:
+   *  re-seeding whenever `utility_scenes` happens to be empty would mean an
+   *  operator can never be rid of a scene they deleted — the four would come
+   *  back on the next launch. Seeding once is what makes "borrar" mean
+   *  borrar. */
+  "utility.seeded": boolean;
 };
 
 export const DEFAULT_SETTINGS: SettingsMap = {
@@ -78,6 +85,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   "library.linkedFolders": { video: [], image: [], audio: [], ppt: [] },
   "library.activeView": { video: "recent", image: "recent", audio: "recent", ppt: "recent" },
   "library.sort": { video: "name-asc", image: "name-asc", audio: "name-asc", ppt: "name-asc" },
+  "utility.seeded": false,
 };
 
 /* -------------------------------------------------------------------------
@@ -153,6 +161,7 @@ export const SETTINGS_VALIDATORS: Record<keyof SettingsMap, (value: unknown) => 
   "library.linkedFolders": isRecordOfKinds(isStringArray),
   "library.activeView": isRecordOfKinds(isString),
   "library.sort": isRecordOfKinds(isOneOf(MEDIA_SORT_ORDERS)),
+  "utility.seeded": isBoolean,
 };
 
 export function isSettingsKey(key: string): key is keyof SettingsMap {

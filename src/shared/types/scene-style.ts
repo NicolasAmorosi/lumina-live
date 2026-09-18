@@ -124,6 +124,23 @@ const FONT_FALLBACK = '"Noto Sans Variable", "Noto Sans", Helvetica, Arial, sans
  *  would be worse than falling back. */
 const UNSAFE_FONT_NAME = /["'\\;{}<>]/;
 
+/** How long a family name is allowed to be. No real one comes close; the cap
+ *  exists so a row can never hold a novel that ends up in an inline style. */
+const MAX_FONT_NAME_LENGTH = 100;
+
+/**
+ * Whether a stored family name is one this app is willing to render.
+ *
+ * Exported so the row validator and `cssFontFamily` below can never disagree:
+ * a name main rejects on write must be the same name the renderer would have
+ * silently dropped anyway. `null` (the app's own Noto Sans) is always fine.
+ */
+export function isSafeFontFamily(fontFamily: string | null): boolean {
+  if (fontFamily === null) return true;
+  const name = fontFamily.trim();
+  return name.length > 0 && name.length <= MAX_FONT_NAME_LENGTH && !UNSAFE_FONT_NAME.test(name);
+}
+
 /**
  * A `font-family` value safe to hand to an inline style.
  *
@@ -136,9 +153,8 @@ const UNSAFE_FONT_NAME = /["'\\;{}<>]/;
  * uninstalled degrades to Noto Sans instead of to the browser default.
  */
 export function cssFontFamily(fontFamily: string | null): string {
-  const name = fontFamily?.trim();
-  if (!name || UNSAFE_FONT_NAME.test(name)) return FONT_FALLBACK;
-  return `"${name}", ${FONT_FALLBACK}`;
+  if (fontFamily === null || !isSafeFontFamily(fontFamily)) return FONT_FALLBACK;
+  return `"${fontFamily.trim()}", ${FONT_FALLBACK}`;
 }
 
 const GRADIENT_SHAPES: Record<GradientDirection, string> = {

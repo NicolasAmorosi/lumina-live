@@ -31,6 +31,7 @@ import type {
   ProgramUpsert,
 } from "../types/program";
 import type { SettingsMap } from "../types/settings";
+import type { UtilityScene, UtilitySceneUpsert } from "../types/utility";
 import type { CloseDecision } from "../types/window";
 
 /**
@@ -202,6 +203,29 @@ export type IpcContract = {
    *  its own whether unsaved work may be discarded — `CLAUDE.md`: that
    *  decision belongs to the control window. See `CloseDecision`. */
   "window:closeDecision": { req: { decision: CloseDecision }; res: void };
+
+  /** The saved time scenes, in the operator's manual order. Read once at boot
+   *  by `utility.store`, and re-read after every write — the list is small and
+   *  main is the only writer, so the store mirrors it rather than patching it.
+   *
+   *  There is deliberately no `utility:usages` yet: nothing references a scene
+   *  until `program_items.kind = 'utility'` lands in F3, so a channel here
+   *  could only ever answer with an empty array. It arrives with the FK that
+   *  gives it something to look at. */
+  "utility:list": { req: void; res: UtilityScene[] };
+  /** `id` is ignored on create and required on update — the two are separate
+   *  channels rather than one upsert so main never has to guess which one the
+   *  editor meant. Both validate the whole scene (`isUtilitySceneUpsert`)
+   *  before writing: `registerHandlers` casts from `unknown`, and a row is
+   *  durable. */
+  "utility:create": { req: UtilitySceneUpsert; res: UtilityScene };
+  "utility:update": { req: UtilitySceneUpsert & { id: number }; res: UtilityScene };
+  "utility:duplicate": { req: { id: number; name: string }; res: UtilityScene };
+  "utility:delete": { req: { id: number }; res: void };
+  /** `ids` is the whole list in the order it should appear. Answers with the
+   *  re-sorted list, so the caller replaces its state with what was actually
+   *  persisted instead of trusting its optimistic guess. */
+  "utility:reorder": { req: { ids: number[] }; res: UtilityScene[] };
 
   "settings:get": { req: void; res: SettingsMap };
   "settings:set": { req: Partial<SettingsMap>; res: void };

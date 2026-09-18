@@ -29,11 +29,14 @@ import { ProgramsRepo } from "../../src/main/db/repositories/programs.repo";
 import { MediaRepo } from "../../src/main/db/repositories/media.repo";
 import { SlidesRepo } from "../../src/main/db/repositories/slides.repo";
 import { DraftRepo } from "../../src/main/db/repositories/draft.repo";
+import { UtilityRepo } from "../../src/main/db/repositories/utility.repo";
+import { seedUtilityScenes } from "../../src/main/db/seed/seed-utility-scenes";
 import { initRepos } from "../../src/main/services/repos";
 import { readBinarySlideTimings } from "../../src/main/slides/ppt-binary-timings";
 import { backfillDeckTimings } from "../../src/main/slides/backfill-timings";
 import { SNIPPET_MARK_END, SNIPPET_MARK_START, parseSnippet } from "../../src/shared/types/bible";
 import { SETTINGS_VALIDATORS, isSettingsKey } from "../../src/shared/types/settings";
+import { DEFAULT_UTILITY_SCENES } from "../../src/shared/types/utility";
 import { buildLegacyPpt } from "../fixtures/legacy-ppt";
 import type { ProgramSummary } from "../../src/shared/types/program";
 import type { MediaAsset } from "../../src/shared/types/media";
@@ -57,6 +60,7 @@ let settingsRepo: SettingsRepo;
 let programsRepo: ProgramsRepo;
 let mediaRepo: MediaRepo;
 let slidesRepo: SlidesRepo;
+let utilityRepo: UtilityRepo;
 
 let versionId: number;
 let bookIds: number[];
@@ -83,6 +87,7 @@ beforeAll(() => {
   programsRepo = new ProgramsRepo(db, sqlite);
   mediaRepo = new MediaRepo(db, sqlite);
   slidesRepo = new SlidesRepo(db, sqlite);
+  utilityRepo = new UtilityRepo(db, sqlite);
 });
 
 afterAll(() => {
@@ -685,5 +690,105 @@ describe("The pre-migration backup is WAL-aware", () => {
       naiveRows < snapshotRows,
       "the fixture no longer reproduces the bug: a plain copy saw every row, so the WAL was checkpointed",
     );
+  });
+});
+
+describe("Utility scenes", () => {
+  test("the four built-in scenes are seeded exactly once", () => {
+    seedUtilityScenes(utilityRepo, settingsRepo);
+    const seeded = utilityRepo.list();
+    assert(
+      seeded.length === DEFAULT_UTILITY_SCENES.length,
+      `expected ${DEFAULT_UTILITY_SCENES.length} seeded scenes, got ${seeded.length}`,
+    );
+    assert(settingsRepo.get("utility.seeded"), "seeding must record that it happened");
+    // The list order is the constant's order, without any reorder() having run.
+    assert(
+      seeded.map((scene) => scene.tool).join() === DEFAULT_UTILITY_SCENES.map((scene) => scene.tool).join(),
+      "the seeded scenes must keep the order they are declared in",
+    );
+
+    seedUtilityScenes(utilityRepo, settingsRepo);
+    assert(utilityRepo.list().length === seeded.length, "seeding twice must not duplicate anything");
+  });
+
+  test("deleting every scene does NOT bring them back on the next launch", () => {
+    // The whole reason the flag exists rather than a row count: an operator
+    // who deletes a scene must be rid of it.
+    for (const scene of utilityRepo.list()) utilityRepo.delete(scene.id);
+    assert(utilityRepo.isEmpty(), "the fixture must start this case with an empty table");
+    seedUtilityScenes(utilityRepo, settingsRepo);
+    assert(utilityRepo.isEmpty(), "an already-seeded database must never be re-seeded");
+  });
+
+  test("a scene round-trips through create, update and duplicate", () => {
+    const created = utilityRepo.create({
+      name: "  Cuenta 5  ",
+      tool: "countdown",
+      config: {
+        durationMs: 5 * 60_000,
+        targetMinuteOfDay: 9 * 60 + 30,
+        endMessage: "¡Empezamos!",
+        format: { hour12: false, showSeconds: true, hideZeroHours: true, overrun: true },
+      },
+      style: {
+        version: 1,
+        background: { kind: "gradient", from: "#04132b", to: "#2f557f", direction: "to-bottom" },
+        fontFamily: "Futura",
+        verticalAlign: "bottom",
+        value: { sizeCqw: 24, color: "#ffffff", weight: 300, shadow: true },
+        title: { sizeCqw: 4, color: "#84adfc", weight: 600, shadow: false },
+        message: { sizeCqw: 4.5, color: "#f5f5f5", weight: 400, shadow: true },
+        triggers: { warningAtMs: 60_000, warningColor: "#cd4900", endColor: "#d0021b" },
+      },
+      title: "El culto comienza en",
+      message: null,
+    });
+    assert(created.name === "Cuenta 5", "the stored name must be trimmed");
+    assert(created.style.background.kind === "gradient", "the background kind must survive the JSON round trip");
+    assert(created.config.format.overrun, "the format flags must survive the JSON round trip");
+    assert(created.style.triggers?.warningAtMs === 60_000, "the colour triggers must survive the JSON round trip");
+
+    const { id: _id, ...fields } = created;
+    const renamed = utilityRepo.update(created.id, { ...fields, name: "Cuenta 5 minutos", tool: "stopwatch" });
+    assert(renamed.tool === "stopwatch", "the tool is a column and must be updatable");
+    assert(renamed.style.fontFamily === "Futura", "an update must not lose the stored style");
+
+    const copy = utilityRepo.duplicate(created.id, "Cuenta 5 (copia)");
+    assert(copy.id !== created.id, "a duplicate must be its own row");
+    assert(copy.style.verticalAlign === "bottom", "a duplicate must carry the style over");
+    assert(utilityRepo.get(created.id)?.name === "Cuenta 5 minutos", "duplicating must not touch the source");
+  });
+
+  test("a new scene lands on top and reorder renormalizes the whole column", () => {
+    const first = utilityRepo.list()[0]!;
+    const newest = utilityRepo.create({ ...DEFAULT_UTILITY_SCENES[0]!, name: "Recién creada" });
+    assert(utilityRepo.list()[0]?.id === newest.id, "a new scene must land at the top of the list");
+
+    const reversed = utilityRepo.list().map((scene) => scene.id).reverse();
+    const reordered = utilityRepo.reorder(reversed);
+    assert(
+      reordered.map((scene) => scene.id).join() === reversed.join(),
+      "reorder must answer with the order it persisted",
+    );
+    assert(utilityRepo.list()[0]?.id === reversed[0], "the persisted order must survive a fresh list()");
+    assert(reversed.includes(first.id), "the fixture must still hold the scene it started from");
+  });
+
+  test("a corrupt config or style falls back field by field instead of throwing", () => {
+    const scene = utilityRepo.list()[0]!;
+    // Hand-written rows are the real case: a truncated write, a version that
+    // wrote a shape this build does not know, somebody editing the file.
+    sqlite
+      .prepare("UPDATE utility_scenes SET config_json = ?, style_json = ? WHERE id = ?")
+      .run("{ not json", JSON.stringify({ version: 1, verticalAlign: "sideways", value: { sizeCqw: 18, color: "#ff0000", weight: 400, shadow: true } }), scene.id);
+
+    const read = utilityRepo.get(scene.id);
+    assert(read !== null, "a corrupt row must still come back as a scene");
+    assert(read.config.durationMs > 0, "an unparseable config must fall back to the defaults");
+    assert(read.style.verticalAlign === "middle", "an invalid enum must fall back to its default");
+    // The half of the style that WAS valid is kept: falling back wholesale
+    // would hand the operator back a scene they never built.
+    assert(read.style.value.color === "#ff0000", "a valid field inside an invalid style must be preserved");
   });
 });

@@ -13,6 +13,7 @@ import type {
   ProgramUpsert,
 } from "@shared/types/program";
 import type { SettingsMap } from "@shared/types/settings";
+import type { UtilitySceneUpsert } from "@shared/types/utility";
 import type { CloseDecision } from "@shared/types/window";
 
 /** Thin per-domain facade over `invoke` — pure readability sugar in the
@@ -93,6 +94,17 @@ export const api = {
   window: {
     /** Answers main's `close-requested` — see `CloseDecision`. */
     closeDecision: (decision: CloseDecision) => invoke("window:closeDecision", { decision }),
+  },
+  /** Saved time scenes — the countdowns, the clock and the stopwatch of
+   *  Funciones ▸ Utilidades. `remove` rather than `delete` for the same reason
+   *  `library` uses it: a reserved word reads badly as a method. */
+  utility: {
+    list: () => invoke("utility:list", undefined),
+    create: (input: UtilitySceneUpsert) => invoke("utility:create", input),
+    update: (input: UtilitySceneUpsert & { id: number }) => invoke("utility:update", input),
+    duplicate: (id: number, name: string) => invoke("utility:duplicate", { id, name }),
+    remove: (id: number) => invoke("utility:delete", { id }),
+    reorder: (ids: number[]) => invoke("utility:reorder", { ids }),
   },
   settings: {
     get: () => invoke("settings:get", undefined),

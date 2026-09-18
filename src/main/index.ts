@@ -5,12 +5,14 @@ import { registerWorshipScheme, registerWorshipProtocolHandler } from "./protoco
 import { openDatabase } from "./db/client";
 import { backupBeforeMigrate, runMigrations } from "./db/migrate";
 import { seedBuiltinBibles } from "./db/seed/seed-bible";
+import { seedUtilityScenes } from "./db/seed/seed-utility-scenes";
 import {
   initRepos,
   closeDatabase,
   getHistoryRepo,
   getMediaRepo,
   getSettingsRepo,
+  getUtilityRepo,
 } from "./services/repos";
 import {
   migrateLegacySettingsIfPresent,
@@ -90,6 +92,10 @@ function initDatabase(): void {
   initRepos(db, sqlite);
   setBibleDb(db, sqlite);
   migrateLegacySettingsIfPresent(getSettingsRepo());
+  // After `initRepos`, unlike the Bible seed above: this one needs two
+  // repositories rather than a raw handle, and the flag it reads lives in
+  // `settings`.
+  seedUtilityScenes(getUtilityRepo(), getSettingsRepo());
 }
 
 function wireMinimizeRestoreSync(controlWindow: BrowserWindow): void {

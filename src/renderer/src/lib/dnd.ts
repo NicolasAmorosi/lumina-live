@@ -13,6 +13,11 @@ export const SCHEDULE_INDEX_MIME = "application/x-worship-schedule-index";
  *  refreshed mid-drag — and is kept distinct from `SCHEDULE_INDEX_MIME` so a
  *  program row can never be read as a playlist reorder. */
 export const PROGRAM_ROW_MIME = "application/x-worship-program-row";
+/** A row of the saved time scenes, dropped on another row to reorder the list.
+ *  Carries the scene's **id** for the same reason the programs one does: the
+ *  list is refreshed from main mid-drag, so an index would point at a
+ *  different row by the time the drop lands. */
+export const UTILITY_SCENE_MIME = "application/x-worship-utility-scene";
 
 let transparentDragImage: HTMLImageElement | null = null;
 

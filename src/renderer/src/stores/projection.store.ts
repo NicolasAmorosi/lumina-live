@@ -14,6 +14,7 @@ import type {
 } from "@shared/types/projection";
 import type { DeckSlide, DeckSoundtrack } from "@shared/types/deck";
 import type { TimerClock } from "@shared/types/timer";
+import type { UtilityScene } from "@shared/types/utility";
 import { assetUrl, LOGO_URL } from "@shared/urls";
 import { timerOutputFor } from "@renderer/lib/utility-output";
 import { defaultMediaVolume } from "@renderer/stores/settings.store";
@@ -110,6 +111,18 @@ export type ProjectionStoreState = {
    *  short-circuit in `OutputView` is what keeps it from doing so. */
   setTimerClock: (clock: TimerClock) => void;
 
+  /** Re-dresses the live utility scene after the operator edited it in the
+   *  «Escenas» modal — a new background, a bigger number, a different end
+   *  message.
+   *
+   *  Same rule as `setTimerClock`, and it is the whole F2 gate: editing what is
+   *  already on the projector is not a new scene. Patching `base` in place
+   *  keeps `sceneEpoch` still, so `OutputView` cuts straight to the new look
+   *  instead of cross-fading the projector into a slightly different copy of
+   *  itself, and the mark inside `base.clock` is untouched, so the count does
+   *  not restart. A no-op unless this exact scene is the one that is live. */
+  setLiveScene: (scene: UtilityScene) => void;
+
   setLiveDeck: (deck: LiveDeck | null) => void;
   setSlideIndex: (index: number) => void;
   setAutoplay: (state: AutoplayState) => void;
@@ -187,6 +200,13 @@ export const useProjectionStore = create<ProjectionStoreState>()(
         // back a new object would push an identical output to the projector.
         if (base?.kind !== "utility" || base.clock === clock) return state;
         return { base: { ...base, clock } };
+      }),
+
+    setLiveScene: (scene) =>
+      set((state) => {
+        const { base } = state;
+        if (base?.kind !== "utility" || base.sceneId !== scene.id || base.scene === scene) return state;
+        return { base: { ...base, scene } };
       }),
 
     setLiveDeck: (liveDeck) =>

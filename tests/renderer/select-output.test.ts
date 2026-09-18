@@ -398,3 +398,58 @@ describe("pausing a timer is not a new scene", () => {
     expect(selectOutputMemo(useProjectionStore.getState())).toBe(first);
   });
 });
+
+/**
+ * The F2 gate, as an assertion.
+ *
+ * Editing a scene that is already on the projector has to change how it looks
+ * without being "something new is live": no `beginScene()`, so no transition,
+ * and the mark inside `base.clock` untouched, so the count does not restart.
+ * Getting this wrong is not a cosmetic bug — it is the projector cross-fading
+ * into an almost identical copy of itself, and a countdown jumping back to its
+ * full duration, in the middle of a service.
+ */
+describe("editing the scene that is live", () => {
+  const clock = { mode: "countdown", state: "running", endsAtMs: 1_700_000_000_000 } as const;
+
+  test("the new look reaches the projector without a new epoch or a new mark", () => {
+    const store = useProjectionStore.getState();
+    store.setBase({ kind: "utility", sceneId: 1, scene: scene(), clock });
+    const before = output();
+
+    const restyled = scene({
+      title: "Empezamos en",
+      style: { ...DEFAULT_SCENE_STYLE, verticalAlign: "top" },
+    });
+    useProjectionStore.getState().setLiveScene(restyled);
+
+    const after = output();
+    if (after.kind !== "timer") throw new Error("unreachable");
+    expect(after.title).toBe("Empezamos en");
+    expect(after.style.verticalAlign).toBe("top");
+    // The two things that must NOT have moved.
+    expect(after.transition.epoch).toBe(before.transition.epoch);
+    expect(after.clock).toEqual(clock);
+  });
+
+  test("it is a no-op for a scene that is not the one live", () => {
+    const store = useProjectionStore.getState();
+    store.setBase({ kind: "utility", sceneId: 1, scene: scene(), clock });
+    const before = selectOutputMemo(useProjectionStore.getState());
+
+    // Another scene entirely: editing it must not touch the projector at all,
+    // which the memo proves by identity — not one push goes out.
+    useProjectionStore.getState().setLiveScene(scene({ id: 2, name: "Otra" }));
+    expect(selectOutputMemo(useProjectionStore.getState())).toBe(before);
+  });
+
+  test("re-saving an identical scene pushes nothing", () => {
+    const store = useProjectionStore.getState();
+    const live = scene();
+    store.setBase({ kind: "utility", sceneId: 1, scene: live, clock });
+    const before = selectOutputMemo(useProjectionStore.getState());
+
+    useProjectionStore.getState().setLiveScene(live);
+    expect(selectOutputMemo(useProjectionStore.getState())).toBe(before);
+  });
+});

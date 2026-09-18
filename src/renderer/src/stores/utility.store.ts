@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { holdClock, initialClock, resumeClock } from "@shared/timer";
-import { DEFAULT_UTILITY_SCENES, type UtilityScene } from "@shared/types/utility";
+import type { UtilityScene } from "@shared/types/utility";
 import type { TimerClock } from "@shared/types/timer";
 
 /**
@@ -27,6 +27,9 @@ type UtilityStoreState = {
   scenes: UtilityScene[];
   run: TimerRun | null;
 
+  /** Replaces the mirror of `utility_scenes`. Drops the armed timer when its
+   *  scene is no longer in the list: a transport counting down for a scene the
+   *  operator just deleted has nothing left to project. */
   setScenes: (scenes: UtilityScene[]) => void;
   /** Arms the scene's timer from zero and starts it running. Returns the clock
    *  it committed, so a caller that has to project it in the same tick never
@@ -43,12 +46,20 @@ type UtilityStoreState = {
 };
 
 export const useUtilityStore = create<UtilityStoreState>()((set, get) => ({
-  // F1 has no persistence: the built-in scenes ARE the list. From F2 on this
-  // is filled from `utility:list` — same shape, so nothing here changes.
-  scenes: [...DEFAULT_UTILITY_SCENES],
+  // Empty until `loadScenes()` mirrors `utility:list` in, at boot. Main seeds
+  // the four built-in scenes into a fresh database once
+  // (`db/seed/seed-utility-scenes.ts`), so this is only ever briefly empty —
+  // or permanently, for an operator who deleted them all, which the panel
+  // shows as an empty state rather than papering over with constants.
+  scenes: [],
   run: null,
 
-  setScenes: (scenes) => set({ scenes }),
+  setScenes: (scenes) =>
+    set((state) => {
+      const { run } = state;
+      const survives = run !== null && scenes.some((scene) => scene.id === run.sceneId);
+      return survives ? { scenes } : { scenes, run: null };
+    }),
 
   start: (scene) => {
     // One `now` for both halves: reading the clock twice would put the mark a

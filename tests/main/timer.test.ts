@@ -15,6 +15,8 @@
 import { describe, expect, test } from "vitest";
 import {
   clampTickDelay,
+  formatDuration,
+  formatMinuteOfDay,
   formatSignedSeconds,
   formatTimerClock,
   formatWallClock,
@@ -23,6 +25,8 @@ import {
   initialClock,
   isTimerRunning,
   msUntilNextTick,
+  parseDuration,
+  parseMinuteOfDay,
   pickValueColor,
   resolveTargetMs,
   resumeClock,
@@ -245,5 +249,48 @@ describe("a time of day is resolved against the local calendar", () => {
   test("a minute outside the day is clamped rather than rolling into another one", () => {
     expect(new Date(resolveTargetMs(-30, NOW)).getDate()).toBe(new Date(NOW).getDate());
     expect(new Date(resolveTargetMs(5_000, NOW)).getDate()).toBe(new Date(NOW).getDate());
+  });
+});
+
+describe("The editor's two text fields", () => {
+  test("a bare number is MINUTES, because every use of this field is «faltan N minutos»", () => {
+    expect(parseDuration("10")).toBe(10 * 60_000);
+    expect(parseDuration(" 5 ")).toBe(5 * 60_000);
+  });
+
+  test("MM:SS and H:MM:SS both parse, and round-trip through the formatter", () => {
+    expect(parseDuration("10:00")).toBe(10 * 60_000);
+    expect(parseDuration("01:30")).toBe(90_000);
+    expect(parseDuration("1:00:00")).toBe(3_600_000);
+    expect(formatDuration(10 * 60_000)).toBe("10:00");
+    expect(formatDuration(90_000)).toBe("01:30");
+    expect(formatDuration(3_600_000)).toBe("1:00:00");
+    expect(parseDuration(formatDuration(5_000))).toBe(5_000);
+  });
+
+  test("what cannot be read answers null instead of a guess", () => {
+    // A field that guesses is a countdown that is wrong on the screen, and the
+    // operator finds out in front of the congregation.
+    expect(parseDuration("")).toBeNull();
+    expect(parseDuration("diez")).toBeNull();
+    expect(parseDuration("10:")).toBeNull();
+    expect(parseDuration("1:2:3:4")).toBeNull();
+    expect(parseDuration("-5")).toBeNull();
+  });
+
+  test("a time of day is HH:MM and nothing else", () => {
+    expect(parseMinuteOfDay("10:00")).toBe(600);
+    expect(parseMinuteOfDay("9:30")).toBe(570);
+    expect(parseMinuteOfDay("00:00")).toBe(0);
+    expect(parseMinuteOfDay("23:59")).toBe(1439);
+    expect(formatMinuteOfDay(600)).toBe("10:00");
+    expect(formatMinuteOfDay(570)).toBe("09:30");
+  });
+
+  test("an hour that does not exist is rejected rather than wrapped", () => {
+    expect(parseMinuteOfDay("25:00")).toBeNull();
+    expect(parseMinuteOfDay("10:75")).toBeNull();
+    expect(parseMinuteOfDay("1000")).toBeNull();
+    expect(parseMinuteOfDay("10:0")).toBeNull();
   });
 });
