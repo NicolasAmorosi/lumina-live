@@ -40,3 +40,22 @@ export type ImportProgress = {
   total: number;
   status: "running" | "done";
 };
+
+/**
+ * How a resource tab's grid is ordered.
+ *
+ * Shared vocabulary rather than a renderer-only string: the choice is
+ * persisted per asset kind in `settings["library.sort"]`, and main validates
+ * what the renderer writes there (`SETTINGS_VALIDATORS`) against this exact
+ * list. `date` is the file's own `mtimeMs`, falling back to the row's
+ * `createdAt` for an asset that was never stat'd.
+ */
+export const MEDIA_SORT_ORDERS = [
+  "name-asc",
+  "name-desc",
+  "date-desc",
+  "date-asc",
+  "size-desc",
+  "size-asc",
+] as const;
+export type MediaSortOrder = (typeof MEDIA_SORT_ORDERS)[number];

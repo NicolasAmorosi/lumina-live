@@ -2,6 +2,7 @@ import type { ButtonHTMLAttributes, KeyboardEvent as ReactKeyboardEvent } from "
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@renderer/lib/utils";
+import { computeMenuPosition, type MenuPosition } from "./floating-menu";
 import { Icon } from "./icon";
 
 export type SelectOption = { disabled?: boolean; label: string; value: string };
@@ -20,37 +21,11 @@ const sizes: Record<NonNullable<SelectProps["size"]>, string> = {
   md: "h-10 text-sm pl-3 pr-8",
 };
 
-// Kept clear of the viewport edge, and of the trigger itself.
-const VIEWPORT_MARGIN = 8;
-const TRIGGER_GAP = 4;
-const MIN_MENU_HEIGHT = 120;
-const MAX_MENU_HEIGHT = 320;
-
-type MenuPosition = { bottom?: number; left: number; maxHeight: number; top?: number; width: number };
-
-/** Flips the menu above the trigger when there isn't enough room below (and
- *  there's more room above), clamps it horizontally inside the viewport, and
- *  caps its height to whichever side it opens toward — so it never spills off
- *  screen regardless of where the trigger sits (a panel, a modal, near an
- *  edge). */
-function computePosition(trigger: HTMLElement): MenuPosition {
-  const rect = trigger.getBoundingClientRect();
-  const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_MARGIN;
-  const spaceAbove = rect.top - VIEWPORT_MARGIN;
-  const openUp = spaceBelow < MIN_MENU_HEIGHT && spaceAbove > spaceBelow;
-  const maxHeight = Math.min(MAX_MENU_HEIGHT, Math.max(80, openUp ? spaceAbove : spaceBelow));
-  const width = rect.width;
-  const left = Math.min(Math.max(rect.left, VIEWPORT_MARGIN), window.innerWidth - width - VIEWPORT_MARGIN);
-  return openUp
-    ? { bottom: window.innerHeight - rect.top + TRIGGER_GAP, left, maxHeight, width }
-    : { left, maxHeight, top: rect.bottom + TRIGGER_GAP, width };
-}
-
 /**
  * A styled dropdown, not a native `<select>` — WorshipApp's identity (design
  * tokens, dark cabin theme) has to reach into the option list itself, which a
  * native listbox never lets a page style. Renders its menu through a portal
- * to `document.body`, positioned in viewport coordinates (`computePosition`),
+ * to `document.body`, positioned in viewport coordinates (`computeMenuPosition`),
  * so it always paints above modals/panels and is never clipped by an
  * ancestor's `overflow`, unlike `Tooltip`'s in-flow bubble.
  *
@@ -75,7 +50,7 @@ export function Select({ className, disabled, onChange, options, placeholder, si
   useLayoutEffect(() => {
     if (!open) return;
     const reposition = () => {
-      if (triggerRef.current) setPosition(computePosition(triggerRef.current));
+      if (triggerRef.current) setPosition(computeMenuPosition(triggerRef.current));
     };
     reposition();
     window.addEventListener("resize", reposition);
@@ -131,7 +106,7 @@ export function Select({ className, disabled, onChange, options, placeholder, si
 
   function openMenu(initialIndex?: number) {
     if (disabled || options.length === 0 || !triggerRef.current) return;
-    setPosition(computePosition(triggerRef.current));
+    setPosition(computeMenuPosition(triggerRef.current));
     setHighlightedIndex(initialIndex ?? (selectedIndex >= 0 ? selectedIndex : firstEnabledIndex()));
     setOpen(true);
   }

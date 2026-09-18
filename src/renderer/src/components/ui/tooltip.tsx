@@ -15,7 +15,7 @@ type TooltipProps = {
   content: ReactNode;
   /** Renders the bubble through a portal to `document.body`, positioned in
    *  viewport coordinates (clamped so it never crosses the screen edge)
-   *  instead of the in-flow CSS bubble — see `Select`'s `computePosition` for
+   *  instead of the in-flow CSS bubble — see `computeMenuPosition` for
    *  the same pattern. Use it when the trigger sits in a narrow column and
    *  the content (e.g. a full filesystem path) needs to render at its
    *  natural width on a single line without being clipped by an ancestor's

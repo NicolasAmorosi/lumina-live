@@ -21,9 +21,16 @@ import { readOsFilesDrag, setMediaAssetDrag } from "@renderer/lib/dnd";
 import { previewAsset } from "@renderer/lib/actions/preview";
 import { goLive } from "@renderer/lib/actions/playback";
 import { removeAsset } from "@renderer/lib/actions/remove-asset";
-import { addLinkedFolder, removeLinkedFolder, selectMediaSourceView } from "@renderer/lib/actions/library-folders";
+import {
+  addLinkedFolder,
+  removeLinkedFolder,
+  selectMediaSourceView,
+  setMediaSortOrder,
+} from "@renderer/lib/actions/library-folders";
 import { useDebouncedCallback } from "@renderer/lib/hooks/use-debounced-callback";
+import { filterAssetsByName, sortAssets } from "@renderer/lib/media-view";
 import { AssetTile } from "./asset-tile";
+import { MediaFilterBar } from "./media-filter-bar";
 import { MediaSourceBar } from "./media-source-bar";
 import { PanelProgressRow } from "./panel-progress-row";
 import { PrewarmConfirmModal } from "./prewarm-confirm-modal";
@@ -75,6 +82,12 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
   const refreshFolder = useLibraryStore((s) => s.refreshFolder);
   const folders = useSettingsStore((s) => s.settings["library.linkedFolders"][kind]);
   const folderAssets = useLibraryStore((s) => s.folderAssets[folderAssetsKey(kind, activeView)]);
+  const sortOrder = useSettingsStore((s) => s.settings["library.sort"][kind]);
+  /** Session-only, and one per tab because each `MediaBrowser` stays mounted
+   *  once visited (see `ResourcePanel`). Deliberately not persisted, unlike
+   *  the order: a filter restored at launch is a tab that looks empty for no
+   *  reason anyone can see. */
+  const [query, setQuery] = useState("");
 
   const isFolderView = activeView !== "recent";
   const visibleAssets = isFolderView ? (folderAssets ?? EMPTY_ASSETS) : recentAssets;
@@ -83,12 +96,24 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
   // `lib/actions/remove-asset.ts`. Filtering here rather than in the store
   // keeps `byKind`/`folderAssets` a faithful copy of what main holds, which is
   // what every refresh rewrites.
-  const assets = useMemo(
+  const viewAssets = useMemo(
     () =>
       pendingRemovalIds.length === 0
         ? visibleAssets
         : visibleAssets.filter((asset) => !pendingRemovalIds.includes(asset.id)),
     [pendingRemovalIds, visibleAssets],
+  );
+  /** What is actually on screen: the whole view, filtered by the search box
+   *  and in the order this tab was left in.
+   *
+   *  Kept apart from `viewAssets` because the deck statuses below are fetched
+   *  for the WHOLE view. Keyed off this list instead, every keystroke in the
+   *  search box would be another `deck:statuses` round-trip over a folder of a
+   *  thousand presentations — for a map the tiles look up by id anyway, and
+   *  which filtering cannot change a single entry of. */
+  const assets = useMemo(
+    () => sortAssets(filterAssetsByName(viewAssets, query), sortOrder),
+    [query, sortOrder, viewAssets],
   );
   // "Empty" and "not read yet" are different answers and the grid used to
   // give the same one for both — a linked folder with 600 files showed "no hay
@@ -222,17 +247,17 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
   const readyEpoch = useDeckStore((s) => s.readyEpoch);
 
   useEffect(() => {
-    if (kind !== "ppt" || assets.length === 0) {
+    if (kind !== "ppt" || viewAssets.length === 0) {
       setDeckStatuses(null);
       fetchedForRef.current = "";
       return;
     }
-    const listKey = `${kind}|${assets.length}|${assets[0]?.id}|${assets.at(-1)?.id}`;
+    const listKey = `${kind}|${viewAssets.length}|${viewAssets[0]?.id}|${viewAssets.at(-1)?.id}`;
     if (listKey === fetchedForRef.current) {
       // Same list, something finished converting: the thumbnails that appear
       // are a bonus, not something anyone is waiting on, and during a batch
       // this fires once per deck.
-      refetchDeckStatuses(assets);
+      refetchDeckStatuses(viewAssets);
       return;
     }
     // A view the operator just opened: asking immediately is the difference
@@ -240,9 +265,9 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
     // second later. Until the answer arrives the tiles show a skeleton.
     fetchedForRef.current = listKey;
     setDeckStatuses(null);
-    fetchDeckStatuses(assets);
+    fetchDeckStatuses(viewAssets);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `refetchDeckStatuses` is stable per render by design (see useDebouncedCallback)
-  }, [kind, assets, prewarmBatch?.status, readyEpoch, fetchDeckStatuses]);
+  }, [kind, viewAssets, prewarmBatch?.status, readyEpoch, fetchDeckStatuses]);
 
   // Empty while the statuses are unknown: offering "Preparar carpeta" for a
   // count we haven't confirmed would show a button that may have nothing to do.
@@ -262,6 +287,11 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
   // already-converted decks included. Main skips those, so the progress bar
   // counted to a total that never matched the number the operator had just
   // agreed to.
+  //
+  // Over `assets`, so a search narrows it too: the button says "esta vista"
+  // and the modal quotes a count back, so with a filter up it has to prepare
+  // the matches the operator can see rather than the thousand decks behind
+  // them.
   const pendingDeckAssetIds = useMemo(
     () =>
       kind !== "ppt" || deckStatuses === null
@@ -300,12 +330,18 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
         onRemoveFolder={(folderPath) => setConfirmRemoveFolder(folderPath)}
         onSelectView={(view) => selectMediaSourceView(kind, view)}
       />
+      <MediaFilterBar
+        onQueryChange={setQuery}
+        onSortChange={(order) => setMediaSortOrder(kind, order)}
+        query={query}
+        sort={sortOrder}
+      />
       <PanelBody
         className="p-1.5"
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => void handleDrop(e)}
       >
-        {assets.length === 0 && status?.error ? (
+        {viewAssets.length === 0 && status?.error ? (
           <LoadingState
             action={
               <Button
@@ -324,10 +360,24 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
             title={t("library.loadFailed")}
             tone="failed"
           />
-        ) : assets.length === 0 && status?.loading ? (
+        ) : viewAssets.length === 0 && status?.loading ? (
           <LoadingState progress={null} surface="panel" title={t("library.loading")} />
-        ) : assets.length === 0 ? (
+        ) : viewAssets.length === 0 ? (
           <EmptyState description={t("resources.emptyHint")} icon={kind} title={t("resources.empty")} />
+        ) : assets.length === 0 ? (
+          // A view with files in it and nothing matching what was typed — the
+          // way out has to be offered here, because the operator's eyes are on
+          // the grid, not on the box two rows above it.
+          <EmptyState
+            action={
+              <Button onClick={() => setQuery("")} size="sm" variant="outline">
+                {t("resources.clearSearch")}
+              </Button>
+            }
+            description={t("resources.searchNoResultsHint", { query })}
+            icon="search"
+            title={t("resources.searchNoResults")}
+          />
         ) : (
           <VirtualGrid
             aria-label={t(`library.${kind}s`)}

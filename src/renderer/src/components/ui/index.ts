@@ -4,6 +4,7 @@ export { Icon, iconNames, type IconName } from "./icon";
 export { Badge, type BadgeVariant } from "./badge";
 export { Card, CardHeader, CardContent, CardFooter } from "./card";
 export { Input } from "./input";
+export { Menu, type MenuOption } from "./menu";
 export { Select, type SelectOption } from "./select";
 export { Textarea } from "./textarea";
 export { Switch } from "./checkbox";

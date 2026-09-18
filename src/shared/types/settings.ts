@@ -4,6 +4,7 @@ import {
   SLIDES_DEFAULT_CACHE_MB,
   SLIDES_DEFAULT_RENDER_WIDTH,
 } from "../constants";
+import { MEDIA_SORT_ORDERS, type MediaSortOrder } from "./media";
 import { TRANSITION_STYLES, type TransitionStyle } from "./projection";
 
 export const THEMES = ["dark", "light"] as const;
@@ -52,6 +53,10 @@ export type SettingsMap = {
   /** Which source view (`"recent"` or one of that kind's linked folder
    *  paths) a resource tab was last left on, restored on next launch. */
   "library.activeView": Record<AssetKind, string>;
+  /** How each resource tab's grid is ordered. Per kind rather than global:
+   *  a folder of hymn decks is browsed by name, a folder of sermon videos by
+   *  date, and the operator should not have to re-pick on every switch. */
+  "library.sort": Record<AssetKind, MediaSortOrder>;
 };
 
 export const DEFAULT_SETTINGS: SettingsMap = {
@@ -72,6 +77,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   "slides.preemptBackground": true,
   "library.linkedFolders": { video: [], image: [], audio: [], ppt: [] },
   "library.activeView": { video: "recent", image: "recent", audio: "recent", ppt: "recent" },
+  "library.sort": { video: "name-asc", image: "name-asc", audio: "name-asc", ppt: "name-asc" },
 };
 
 /* -------------------------------------------------------------------------
@@ -146,6 +152,7 @@ export const SETTINGS_VALIDATORS: Record<keyof SettingsMap, (value: unknown) => 
   "slides.preemptBackground": isBoolean,
   "library.linkedFolders": isRecordOfKinds(isStringArray),
   "library.activeView": isRecordOfKinds(isString),
+  "library.sort": isRecordOfKinds(isOneOf(MEDIA_SORT_ORDERS)),
 };
 
 export function isSettingsKey(key: string): key is keyof SettingsMap {
