@@ -1,7 +1,8 @@
 # Utilidades — escenas de tiempo: cuenta atrás, reloj y cronómetro
 
 **Fecha:** 2026-09-17 (decisiones ampliadas el 2026-09-17, segunda tanda)
-**Estado:** plan cerrado. **F1 entregada y verificada** contra el proyector real (2026-09-18); F2 y F3 pendientes.
+**Estado:** plan cerrado. **F1 y F2 entregadas y verificadas** contra el proyector real
+(2026-09-18); **F3 pendiente**.
 **Depende de:** [`PLAN.md`](PLAN.md) — sus cinco reglas comunes valen acá sin excepción.
 
 ## Qué resuelve
@@ -42,6 +43,19 @@ elige de una lista.
 Decisión derivada, no preguntada: **al llegar a cero sin overrun la escena se queda en `00:00`**
 y el transporte del control lo marca como terminado. El proyector nunca decide un cambio de
 escena por su cuenta — eso es la regla 2 de `PLAN.md`.
+
+## Decisiones cerradas con el usuario (2026-09-18, tercera tanda — antes de F2)
+
+| Tema | Decisión |
+|---|---|
+| Cuándo guarda el editor | **Guardar explícito.** La vista previa 16:9 del modal se actualiza mientras se edita, pero la fila y el proyector sólo cambian al tocar «Guardar» — con el patrón de *dirty* + descartar de `ProgramsModal`. Guardar en cada tecla escribiría el mensaje de fin letra por letra delante de la congregación |
+| Borrar una escena de fábrica | **La siembra ocurre una sola vez**, marcada en `settings["utility.seeded"]`. Borrar borra de verdad; si la lista queda vacía se muestra un estado vacío con «Nueva escena». Sembrar «cuando la tabla está vacía» haría imposible quedarse sin ellas |
+| Cambiar la herramienta de una escena existente | **Sí, es un campo más.** Conserva nombre, fondo y tipografía; si esa escena tenía un timer armado, al guardar se re-arma desde el valor inicial de la herramienta nueva (un `endsAtMs` no significa nada para un cronómetro) |
+| De dónde sale la imagen de fondo | **Biblioteca de imágenes + un botón que abre el diálogo nativo** y las da de alta con `library:add`, el mismo camino que la pestaña Imágenes. La imagen queda además disponible para proyectar sola |
+
+Decisión derivada, no preguntada: **`utility:usages` NO se implementa en F2.** Nada referencia una
+escena hasta que llegue `program_items.kind = 'utility'` en F3, así que hoy sólo podría responder
+un array vacío. Llega junto con la FK que le da algo que mirar.
 
 ---
 
@@ -358,14 +372,25 @@ negro total bajo NEGRO → 09:25 al destapar, con los dos monitores del control 
 9:40:46 a las 00:19, el reloj mostró la hora, y el cronómetro contó 00:02 y se congeló ahí al
 pausarlo.
 
-### F2 — Persistencia y el editor
+### F2 — Persistencia y el editor ✅
 
-Tabla, repo, validadores, IPC, el modal «Escenas» con la vista previa en vivo, `ColorField`, la
-promoción de `FieldGroup`/`FieldRow`, fondo sólido/degradado/imagen, selector de fuente, los
-*color triggers*, el texto de fin y el overrun.
+Tabla `utility_scenes` + `drizzle/0010_utility_scenes.sql`, `UtilityRepo` con parseo defensivo,
+`shared/scene-validators.ts`, seis canales IPC (`utility:list|create|update|duplicate|delete|reorder`),
+el modal «Escenas» con la vista previa 16:9 renderizada por el mismo `OutputView`, `ColorField`, la
+promoción de `FieldGroup`/`FieldRow` a `components/ui/`, fondo sólido/degradado/imagen, selector de
+fuente sobre `queryLocalFonts()`, los *color triggers*, el texto de fin y el overrun.
 
 **Gate:** editar la escena que está EN VIVO actualiza el proyector **sin** disparar la transición
 de escena ni reiniciar la cuenta.
+
+**Resultado (2026-09-18), medido sobre la app corriendo contra un perfil descartable:** con «Cuenta
+10 minutos» proyectada en 08:32, cambiar su línea de arriba a «EMPEZAMOS EN» y guardar dejó el
+proyector en 08:31 con el texto nuevo — **el mismo elemento de capa del DOM**, marcado antes de
+editar, seguía ahí, que es lo que prueba que no corrió ninguna transición. Después, `ColorField` →
+Campfire y alineación → Arriba llegaron al proyector como `rgb(205, 73, 0)` y `flex-start`, con la
+cuenta todavía corriendo. Reiniciar la app devolvió las cuatro escenas con la edición intacta y sin
+volver a sembrar. Crear, cambiar la herramienta, duplicar, borrar (con confirmación) y reordenar por
+drag verificados por la UI; borrar las cuatro y reiniciar deja la lista vacía, como se decidió.
 
 ### F3 — Ítem del orden de culto
 
@@ -401,5 +426,5 @@ mandarla EN VIVO. Y borrar la escena que un programa guardado usa avisa en qué 
 - El cronómetro se puede leer en la pestaña Utilidades sin estar proyectado.
 - Mandar cualquier otra cosa EN VIVO reemplaza la escena; volver a ella la muestra tal como quedó.
 - El historial de proyección no tiene una fila por reloj.
-- Una escena creada en un culto sigue estando la semana siguiente, sin volver a configurarla (F2).
+- Una escena creada en un culto sigue estando la semana siguiente, sin volver a configurarla (F2). ✅
 - Un programa guardado con una escena la recupera al abrirlo (F3).

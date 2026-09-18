@@ -280,11 +280,11 @@ npm install              # instala deps — better-sqlite3 trae binarios precomp
 npm run dev               # electron-vite dev (HMR en renderer, restart de main en watch)
 npm run typecheck          # tsc --noEmit sobre node (main+preload+shared) y web (renderer+shared)
 npm run lint                # eslint .
-npm run test                 # vitest run — 147 casos en dos proyectos: `main` (Node: migraciones, seed,
-                              #   FTS5, repos, borrador, validadores de settings, respaldo WAL, zip reader,
-                              #   audio vinculado, urls, prune del historial, funciones de tiempo) y
-                              #   `renderer` (jsdom: selectOutput, freezeLivePositions, live-intent, store de
-                              #   toasts, utils). Nada importa `electron`: ese es el límite del suite
+npm run test                 # vitest run — 176 casos en dos proyectos: `main` (Node: migraciones, seed,
+                              #   FTS5, repos, borrador, validadores de settings y de escena, respaldo WAL,
+                              #   zip reader, audio vinculado, urls, prune del historial, funciones de tiempo)
+                              #   y `renderer` (jsdom: selectOutput, freezeLivePositions, live-intent, store
+                              #   de toasts, utils). Nada importa `electron`: ese es el límite del suite
 npm run test:watch            # el mismo suite en watch, mientras se toca un módulo
 npm run db:generate            # drizzle-kit generate — nueva migración tras editar db/schema.ts
 npm run slides:smoke -- x.pptx # conversión + parseo OOXML (timings/audio) SIN Electron
@@ -341,6 +341,19 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   posterior al último checkpoint — medido, 5000 filas contra 4977 con un `-wal` caliente. Y la base
   se cierra en `will-quit` (`closeDatabase()`), que es lo que vacía el `-wal` en vez de dejarlo
   crecer entre sesiones.
+- **Editar lo que ya está EN VIVO parchea `base` en el lugar; nunca es una escena nueva.**
+  `setTimerClock` (pausar, reanudar, reiniciar) y `setLiveScene` (el operador editó la escena que
+  está proyectada) escriben sobre `base` sin tocar `sceneEpoch`, igual que `setVideoResumeAt`.
+  Llamar a `beginScene()` ahí haría que el proyector se funda en una copia casi idéntica de sí
+  mismo en pleno culto, y en el caso del reloj además reiniciaría la cuenta. Hay tests que lo
+  afirman en `tests/renderer/select-output.test.ts`.
+- **Una columna JSON se VALIDA al escribir y se NORMALIZA campo por campo al leer.** Las dos
+  mitades no son intercambiables: main rechaza un `utility:create` que no describa una escena
+  entera (`isUtilitySceneUpsert`) porque el operador todavía está mirando el formulario; y el repo
+  normaliza al leer (`normalizeSceneStyle`) porque una fila que YA está guardada hay que mostrarla
+  igual, y un color roto tiene que costar el color y no la escena — mucho menos el arranque. Misma
+  disciplina que `DraftRepo.load` y el seed de la Biblia. Y lo que sale de un normalizador siempre
+  pasa el validador, con un test que lo afirma.
 - **La ventana de proyección no tiene lógica de dominio.** Es una función pura del último
   `ProjectionOutput` recibido (`src/shared/types/projection.ts`). Si necesitás que "sepa" algo del
   culto, calculalo en el control y mandalo por `projection:show`.

@@ -1,7 +1,9 @@
 # Panel de Funciones — plan del área
 
 **Fecha:** 2026-09-17
-**Estado:** interfaz entregada (commit `c8a47c0`); las tres funciones, sin implementar.
+**Estado:** interfaz entregada (commit `c8a47c0`). **Utilidades entregada hasta F2**
+(persistencia + editor, 2026-09-18); le queda F3 (ítem del orden de culto). Entradas y Overlays,
+sin empezar.
 
 La primera columna de abajo pasó de cinco pestañas planas a tres con un segundo nivel:
 
@@ -100,9 +102,11 @@ contenido base y sí respetan las dos etapas.
 
 Uno por vez, de menor a mayor riesgo. Ninguno depende del anterior salvo donde se dice.
 
-1. **Utilidades.** Es la única de las tres que no necesita ni tabla nueva ni dependencias
-   nativas, y obliga a resolver el patrón «el proyector dibuja el tiempo desde una marca
-   absoluta» que Overlays después reutiliza para su animación.
+1. **Utilidades.** ✅ hasta F2. Es la única de las tres que no necesita dependencias nativas, y
+   obliga a resolver el patrón «el proyector dibuja el tiempo desde una marca absoluta» que
+   Overlays después reutiliza para su animación. De paso dejó hechas dos piezas que Overlays da
+   por sentadas: `SceneStyle` con sus validadores, y el par `FieldGroup`/`FieldRow` + `ColorField`
+   en `components/ui/`.
 2. **Overlays.** Tabla, repositorio, IPC CRUD y —lo verdaderamente nuevo— componer una capa
    por encima de la escena sin tocar las transiciones de la escena.
 3. **Entradas.** El más grande por un orden de magnitud: agente de captura nativo, permisos,

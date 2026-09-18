@@ -85,4 +85,13 @@
   `window.worship.invoke` works there and IPC-based setup silently succeeds against the wrong
   target while every DOM query comes back empty).
 
-**Last updated:** 2026-09-13
+- **`startsWith` is not "exactly" — use equality (added 2026-09-18).** The bullet above prescribes
+  `url.startsWith("http://localhost:5173/")`, and that is still wrong once anything is live: the
+  projector is `http://localhost:5173/projection.html`, which passes that check. A driver that
+  picked the first match then read the PROJECTOR's DOM while sending clicks meant for the control
+  window — every query came back empty and the panel looked unmounted, twice, before the url was
+  printed. Match the control window by `url === "http://localhost:<port>/"` and nothing looser.
+  And do not hardcode the port: a stale dev server holding 5173 makes Vite take **5174** silently,
+  so read it out of the dev log (`grep -o "localhost:517[0-9]"`) instead of assuming.
+
+**Last updated:** 2026-09-18

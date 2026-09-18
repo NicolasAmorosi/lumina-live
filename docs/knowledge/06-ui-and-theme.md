@@ -96,6 +96,28 @@ señalética, por eso no se usa acá). Se sirve desde `@fontsource-variable/noto
 `main.tsx`/`projection.tsx` — no hay `@import` de Google Fonts: la app queda usable sin internet
 desde el primer render, incluyendo en una iglesia sin conexión.
 
+## Formularios: `FieldGroup`/`FieldRow`, y `ColorField`
+
+`FieldGroup` + `FieldRow` (`components/ui/field.tsx`) son la forma de CUALQUIER pantalla de
+opciones: un título, un recuadro con líneas divisorias y una fila por opción — etiqueta (con
+descripción opcional) a la izquierda, su control a la derecha, sin envolver nunca. Nacieron dentro
+de Ajustes como `SettingsGroup`/`SettingsRow` y subieron a `ui/` cuando el editor de escenas de
+Utilidades fue el segundo consumidor: es literalmente la regla de reutilización de `CLAUDE.md`
+disparándose. Se agrega una opción a un grupo existente, o se abre un grupo nuevo; nunca una lista
+plana de filas.
+
+`ColorField` es el control de color. Elige de la paleta oficial (las muestras son valores de la
+tabla de ALPS de más arriba) o acepta un hex propio, y **solo emite `#rrggbb`** — una sola forma
+canónica, porque dos escrituras del mismo color en la base es una comparación que falla sobre un
+valor que el operador nunca ve. Abre su popover por portal con `computeMenuPosition`, igual que
+`Select` y `Menu`, porque todo panel y todo diálogo de esta app recorta su overflow.
+
+Los hex que aparecen en `color-field.tsx` y en `DEFAULT_SCENE_STYLE` **no violan** la regla de "nada
+de colores hardcodeados en un componente": son valores de CONTENIDO, guardados en una fila y
+editables por el operador —la misma categoría que el nombre de un programa—, y terminan en un
+`style` inline sobre el escenario del proyector, que no tiene tema. Un color de la INTERFAZ sigue
+saliendo siempre de un token semántico.
+
 ## Layout de la ventana de control — EasyWorship 2009
 
 `components/pages/layout/AppShell.tsx` es el workspace completo, calcado de EasyWorship 2009:

@@ -22,7 +22,8 @@ migración `0004_rename_programs.sql` con `ALTER TABLE ... RENAME` — un recrea
 perdido el `CHECK`, que Drizzle no materializa en el snapshot), `bible_versions`+`bible_books`+`bible_verses`+
 `bible_verses_fts` (FTS5 external-content), `bible_favorites`, `projection_history`,
 `slide_decks`+`deck_slides`+`deck_audio` (cache persistente de presentaciones convertidas,
-direccionado por hash de contenido — ver `03-slides-libreoffice.md`), y `program_draft`.
+direccionado por hash de contenido — ver `03-slides-libreoffice.md`), `program_draft` y
+`utility_scenes` (las escenas de tiempo guardadas de Funciones ▸ Utilidades).
 
 `program_draft` es **una sola fila** (`id = 1`), reescrita entera, con el orden de culto que el
 operador está armando y todavía no guardó. Era el único dato de usuario sin respaldo: vivía solo en
@@ -35,6 +36,31 @@ que poder referenciar un asset que el operador está por borrar, que es exactame
 `onDelete: "restrict"` de esa tabla existe para prohibir — un borrador nunca puede ser lo que
 bloquea un borrado. `DraftRepo.load()` filtra al leer los ítems cuyo asset ya no existe, del lado de
 main, que es el único que puede responder eso sin un round-trip IPC por ítem.
+
+## `utility_scenes` — `tool` en columna, el resto en JSON, y una siembra que ocurre UNA vez
+
+`tool` es una **columna** y no un campo de `config_json` porque es el discriminante: la lista
+muestra un ícono y una etiqueta por escena, y no puede tener que parsear un blob por fila para
+hacerlo. Lo demás se parte en dos JSON con roles distintos: `config_json` es lo que el operador
+configuró (`TimerConfig`) y `style_json` es cómo se ve (`SceneStyle`, pensado para que Overlays y
+los ajustes de proyección de la Biblia lo reutilicen). Son JSON y no treinta columnas para que un
+cambio de forma sea una rama en `shared/scene-validators.ts` y no una migración.
+
+De ahí salen las dos reglas que sostienen la tabla:
+
+- **Main valida al ESCRIBIR** (`isUtilitySceneUpsert`), estricto: `registerHandlers` castea el
+  request desde `unknown`, el renderer es otro proceso y una fila mal escrita sobrevive a la sesión
+  que la escribió. Es el mismo argumento de `SETTINGS_VALIDATORS` sobre una forma más grande.
+- **El repo normaliza al LEER** (`normalizeSceneStyle`/`normalizeTimerConfig`), tolerante y **campo
+  por campo**: una fila escrita por una versión futura, editada a mano o truncada tiene que poder
+  mostrarse igual, y un color roto cuesta el color, no la escena. Misma disciplina que
+  `DraftRepo.load` y el seed de la Biblia. Lo que sale de un normalizador siempre pasa el validador
+  — hay un test que lo afirma.
+
+La siembra de las cuatro escenas de fábrica está guardada por el flag `utility.seeded` de
+`settings`, **no por un conteo de filas**. Sembrar "cuando la tabla está vacía" significaría que el
+operador que borra una escena la encuentra de vuelta el lunes, y que borrarlas todas es imposible.
+Con el flag, borrar es borrar: el panel muestra su estado vacío y ofrece crear una.
 
 ## "¿Está convertido?" se pregunta por CONTENIDO, no por propiedad de la fila
 

@@ -26,7 +26,11 @@ canciones/letras con secciones proyectables.
 - **Video embebido dentro de una diapositiva**: se detecta y se loguea al convertir, pero no se
   extrae ni se reproduce (fuera de alcance acordado). El audio embebido sí funciona.
 - **Ajustes de proyección configurables** (tamaño de fuente, alineación) para biblia/texto: hoy
-  siguen hardcodeados en `vw` dentro de `ProjectionApp.tsx`, igual que la legacy.
+  siguen hardcodeados en `output-view.tsx`, igual que la legacy. La maquinaria para resolverlo ya
+  existe y se construyó pensando en esto: `SceneStyle` (`shared/types/scene-style.ts`) con sus
+  validadores y normalizadores, el `ColorField` y los `FieldGroup`/`FieldRow` del editor de escenas
+  de tiempo. Falta decidir dónde vive el estilo del versículo (¿una fila más, un `settings`?) y
+  enchufarlo — no diseñar nada nuevo.
 - **Pantalla de Configuración**: ya tiene categorías (Proyección, Sistema) con tema e idioma
   expuestos; falta agregar `media.volume` y las claves `slides.*` (override de LibreOffice,
   formato/tamaño de las diapositivas cacheadas) — encajan como un grupo más dentro de una
