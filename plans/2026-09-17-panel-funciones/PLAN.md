@@ -30,7 +30,7 @@ desarrollo»; este documento es el plan para llenarlas.
 
 | Tema | Decisión |
 |---|---|
-| Alcance de Utilidades | Cuenta regresiva (a hora fija **y** por duración), reloj y cronómetro |
+| Alcance de Utilidades | Cuenta regresiva (a hora fija **y** por duración), reloj y cronómetro, cada uno como **escena guardada y editable** — ver la segunda tanda de decisiones en [`utilidades.md`](utilidades.md) |
 | Cómo proyecta la cuenta regresiva | **Pantalla completa**: es un contenido más, tapa lo que había. El fondo es parte de la utilidad |
 | Alcance de Overlays | **Placas guardadas y reutilizables**, en la base de datos: se crean una vez y quedan para el próximo culto |
 | Overlay + NEGRO/LOGO | **Se tapa con todo lo demás.** NEGRO es negro, sin excepciones que el operador tenga que recordar |
@@ -115,10 +115,13 @@ verificación a mano contra el proyector real (no sólo los monitores).
 
 ## Lo que este plan deja explícitamente afuera
 
-- **Que una utilidad o una placa sea un ítem del orden de culto.** Sería un
-  `program_items.kind` nuevo, con migración, borrador y programas guardados detrás. Se puede
-  hacer después; ninguno de los dos planes lo asume.
+- **Que una PLACA sea un ítem del orden de culto.** Una placa modifica lo proyectado en vez de
+  reemplazarlo, así que no tiene lugar en una lista de contenidos; el plan de Overlays no lo
+  asume. Para una **utilidad** sí: el usuario lo pidió el 2026-09-17 y es la fase F3 de
+  [`utilidades.md`](utilidades.md) — `program_items.kind = 'utility'` con su migración a mano,
+  su borrador y sus programas guardados.
 - **Composición libre** (texto sobre video con posición y tamaño arbitrarios). Overlays
-  entrega plantillas, no un editor.
+  entrega plantillas, no un editor. Una escena de utilidad tiene tres roles de texto con
+  tamaño, color y alineación vertical — tampoco es un canvas.
 - **Que el proyector muestre dos utilidades a la vez**, o una utilidad y una entrada externa.
   Contenido base hay uno.
