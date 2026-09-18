@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type Ref } from "react";
 import { Icon } from "@renderer/components/ui";
 import { cn } from "@renderer/lib/utils";
+import { TimerScene } from "./timer-scene";
 import type {
   MediaStatus,
   ProjectionMediaError,
@@ -338,6 +339,11 @@ function OutputScene({ frozenFrame, mode, onImageError, output }: OutputScenePro
           src={output.url}
         />
       ) : null}
+
+      {/* Its own component, and the only part of a scene that re-renders on
+          its own: the countdown ticks inside it, from an absolute mark, so
+          nothing above here moves once per second. */}
+      {output.kind === "timer" ? <TimerScene onImageError={onImageError} output={output} /> : null}
 
       {output.kind === "bible" ? (
         <div
@@ -760,8 +766,14 @@ export function OutputView({
   // video, "the video won't play" is the fact the operator needs — the
   // overlay itself is fine and is about to come off.
   const videoUnderlayUrl = output.videoUnderlay?.url ?? null;
+  // A timer scene's own url is its background image, when it has one — the
+  // only file a generated scene can fail to load.
   const sceneUrl =
-    output.kind === "image" || output.kind === "slide" || output.kind === "logo" ? output.url : null;
+    output.kind === "image" || output.kind === "slide" || output.kind === "logo"
+      ? output.url
+      : output.kind === "timer"
+        ? output.backgroundUrl
+        : null;
   // `mode !== "live"` is belt-and-suspenders on top of the projector simply
   // not passing a label: whatever a future caller does, the congregation
   // never sees this.

@@ -13,7 +13,9 @@ import type {
   VideoUnderlay,
 } from "@shared/types/projection";
 import type { DeckSlide, DeckSoundtrack } from "@shared/types/deck";
+import type { TimerClock } from "@shared/types/timer";
 import { assetUrl, LOGO_URL } from "@shared/urls";
+import { timerOutputFor } from "@renderer/lib/utility-output";
 import { defaultMediaVolume } from "@renderer/stores/settings.store";
 
 /** The deck currently loaded for projection — slide urls are durable, DB-backed
@@ -99,6 +101,15 @@ export type ProjectionStoreState = {
    *  an out-of-range value, and a slider can overshoot by a rounding error. */
   setVideoVolume: (volume: number) => void;
 
+  /** Moves the live utility scene's clock: a pause, a resume, a reset.
+   *
+   *  Patches `base` in place, like `setVideoResumeAt`, and for the same
+   *  reason: neither is "something new is live". Nothing on this path may call
+   *  `beginScene()` — pausing a countdown must not cross-fade the projector
+   *  into an almost identical copy of itself, and the `sameEpoch`
+   *  short-circuit in `OutputView` is what keeps it from doing so. */
+  setTimerClock: (clock: TimerClock) => void;
+
   setLiveDeck: (deck: LiveDeck | null) => void;
   setSlideIndex: (index: number) => void;
   setAutoplay: (state: AutoplayState) => void;
@@ -167,6 +178,15 @@ export const useProjectionStore = create<ProjectionStoreState>()(
         const { base } = state;
         if (base?.kind !== "video" || base.startAtSeconds === startAtSeconds) return state;
         return { base: { ...base, startAtSeconds } };
+      }),
+
+    setTimerClock: (clock) =>
+      set((state) => {
+        const { base } = state;
+        // No-op guard: `base` is an input of `selectOutput`'s memo, so handing
+        // back a new object would push an identical output to the projector.
+        if (base?.kind !== "utility" || base.clock === clock) return state;
+        return { base: { ...base, clock } };
       }),
 
     setLiveDeck: (liveDeck) =>
@@ -295,6 +315,10 @@ function selectOutputWithoutUnderlay(state: ProjectionStoreState): ProjectionOut
       return { kind: "image", url: assetUrl(state.base.assetId) };
     case "bible":
       return { kind: "bible", text: state.base.text, reference: state.base.reference };
+    case "utility":
+      // Shared with the PREVIEW monitor's own output, so the two can never
+      // translate the same scene differently.
+      return timerOutputFor(state.base.scene, state.base.clock);
   }
 }
 

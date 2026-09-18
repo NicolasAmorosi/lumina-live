@@ -1,0 +1,108 @@
+/**
+ * A utility scene: one saved, reusable, projectable piece of time.
+ *
+ * The operator builds "Cuenta 10 minutos" once — with its background, its
+ * typeface, its colour and its message — and picks it off a list every Sunday
+ * after that. From F2 on this is a row in `utility_scenes`; the shape is
+ * identical either way, which is what lets F1 ship the whole feature against
+ * the built-in defaults below without anything having to be rewritten.
+ */
+import { DEFAULT_SCENE_STYLE, type SceneStyle } from "./scene-style";
+import { DEFAULT_TIMER_FORMAT, type TimerConfig, type TimerTool } from "./timer";
+
+export type UtilityScene = {
+  id: number;
+  /** What the operator called it. Free text, shown in the list. */
+  name: string;
+  tool: TimerTool;
+  config: TimerConfig;
+  style: SceneStyle;
+  /** The line above the number. `null` hides it. */
+  title: string | null;
+  /** The line below it — replaced by `config.endMessage` once a countdown
+   *  passes zero. */
+  message: string | null;
+};
+
+/** Only the fields the editor can change; `id` distinguishes an update from a
+ *  create, exactly like `ProgramUpsert`. */
+export type UtilitySceneUpsert = Omit<UtilityScene, "id"> & { id?: number };
+
+/** Which saved programs reference a scene, for the "delete anyway"
+ *  confirmation — the FK violation itself does not say which program. Same
+ *  shape and same purpose as `MediaAssetUsage`. */
+export type UtilitySceneUsage = {
+  programId: number;
+  programName: string;
+  itemCount: number;
+};
+
+const MINUTE_MS = 60_000;
+
+/**
+ * The four scenes a fresh install starts with — one per tool, so the feature
+ * is usable before anybody opens the editor.
+ *
+ * The Spanish literals here are SEED CONTENT, not UI text: they land in a row
+ * the operator renames and edits like any program name, so they do not belong
+ * in the `i18n` dictionary (main, which seeds them from F2 on, has no
+ * dictionary either — the same reason a seeded Bible's book names are data).
+ */
+export const DEFAULT_UTILITY_SCENES: readonly UtilityScene[] = [
+  {
+    id: 1,
+    name: "Cuenta 10 minutos",
+    tool: "countdown",
+    config: {
+      durationMs: 10 * MINUTE_MS,
+      targetMinuteOfDay: 10 * 60,
+      endMessage: "¡Bienvenidos!",
+      format: DEFAULT_TIMER_FORMAT,
+    },
+    style: DEFAULT_SCENE_STYLE,
+    title: "El culto comienza en",
+    message: null,
+  },
+  {
+    id: 2,
+    name: "Comenzamos 10:00",
+    tool: "countdown-to-time",
+    config: {
+      durationMs: 10 * MINUTE_MS,
+      targetMinuteOfDay: 10 * 60,
+      endMessage: "¡Bienvenidos!",
+      format: DEFAULT_TIMER_FORMAT,
+    },
+    style: DEFAULT_SCENE_STYLE,
+    title: "Comenzamos a las 10:00",
+    message: null,
+  },
+  {
+    id: 3,
+    name: "Reloj",
+    tool: "clock",
+    config: {
+      durationMs: 10 * MINUTE_MS,
+      targetMinuteOfDay: 10 * 60,
+      endMessage: null,
+      format: { ...DEFAULT_TIMER_FORMAT, showSeconds: false },
+    },
+    style: DEFAULT_SCENE_STYLE,
+    title: null,
+    message: null,
+  },
+  {
+    id: 4,
+    name: "Cronómetro",
+    tool: "stopwatch",
+    config: {
+      durationMs: 10 * MINUTE_MS,
+      targetMinuteOfDay: 10 * 60,
+      endMessage: null,
+      format: DEFAULT_TIMER_FORMAT,
+    },
+    style: DEFAULT_SCENE_STYLE,
+    title: null,
+    message: null,
+  },
+];

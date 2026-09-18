@@ -127,6 +127,13 @@ export function SlidesPanel() {
         </MediaPanel>
       );
     }
+    if (content.kind === "utility") {
+      return (
+        <MediaPanel className="w-full">
+          <MediaTrackRow kind="utility" label={content.scene.name} onDelete={clearPreview} />
+        </MediaPanel>
+      );
+    }
     return null;
   })();
 
@@ -137,7 +144,9 @@ export function SlidesPanel() {
         ? content.asset.name
         : content?.kind === "bible"
           ? content.reference
-          : null;
+          : content?.kind === "utility"
+            ? content.scene.name
+            : null;
 
   return (
     <>

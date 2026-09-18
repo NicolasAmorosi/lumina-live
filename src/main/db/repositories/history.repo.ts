@@ -13,7 +13,12 @@ export class HistoryRepo {
   private lastDeckAssetId: number | null = null;
 
   record(output: ProjectionOutput, programId: number | null): void {
-    if (output.kind === "black") return; // not worth remembering
+    // Not worth remembering. A timer is excluded for a second reason beyond
+    // "it is not content of the service": every pause, resume and reset is
+    // another `projection:show`, so a countdown left on screen before a
+    // service would write a row per touch, each carrying a whole serialized
+    // scene, straight into the 5000-row budget.
+    if (output.kind === "black" || output.kind === "timer") return;
 
     if (output.kind === "slide") {
       if (this.lastDeckAssetId === output.deckAssetId) return;

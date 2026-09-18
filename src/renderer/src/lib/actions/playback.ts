@@ -5,6 +5,7 @@ import { useDisplayStore } from "@renderer/stores/display.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
 import { useBibleStore } from "@renderer/stores/bible.store";
 import { useAudioStore, nextAssetTrack } from "@renderer/stores/audio.store";
+import { findScene, useUtilityStore } from "@renderer/stores/utility.store";
 import { notifyManualNavigation } from "@renderer/effects/deck-autoplay";
 import { projectVerse } from "@renderer/lib/actions/bible";
 import { stopPreviewPlayback } from "@renderer/lib/actions/preview-playback";
@@ -180,6 +181,36 @@ async function goLiveWithMediaAsset(
   return "base";
 }
 
+/**
+ * A utility scene replaces `base` like any other content — it is full-screen
+ * content, not an overlay (decision of 2026-09-17).
+ *
+ * Synchronous, so the `isCurrentLiveIntent` check `goLive()` already made
+ * after opening the projector still holds: there is no `await` between there
+ * and the commit below.
+ */
+function goLiveWithUtilityScene(sceneId: number): void {
+  const utility = useUtilityStore.getState();
+  const scene = findScene(utility.scenes, sceneId);
+  if (!scene) return;
+
+  // EN VIVO on a countdown nobody started means "start it": projecting a
+  // frozen 10:00 is never what the operator meant by pressing it. One they
+  // paused on purpose is left exactly as it is — same rule as a video's
+  // declarative `paused`.
+  const clock = utility.ensureStarted(scene);
+
+  // Live content that isn't in the schedule: no row may claim the on-air rail.
+  useProgramStore.getState().setActive(null);
+  useAudioStore.getState().setDeckTrack(null);
+  useBibleStore.getState().setCurrentVerseIndex(null);
+
+  const store = useProjectionStore.getState();
+  store.beginScene();
+  store.setBase({ kind: "utility", sceneId: scene.id, scene, clock });
+  store.setOverlay("none");
+}
+
 async function goLiveWithScheduleItem(
   index: number,
   startSlideIndex: number,
@@ -287,6 +318,9 @@ export async function goLive(): Promise<void> {
       useProjectionStore.getState().beginScene();
       projectVerse(target.verseIndex);
       useProjectionStore.getState().setOverlay("none");
+      return;
+    case "utility":
+      goLiveWithUtilityScene(target.sceneId);
   }
 }
 

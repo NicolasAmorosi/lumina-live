@@ -33,6 +33,16 @@ export function previewAsset(assetId: number, assetKind: AssetKind): void {
   usePreviewStore.getState().setTarget({ kind: "asset", assetId, assetKind });
 }
 
+/** A saved utility scene. Deliberately does NOT arm or start its timer:
+ *  selecting is never acting, and a countdown that started because somebody
+ *  clicked a row is a countdown nobody asked for. Starting it is the
+ *  transport's job, or `goLive()`'s. */
+export function previewUtilityScene(sceneId: number): void {
+  useProgramStore.getState().select(null);
+  useLibraryStore.getState().select(null);
+  usePreviewStore.getState().setTarget({ kind: "utility", sceneId });
+}
+
 export function setPreviewSlide(index: number): void {
   usePreviewStore.getState().setSlideIndex(index);
 }

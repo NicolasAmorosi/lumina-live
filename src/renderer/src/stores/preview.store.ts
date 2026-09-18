@@ -10,7 +10,12 @@ import type { AssetKind } from "@shared/constants";
 export type PreviewTarget =
   | { kind: "scheduleItem"; index: number }
   | { kind: "verse"; verseIndex: number }
-  | { kind: "asset"; assetId: number; assetKind: AssetKind };
+  | { kind: "asset"; assetId: number; assetKind: AssetKind }
+  /** A saved utility scene (a countdown, the clock, a stopwatch). Only its id
+   *  — unlike the live `base`, a preview target is re-resolved on every render
+   *  anyway, so holding a copy of the scene here would just be a copy that can
+   *  go stale while the operator edits it. */
+  | { kind: "utility"; sceneId: number };
 
 type PreviewStoreState = {
   /** 1-based cursor inside the previewed deck, independent of the live one. */

@@ -21,6 +21,9 @@ import {
 } from "@renderer/stores/projection.store";
 import { LOGO_URL, assetUrl, slideUrl } from "@shared/urls";
 import type { DeckSlide } from "@shared/types/deck";
+import { DEFAULT_SCENE_STYLE } from "@shared/types/scene-style";
+import { DEFAULT_TIMER_FORMAT } from "@shared/types/timer";
+import type { UtilityScene } from "@shared/types/utility";
 
 const initialState = useProjectionStore.getState();
 
@@ -46,6 +49,19 @@ function deckOf(assetId: number, slideCount: number): LiveDeck {
     soundtrack: null,
     cumulativeMs: buildCumulativeMs(slides),
     autoAdvance: false,
+  };
+}
+
+function scene(overrides: Partial<UtilityScene> = {}): UtilityScene {
+  return {
+    id: 1,
+    name: "Cuenta 10 minutos",
+    tool: "countdown",
+    config: { durationMs: 600_000, targetMinuteOfDay: 600, endMessage: null, format: DEFAULT_TIMER_FORMAT },
+    style: DEFAULT_SCENE_STYLE,
+    title: "El culto comienza en",
+    message: null,
+    ...overrides,
   };
 }
 
@@ -279,5 +295,106 @@ describe("buildCumulativeMs", () => {
 
   test("an empty deck still yields the two leading zeroes", () => {
     expect(buildCumulativeMs([])).toEqual([0, 0]);
+  });
+});
+
+/**
+ * A utility scene is full-screen base content like any other — and the one
+ * whose value changes on its own, which is exactly why none of that change may
+ * reach this function. What the projector gets is a fixed mark.
+ */
+describe("a utility scene on the projector", () => {
+  const clock = { mode: "countdown", state: "running", endsAtMs: 1_000 } as const;
+
+  test("the scene reaches the projector resolved, as a mark plus its formatting", () => {
+    useProjectionStore.getState().setBase({ kind: "utility", sceneId: 1, scene: scene(), clock });
+    const result = output();
+    expect(result.kind).toBe("timer");
+    if (result.kind !== "timer") throw new Error("unreachable");
+    expect(result.clock).toEqual(clock);
+    expect(result.title).toBe("El culto comienza en");
+    expect(result.format).toEqual(DEFAULT_TIMER_FORMAT);
+    // Nothing in the output is a second-by-second value: the projector
+    // subtracts against its own clock, and this object never moves.
+    expect(JSON.stringify(result)).not.toContain("remaining");
+  });
+
+  test("an image background travels as a capability url, never as an id the projector must resolve", () => {
+    const withImage = scene({
+      style: { ...DEFAULT_SCENE_STYLE, background: { kind: "image", assetId: 42, fit: "cover" } },
+    });
+    useProjectionStore.getState().setBase({ kind: "utility", sceneId: 1, scene: withImage, clock });
+    const result = output();
+    expect(result.kind === "timer" && result.backgroundUrl).toBe(assetUrl(42));
+  });
+
+  test("a colour background resolves to no url at all", () => {
+    useProjectionStore.getState().setBase({ kind: "utility", sceneId: 1, scene: scene(), clock });
+    const result = output();
+    expect(result.kind === "timer" && result.backgroundUrl).toBeNull();
+  });
+
+  test("NEGRO covers it and the mark survives underneath, unchanged", () => {
+    const store = useProjectionStore.getState();
+    store.setBase({ kind: "utility", sceneId: 1, scene: scene(), clock });
+    store.setOverlay("black");
+    expect(output().kind).toBe("black");
+
+    useProjectionStore.getState().setOverlay("none");
+    const result = output();
+    // The count is a mark, so being covered costs it nothing: it comes back
+    // showing the time that has actually passed, not the time it was covered at.
+    expect(result.kind === "timer" && result.clock).toEqual(clock);
+  });
+});
+
+describe("pausing a timer is not a new scene", () => {
+  test("setTimerClock moves the clock without touching the scene epoch", () => {
+    const store = useProjectionStore.getState();
+    store.beginScene();
+    store.setBase({
+      kind: "utility",
+      sceneId: 1,
+      scene: scene(),
+      clock: { mode: "countdown", state: "running", endsAtMs: 1_000 },
+    });
+    const epoch = useProjectionStore.getState().sceneEpoch;
+
+    useProjectionStore.getState().setTimerClock({ mode: "countdown", state: "held", remainingMs: 500 });
+
+    // A bumped epoch here would cross-fade the projector into an almost
+    // identical copy of itself, mid-service.
+    expect(useProjectionStore.getState().sceneEpoch).toBe(epoch);
+    const result = output();
+    expect(result.kind === "timer" && result.clock).toEqual({
+      mode: "countdown",
+      state: "held",
+      remainingMs: 500,
+    });
+  });
+
+  test("it is a no-op when the live content is not this utility", () => {
+    const store = useProjectionStore.getState();
+    store.setBase({ kind: "image", assetId: 3 });
+    const before = selectOutputMemo(useProjectionStore.getState());
+
+    useProjectionStore.getState().setTimerClock({ mode: "countdown", state: "held", remainingMs: 1 });
+
+    // Same object, so nothing is pushed to the projector at all.
+    expect(selectOutputMemo(useProjectionStore.getState())).toBe(before);
+  });
+
+  test("a running countdown produces no new output as time passes", () => {
+    const store = useProjectionStore.getState();
+    store.setBase({
+      kind: "utility",
+      sceneId: 1,
+      scene: scene(),
+      clock: { mode: "countdown", state: "running", endsAtMs: Date.now() + 600_000 },
+    });
+    const first = selectOutputMemo(useProjectionStore.getState());
+    // The whole design in one assertion: sixty seconds of a running countdown
+    // is zero pushes, zero history rows and zero scene transitions.
+    expect(selectOutputMemo(useProjectionStore.getState())).toBe(first);
   });
 });

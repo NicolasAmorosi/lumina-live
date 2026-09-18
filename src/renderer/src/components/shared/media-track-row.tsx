@@ -3,7 +3,7 @@ import { IconButton, Icon, MediaScrubber, VolumeControl, type IconName } from "@
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { cn, formatClock } from "@renderer/lib/utils";
 
-export type MediaTrackKind = "video" | "audio" | "image" | "bible";
+export type MediaTrackKind = "video" | "audio" | "image" | "bible" | "utility";
 
 type MediaTrackRowProps = {
   className?: string;
@@ -51,6 +51,9 @@ const kindIcon: Record<MediaTrackKind, IconName> = {
   audio: "audio",
   image: "image",
   bible: "bible",
+  // Generic on purpose: the row is labelled with the scene's own name, and
+  // the tool's specific icon is what the list in the Utilities tab shows.
+  utility: "clock",
 };
 // "bible" never carries a duration, so this is never actually read for it —
 // present only to keep the Record exhaustive.
@@ -59,6 +62,7 @@ const kindTone: Record<MediaTrackKind, "primary" | "audio"> = {
   audio: "audio",
   image: "primary",
   bible: "primary",
+  utility: "primary",
 };
 
 /**

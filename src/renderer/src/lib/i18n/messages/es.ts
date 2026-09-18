@@ -115,9 +115,6 @@ const es = {
     title: "Funciones",
     inDevelopment: "En desarrollo",
     utilities: "Utilidades",
-    utilitiesTitle: "Relojes y cuentas regresivas",
-    utilitiesHint:
-      "Va a permitir proyectar una cuenta regresiva antes del culto, un reloj y un cronómetro, solos o encima de lo que ya está en pantalla.",
     inputs: "Entradas",
     inputsTitle: "Fuentes de video externas",
     inputsHint:
@@ -126,6 +123,20 @@ const es = {
     overlaysTitle: "Capas sobre lo proyectado",
     overlaysHint:
       "Va a permitir superponer una placa —el nombre del predicador, un aviso— sobre un video o cualquier otra cosa que esté en vivo.",
+  },
+  utilities: {
+    listLabel: "Escenas de tiempo",
+    tools: {
+      countdown: "Cuenta regresiva",
+      countdownToTime: "A una hora",
+      clock: "Reloj",
+      stopwatch: "Cronómetro",
+    },
+    start: "Arrancar",
+    pause: "Pausar",
+    resume: "Reanudar",
+    reset: "Reiniciar",
+    finished: "Terminó",
   },
   bible: {
     title: "Biblia",

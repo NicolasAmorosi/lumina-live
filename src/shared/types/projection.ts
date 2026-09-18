@@ -4,6 +4,10 @@
  * `selectOutput` switch (renderer/stores/projection.store.ts) is a compile error,
  * not a runtime "stuck on logo" bug like the old `restorePrevious()`.
  */
+import type { SceneStyle } from "./scene-style";
+import type { TimerClock, TimerFormat } from "./timer";
+import type { UtilityScene } from "./utility";
+
 /** Which video (if any) is the current *base* content, independent of NEGRO/
  *  LOGO. Present on every `ProjectionOutput` variant (including "black" and
  *  "logo" themselves) so the projection window can keep a video's element —
@@ -53,6 +57,33 @@ export type ProjectionOutputKind =
        *  slide change never waits on a decode. Computed here (domain logic
        *  belongs in the control window), materialized there. */
       preload: string[];
+    }
+  /**
+   * A generated time scene: a countdown, the wall clock or a stopwatch.
+   *
+   * Everything here is either a MARK the projection window subtracts against
+   * its own clock, or FORMATTING it applies to the result — see `TimerClock`
+   * and `TimerFormat`. Nothing in it is a decision, and nothing in it changes
+   * while the count runs, which is what keeps `sceneContentKey` stable and
+   * the scene from re-animating once per second.
+   */
+  | {
+      kind: "timer";
+      clock: TimerClock;
+      format: TimerFormat;
+      style: SceneStyle;
+      /** Resolved from `style.background` when it is an image — the same
+       *  reason `VideoUnderlay` carries a url and not an `assetId`: the
+       *  projection window resolves nothing. `null` for every other kind of
+       *  background. */
+      backgroundUrl: string | null;
+      title: string | null;
+      /** Swapped for `endMessage` by the projector itself once the countdown
+       *  passes zero: a pure function of the mark it is already rendering, so
+       *  making the control window push it would mean a clock and a push per
+       *  second — and a full scene transition at exactly the wrong moment. */
+      message: string | null;
+      endMessage: string | null;
     };
 
 /** How the projector should move from whatever it was showing to a new
@@ -187,6 +218,20 @@ export type BaseContent =
   | { kind: "deck"; assetId: number; slideIndex: number }
   | { kind: "video"; assetId: number; epoch: number; startAtSeconds: number }
   | { kind: "image"; assetId: number }
-  | { kind: "bible"; text: string; reference: string };
+  | { kind: "bible"; text: string; reference: string }
+  /**
+   * A utility scene on the projector.
+   *
+   * The scene travels RESOLVED, not as an id: `selectOutput` is a pure
+   * function of `ProjectionStoreState` and its memo compares that tuple by
+   * reference (`outputInputs`), so reaching into `utility.store` from inside
+   * it would break both. It is the same rule `videoUnderlay` follows.
+   *
+   * `clock` is separate from `scene.config` because it is the only part that
+   * moves: pause, resume and reset rewrite it in place (`setTimerClock`)
+   * without beginning a new scene, and editing the scene while it is live
+   * rewrites `scene` the same way.
+   */
+  | { kind: "utility"; sceneId: number; scene: UtilityScene; clock: TimerClock };
 
 export type OverlayState = "none" | "black" | "logo";

@@ -3,8 +3,11 @@ import { useDeckStore } from "@renderer/stores/deck.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
 import { useProgramStore } from "@renderer/stores/program.store";
 import { useMediaAsset } from "@renderer/lib/hooks/use-media-asset";
+import { clockForScene, findScene, useUtilityStore } from "@renderer/stores/utility.store";
+import { timerOutputFor } from "@renderer/lib/utility-output";
 import { assetUrl } from "@shared/urls";
 import type { MediaAsset } from "@shared/types/media";
+import type { UtilityScene } from "@shared/types/utility";
 import { INSTANT_TRANSITION } from "@shared/types/projection";
 import type { ProjectionOutput } from "@shared/types/projection";
 
@@ -16,12 +19,14 @@ import type { ProjectionOutput } from "@shared/types/projection";
 export type PreviewContent =
   | { kind: "deck"; assetId: number; title: string; missingSince: number | null }
   | { kind: "media"; asset: MediaAsset }
-  | { kind: "bible"; reference: string; text: string; verseIndex: number | null };
+  | { kind: "bible"; reference: string; text: string; verseIndex: number | null }
+  | { kind: "utility"; scene: UtilityScene };
 
 export function usePreviewContent(): PreviewContent | null {
   const target = usePreviewStore((s) => s.target);
   const items = useProgramStore((s) => s.items);
   const verses = useBibleStore((s) => s.verses);
+  const scenes = useUtilityStore((s) => s.scenes);
 
   const scheduleItem = target?.kind === "scheduleItem" ? items[target.index] : undefined;
   const scheduleAssetId =
@@ -42,6 +47,13 @@ export function usePreviewContent(): PreviewContent | null {
       text: verse.text,
       verseIndex: target.verseIndex,
     };
+  }
+
+  if (target.kind === "utility") {
+    // Resolved on every render rather than copied into the target, so editing
+    // a scene is reflected in the preview the moment it is saved.
+    const scene = findScene(scenes, target.sceneId);
+    return scene ? { kind: "utility", scene } : null;
   }
 
   if (target.kind === "asset") {
@@ -83,6 +95,7 @@ export function usePreviewContent(): PreviewContent | null {
 export function usePreviewOutput(content: PreviewContent | null): ProjectionOutput | null {
   const slideIndex = usePreviewStore((s) => s.slideIndex);
   const playing = usePreviewStore((s) => s.playing);
+  const run = useUtilityStore((s) => s.run);
   const deckEntry = useDeckStore((s) => (content?.kind === "deck" ? s.byAssetId[content.assetId] : undefined));
 
   if (!content) return null;
@@ -150,6 +163,15 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
         kind: "bible",
         text: content.text,
         reference: content.reference,
+        videoUnderlay: null,
+        transition: INSTANT_TRANSITION,
+      };
+    case "utility":
+      // The SAME clock the transport shows, so an operator who started the
+      // countdown sees it running here before deciding to send it — and the
+      // same builder the projector's own output uses.
+      return {
+        ...timerOutputFor(content.scene, clockForScene(run, content.scene, Date.now())),
         videoUnderlay: null,
         transition: INSTANT_TRANSITION,
       };

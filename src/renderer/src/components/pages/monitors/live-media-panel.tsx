@@ -25,8 +25,8 @@ const VIDEO_ERROR_KEY = mediaErrorKey({ kind: "video" });
  * soundtrack (if it has one), and every standalone audio track sent live
  * independently. Any number of these can sound at once; this panel is what
  * keeps that legible instead of leaving the operator guessing what's on.
- * A live image gets a row too, even though it has nothing to play — just its
- * name and a way to clear it back to empty.
+ * A live image or utility scene gets a row too, even though neither has
+ * anything to play — just its name and a way to clear it back to empty.
  *
  * Renders nothing at all when silent, so a service with no audio in play
  * looks exactly like it did before this panel existed.
@@ -83,6 +83,17 @@ export function LiveMediaPanel() {
         label={heading ?? ""}
         onDelete={clearBaseContent}
       />,
+    );
+  }
+
+  if (base?.kind === "utility") {
+    // Same reason the live image gets a row: it plays nothing, but every
+    // other kind of live content has a way to take it off the projector from
+    // here, and a countdown the operator cannot dismiss without pressing LOGO
+    // is the odd one out. The timer's own controls stay in the Utilities tab,
+    // where they work whether or not the scene is live.
+    rows.push(
+      <MediaTrackRow key="utility" kind="utility" label={heading ?? ""} onDelete={clearBaseContent} />,
     );
   }
 
