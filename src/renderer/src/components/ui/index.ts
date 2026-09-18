@@ -15,6 +15,8 @@ export { LoadingState } from "./loading-state";
 export { MediaScrubber } from "./media-scrubber";
 export { VolumeControl } from "./volume-control";
 export { Title, Label, Caption } from "./title";
+export { FieldGroup, FieldRow } from "./field";
+export { ColorField } from "./color-field";
 export { HighlightedText, type TextSegment } from "./highlighted-text";
 export { Dialog, DialogHeader, DialogContent, DialogFooter } from "./dialog";
 export { Tabs, TabPanel, TabPanels, type TabItem, type TabsVariant } from "./tabs";

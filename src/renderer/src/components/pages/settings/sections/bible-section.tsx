@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
-import { Button, Icon, Tooltip } from "@renderer/components/ui";
+import { Button, FieldGroup, FieldRow, Icon, Tooltip } from "@renderer/components/ui";
 import { useBibleStore } from "@renderer/stores/bible.store";
 import { api } from "@renderer/lib/api";
 import { toast } from "@renderer/lib/toast";
-import { SettingsGroup, SettingsRow } from "../settings-row";
 
 /** Scripture-related settings: importing bible versions. */
 export function BibleSection() {
@@ -41,8 +40,8 @@ export function BibleSection() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SettingsGroup title={t("settings.groups.versions")}>
-        <SettingsRow description={t("settings.bibleImportDesc")} label={t("settings.bibleImport")}>
+      <FieldGroup title={t("settings.groups.versions")}>
+        <FieldRow description={t("settings.bibleImportDesc")} label={t("settings.bibleImport")}>
           <Tooltip content={t("settings.bibleImportFormats")} floating>
             <Icon className="text-subtle" name="help" />
           </Tooltip>
@@ -54,8 +53,8 @@ export function BibleSection() {
           >
             {t("bible.import")}
           </Button>
-        </SettingsRow>
-      </SettingsGroup>
+        </FieldRow>
+      </FieldGroup>
     </div>
   );
 }

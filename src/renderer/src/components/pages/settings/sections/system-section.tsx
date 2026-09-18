@@ -1,8 +1,7 @@
 import type { Locale } from "@shared/types/settings";
 import { availableLocales, useT, type MessageKey } from "@renderer/lib/i18n/i18n-provider";
-import { Button, Icon, Select } from "@renderer/components/ui";
+import { Button, FieldGroup, FieldRow, Icon, Select } from "@renderer/components/ui";
 import { useSettingsStore } from "@renderer/stores/settings.store";
-import { SettingsGroup, SettingsRow } from "../settings-row";
 
 const LOCALE_LABEL_KEYS: Record<Locale, MessageKey> = {
   es: "settings.locales.es",
@@ -19,8 +18,8 @@ export function SystemSection() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SettingsGroup title={t("settings.groups.appearance")}>
-        <SettingsRow description={t("settings.themeDesc")} label={t("settings.theme")}>
+      <FieldGroup title={t("settings.groups.appearance")}>
+        <FieldRow description={t("settings.themeDesc")} label={t("settings.theme")}>
           <div className="inline-flex gap-1 rounded-lg border border-border p-0.5">
             <Button
               className="w-28 justify-center"
@@ -41,11 +40,11 @@ export function SystemSection() {
               <Icon name="sun" /> {t("settings.themeLight")}
             </Button>
           </div>
-        </SettingsRow>
-      </SettingsGroup>
+        </FieldRow>
+      </FieldGroup>
 
-      <SettingsGroup title={t("settings.groups.language")}>
-        <SettingsRow description={t("settings.languageDesc")} label={t("settings.language")}>
+      <FieldGroup title={t("settings.groups.language")}>
+        <FieldRow description={t("settings.languageDesc")} label={t("settings.language")}>
           <Select
             className="min-w-40"
             onChange={(value) => void updateSettings({ "ui.locale": value as Locale })}
@@ -53,8 +52,8 @@ export function SystemSection() {
             size="md"
             value={locale}
           />
-        </SettingsRow>
-      </SettingsGroup>
+        </FieldRow>
+      </FieldGroup>
     </div>
   );
 }

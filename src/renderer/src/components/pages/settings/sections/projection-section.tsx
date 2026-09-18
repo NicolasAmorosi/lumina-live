@@ -1,5 +1,5 @@
 import { useT, type MessageKey } from "@renderer/lib/i18n/i18n-provider";
-import { Button, Icon, Select, Tooltip, VolumeControl } from "@renderer/components/ui";
+import { Button, FieldGroup, FieldRow, Icon, Select, Tooltip, VolumeControl } from "@renderer/components/ui";
 import { useDisplayStore } from "@renderer/stores/display.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { useSettingsStore } from "@renderer/stores/settings.store";
@@ -9,7 +9,6 @@ import { toast } from "@renderer/lib/toast";
 import { IpcError } from "@shared/ipc/result";
 import { LOGO_URL } from "@shared/urls";
 import type { TransitionStyle } from "@shared/types/projection";
-import { SettingsGroup, SettingsRow } from "../settings-row";
 
 const TRANSITION_STYLE_LABEL_KEYS: Record<TransitionStyle, MessageKey> = {
   none: "settings.transitionStyles.none",
@@ -59,8 +58,8 @@ export function ProjectionSection() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SettingsGroup title={t("settings.groups.screen")}>
-        <SettingsRow description={t("settings.displayDesc")} label={t("settings.display")}>
+      <FieldGroup title={t("settings.groups.screen")}>
+        <FieldRow description={t("settings.displayDesc")} label={t("settings.display")}>
           <Select
             className="min-w-56"
             onChange={(value) => void setDisplayId(Number(value))}
@@ -71,8 +70,8 @@ export function ProjectionSection() {
             size="md"
             value={displayId !== null ? String(displayId) : ""}
           />
-        </SettingsRow>
-        <SettingsRow description={t("settings.windowDesc")} label={t("settings.windowLabel")}>
+        </FieldRow>
+        <FieldRow description={t("settings.windowDesc")} label={t("settings.windowLabel")}>
           {presentationOpen ? (
             <Button onClick={() => void useDisplayStore.getState().close()} variant="secondary">
               {t("header.closeDisplay")}
@@ -82,18 +81,18 @@ export function ProjectionSection() {
               {t("header.openDisplay")}
             </Button>
           )}
-        </SettingsRow>
-      </SettingsGroup>
+        </FieldRow>
+      </FieldGroup>
 
-      <SettingsGroup title={t("settings.groups.logo")}>
-        <SettingsRow description={t("settings.logoDesc")} label={t("settings.logo")}>
+      <FieldGroup title={t("settings.groups.logo")}>
+        <FieldRow description={t("settings.logoDesc")} label={t("settings.logo")}>
           <Tooltip content={t("settings.logoFormats")} floating>
             <Icon className="text-subtle" name="help" />
           </Tooltip>
           <Button onClick={() => void changeLogo()} variant="secondary">
             {t("settings.chooseFile")}
           </Button>
-        </SettingsRow>
+        </FieldRow>
         <div className="flex h-64 items-center justify-center overflow-hidden bg-surface px-4 py-3">
           {logoUrl ? (
             <img alt="" className="h-full max-w-full object-contain" src={logoUrl} />
@@ -101,18 +100,18 @@ export function ProjectionSection() {
             <Icon className="text-subtle" name="image" />
           )}
         </div>
-      </SettingsGroup>
+      </FieldGroup>
 
-      <SettingsGroup title={t("settings.groups.liveContent")}>
-        <SettingsRow description={t("settings.clearLiveDesc")} label={t("settings.clearLive")}>
+      <FieldGroup title={t("settings.groups.liveContent")}>
+        <FieldRow description={t("settings.clearLiveDesc")} label={t("settings.clearLive")}>
           <Button disabled={base === null} onClick={clearLive} variant="outline">
             <Icon name="close" /> {t("footer.clear")}
           </Button>
-        </SettingsRow>
-      </SettingsGroup>
+        </FieldRow>
+      </FieldGroup>
 
-      <SettingsGroup title={t("settings.groups.audio")}>
-        <SettingsRow description={t("settings.startVolumeDesc")} label={t("settings.startVolume")}>
+      <FieldGroup title={t("settings.groups.audio")}>
+        <FieldRow description={t("settings.startVolumeDesc")} label={t("settings.startVolume")}>
           <span className="w-10 text-right text-sm tabular-nums text-muted-foreground">
             {Math.round(startVolume * 100)}%
           </span>
@@ -122,11 +121,11 @@ export function ProjectionSection() {
             onChange={(volume) => void updateSettings({ "media.volume": volume })}
             value={startVolume}
           />
-        </SettingsRow>
-      </SettingsGroup>
+        </FieldRow>
+      </FieldGroup>
 
-      <SettingsGroup title={t("settings.groups.transition")}>
-        <SettingsRow description={t("settings.transitionStyleDesc")} label={t("settings.transitionStyle")}>
+      <FieldGroup title={t("settings.groups.transition")}>
+        <FieldRow description={t("settings.transitionStyleDesc")} label={t("settings.transitionStyle")}>
           <Select
             className="min-w-48"
             onChange={(value) => void updateSettings({ "projection.transition.style": value as TransitionStyle })}
@@ -137,8 +136,8 @@ export function ProjectionSection() {
             size="md"
             value={transitionStyle}
           />
-        </SettingsRow>
-        <SettingsRow description={t("settings.transitionDurationDesc")} label={t("settings.transitionDuration")}>
+        </FieldRow>
+        <FieldRow description={t("settings.transitionDurationDesc")} label={t("settings.transitionDuration")}>
           <Select
             className="min-w-40"
             disabled={transitionStyle === "none"}
@@ -150,8 +149,8 @@ export function ProjectionSection() {
             size="md"
             value={String(transitionDurationMs)}
           />
-        </SettingsRow>
-      </SettingsGroup>
+        </FieldRow>
+      </FieldGroup>
     </div>
   );
 }
