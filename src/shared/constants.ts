@@ -13,7 +13,11 @@ export const ASSET_EXTENSIONS: Record<AssetKind, readonly string[]> = {
   ppt: ["ppt", "pptx", "pptm", "pps", "ppsx", "ppsm", "odp"],
 };
 
-export const PROGRAM_ITEM_KINDS = ["media", "ppt", "bible", "text"] as const;
+// A `text` kind used to live here too: schema column, DTO, repo mapping,
+// preview, projector output — everything except a way to create one. It was
+// removed in 0009 rather than finished; an announcement is a PPT slide in
+// this church's workflow, and a half-wired kind is worse than no kind.
+export const PROGRAM_ITEM_KINDS = ["media", "ppt", "bible"] as const;
 export type ProgramItemKind = (typeof PROGRAM_ITEM_KINDS)[number];
 
 /** Bump to invalidate every cached deck at once when the conversion pipeline
@@ -35,6 +39,32 @@ export const SLIDES_CONVERTER_VERSION = 2;
  *  self-correct without the operator touching each one by hand. */
 export const LINKED_AUDIO_RESOLVER_VERSION = 1;
 export const SLIDES_THUMB_WIDTH = 320;
+
+/** Bump to invalidate every cached media thumbnail at once when the way they
+ *  are generated changes (a different width, a different encoder setting).
+ *  Same role `SLIDES_CONVERTER_VERSION` plays for decks: it is part of the
+ *  cache key, so a bump simply makes every existing file a miss instead of
+ *  requiring anyone to delete a directory by hand. */
+export const MEDIA_THUMB_VERSION = 1;
+/** Width of a generated library thumbnail, in px. Two-ish times the ~120px a
+ *  tile occupies, so it still looks right on a HiDPI screen without keeping a
+ *  full-resolution decode of every visible image alive. */
+export const MEDIA_THUMB_WIDTH = 320;
+/** JPEG quality for generated thumbnails — deliberately not PNG: a tile is a
+ *  photo or a video frame, and a lossless encode of one costs an order of
+ *  magnitude more bytes for no visible gain at this size. */
+export const MEDIA_THUMB_QUALITY = 80;
+/** Thumbnails untouched for this long are pruned at startup. `size+mtime` is
+ *  part of the cache key, so editing a file orphans its old thumbnail
+ *  forever; this is what eventually collects those. Regenerating one is
+ *  cheap, so erring on the short side costs nothing but a redraw. */
+export const MEDIA_THUMB_MAX_AGE_MS = 60 * 24 * 60 * 60 * 1000;
+/** Hard ceiling on the thumbnail directory, enforced oldest-first after the
+ *  age pass. Age alone never bounded it: a church that adds a few hundred
+ *  photos every week keeps every one of those thumbnails "fresh" and the
+ *  directory only grows. At ~12 KB a thumbnail this is roughly 20.000 of
+ *  them — far more than any real library shows in two months. */
+export const MEDIA_THUMB_MAX_BYTES = 256 * 1024 * 1024;
 export const SLIDES_DEFAULT_RENDER_WIDTH = 1920;
 export const SLIDES_MIN_RENDER_WIDTH = 1280;
 export const SLIDES_MAX_RENDER_WIDTH = 2560;
@@ -43,6 +73,32 @@ export const SLIDES_DEFAULT_CACHE_MB = 4096;
  *  fly past in a single frame. */
 export const SLIDES_MIN_ADVANCE_MS = 250;
 export const SOFFICE_PROBE_TIMEOUT_MS = 10_000;
+/** How many decks a background prewarm batch converts per `soffice`
+ *  invocation. LibreOffice's own startup cost (not the per-file conversion)
+ *  is what dominates converting hundreds of small files one at a time —
+ *  batching amortizes it, but a batch this size still finishes in well under
+ *  a minute so a soft-preemption for an interactive job never loses much
+ *  work. Never used for the interactive `deck:ensure` path (always 1). */
+export const SLIDES_BATCH_SIZE = 20;
+/** A prewarm automatic "visible" set is capped at this many decks. Now that
+ *  the library grid is virtualized, "visible" is a real viewport range rather
+ *  than "this whole linked folder's current view", so this is a backstop
+ *  rather than the main defence: a very tall window at a very small tile size
+ *  could still mount more tiles than a background queue should be handed at
+ *  once. Anything beyond it is reachable through the manual "Preparar
+ *  carpeta" button. */
+export const PREWARM_VISIBLE_MAX = 32;
+/** How many of an explicit import's presentations are converted automatically.
+ *
+ *  Dropping a folder of 600 `.pps` onto the library used to enqueue 600
+ *  conversions — no confirmation, no progress bar, no way to stop it — which
+ *  is precisely the "nunca 600 decks automáticos" case the tracked, cancelable
+ *  "Preparar carpeta" button exists for. Importing a handful and having them
+ *  ready by the time you scroll to them is the behaviour worth keeping, and
+ *  that is what this preserves; everything past it stays a deliberate act.
+ *  Nothing is lost either way — an unconverted deck still converts on demand
+ *  the moment it is previewed. */
+export const PREWARM_EXPLICIT_MAX = 20;
 export const SLIDES_RASTER_PAGE_TIMEOUT_MS = 30_000;
 
 export const DEFAULT_MEDIA_VOLUME = 0.5;

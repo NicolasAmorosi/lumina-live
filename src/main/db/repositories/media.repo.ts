@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray, sql } from "drizzle-orm";
 import Database from "better-sqlite3";
 import type { Db } from "../client";
 import { mediaAssets } from "../schema";
@@ -8,6 +8,11 @@ import { LINKED_AUDIO_RESOLVER_VERSION, type AssetKind } from "@shared/constants
 import type { MediaAsset } from "@shared/types/media";
 import { resolveLinkedAudio } from "../../slides/linked-audio";
 import { IpcError } from "@shared/ipc/result";
+
+/** One `IN (...)` binds one parameter per id, and SQLite refuses the
+ *  statement past `SQLITE_MAX_VARIABLE_NUMBER`. Every query here that takes
+ *  a caller-sized list of ids partitions it with this. */
+const ID_CHUNK = 500;
 
 function toPathKey(filePath: string): string {
   const normalized = path.normalize(filePath).normalize("NFC");
@@ -22,6 +27,7 @@ function toDTO(row: typeof mediaAssets.$inferSelect): MediaAsset {
     ext: row.ext,
     path: row.path,
     sizeBytes: row.sizeBytes,
+    mtimeMs: row.mtimeMs,
     durationMs: row.durationMs,
     linkedAudioPath: row.linkedAudioPath,
     inLibrary: row.inLibrary === 1,
@@ -31,16 +37,11 @@ function toDTO(row: typeof mediaAssets.$inferSelect): MediaAsset {
   };
 }
 
-/** Resolves the audio a legacy `.ppt`/`.pps` deck points at (or sits next to)
- *  — see `linked-audio.ts` for the three-rule heuristic. Kept as a thin
- *  re-export here so callers that only know about "media assets" don't need
- *  to reach into `slides/`. */
-export function findLinkedAudio(filePath: string): string | null {
-  return resolveLinkedAudio(filePath);
-}
-
 export class MediaRepo {
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly sqlite: Database.Database,
+  ) {}
 
   list(kind: AssetKind): MediaAsset[] {
     return this.db
@@ -64,6 +65,7 @@ export class MediaRepo {
       .get();
 
     if (existing) {
+      const mtimeMs = Math.trunc(stat.mtimeMs);
       this.db
         .update(mediaAssets)
         .set({
@@ -71,19 +73,36 @@ export class MediaRepo {
           missingSince: null,
           lastSeenAt: now,
           sizeBytes: stat.size,
-          mtimeMs: Math.trunc(stat.mtimeMs),
+          mtimeMs,
           updatedAt: now,
         })
         .where(eq(mediaAssets.id, existing.id))
         .run();
-      return toDTO({ ...existing, inLibrary: inLibrary ? 1 : existing.inLibrary });
+      // The returned DTO must carry what was just written, not the row as it
+      // was read: `sizeBytes`/`mtimeMs` are the identity a thumbnail's
+      // cache-buster is built from (`assetThumbVersion`), so handing back the
+      // pre-update values would leave the caller pointing at the previous
+      // file's thumbnail.
+      return toDTO({
+        ...existing,
+        inLibrary: inLibrary ? 1 : existing.inLibrary,
+        missingSince: null,
+        sizeBytes: stat.size,
+        mtimeMs,
+        updatedAt: now,
+      });
     }
 
     const ext = path.extname(filePath).slice(1).toLowerCase();
     const name = path.basename(filePath, path.extname(filePath));
-    const linkedAudioPath = kind === "ppt" ? findLinkedAudio(filePath) : null;
 
-    const id = this.db
+    // Linked-audio resolution is deliberately NOT done here: for a legacy
+    // `.ppt`/`.pps` it means reading the whole file into memory (see
+    // `linked-audio.ts`), which is exactly the cost that makes importing many
+    // decks at once freeze the app. It's left at version 0 and resolved
+    // lazily, once, the first time the deck is actually opened
+    // (`ensureLinkedAudio`, called from `deck-service.ts`'s `toDeckDTO`).
+    const row = this.db
       .insert(mediaAssets)
       .values({
         kind,
@@ -93,22 +112,114 @@ export class MediaRepo {
         ext,
         sizeBytes: stat.size,
         mtimeMs: Math.trunc(stat.mtimeMs),
-        linkedAudioPath,
-        // Already resolved above at the current rules — mark it so
-        // `ensureLinkedAudio` doesn't immediately redo the same I/O the
-        // first time this deck is opened.
-        linkedAudioResolvedVersion: kind === "ppt" ? LINKED_AUDIO_RESOLVER_VERSION : 0,
+        linkedAudioPath: null,
+        linkedAudioResolvedVersion: 0,
         inLibrary: inLibrary ? 1 : 0,
         lastSeenAt: now,
         missingSince: null,
         createdAt: now,
         updatedAt: now,
       })
-      .run().lastInsertRowid as number;
-
-    const row = this.db.select().from(mediaAssets).where(eq(mediaAssets.id, id)).get();
-    if (!row) throw new Error("Failed to read back inserted media asset");
+      .returning()
+      .get();
     return toDTO(row);
+  }
+
+  /** Same upsert as `upsertFromPath`, batched: one `statSync` result per file
+   *  (already gathered by the caller — `library-import.ts` — so a vanished
+   *  file just isn't in the list) and a single transaction for the whole
+   *  slice. A row whose `pathKey`, size and mtime are unchanged and already
+   *  `!missing` is skipped entirely — the common case of revisiting a stable
+   *  linked folder, which used to cost one `UPDATE` per file every time. */
+  upsertBatch(
+    files: { path: string; stat: fs.Stats }[],
+    kind: AssetKind,
+    inLibrary: boolean,
+  ): { assets: MediaAsset[]; mutated: number } {
+    if (files.length === 0) return { assets: [], mutated: 0 };
+    const now = Date.now();
+    const entries = files.map((file) => ({ file, pathKey: toPathKey(file.path) }));
+    const existingByKey = new Map(
+      this.db
+        .select()
+        .from(mediaAssets)
+        .where(inArray(mediaAssets.pathKey, entries.map((e) => e.pathKey)))
+        .all()
+        .map((row) => [row.pathKey, row] as const),
+    );
+
+    const run = this.sqlite.transaction(() => {
+      const results: MediaAsset[] = [];
+      let mutated = 0;
+      for (const { file, pathKey } of entries) {
+        const sizeBytes = file.stat.size;
+        const mtimeMs = Math.trunc(file.stat.mtimeMs);
+        const existing = existingByKey.get(pathKey);
+
+        if (
+          existing &&
+          existing.sizeBytes === sizeBytes &&
+          existing.mtimeMs === mtimeMs &&
+          existing.missingSince === null &&
+          (existing.inLibrary === 1 || !inLibrary)
+        ) {
+          results.push(toDTO(existing));
+          continue;
+        }
+        mutated += 1;
+
+        const ext = path.extname(file.path).slice(1).toLowerCase();
+        const name = path.basename(file.path, path.extname(file.path));
+
+        // A single upsert statement, not "select then insert-or-update": two
+        // imports racing on the same `pathKey` (the process-wide lock in
+        // `library-import.ts` should already prevent this, but this is the
+        // belt to its suspenders) resolve atomically instead of one of them
+        // hitting `ux_media_path`'s UNIQUE constraint. Only the columns
+        // listed in `set` are touched on conflict — `linkedAudioPath` and its
+        // version are never clobbered by a re-import.
+        const row = this.db
+          .insert(mediaAssets)
+          .values({
+            kind,
+            path: file.path,
+            pathKey,
+            name,
+            ext,
+            sizeBytes,
+            mtimeMs,
+            linkedAudioPath: null,
+            linkedAudioResolvedVersion: 0,
+            inLibrary: inLibrary ? 1 : 0,
+            lastSeenAt: now,
+            missingSince: null,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: mediaAssets.pathKey,
+            set: {
+              // Reactivating an inactive row must not deactivate an already-active
+              // one — same "OR" semantics `upsertFromPath` uses, expressed in SQL
+              // so it stays correct even under the race described above.
+              inLibrary: inLibrary
+                ? sql`1`
+                : sql`CASE WHEN ${mediaAssets.inLibrary} = 1 THEN 1 ELSE 0 END`,
+              missingSince: null,
+              lastSeenAt: now,
+              sizeBytes,
+              mtimeMs,
+              updatedAt: now,
+            },
+          })
+          .returning()
+          .get();
+        results.push(toDTO(row));
+      }
+      return { assets: results, mutated };
+    });
+
+    return run();
   }
 
   /** Throws `IpcError("MEDIA_ASSET_IN_USE")` when the asset is still referenced
@@ -133,19 +244,118 @@ export class MediaRepo {
     }
   }
 
+  /**
+   * By-id lookups, on the `worship://` hot path.
+   *
+   * Every tile in a virtualized grid asks for `worship://asset/<id>/thumb`,
+   * and every one of those used to be a Drizzle `SELECT *` — the whole row
+   * rebuilt and recompiled per request, to read one or three columns. These
+   * three are prepared once and ask only for what they use. Lazy for the same
+   * reason as `SlidesRepo`'s: the repo exists before the table does.
+   */
+  private byIdStatement: Database.Statement | null = null;
+  private pathStatement: Database.Statement | null = null;
+  private linkedAudioStatement: Database.Statement | null = null;
+
   getById(id: number): MediaAsset | null {
-    const row = this.db.select().from(mediaAssets).where(eq(mediaAssets.id, id)).get();
-    return row ? toDTO(row) : null;
+    this.byIdStatement ??= this.sqlite.prepare(
+      `SELECT id, kind, name, ext, path, size_bytes AS sizeBytes, mtime_ms AS mtimeMs,
+              duration_ms AS durationMs, linked_audio_path AS linkedAudioPath,
+              in_library AS inLibrary, missing_since AS missingSince,
+              created_at AS createdAt, updated_at AS updatedAt
+         FROM media_assets WHERE id = ?`,
+    );
+    const row = this.byIdStatement.get(id) as
+      | (Omit<MediaAsset, "inLibrary"> & { inLibrary: number })
+      | undefined;
+    return row ? { ...row, inLibrary: row.inLibrary === 1 } : null;
   }
 
   getPathById(id: number): string | null {
-    const row = this.db.select().from(mediaAssets).where(eq(mediaAssets.id, id)).get();
-    return row ? row.path : null;
+    this.pathStatement ??= this.sqlite.prepare(`SELECT path FROM media_assets WHERE id = ?`);
+    const row = this.pathStatement.get(id) as { path: string } | undefined;
+    return row?.path ?? null;
   }
 
   linkedAudioPathById(id: number): string | null {
-    const row = this.db.select().from(mediaAssets).where(eq(mediaAssets.id, id)).get();
+    this.linkedAudioStatement ??= this.sqlite.prepare(
+      `SELECT linked_audio_path AS linkedAudioPath FROM media_assets WHERE id = ?`,
+    );
+    const row = this.linkedAudioStatement.get(id) as { linkedAudioPath: string | null } | undefined;
     return row?.linkedAudioPath ?? null;
+  }
+
+  // -- content hash ---------------------------------------------------------
+  //
+  // The asset's own copy of the identity `slide_decks` is keyed by. See the
+  // column comments in `schema.ts` and `N3` in the media-chain audit §5.2:
+  // without it, "is this asset converted?" can only be asked as "does this
+  // asset OWN a deck row?", and ownership is exclusive while the cache is
+  // content-addressed.
+
+  /** The stored hash, but only while the `(size, mtime)` it was computed over
+   *  still matches the file the row describes. A stale stamp reads as "no
+   *  hash": the bytes changed, so the old digest answers about a file that no
+   *  longer exists. */
+  private static validHash(row: typeof mediaAssets.$inferSelect): string | null {
+    if (row.contentHash === null) return null;
+    if (row.contentHashSize !== row.sizeBytes) return null;
+    if (row.contentHashMtimeMs !== row.mtimeMs) return null;
+    return row.contentHash;
+  }
+
+  /** `assetId → content hash`, for the assets that have a currently-valid one.
+   *  Chunked for the same reason `sweep` and `statusesByAsset` are: the caller
+   *  is a grid handing over every asset it can see, and one `IN (...)` binds
+   *  one parameter per id. */
+  validContentHashes(ids: readonly number[]): Map<number, string> {
+    const result = new Map<number, string>();
+    if (ids.length === 0) return result;
+    for (let i = 0; i < ids.length; i += ID_CHUNK) {
+      const slice = ids.slice(i, i + ID_CHUNK);
+      for (const row of this.db
+        .select()
+        .from(mediaAssets)
+        .where(inArray(mediaAssets.id, slice))
+        .all()) {
+        const hash = MediaRepo.validHash(row);
+        if (hash !== null) result.set(row.id, hash);
+      }
+    }
+    return result;
+  }
+
+  /** Records the digest together with the `(size, mtime)` it describes, so it
+   *  can be invalidated without re-reading the file. Called from the two
+   *  places that ever compute one: a real conversion (which needs the hash
+   *  anyway, so this is free) and the startup backfill. */
+  setContentHash(id: number, contentHash: string, sizeBytes: number, mtimeMs: number): void {
+    this.db
+      .update(mediaAssets)
+      .set({ contentHash, contentHashSize: sizeBytes, contentHashMtimeMs: mtimeMs })
+      .where(eq(mediaAssets.id, id))
+      .run();
+  }
+
+  /** Assets of `kind` whose stamp is missing or stale — the backfill's work
+   *  list. Missing files are excluded: they cannot be read, and the sweep
+   *  will re-offer them here once they come back (their stamp stays absent).
+   *  `inLibrary` is deliberately NOT filtered: a linked folder's assets are
+   *  `inLibrary = 0` and they are the bulk of a real library. */
+  assetsNeedingContentHash(kind: AssetKind): { id: number; path: string }[] {
+    return this.db
+      .select({ id: mediaAssets.id, path: mediaAssets.path })
+      .from(mediaAssets)
+      .where(
+        and(
+          eq(mediaAssets.kind, kind),
+          sql`${mediaAssets.missingSince} IS NULL`,
+          sql`(${mediaAssets.contentHash} IS NULL
+               OR ${mediaAssets.contentHashSize} IS NOT ${mediaAssets.sizeBytes}
+               OR ${mediaAssets.contentHashMtimeMs} IS NOT ${mediaAssets.mtimeMs})`,
+        ),
+      )
+      .all();
   }
 
   /** Manual override for when the heuristic in `linked-audio.ts` guesses
@@ -204,33 +414,80 @@ export class MediaRepo {
     }
   }
 
-  /** Re-stats every in-library row, marking newly-missing files and clearing the flag
-   *  on ones that reappeared (e.g. a reconnected drive). Never deletes rows. */
-  sweep(): void {
+  /** Re-stats every in-library row, marking newly-missing files and clearing
+   *  the flag on ones that reappeared (e.g. a reconnected drive). Never
+   *  deletes rows. Chunked with a yield every 200 rows — a large library must
+   *  never turn this into a multi-second main-thread stall — and writes go
+   *  through in a couple of `id IN (...)` statements instead of one `UPDATE`
+   *  per row. Returns the kinds that actually changed, so a caller only
+   *  refreshes what's stale instead of every tab. */
+  async sweep(): Promise<Set<AssetKind>> {
     const rows = this.db.select().from(mediaAssets).where(eq(mediaAssets.inLibrary, 1)).all();
+    const changedKinds = new Set<AssetKind>();
+    const toClear: number[] = [];
+    const toMark: number[] = [];
+
+    // Asynchronous existence checks, a chunk at a time. `existsSync` per row
+    // was the wrong tool for the one case this function exists to handle: a
+    // removable drive or a network share that went away answers each call in
+    // milliseconds-to-seconds, and a synchronous loop over a large library
+    // then blocks the main process — and therefore the projection — for as
+    // long as that takes. The `setImmediate` yield only limited how long each
+    // BATCH blocked, not the calls themselves.
+    const PROBE_CHUNK = 200;
+    for (let i = 0; i < rows.length; i += PROBE_CHUNK) {
+      const slice = rows.slice(i, i + PROBE_CHUNK);
+      const exists = await Promise.all(
+        slice.map((row) =>
+          fs.promises
+            .access(row.path, fs.constants.F_OK)
+            .then(() => true)
+            .catch(() => false),
+        ),
+      );
+      slice.forEach((row, index) => {
+        if (exists[index] && row.missingSince !== null) {
+          toClear.push(row.id);
+          changedKinds.add(row.kind);
+        } else if (!exists[index] && row.missingSince === null) {
+          toMark.push(row.id);
+          changedKinds.add(row.kind);
+        }
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    if (toClear.length === 0 && toMark.length === 0) return changedKinds;
+
     const now = Date.now();
-    for (const row of rows) {
-      const exists = fs.existsSync(row.path);
-      if (exists && row.missingSince !== null) {
+    const run = this.sqlite.transaction(() => {
+      for (let i = 0; i < toClear.length; i += ID_CHUNK) {
+        const slice = toClear.slice(i, i + ID_CHUNK);
         this.db
           .update(mediaAssets)
           .set({ missingSince: null, lastSeenAt: now })
-          .where(eq(mediaAssets.id, row.id))
+          .where(inArray(mediaAssets.id, slice))
           .run();
-      } else if (!exists && row.missingSince === null) {
+      }
+      for (let i = 0; i < toMark.length; i += ID_CHUNK) {
+        const slice = toMark.slice(i, i + ID_CHUNK);
         this.db
           .update(mediaAssets)
           .set({ missingSince: now })
-          .where(eq(mediaAssets.id, row.id))
+          .where(inArray(mediaAssets.id, slice))
           .run();
       }
-    }
+    });
+    run();
+
+    return changedKinds;
   }
 
   relocate(id: number, newPath: string): MediaAsset | null {
     const row = this.db.select().from(mediaAssets).where(eq(mediaAssets.id, id)).get();
     if (!row) return null;
     const stat = fs.statSync(newPath);
+    const mtimeMs = Math.trunc(stat.mtimeMs);
     const now = Date.now();
     this.db
       .update(mediaAssets)
@@ -238,13 +495,22 @@ export class MediaRepo {
         path: newPath,
         pathKey: toPathKey(newPath),
         sizeBytes: stat.size,
-        mtimeMs: Math.trunc(stat.mtimeMs),
+        mtimeMs,
         missingSince: null,
         lastSeenAt: now,
         updatedAt: now,
       })
       .where(eq(mediaAssets.id, id))
       .run();
-    return toDTO({ ...row, path: newPath, missingSince: null });
+    // Same reason as `upsertFromPath`: the relocated file is a different set
+    // of bytes as far as the thumbnail cache is concerned.
+    return toDTO({
+      ...row,
+      path: newPath,
+      sizeBytes: stat.size,
+      mtimeMs,
+      missingSince: null,
+      updatedAt: now,
+    });
   }
 }

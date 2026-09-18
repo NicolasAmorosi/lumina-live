@@ -29,8 +29,8 @@ export function EmptyState({ action, className, description, icon, title, tone =
         )}
         {...props}
       >
-        {icon ? <Icon className={cn("size-6", tone === "danger" ? "text-danger" : "text-subtle")} name={icon} /> : null}
-        <p className={cn("text-sm font-medium", tone === "danger" ? "text-danger" : "text-foreground")}>{title}</p>
+        {icon ? <Icon className={cn("size-6", tone === "danger" ? "text-danger-ink" : "text-subtle")} name={icon} /> : null}
+        <p className={cn("text-sm font-medium", tone === "danger" ? "text-danger-ink" : "text-foreground")}>{title}</p>
         {description ? <p className="text-xs text-subtle">{description}</p> : null}
         {action}
       </div>

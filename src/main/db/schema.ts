@@ -37,6 +37,20 @@ export const mediaAssets = sqliteTable(
      *  the folder/file on every deck open, while still forcing one re-check
      *  per asset when the matching rules change. */
     linkedAudioResolvedVersion: integer("linked_audio_resolved_version").notNull().default(0),
+    /** SHA-256 of the file's bytes — the same identity `slide_decks` is keyed
+     *  by. It lives here so a question about an asset ("is this converted?",
+     *  "which deck is its first slide in?") can be answered by CONTENT rather
+     *  than by which asset happens to own the deck row: `slide_decks`
+     *  .`media_asset_id` is exclusive and `relinkDeck` moves it, so with the
+     *  same file present twice only the last one opened looked converted.
+     *  See `N3` in `auditorias/reports/2026-09-11-cadena-de-media.md` §5.2. */
+    contentHash: text("content_hash"),
+    /** The `(size, mtime)` the hash was computed over. `contentHash` is only
+     *  trustworthy while these still match `sizeBytes`/`mtimeMs` — the same
+     *  invalidation rule `tryCacheHit` already applies to a deck row, and the
+     *  reason the hash never has to be recomputed just to be used. */
+    contentHashSize: integer("content_hash_size"),
+    contentHashMtimeMs: integer("content_hash_mtime_ms"),
     inLibrary: integer("in_library").notNull().default(1),
     lastSeenAt: integer("last_seen_at"),
     missingSince: integer("missing_since"),
@@ -46,6 +60,10 @@ export const mediaAssets = sqliteTable(
   (t) => [
     uniqueIndex("ux_media_path").on(t.pathKey),
     index("ix_media_kind").on(t.kind, t.inLibrary, t.name),
+    /** Both directions of the content join: `statusesByAsset` looks decks up
+     *  by an asset's hash, and the backfill scans for assets that still have
+     *  none. */
+    index("ix_media_content_hash").on(t.contentHash),
   ],
 );
 
@@ -82,7 +100,7 @@ export const programItems = sqliteTable(
       .notNull()
       .references(() => programs.id, { onDelete: "cascade" }),
     position: integer("position").notNull(),
-    kind: text("kind", { enum: ["media", "ppt", "bible", "text"] }).notNull(),
+    kind: text("kind", { enum: ["media", "ppt", "bible"] }).notNull(),
 
     mediaAssetId: integer("media_asset_id").references(() => mediaAssets.id, {
       onDelete: "restrict",
@@ -100,7 +118,6 @@ export const programItems = sqliteTable(
     bibleReference: text("bible_reference"),
     bibleText: text("bible_text"),
 
-    textBody: text("text_body"),
     title: text("title"),
     createdAt: integer("created_at").notNull(),
   },
@@ -284,3 +301,32 @@ export const deckAudio = sqliteTable(
 // schema builder has no FTS5 primitive. It is added by hand in drizzle/0000_init.sql, right
 // after this schema's generated CREATE TABLE statements. See db/migrate.ts for the seed step
 // that follows migrations.
+
+/**
+ * The unsaved order of service, mirrored out of the control window.
+ *
+ * Everything else this app holds reaches SQLite the moment it changes; the
+ * schedule being edited lived ONLY in `program.store`, so a reload, a window
+ * close, a renderer crash or a power cut threw away what is typically 15-40
+ * minutes of work done before the service — the one piece of user data with no
+ * backing store at all.
+ *
+ * A single row (`id = 1`), rewritten wholesale: a draft has no history worth
+ * keeping and exactly one reader, the next launch.
+ *
+ * `items` is a JSON blob rather than rows in `program_items` on purpose. A
+ * draft has to be able to hold a row pointing at an asset the operator is
+ * about to delete, which is precisely what that table's `onDelete: "restrict"`
+ * FK exists to forbid — and a draft must never be the thing that blocks a
+ * deletion. `DraftRepo.load()` drops whatever no longer resolves instead.
+ */
+export const programDraft = sqliteTable("program_draft", {
+  id: integer("id").primaryKey(),
+  /** The saved program this draft is an edit OF, or null for a brand new one. */
+  programId: integer("program_id"),
+  name: text("name").notNull(),
+  notes: text("notes"),
+  /** JSON: `ProgramItemUpsert[]`. */
+  items: text("items").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});

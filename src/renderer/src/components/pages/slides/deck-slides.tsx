@@ -3,17 +3,19 @@ import {
   Badge,
   Button,
   Callout,
+  DECK_GRID_COLUMNS,
   EmptyState,
   Icon,
   IconButton,
   MediaPanel,
-  ProgressBar,
-  SlideGrid,
-  Skeleton,
+  SLIDE_GRID_GAP_PX,
   ThumbTile,
   Tooltip,
+  VirtualGrid,
+  thumbTileHeight,
 } from "@renderer/components/ui";
 import { PreviewMissingState } from "@renderer/components/shared/preview-missing-state";
+import { DeckConversionStatus } from "@renderer/components/shared/deck-conversion-status";
 import { useDeck } from "@renderer/lib/hooks/use-deck";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
@@ -47,7 +49,7 @@ function DeckAudioStrip({ assetId, deck }: { assetId: number; deck: DeckDTO }) {
 
   return (
     <MediaPanel>
-      <div className="flex items-center gap-2 px-2 py-1 text-sm">
+      <div className="flex items-center gap-2 px-2 py-1.5 text-sm">
         <Icon className="size-4 shrink-0 text-muted-foreground" name="audio" />
         <span className="min-w-0 flex-1 truncate text-foreground">
           {deck.soundtrack?.name ?? t("deck.audio.none")}
@@ -95,7 +97,7 @@ export function DeckSlides({ assetId, missingSince }: { assetId: number; missing
   const liveIndex = isLive ? base.slideIndex : null;
 
   if (missingSince !== null) {
-    return <PreviewMissingState />;
+    return <PreviewMissingState assetId={assetId} />;
   }
 
   if (environment && !environment.available) {
@@ -110,41 +112,43 @@ export function DeckSlides({ assetId, missingSince }: { assetId: number; missing
     );
   }
 
-  if (!entry || entry.status === "converting") {
-    const done = entry?.progress.done ?? 0;
-    const total = entry?.progress.total ?? 0;
+  const slides = entry?.deck?.slides ?? [];
+
+  // Only fall back to the loading/failed placeholder when there is nothing
+  // else to show. A deck that already has a rendered grid (from a previous
+  // `ready` DTO still sitting in the store) keeps showing it even while
+  // `entry.status` flips to `converting` — e.g. `ensure()`'s IPC round-trip
+  // for a deck that's actually a cache hit, or a real background
+  // reconversion racing a stale grid. Tearing the grid down here is exactly
+  // the "monitors lie to the operator" failure this app avoids everywhere
+  // else — a slide grid that vanishes and reappears for a deck that was
+  // never really being reconverted.
+  // A cancelled conversion (`stale` with no DTO — see `DeckConversionStatus`)
+  // belongs here too: the "no tiene diapositivas" empty state below would
+  // accuse the file for something the operator chose to do. Spelled out rather
+  // than written as `!== "ready"` so this only ever routes states that
+  // `DeckConversionStatus` actually renders.
+  if (
+    slides.length === 0 &&
+    (!entry ||
+      entry.status === "converting" ||
+      entry.status === "failed" ||
+      (entry.status === "stale" && entry.deck === null))
+  ) {
     return (
-      <div className="flex w-full max-w-md flex-col gap-2 self-center">
-        <Skeleton className="aspect-video w-full" />
-        <ProgressBar value={total > 0 ? done / total : 0} />
-        <p className="text-center text-xs text-subtle">
-          {total > 0 ? t("deck.converting", { done, total }) : t("deck.preparing")}
-        </p>
-        <p className="text-center text-xs text-subtle">{t("deck.convertingHint")}</p>
+      <div className="self-center py-6">
+        <DeckConversionStatus assetId={assetId} onRetry={reconvert} />
       </div>
     );
   }
 
-  if (entry.status === "failed") {
-    return (
-      <Callout tone="danger">
-        <p className="font-medium">{t("deck.failed")}</p>
-        {entry.error ? <p className="mt-1 text-xs text-muted-foreground">{entry.error}</p> : null}
-        <Button className="mt-2" onClick={reconvert} size="sm">
-          {t("deck.retry")}
-        </Button>
-      </Callout>
-    );
-  }
-
-  const slides = entry.deck?.slides ?? [];
   if (slides.length === 0) {
     return <EmptyState icon="layers" title={t("deck.noSlides")} />;
   }
 
   return (
     <div className="flex min-h-0 flex-col gap-3">
-      {entry.status === "stale" ? (
+      {entry?.status === "stale" ? (
         <Callout tone="warning">
           <p>{t("deck.stale")}</p>
           <Button className="mt-2" onClick={reconvert} size="sm">
@@ -152,14 +156,27 @@ export function DeckSlides({ assetId, missingSince }: { assetId: number; missing
           </Button>
         </Callout>
       ) : null}
-      {entry.status === "ready" && entry.deck ? (
+      {entry?.status === "failed" ? (
+        <Callout tone="danger">
+          <p>{entry.error ?? t("deck.failed")}</p>
+          <Button className="mt-2" onClick={reconvert} size="sm">
+            {t("deck.retry")}
+          </Button>
+        </Callout>
+      ) : null}
+      {entry?.status === "ready" && entry.deck ? (
         <DeckAudioStrip assetId={assetId} deck={entry.deck} />
       ) : null}
-      <SlideGrid variant="fixed-2">
-        {slides.map((slide) => (
+      <VirtualGrid
+        aria-label={t("deck.title")}
+        columns={DECK_GRID_COLUMNS}
+        gap={SLIDE_GRID_GAP_PX}
+        itemHeight={(columnWidth) => thumbTileHeight(columnWidth, { label: false })}
+        itemKey={(slide) => slide.index}
+        items={slides}
+        renderItem={(slide, _index, { tabIndex }) => (
           <ThumbTile
             index={slide.index}
-            key={slide.index}
             live={liveIndex === slide.index}
             onClick={() => setPreviewSlide(slide.index)}
             // The cache dir can be evicted under us; surface it instead of
@@ -174,10 +191,14 @@ export function DeckSlides({ assetId, missingSince }: { assetId: number; missing
             }}
             selected={previewIndex === slide.index}
             src={slide.thumbUrl}
+            tabIndex={tabIndex}
             title={t("deck.slideAlt", { index: slide.index })}
           />
-        ))}
-      </SlideGrid>
+        )}
+        // A slide's `index` is 1-based, the way EasyWorship numbers them; this
+        // grid works in array positions.
+        scrollToIndex={previewIndex - 1}
+      />
     </div>
   );
 }

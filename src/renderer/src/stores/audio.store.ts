@@ -17,6 +17,11 @@ export type LiveAudioTrack = {
   epoch: number;
   paused: boolean;
   startAtSeconds: number;
+  /** 0..1. Starts at `media.volume` (Ajustes) for every new track and is the
+   *  operator's for as long as the track lives; it is deliberately not
+   *  persisted, so nothing ever starts at a level left over from another
+   *  service. */
+  volume: number;
 };
 
 /** Stable id for the one deck-soundtrack slot — at most one at a time,
@@ -49,12 +54,22 @@ type AudioStoreState = {
   addTrack: (track: LiveAudioTrack) => void;
   removeTrack: (trackId: string) => void;
   setPaused: (trackId: string, paused: boolean) => void;
+  /** Clamped to 0..1 here rather than at the call sites, so a slider that
+   *  overshoots by a rounding error can never push an out-of-range value into
+   *  `HTMLMediaElement.volume`, which throws on one. */
+  setVolume: (trackId: string, volume: number) => void;
   /** Restarts an already-live track in place: bumps its epoch (remounting
    *  the `<audio>` element so `startAtSeconds` re-applies) and unpauses it,
    *  without touching `trackId` — used when EN VIVO targets an asset that is
    *  already in the list but paused, so it plays again instead of stacking a
    *  second instance of the same audio. */
   restartTrack: (trackId: string, startAtSeconds: number) => void;
+  /** Rewrites where the named tracks would resume from if their elements had
+   *  to be mounted again — see `lib/actions/live-positions.ts`. Deliberately
+   *  does NOT bump `epoch`: nothing should remount while the projection window
+   *  this describes is still on screen, and the value is only ever read by the
+   *  NEXT mount. Tracks absent from the map keep the point they had. */
+  setStartPositions: (positions: ReadonlyMap<string, number>) => void;
   /** Replaces the single deck-soundtrack slot; `null` clears it. Every other
    *  track (standalone audio assets) is untouched — a deck change never cuts
    *  audio the operator sent live independently. */
@@ -76,12 +91,42 @@ export const useAudioStore = create<AudioStoreState>()(
         tracks: state.tracks.map((t) => (t.trackId === trackId ? { ...t, paused } : t)),
       })),
 
+    setVolume: (trackId, volume) =>
+      set((state) => {
+        const clamped = Math.min(1, Math.max(0, volume));
+        const track = state.tracks.find((t) => t.trackId === trackId);
+        // No-op when the level did not actually move: this list is what
+        // `projection-sync` subscribes to, and a slider drag reports the same
+        // rounded value many times over — each identical array would be one
+        // more push of every live track to main for nothing.
+        if (!track || track.volume === clamped) return state;
+        return {
+          tracks: state.tracks.map((t) => (t.trackId === trackId ? { ...t, volume: clamped } : t)),
+        };
+      }),
+
     restartTrack: (trackId, startAtSeconds) =>
       set((state) => ({
         tracks: state.tracks.map((t) =>
           t.trackId === trackId ? { ...t, epoch: nextEpoch(), paused: false, startAtSeconds } : t,
         ),
       })),
+
+    setStartPositions: (positions) =>
+      set((state) => {
+        let changed = false;
+        const tracks = state.tracks.map((track) => {
+          const at = positions.get(track.trackId);
+          if (at === undefined || at === track.startAtSeconds) return track;
+          changed = true;
+          return { ...track, startAtSeconds: at };
+        });
+        // No-op when nothing moved, for the same reason as
+        // `pruneMediaStatus`: this list is subscribed to by the push to main,
+        // and a fresh array with identical contents would re-send every track
+        // for nothing.
+        return changed ? { tracks } : state;
+      }),
 
     setDeckTrack: (track) =>
       set((state) => {

@@ -20,8 +20,6 @@ function toItemDTO(row: typeof programItems.$inferSelect): ProgramItemDTO {
       return { ...base, kind: "media", mediaAssetId: row.mediaAssetId! };
     case "ppt":
       return { ...base, kind: "ppt", mediaAssetId: row.mediaAssetId! };
-    case "text":
-      return { ...base, kind: "text", body: row.textBody ?? "" };
     case "bible":
     default:
       return {
@@ -64,23 +62,36 @@ export class ProgramsRepo {
    *  only breaks ties between rows that share a `sortOrder`, which can only
    *  happen before the first `reorder()` renormalizes them. */
   list(): ProgramSummary[] {
-    const rows = this.db.select().from(programs).orderBy(programs.sortOrder, desc(programs.updatedAt)).all();
-    return rows.map((p) =>
-      toSummary(
-        p,
-        this.db.select({ n: count() }).from(programItems).where(eq(programItems.programId, p.id)).get()?.n ?? 0,
-      ),
-    );
+    // One statement, not one per row. This used to run a `SELECT count(*)`
+    // inside the map — 41 queries for 40 programs — and it is not a rarely
+    // taken path: the modal calls it on open, after every save, delete and
+    // favourite toggle, and `reorder()` calls it after every single drag.
+    // `count(programItems.id)` (a column, not `*`) is what keeps a program
+    // with no items at 0 instead of the 1 that the LEFT JOIN's null row
+    // would otherwise count.
+    const rows = this.db
+      .select({ program: programs, itemCount: count(programItems.id) })
+      .from(programs)
+      .leftJoin(programItems, eq(programItems.programId, programs.id))
+      .groupBy(programs.id)
+      .orderBy(programs.sortOrder, desc(programs.updatedAt))
+      .all();
+    return rows.map((row) => toSummary(row.program, row.itemCount));
   }
 
+  /** Opening a program for real: stamps `lastOpenedAt`. */
   load(id: number): ProgramDTO {
+    const now = Date.now();
+    this.db.update(programs).set({ lastOpenedAt: now }).where(eq(programs.id, id)).run();
+    return { ...this.peek(id), lastOpenedAt: now };
+  }
+
+  /** Reading a program without opening it — the programs modal's preview panel.
+   *  Writes nothing at all, which is the whole point: `lastOpenedAt` is what
+   *  the list means by "last opened", and a glance is not an opening. */
+  peek(id: number): ProgramDTO {
     const p = this.db.select().from(programs).where(eq(programs.id, id)).get();
     if (!p) throw new Error(`Program ${id} not found`);
-    this.db
-      .update(programs)
-      .set({ lastOpenedAt: Date.now() })
-      .where(eq(programs.id, id))
-      .run();
     const items = this.db
       .select()
       .from(programItems)
@@ -88,7 +99,7 @@ export class ProgramsRepo {
       .orderBy(programItems.position)
       .all()
       .map(toItemDTO);
-    return { ...toSummary(p, items.length), lastOpenedAt: Date.now(), items };
+    return { ...toSummary(p, items.length), items };
   }
 
   /** Replaces a program's items wholesale inside one transaction — reordering,
@@ -127,7 +138,7 @@ export class ProgramsRepo {
       }
 
       input.items.forEach((item: ProgramItemUpsert, index: number) => {
-        this.db.insert(programItems).values(toRow(programId!, index, item, now)).run();
+        this.db.insert(programItems).values(toRow(programId, index, item, now)).run();
       });
 
       return programId;
@@ -232,11 +243,22 @@ export class ProgramsRepo {
    *  from `ids` keeps whatever key it had — it stays in the list, just where
    *  that key happens to fall. */
   reorder(ids: number[]): ProgramSummary[] {
-    this.sqlite.transaction(() => {
-      ids.forEach((id, index) => {
-        this.db.update(programs).set({ sortOrder: index }).where(eq(programs.id, id)).run();
-      });
-    })();
+    if (ids.length > 0) {
+      // One statement for the whole drag, instead of an UPDATE per id inside a
+      // transaction. `json_each` turns the array into a (key, value) table
+      // whose `key` IS the 0-based position, which is exactly the sort order
+      // being assigned — so the mapping never has to be spelled out as SQL
+      // text, and a 40-program list costs one prepare instead of forty.
+      // A single statement is atomic on its own; the transaction it needed
+      // went away with the loop.
+      this.sqlite
+        .prepare(
+          `UPDATE programs
+              SET sort_order = (SELECT key FROM json_each(?) WHERE value = programs.id)
+            WHERE id IN (SELECT value FROM json_each(?))`,
+        )
+        .run(JSON.stringify(ids), JSON.stringify(ids));
+    }
     return this.list();
   }
 
@@ -277,8 +299,6 @@ function toRow(programId: number, position: number, item: ProgramItemUpsert, now
     case "media":
     case "ppt":
       return { ...common, kind: item.kind, mediaAssetId: item.mediaAssetId, title: item.title };
-    case "text":
-      return { ...common, kind: "text" as const, textBody: item.body, title: item.title };
     case "bible":
     default:
       return {

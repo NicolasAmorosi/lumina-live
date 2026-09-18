@@ -1,6 +1,7 @@
 import { ipcMain, type IpcMainInvokeEvent } from "electron";
 import type { IpcChannel, IpcContract, Req, Res } from "@shared/ipc/contract";
-import { toIpcError, type Result } from "@shared/ipc/result";
+import { IpcError, toIpcError, type Result } from "@shared/ipc/result";
+import { isTrustedSender } from "./trusted-senders";
 
 export type Handlers = {
   [K in IpcChannel]: (req: Req<K>, ev: IpcMainInvokeEvent) => Promise<Res<K>> | Res<K>;
@@ -16,6 +17,13 @@ export function registerHandlers(handlers: Handlers): void {
   for (const channel of Object.keys(handlers) as IpcChannel[]) {
     ipcMain.handle(channel, async (event, req: unknown) => {
       try {
+        // Every channel, without exception — the bridge is generic, so an
+        // untrusted caller reaching one reaches all of them. See
+        // `trusted-senders.ts` for what this does and does not cover.
+        if (!isTrustedSender(event.sender.id)) {
+          console.error(`[ipc] rejected ${channel} from untrusted sender ${event.sender.id}`);
+          throw new IpcError({ code: "UNTRUSTED_SENDER", message: "Origen no autorizado." });
+        }
         const data = await (handlers[channel] as (r: unknown, e: IpcMainInvokeEvent) => unknown)(
           req,
           event,

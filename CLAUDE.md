@@ -118,14 +118,16 @@ src/
         │   ├── ui/          # primitivas del design system — barrel index.ts
         │   ├── shared/      # cross-feature: modal, panel, output-view (renderiza un ProjectionOutput)
         │   └── pages/       # una carpeta por feature:
-        │       ├── layout/     # AppShell (grilla estilo EasyWorship), TopBar, StatusBar
+        │       ├── layout/     # AppShell (grilla estilo EasyWorship), TopBar
         │       ├── schedule/   # el orden del culto (columna izq. arriba)
         │       ├── resources/  # browser con pestañas: Biblia | Videos | Imágenes | Audios | PPT
         │       ├── slides/     # grilla central de diapositivas/versículos del ítem en preview
         │       ├── monitors/   # columna der.: LIVE arriba, PREVIEW abajo, transporte del deck
         │       └── programs/   # modal de programas guardados
-        ├── stores/          # Zustand: program, toast, preview, projection, deck, bible, library, settings
-        ├── effects/         # projection-sync.ts + deck-autoplay.ts — la lógica "con orden"
+        ├── stores/          # Zustand: program, toast, preview, projection, deck, bible,
+        │                    #   library, settings, audio, display, ui
+        ├── effects/         # projection-sync.ts + deck-autoplay.ts + end-of-playback.ts —
+        │                    #   la lógica "con orden"
         └── lib/             # api.ts, ipc.ts, i18n/, utils.ts, hooks/, actions/ (cruza stores)
 ```
 
@@ -148,6 +150,13 @@ Esta es la regla central del sistema de componentes, calcado de
 - **Todos los colores/sombras/radios vienen de `styles/globals.css`** (`@theme inline` +
   `:root`/`[data-theme]`). Nunca un valor de color hardcodeado en un componente — ni siquiera
   "solo por ahora". Ver la tabla de tokens semánticos abajo.
+- **Una primitiva que puede vivir dentro de una celda de grilla lleva `h-full` Y `w-full`.** No
+  alcanza con uno: un `<button>` se dimensiona *shrink-to-fit* incluso siendo `display:flex`, así
+  que en cuanto deja de ser el grid item (p. ej. envuelto por el `role="listitem"` de
+  `VirtualGrid`) su ancho pasa a ser el de su propio contenido. Y si además una grilla calcula
+  offsets a partir de su altura, ese número va en `components/ui/thumb-tile.geometry.ts`,
+  impuesto por el CSS — nunca estimado desde él. Diagnóstico completo en
+  [`.claude/knowledge/tile-height-uniformity-flex-min-height-and-grid-auto-rows.md`](.claude/knowledge/tile-height-uniformity-flex-min-height-and-grid-auto-rows.md).
 - **Barrel exports**: `components/ui/index.ts` reexporta todo con named exports. Sin default
   exports en componentes.
 - **Naming**: archivos `kebab-case` en `ui/` y sueltos; `PascalCase` para componentes dentro de
@@ -167,10 +176,20 @@ Esta es la regla central del sistema de componentes, calcado de
 | `bg-danger` / `bg-success` | estados |
 | `bg-on-air` / `border-on-air` | **reservado**: esto está en el proyector AHORA (monitor LIVE, riel de la fila activa) |
 | `bg-badge-{ppt,video,image,audio,bible}` | color por tipo de contenido en playlist/biblioteca |
+| `text-{danger,primary,success,warning,badge-audio}-ink` | **ese color como TEXTO o ÍCONO** sobre una superficie de la app. No es lo mismo que el token pelado, que es un RELLENO (`bg-danger` + blanco encima): en el tema oscuro un rojo legible sobre `bg-card` es un rojo claro, y blanco sobre un rojo claro no se lee. Los dos roles tiran para lados opuestos y **no pueden ser un solo valor** |
 | `shadow-surface` / `shadow-raised` / `shadow-overlay` | los ÚNICOS 3 niveles de elevación — cards / dropdowns-tooltips / modales-toasts |
 
 El tema (`ui.theme` en `settings`, `data-theme` en `<html>`) redefine los `--wa-*`; los
 componentes nunca necesitan saber en qué tema están.
+
+**Regla derivada, no negociable: un color que se escribe como texto va siempre por su `-ink`.**
+`text-danger`, `text-primary`, `text-success`, `text-warning` y `text-badge-audio` **no existen**
+como clases de texto — quedaron entre 2,18:1 y 2,89:1 sobre `bg-card` en el tema oscuro, por debajo
+del 3:1 que WCAG pide hasta para un ícono. Solo los cinco tonos que aparecen como texto o ícono
+suelto tienen `-ink`; el resto de los badges únicamente pintan el tinte de `Badge`, que ya lleva
+`text-foreground`. Cada `-ink` es su propio color de ALPS aclarado hacia blanco, igual que este
+archivo ya interpola la rampa Denim para superficies oscuras que ALPS no define — `primary-ink` es
+literalmente el Denim `#84adfc`.
 
 Todos los valores de color salen del sistema de identidad oficial de la iglesia (familia **Denim**
 + colores de acento de ALPS) y la tipografía es **Noto Sans** self-hosted. Antes de agregar un
@@ -254,12 +273,20 @@ allowlist.
 ## Comandos esenciales
 
 ```bash
-npm install              # instala deps — better-sqlite3 trae binarios precompilados, no compila nada
+npm install              # instala deps — better-sqlite3 trae binarios precompilados, no compila nada.
+                          #   El `postinstall` baja además el binario de Electron: desde la v42 el
+                          #   paquete ya NO lo hace solo, y sin él `npm run dev` muere con
+                          #   `Error: Electron uninstall` mientras build/typecheck/lint pasan igual
 npm run dev               # electron-vite dev (HMR en renderer, restart de main en watch)
 npm run typecheck          # tsc --noEmit sobre node (main+preload+shared) y web (renderer+shared)
 npm run lint                # eslint .
-npm run db:generate          # drizzle-kit generate — nueva migración tras editar db/schema.ts
-npm run db:smoke              # smoke test de la capa de datos SIN Electron (migraciones+seed+FTS5+CRUD)
+npm run test                 # vitest run — 103 casos en dos proyectos: `main` (Node: migraciones, seed,
+                              #   FTS5, repos, borrador, validadores de settings, respaldo WAL, zip reader,
+                              #   audio vinculado, urls, prune del historial) y `renderer` (jsdom: selectOutput,
+                              #   freezeLivePositions, live-intent, store de toasts, utils). Nada importa
+                              #   `electron`: ese es el límite del suite
+npm run test:watch            # el mismo suite en watch, mientras se toca un módulo
+npm run db:generate            # drizzle-kit generate — nueva migración tras editar db/schema.ts
 npm run slides:smoke -- x.pptx # conversión + parseo OOXML (timings/audio) SIN Electron
 npm run build                 # electron-vite build
 npm run package:win|mac|linux  # build + electron-builder para esa plataforma
@@ -280,9 +307,51 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   `net.fetch(file://…)`: eso ignora los headers, deja a todo video/audio **sin seek** y rompe la
   reproducción con `PIPELINE_ERROR_DECODE (-12909)` por datos desalineados. Diagnóstico completo en
   [`.claude/knowledge/worship-protocol-range-and-video-lifecycle.md`](.claude/knowledge/worship-protocol-range-and-video-lifecycle.md).
+- **Cancelar un trabajo encolado SIEMPRE settlea su promesa.** Sacar un `Job` de una cola sin
+  `inFlight.delete()` + `reject(CANCELED)` no lo cancela: deja una promesa que nunca resuelve y,
+  peor, un zombi en el mapa de dedupe que devuelve esa misma promesa muerta para siempre —
+  salteándose incluso el cache-hit, que está guardado por `!inFlight.has()`. Un job **corriendo**
+  no necesita nada de eso (lo settlea `pump`). Diagnóstico en
+  [`.claude/knowledge/canceling-a-queued-job-must-settle-it-or-it-poisons-the-dedupe-map.md`](.claude/knowledge/canceling-a-queued-job-must-settle-it-or-it-poisons-the-dedupe-map.md).
+- **Un error de `jsx-a11y` sobre un contenedor que delega el teclado se suprime con su porqué, no
+  se "arregla".** `Tabs`, `VirtualGrid`, `Select` y los centinelas de `Modal` manejan las teclas en
+  el contenedor a propósito: el tab stop es la pestaña seleccionada, el tile enfocado o el
+  disparador, y la regla lee **un elemento por vez**. Hacer focusable el contenedor agrega un tab
+  stop que no lleva a nada, y un handler de teclado en un `role="option"` no puede dispararse
+  nunca. Ver
+  [`.claude/knowledge/jsx-a11y-reads-one-element-so-every-delegated-keyboard-pattern-is-an-error.md`](.claude/knowledge/jsx-a11y-reads-one-element-so-every-delegated-keyboard-pattern-is-an-error.md),
+  que además tiene las dos trampas de la sintaxis `-- razón` del directive.
+- **Nada de `dangerouslySetInnerHTML`, nunca.** Para resaltar coincidencias, la primitiva recibe
+  **segmentos** (`{text, match}[]`), no un string con markup adentro — así la versión insegura ni
+  siquiera se puede escribir. El caso que lo motivó: el `snippet()` de FTS5 envuelve el texto
+  crudo del versículo, que sale de un JSON que importa el usuario, y el renderer tiene el puente
+  IPC genérico. Ver
+  [`.claude/knowledge/fts5-snippet-is-markup-wrapped-around-user-supplied-text.md`](.claude/knowledge/fts5-snippet-is-markup-wrapped-around-user-supplied-text.md).
+- **El orden de culto sin guardar se espeja a SQLite solo (`program_draft`), y cerrar la ventana lo
+  decide el control, no main.** `effects/draft-autosave.ts` escribe el borrador con debounce y
+  `App` lo recupera al arrancar; era el único dato de usuario sin respaldo. Main **nunca** infiere
+  si hay trabajo sin guardar: `windows/close-guard.ts` veta el primer `close`, emite
+  `close-requested` y espera un `window:closeDecision`, con una gracia de 4 s para que un renderer
+  colgado no vuelva la app incerrable. Ojo con el ciclo de vida: vetar un `close` durante un quit
+  **cancela el quit entero** y `will-quit` no llega, así que reanudarlo es `app.quit()` y no
+  `win.close()` — diagnóstico en
+  [`.claude/knowledge/vetoing-a-close-during-a-quit-cancels-the-quit.md`](.claude/knowledge/vetoing-a-close-during-a-quit-cancels-the-quit.md).
+- **El respaldo previo a una migración se toma con `VACUUM INTO` + `PRAGMA integrity_check`, nunca
+  con `copyFileSync`.** La base corre en WAL: copiar solo `worship.db` pierde en silencio todo lo
+  posterior al último checkpoint — medido, 5000 filas contra 4977 con un `-wal` caliente. Y la base
+  se cierra en `will-quit` (`closeDatabase()`), que es lo que vacía el `-wal` en vez de dejarlo
+  crecer entre sesiones.
 - **La ventana de proyección no tiene lógica de dominio.** Es una función pura del último
   `ProjectionOutput` recibido (`src/shared/types/projection.ts`). Si necesitás que "sepa" algo del
   culto, calculalo en el control y mandalo por `projection:show`.
+- **Main tampoco sabe qué está en vivo, y no se le inventa una segunda fuente de verdad.**
+  `selectOutput` es una proyección **con pérdida**: un deck tapado por NEGRO/LOGO y "no hay nada en
+  vivo" llegan a main como el mismo `ProjectionOutput`. Cualquier decisión de main sobre "lo que
+  está en vivo" (pins de desalojo, atribución de historial, rechazar una operación) o viaja dentro
+  del output porque el proyector mismo la necesita —como `videoUnderlay`— o es del control. Un
+  guard en main que acierta el 95% es peor que ninguno: el 5% es un rechazo que el operador no
+  puede explicar ni saltear en pleno culto. Diagnóstico en
+  [`.claude/knowledge/main-cannot-know-what-is-live-under-an-overlay.md`](.claude/knowledge/main-cannot-know-what-is-live-under-an-overlay.md).
 - **Seleccionar NUNCA proyecta.** El flujo es de dos etapas, como EasyWorship: un click (en el
   programa, en un recurso, en un versículo o en una diapositiva) mueve el target de preview
   (`lib/actions/preview.ts` + `stores/preview.store.ts`), y `goLive()`
@@ -292,6 +361,58 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   `components/shared/output-view.tsx` (`OutputView`) es lo que pinta la ventana de proyección Y
   los monitores LIVE y PREVIEW. Si el preview y lo proyectado se pintan distinto, un monitor puede
   mentirle al operador — por eso hay un solo componente y los tamaños van en `cqw`.
+- **Una grilla de contenido que puede crecer va por `VirtualGrid`, y si refleja algo en vivo tiene
+  que seguirlo.** Las diapositivas de un deck y los versículos de un capítulo (176 en el Salmo 119,
+  montados dos veces: preview y en vivo) usan `VirtualGrid` con la geometría de
+  `components/ui/slide-grid.geometry.ts`; `SlideGrid` quedó sólo para las grillas de un tile. La
+  segunda mitad no es opcional: virtualizar convierte "el tile quedó fuera de vista" en "el tile no
+  existe", así que la grilla en vivo sigue al proyector y la del centro al cursor de preview
+  (`scrollToIndex`), y sólo se mueve cuando ese índice cambia — un scroll manual del operador se
+  respeta hasta la próxima diapositiva. Ojo con el teclado: un salto que cruza la ventana montada
+  remonta el tile enfocado, ver
+  [`.claude/knowledge/a-keyboard-jump-across-the-mounted-window-remounts-the-tile-it-focused.md`](.claude/knowledge/a-keyboard-jump-across-the-mounted-window-remounts-the-tile-it-focused.md).
+- **Un archivo que el proyector no puede reproducir se reporta, nunca se pinta ahí.** El
+  `<video>`/`<audio>`/`<img>` de la ventana de proyección tiene `onError` y manda
+  `projection:reportMediaError`; el aviso (banda roja sobre el escenario, toast, fila marcada en el
+  panel de medios) lo pinta **solo** la ventana de control — `OutputView` en `mode === "live"` no
+  recibe `errorLabel` porque la congregación no puede ver un cartel de error. Y el aviso **no**
+  cambia lo proyectado: qué hacer con un archivo roto lo decide el operador, no la app. Es la regla
+  de "los monitores nunca le mienten al operador" aplicada al caso en que la mentira sería un
+  escenario negro y silencioso.
+- **Los tiempos de auto-avance de un `.ppt`/`.pps` legacy se leen del binario de origen, no del
+  `.pptx` convertido.** El exportador de PPTX de LibreOffice solo escribe `<p:transition>` cuando la
+  diapositiva tiene un efecto visual, y `advTm` es un atributo de ese elemento: sin efecto, el
+  tiempo desaparece (222 de 1226 archivos del himnario real). `ppt-binary-timings.ts` los lee, y
+  `mergeBinaryTimings` **solo rellena huecos y abandona el merge entero ante una sola discrepancia**
+  con lo que el `.pptx` sí trajo — avanzar con el tiempo de otra diapositiva en pleno culto es peor
+  que no avanzar. Diagnóstico en
+  [`.claude/knowledge/libreoffice-pptx-export-drops-advtm-without-a-transition-effect.md`](.claude/knowledge/libreoffice-pptx-export-drops-advtm-without-a-transition-effect.md).
+- **Nunca leas un `.pptx` entero para sacarle sus partes XML.** Un zip es de acceso aleatorio: va
+  todo por `readZipEntries` (`src/main/slides/zip-reader.ts`), que lee el directorio central y solo
+  los rangos pedidos. `unzipSync` con `filter` **no** evita el `readFileSync` de 200 MB, solo el
+  inflate. Y si agregás un camino nuevo de lectura de entradas, pasale a `inflateSync` su buffer
+  `out` con el tamaño que ya trae el directorio central. Diagnóstico y mediciones en
+  [`.claude/knowledge/a-pptx-is-random-access-and-inflatesync-needs-its-out-buffer.md`](.claude/knowledge/a-pptx-is-random-access-and-inflatesync-needs-its-out-buffer.md).
+- **En `before-quit` no corre nada asíncrono.** Ni un `setTimeout`, ni un callback, ni una promesa:
+  el proceso ya se fue. La limpieza de salida es sincrónica y punto — por eso el SIGKILL de respaldo
+  de `soffice` va en la misma llamada que el SIGTERM. Ver
+  [`.claude/knowledge/nothing-asynchronous-survives-before-quit.md`](.claude/knowledge/nothing-asynchronous-survives-before-quit.md).
+- **Lo que el proyector aplica UNA vez al montar hay que recalcularlo antes de reconstruir la
+  ventana.** `startAtSeconds` (de `AudioTrackPush` y de `VideoUnderlay`) es un seek de montaje, no
+  una posición: replicar el snapshot de main en una ventana nueva remonta cada elemento en el punto
+  que el operador eligió al principio. `freezeLivePositions()` (`lib/actions/live-positions.ts`)
+  pliega la última `mediaStatus` reportada ahí adentro, y lo llaman los tres caminos que destruyen
+  la ventana (`projection-closed`, `display.store.close()`, el reopen de `setDisplayId`). Sin eso
+  un deck con banda sonora no solo reiniciaba la música: el modo "synced" deriva el cursor de
+  diapositiva del reloj de audio, así que volvía a la **diapositiva 1** en pleno culto. Diagnóstico
+  en
+  [`.claude/knowledge/startatseconds-is-a-mount-time-seek-so-a-rebuilt-projector-restarts-everything.md`](.claude/knowledge/startatseconds-is-a-mount-time-seek-so-a-rebuilt-projector-restarts-everything.md).
+- **Todo lo que el proyector tiene que SOSTENER viaja dentro del `ProjectionOutput`; un
+  `MediaCommand` es solo para lo que pasa una vez.** `paused`, `startAtSeconds` y `volume` son
+  estado (`VideoUnderlay`/`AudioTrackPush`); `seek` y `restart` son órdenes. La prueba está en el
+  remonte: un comando se pierde en cada epoch nuevo y en cada reconstrucción de la ventana, y deja
+  al operador con un panel que muestra un nivel que la sala no escucha. Por eso el volumen de
+  `M2` no se implementó sobre el `setVolume` que ya existía — ese comando se borró.
 - **NEGRO/LOGO pausa un video en vivo y mantiene su posición; la pista de audio de un deck sigue
   sonando.** El `<video>` no se desmonta al taparlo (`videoUnderlay` en `ProjectionOutput` +
   `LiveVideo` en `output-view.tsx`) — solo se oculta y se pausa, y al destapar reanuda donde
@@ -335,5 +456,6 @@ no reimplementando desde cero.
 - Requiere **LibreOffice instalado** para convertir presentaciones (`brew install --cask libreoffice`).
   No se empaqueta; la app lo detecta y guía la instalación si falta.
 - `git` está activo; commitea/pushea solo si el usuario lo pide.
-- No hay CI configurado. `npm run typecheck && npm run lint && npm run db:smoke` es la barra
-  mínima antes de dar por buena una tarea.
+- No hay CI configurado — es una decisión del usuario, no un pendiente.
+  `npm run typecheck && npm run lint && npm run test` es la barra mínima antes de dar por buena
+  una tarea, y corre a mano.

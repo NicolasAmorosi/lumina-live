@@ -1,15 +1,17 @@
-import { useT } from "@renderer/lib/i18n/i18n-provider";
-import { Button, Icon, Select, Tooltip } from "@renderer/components/ui";
+import { useT, type MessageKey } from "@renderer/lib/i18n/i18n-provider";
+import { Button, Icon, Select, Tooltip, VolumeControl } from "@renderer/components/ui";
 import { useDisplayStore } from "@renderer/stores/display.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { useSettingsStore } from "@renderer/stores/settings.store";
 import { clearLive } from "@renderer/lib/actions/playback";
 import { api } from "@renderer/lib/api";
+import { toast } from "@renderer/lib/toast";
+import { IpcError } from "@shared/ipc/result";
 import { LOGO_URL } from "@shared/urls";
 import type { TransitionStyle } from "@shared/types/projection";
 import { SettingsGroup, SettingsRow } from "../settings-row";
 
-const TRANSITION_STYLE_LABEL_KEYS: Record<TransitionStyle, string> = {
+const TRANSITION_STYLE_LABEL_KEYS: Record<TransitionStyle, MessageKey> = {
   none: "settings.transitionStyles.none",
   crossfade: "settings.transitionStyles.crossfade",
   "fade-through-black": "settings.transitionStyles.fadeThroughBlack",
@@ -27,6 +29,7 @@ export function ProjectionSection() {
   const logoPath = useSettingsStore((s) => s.settings["logo.path"]);
   const transitionStyle = useSettingsStore((s) => s.settings["projection.transition.style"]);
   const transitionDurationMs = useSettingsStore((s) => s.settings["projection.transition.durationMs"]);
+  const startVolume = useSettingsStore((s) => s.settings["media.volume"]);
   const updateSettings = useSettingsStore((s) => s.update);
 
   // The URL carries the logo's own path as a cache-buster: it's the same
@@ -37,7 +40,18 @@ export function ProjectionSection() {
   const logoUrl = logoPath ? `${LOGO_URL}?p=${encodeURIComponent(logoPath)}` : null;
 
   async function changeLogo() {
-    await api.files.setLogo();
+    try {
+      await api.files.setLogo();
+    } catch (error) {
+      // Main refuses an image it cannot decode rather than persisting one that
+      // would leave LOGO black on the projector, so there is nothing to
+      // reload: the previous logo is still the one in the database.
+      if (error instanceof IpcError && error.code === "LOGO_UNREADABLE") {
+        toast.danger(t("settings.logoUnreadable"));
+        return;
+      }
+      throw error;
+    }
     // Refreshes `settings.store` from the DB — this drives both this
     // thumbnail and (via App.tsx) the logo actually shown on the projector.
     await useSettingsStore.getState().load();
@@ -94,6 +108,20 @@ export function ProjectionSection() {
           <Button disabled={base === null} onClick={clearLive} variant="outline">
             <Icon name="close" /> {t("footer.clear")}
           </Button>
+        </SettingsRow>
+      </SettingsGroup>
+
+      <SettingsGroup title={t("settings.groups.audio")}>
+        <SettingsRow description={t("settings.startVolumeDesc")} label={t("settings.startVolume")}>
+          <span className="w-10 text-right text-sm tabular-nums text-muted-foreground">
+            {Math.round(startVolume * 100)}%
+          </span>
+          <VolumeControl
+            label={t("settings.startVolume")}
+            muteLabel={startVolume === 0 ? t("media.unmute") : t("media.mute")}
+            onChange={(volume) => void updateSettings({ "media.volume": volume })}
+            value={startVolume}
+          />
         </SettingsRow>
       </SettingsGroup>
 

@@ -24,8 +24,11 @@
   },
   "include": [
     "electron.vite.config.ts",
+    "vitest.config.ts",
     "drizzle.config.ts",
     "scripts/**/*.ts",
+    "tests/main/**/*.ts",
+    "tests/fixtures/**/*.ts",
     "src/main/**/*",
     "src/preload/**/*",
     "src/shared/**/*"

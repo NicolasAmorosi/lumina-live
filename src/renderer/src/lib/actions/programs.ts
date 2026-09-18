@@ -2,7 +2,12 @@ import { api } from "@renderer/lib/api";
 import { t } from "@renderer/lib/i18n/i18n-provider";
 import { toast } from "@renderer/lib/toast";
 import { useProgramStore } from "@renderer/stores/program.store";
-import type { ProgramSummary } from "@shared/types/program";
+import type {
+  ProgramDraft,
+  ProgramItemDTO,
+  ProgramItemUpsert,
+  ProgramSummary,
+} from "@shared/types/program";
 
 export type ProgramMetaInput = {
   name: string;
@@ -19,10 +24,40 @@ export function hasUnsavedChanges(): boolean {
   return dirty && items.length > 0;
 }
 
-function draftItems() {
-  return useProgramStore
-    .getState()
-    .items.map(({ id: _id, position: _position, ...rest }) => rest as never);
+/**
+ * `ProgramItemDTO` -> `ProgramItemUpsert`: the same row minus `id` and
+ * `position`, both of which `ProgramsRepo.save()` reassigns from scratch.
+ *
+ * An explicit switch, not the rest-spread cast (`as never`) this used to be:
+ * `Omit` over a discriminated union collapses it to its shared members, so the
+ * cast was papering over a genuine hole in the types at the edge of an IPC
+ * channel — in a project that forces exhaustiveness everywhere else. The
+ * switch also makes adding an item kind a compile error here, which is the
+ * point.
+ */
+export function toUpsertItems(items: ProgramItemDTO[]): ProgramItemUpsert[] {
+  return items.map((item) => {
+    switch (item.kind) {
+      case "media":
+      case "ppt":
+        return { kind: item.kind, mediaAssetId: item.mediaAssetId, title: item.title };
+      case "bible":
+        return {
+          kind: "bible",
+          bibleVersionId: item.bibleVersionId,
+          bibleBookId: item.bibleBookId,
+          chapter: item.chapter,
+          verseFrom: item.verseFrom,
+          verseTo: item.verseTo,
+          reference: item.reference,
+          text: item.text,
+        };
+    }
+  });
+}
+
+function draftItems(): ProgramItemUpsert[] {
+  return toUpsertItems(useProgramStore.getState().items);
 }
 
 /** Overwrites the currently loaded program with the schedule as it stands —
@@ -165,8 +200,37 @@ export async function deleteProgram(id: number): Promise<void> {
   }
 }
 
+/**
+ * Puts back the schedule the operator was editing when the app last went away.
+ *
+ * A draft of a SAVED program has to adopt it in main as well, or the restored
+ * service looks right and behaves like a program nobody opened: its decks lose
+ * the anti-eviction pin and every `projection_history` row written from there
+ * on goes unattributed. The items then come from the draft, not from disk —
+ * that is the whole point of restoring one.
+ */
+export async function restoreDraft(draft: ProgramDraft): Promise<void> {
+  if (draft.programId !== null) {
+    await api.programs.load(draft.programId).catch(() => null);
+  }
+  useProgramStore.getState().restoreDraft(draft);
+  // Announced from here rather than from `App`, for the same reason as the
+  // removal toast: a message belongs with the action that earns it, not with
+  // whichever component happened to call it.
+  toast.info(t("schedule.draftRestored"));
+}
+
 /** Starts a brand new, unsaved program. Callers must check
  *  `hasUnsavedChanges()` first — this never asks on its own. */
 export function newProgram(): void {
   useProgramStore.getState().newProgram();
+  // Main keeps its own notion of "the current program" for history attribution
+  // and deck pinning, and nothing used to tell it the schedule had been reset:
+  // every verse and slide sent live afterwards was recorded against the
+  // previous service. Deliberately not surfaced to the operator — a failure
+  // here misfiles a history row, which is not worth a toast over the schedule
+  // they just cleared.
+  void api.programs.releaseCurrent().catch((error: unknown) => {
+    console.error("[programs] releaseCurrent failed", error);
+  });
 }

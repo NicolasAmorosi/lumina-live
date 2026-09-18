@@ -1,10 +1,10 @@
 import type { Locale } from "@shared/types/settings";
-import { availableLocales, useT } from "@renderer/lib/i18n/i18n-provider";
+import { availableLocales, useT, type MessageKey } from "@renderer/lib/i18n/i18n-provider";
 import { Button, Icon, Select } from "@renderer/components/ui";
 import { useSettingsStore } from "@renderer/stores/settings.store";
 import { SettingsGroup, SettingsRow } from "../settings-row";
 
-const LOCALE_LABEL_KEYS: Record<Locale, string> = {
+const LOCALE_LABEL_KEYS: Record<Locale, MessageKey> = {
   es: "settings.locales.es",
   it: "settings.locales.it",
   en: "settings.locales.en",

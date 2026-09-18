@@ -2,6 +2,7 @@ import type { ButtonHTMLAttributes, KeyboardEvent as ReactKeyboardEvent } from "
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@renderer/lib/utils";
+import { computeMenuPosition, type MenuPosition } from "./floating-menu";
 import { Icon } from "./icon";
 
 export type SelectOption = { disabled?: boolean; label: string; value: string };
@@ -20,37 +21,11 @@ const sizes: Record<NonNullable<SelectProps["size"]>, string> = {
   md: "h-10 text-sm pl-3 pr-8",
 };
 
-// Kept clear of the viewport edge, and of the trigger itself.
-const VIEWPORT_MARGIN = 8;
-const TRIGGER_GAP = 4;
-const MIN_MENU_HEIGHT = 120;
-const MAX_MENU_HEIGHT = 320;
-
-type MenuPosition = { bottom?: number; left: number; maxHeight: number; top?: number; width: number };
-
-/** Flips the menu above the trigger when there isn't enough room below (and
- *  there's more room above), clamps it horizontally inside the viewport, and
- *  caps its height to whichever side it opens toward — so it never spills off
- *  screen regardless of where the trigger sits (a panel, a modal, near an
- *  edge). */
-function computePosition(trigger: HTMLElement): MenuPosition {
-  const rect = trigger.getBoundingClientRect();
-  const spaceBelow = window.innerHeight - rect.bottom - VIEWPORT_MARGIN;
-  const spaceAbove = rect.top - VIEWPORT_MARGIN;
-  const openUp = spaceBelow < MIN_MENU_HEIGHT && spaceAbove > spaceBelow;
-  const maxHeight = Math.min(MAX_MENU_HEIGHT, Math.max(80, openUp ? spaceAbove : spaceBelow));
-  const width = rect.width;
-  const left = Math.min(Math.max(rect.left, VIEWPORT_MARGIN), window.innerWidth - width - VIEWPORT_MARGIN);
-  return openUp
-    ? { bottom: window.innerHeight - rect.top + TRIGGER_GAP, left, maxHeight, width }
-    : { left, maxHeight, top: rect.bottom + TRIGGER_GAP, width };
-}
-
 /**
  * A styled dropdown, not a native `<select>` — WorshipApp's identity (design
  * tokens, dark cabin theme) has to reach into the option list itself, which a
  * native listbox never lets a page style. Renders its menu through a portal
- * to `document.body`, positioned in viewport coordinates (`computePosition`),
+ * to `document.body`, positioned in viewport coordinates (`computeMenuPosition`),
  * so it always paints above modals/panels and is never clipped by an
  * ancestor's `overflow`, unlike `Tooltip`'s in-flow bubble.
  *
@@ -75,7 +50,7 @@ export function Select({ className, disabled, onChange, options, placeholder, si
   useLayoutEffect(() => {
     if (!open) return;
     const reposition = () => {
-      if (triggerRef.current) setPosition(computePosition(triggerRef.current));
+      if (triggerRef.current) setPosition(computeMenuPosition(triggerRef.current));
     };
     reposition();
     window.addEventListener("resize", reposition);
@@ -98,6 +73,15 @@ export function Select({ className, disabled, onChange, options, placeholder, si
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [open]);
+
+  // The typeahead buffer's reset timer is the one thing in here that can
+  // outlive the component: a Select unmounted within 500 ms of a keystroke
+  // (a modal closing under the operator's hands) left it counting down
+  // towards a ref nobody reads any more.
+  useEffect(() => {
+    const typeahead = typeaheadRef.current;
+    return () => window.clearTimeout(typeahead.timer);
+  }, []);
 
   function optionId(index: number) {
     return `${id}-option-${index}`;
@@ -122,7 +106,7 @@ export function Select({ className, disabled, onChange, options, placeholder, si
 
   function openMenu(initialIndex?: number) {
     if (disabled || options.length === 0 || !triggerRef.current) return;
-    setPosition(computePosition(triggerRef.current));
+    setPosition(computeMenuPosition(triggerRef.current));
     setHighlightedIndex(initialIndex ?? (selectedIndex >= 0 ? selectedIndex : firstEnabledIndex()));
     setOpen(true);
   }
@@ -203,6 +187,11 @@ export function Select({ className, disabled, onChange, options, placeholder, si
       case "Escape":
         if (open) {
           e.preventDefault();
+          // No `triggerRef.focus()` here, unlike `selectOption`: this handler
+          // is on the trigger itself and the options are never focusable, so a
+          // keydown can only arrive while the trigger already has focus.
+          // `selectOption` needs it because a pointer press on an option blurs
+          // the button first.
           setOpen(false);
         }
         break;
@@ -214,7 +203,7 @@ export function Select({ className, disabled, onChange, options, placeholder, si
     }
   }
 
-  return (
+  const trigger = (
     <button
       aria-activedescendant={open && highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined}
       aria-controls={listboxId}
@@ -243,46 +232,65 @@ export function Select({ className, disabled, onChange, options, placeholder, si
         )}
         name="chevronDown"
       />
-      {open && position
-        ? createPortal(
-            <ul
-              className="fixed z-[100] overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-overlay focus:outline-none"
-              id={listboxId}
-              ref={menuRef}
-              role="listbox"
-              style={{
-                left: position.left,
-                maxHeight: position.maxHeight,
-                width: position.width,
-                ...(position.top !== undefined ? { top: position.top } : { bottom: position.bottom }),
-              }}
-            >
-              {options.map((option, index) => (
-                <li
-                  aria-disabled={option.disabled || undefined}
-                  aria-selected={option.value === value}
-                  className={cn(
-                    "flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm text-foreground",
-                    option.disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
-                    !option.disabled && index === highlightedIndex && "bg-hover",
-                  )}
-                  id={optionId(index)}
-                  key={option.value}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    selectOption(index);
-                  }}
-                  onMouseEnter={() => !option.disabled && setHighlightedIndex(index)}
-                  role="option"
-                >
-                  <span className="truncate">{option.label}</span>
-                  {option.value === value ? <Icon className="shrink-0 text-primary" name="check" /> : null}
-                </li>
-              ))}
-            </ul>,
-            document.body,
-          )
-        : null}
     </button>
+  );
+
+  // The menu is the trigger's SIBLING, not its child. The portal takes it out
+  // of the DOM either way, but written inside the `<button>` it reads — to a
+  // person and to a linter — like a listbox full of interactive rows nested in
+  // a button, which is invalid HTML and is not what ships.
+  const menu =
+    open && position
+      ? createPortal(
+          <ul
+            className="fixed z-[var(--z-popover)] overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-overlay focus:outline-none"
+            id={listboxId}
+            ref={menuRef}
+            role="listbox"
+            style={{
+              left: position.left,
+              maxHeight: position.maxHeight,
+              width: position.width,
+              ...(position.top !== undefined ? { top: position.top } : { bottom: position.bottom }),
+            }}
+          >
+            {options.map((option, index) => (
+              /* eslint-disable-next-line jsx-a11y/click-events-have-key-events --
+                 In the ARIA listbox pattern the options never take focus: the
+                 trigger keeps it and points at the active option with
+                 `aria-activedescendant`, so the keyboard equivalent of this
+                 click lives in the trigger's `onKeyDown`. A key handler here
+                 could never fire. */
+              <li
+                aria-disabled={option.disabled || undefined}
+                aria-selected={option.value === value}
+                className={cn(
+                  "flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm text-foreground",
+                  option.disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+                  !option.disabled && index === highlightedIndex && "bg-hover",
+                )}
+                id={optionId(index)}
+                key={option.value}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  selectOption(index);
+                }}
+                onMouseEnter={() => !option.disabled && setHighlightedIndex(index)}
+                role="option"
+              >
+                <span className="truncate">{option.label}</span>
+                {option.value === value ? <Icon className="shrink-0 text-primary-ink" name="check" /> : null}
+              </li>
+            ))}
+        </ul>,
+          document.body,
+        )
+      : null;
+
+  return (
+    <>
+      {trigger}
+      {menu}
+    </>
   );
 }

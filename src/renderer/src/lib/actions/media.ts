@@ -4,6 +4,20 @@ import { toggleAutoplay } from "@renderer/effects/deck-autoplay";
 import { api } from "@renderer/lib/api";
 import type { MediaTarget } from "@shared/types/projection";
 
+/**
+ * Sets the level of one live media target, 0..1.
+ *
+ * Declarative on purpose — it writes the store, which rides out to the
+ * projector inside `VideoUnderlay`/`AudioTrackPush`, rather than sending a
+ * one-shot command to the element. A command would be lost by every remount
+ * (a new epoch, the projection window rebuilt onto another screen), leaving
+ * the panel showing a level the room cannot hear. Same rule as `paused`.
+ */
+export function setMediaVolume(target: MediaTarget, volume: number): void {
+  if (target.kind === "video") useProjectionStore.getState().setVideoVolume(volume);
+  else useAudioStore.getState().setVolume(target.trackId, volume);
+}
+
 /** Pauses/resumes the live video. Declarative — see `VideoUnderlay.paused` —
  *  so it survives a NEGRO/LOGO round-trip instead of NEGRO silently
  *  overriding an operator's explicit pause. */

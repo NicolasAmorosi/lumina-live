@@ -14,13 +14,23 @@
   to   { opacity: 0; transform: translate3d(0.75rem, 0.5rem, 0) scale(0.94); }
 }
 .wa-toast-enter { animation: toast-enter 180ms ease-out; }
+/* `forwards`: the store removes the item when this ends (EXIT_MS in
+ * `toast.store.ts`), and without holding the last frame the toast snaps back
+ * to full opacity for the tick between the animation ending and the state
+ * update landing. */
+.wa-toast-exit { animation: toast-exit 180ms ease-in forwards; }
 
 /* The programs modal's side panel (`components/pages/programs/`) expands the
  * dialog itself sideways rather than compressing the list column — see
- * `.claude/knowledge/` for the rationale. */
-@utility modal-expand {
-  transition: max-width 200ms ease;
+ * `.claude/knowledge/` for the rationale. The dialog itself resizes
+ * instantly (animating its `max-width` stretched the header's empty middle,
+ * since the header spans the full dialog width but its title/close button
+ * don't grow with it) — only the panel's own mount animates, below. */
+@keyframes program-panel-enter {
+  from { opacity: 0; transform: translate3d(-0.75rem, 0, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
 }
+.wa-program-panel-enter { animation: program-panel-enter 50ms ease-out; }
 @keyframes linear-loader-slide {
   0% { transform: translateX(-120%); }
   60%  { transform: translateX(320%); }
@@ -74,7 +84,11 @@
   @keyframes button-loading-shimmer { from { opacity: 0.45; } to { opacity: 0.8; } }
   .wa-button-loading-shimmer { animation: button-loading-shimmer 1.4s ease-in-out infinite alternate; will-change: opacity; }
   .wa-toast-enter { animation-duration: 1ms; }
-  .modal-expand { transition-duration: 1ms; }
+  /* The store still waits EXIT_MS before removing the item — it just spends
+   * that time already invisible, which is the point of the preference. */
+  .wa-toast-exit { animation-duration: 1ms; }
+  @keyframes program-panel-enter { from { opacity: 0; } to { opacity: 1; } }
+  .wa-program-panel-enter { animation-duration: 1ms; }
 }
 
 /*
@@ -106,7 +120,9 @@
   --wa-bg-active: #2f557f;
   --wa-text-primary: #f5f5f5;
   --wa-text-secondary: #a9c0dd;
-  --wa-text-muted: #7089a8;
+  /* 60% of the way to --wa-text-secondary along the same Denim ramp: 3.70 ->
+   * 5.59 on bg-card, while staying a visible step below it (7.15). */
+  --wa-text-muted: #92aac8;
   --wa-accent-primary: #2e6de7;
   --wa-accent-hover: #5589ee;
   --wa-accent-light: #84adfc;
@@ -122,6 +138,33 @@
   --wa-badge-image: #2b8500;
   --wa-badge-audio: #007f98;
   --wa-badge-bible: #2e6de7;
+
+  /*
+   * "ink" = this hue as TEXT/ICON on one of the app's own surfaces, as opposed
+   * to the plain token, which is a FILL (bg-danger, bg-primary, ... with white
+   * on top). They cannot be one value: on the dark theme a red readable on
+   * #123054 is a light red, and white on a light red is unreadable — the two
+   * roles pull in opposite directions.
+   *
+   * Measured on `bg-card` (#123054), the worst surface any of these lands on:
+   *   text-danger      2.35 -> 5.01     text-primary     2.83 -> 5.94
+   *   text-success     2.83 -> 5.58     text-badge-audio 2.85 -> 5.52
+   *   text-warning     2.89 -> 6.33     text-subtle      3.70 -> 5.59
+   * WCAG AA asks 4.5 for small text; every one of them used to fail even the
+   * 3.0 asked of a graphical object.
+   *
+   * Hues are not invented: each is its own ALPS colour tinted toward white,
+   * the same way this file already interpolates the Denim ramp for dark
+   * surfaces ALPS does not define. `primary-ink` is literally Denim #84adfc.
+   * Only the five hues that actually appear as bare text or a bare icon get
+   * one — the other badge colours are only ever a `Badge` tint, which the
+   * badge's own `text-foreground` already made readable.
+   */
+  --wa-danger-ink: #e8808d;        /* Scarlett  #d0021b + 50% white */
+  --wa-accent-ink: #84adfc;        /* Denim     #84adfc, straight from ALPS */
+  --wa-success-ink: #80b666;       /* Tree Frog #2b8500 + 40% white */
+  --wa-warning-ink: #e6a480;       /* Campfire  #cd4900 + 50% white */
+  --wa-badge-audio-ink: #66b2c1;   /* Ming      #007f98 + 40% white */
 }
 
 [data-theme="light"] {
@@ -149,6 +192,14 @@
   --wa-badge-image: #355724;
   --wa-badge-audio: #255760;
   --wa-badge-bible: #2f557f;
+  /* The light theme already passes on every surface these land on, so ink ==
+   * fill here. Split anyway, so a component never has to know which theme it
+   * is in — which is the whole point of the token layer. */
+  --wa-danger-ink: #d0021b;
+  --wa-accent-ink: #2f557f;
+  --wa-success-ink: #355724;
+  --wa-warning-ink: #cd4900;
+  --wa-badge-audio-ink: #255760;
 }
 
 @theme inline {
@@ -187,6 +238,13 @@
   --color-badge-audio: var(--wa-badge-audio);
   --color-badge-bible: var(--wa-badge-bible);
 
+  /* Text/icon counterparts of the fills above — see the note by the palette. */
+  --color-danger-ink: var(--wa-danger-ink);
+  --color-primary-ink: var(--wa-accent-ink);
+  --color-success-ink: var(--wa-success-ink);
+  --color-warning-ink: var(--wa-warning-ink);
+  --color-badge-audio-ink: var(--wa-badge-audio-ink);
+
   /* Noto Sans is the church's official typeface (Advent Sans is logo-only). */
   --font-sans: "Noto Sans Variable", "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
 
@@ -198,6 +256,31 @@
   --shadow-surface: 0 1px 2px 0 rgb(0 0 0 / 0.25), 0 1px 3px 0 rgb(0 0 0 / 0.2);
   --shadow-raised: 0 2px 4px -2px rgb(0 0 0 / 0.3), 0 4px 12px -2px rgb(0 0 0 / 0.25);
   --shadow-overlay: 0 8px 16px -8px rgb(0 0 0 / 0.4), 0 20px 40px -8px rgb(0 0 0 / 0.5);
+
+  /*
+   * Stacking scale — the missing half of the elevation scale above. Until
+   * this existed, `z-50` (modal), `z-[60]` (toasts) and `z-[100]` (the Select
+   * menu, the floating tooltip AND the ProgramsModal drag clone) competed at
+   * numbers picked one at a time, with three different things sharing 100 and
+   * DOM order deciding which of them actually won.
+   *
+   * Read it top to bottom as "what may cover what". A floating tooltip and a
+   * dropdown are ABOVE the modal on purpose: both are opened from inside one,
+   * and one that renders underneath is worse than none. The drag clone is
+   * above everything because it is attached to the pointer — it has to be
+   * visible wherever the pointer goes — and the toast is last because a
+   * message the operator has to read during a service cannot be covered by
+   * anything, including a drag in progress.
+   *
+   * Steps of 100 so a level can be slotted between two without renumbering.
+   * Used as `z-[var(--z-modal)]`: Tailwind v4 has no z-index theme namespace.
+   */
+  --z-raised: 10;      /* sticky headers, in-flow overlays (an error banner) */
+  --z-sticky: 20;      /* a control revealed on hover over a row */
+  --z-modal: 100;      /* the modal stack and its backdrop */
+  --z-popover: 200;    /* Select menus and floating tooltips — opened FROM a modal */
+  --z-drag: 300;       /* the clone following the pointer */
+  --z-toast: 400;      /* never covered by anything */
 }
 
 * { box-sizing: border-box; }

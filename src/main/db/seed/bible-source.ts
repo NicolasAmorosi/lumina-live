@@ -62,12 +62,22 @@ function parseBook(book: BibleSourceBook, index: number): ParsedBook {
 function normalizeChapters(raw: unknown): string[][] {
   if (Array.isArray(raw)) return raw.map(normalizeVerses);
   if (raw && typeof raw === "object") {
-    return Object.keys(raw as object)
+    return Object.keys(raw)
       .map(Number)
       .sort((a, b) => a - b)
       .map((n) => normalizeVerses((raw as Record<string, unknown>)[String(n)]));
   }
   throw new Error("Unrecognized chapters shape");
+}
+
+/** A verse is text or it is nothing. `String()` on a shape we did not expect
+ *  writes the literal "[object Object]" into the Bible and seeds it happily —
+ *  this file's whole job is to survive a JSON the user supplied, so an
+ *  unreadable verse has to come out empty and be visible as empty. */
+function asVerseText(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return "";
 }
 
 function normalizeVerses(raw: unknown): string[] {
@@ -76,16 +86,16 @@ function normalizeVerses(raw: unknown): string[] {
       if (typeof v === "string") return v;
       if (v && typeof v === "object") {
         const o = v as Record<string, unknown>;
-        return String(o["text"] ?? o["verse"] ?? "");
+        return asVerseText(o["text"] ?? o["verse"]);
       }
-      return String(v ?? "");
+      return asVerseText(v);
     });
   }
   if (raw && typeof raw === "object") {
-    return Object.keys(raw as object)
+    return Object.keys(raw)
       .map(Number)
       .sort((a, b) => a - b)
-      .map((n) => String((raw as Record<string, unknown>)[String(n)] ?? ""));
+      .map((n) => asVerseText((raw as Record<string, unknown>)[String(n)]));
   }
   return [];
 }

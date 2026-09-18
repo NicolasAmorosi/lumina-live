@@ -6,14 +6,12 @@ const ICON_BY_KIND: Record<ProgramItemDTO["kind"], IconName> = {
   media: "video",
   ppt: "ppt",
   bible: "bible",
-  text: "fileText",
 };
 
 const BADGE_BY_KIND: Record<ProgramItemDTO["kind"], BadgeVariant> = {
   media: "video",
   ppt: "ppt",
   bible: "bible",
-  text: "neutral",
 };
 
 /** Display label for a program item, resolving a media/ppt title through the
@@ -22,8 +20,7 @@ const BADGE_BY_KIND: Record<ProgramItemDTO["kind"], BadgeVariant> = {
 export function useItemLabel(item: ProgramItemDTO): string {
   const asset = useMediaAsset(item.kind === "media" || item.kind === "ppt" ? item.mediaAssetId : null);
   if (item.kind === "media" || item.kind === "ppt") return item.title ?? asset?.name ?? "…";
-  if (item.kind === "bible") return item.reference;
-  return item.title ?? item.body.slice(0, 40);
+  return item.reference;
 }
 
 /** Icon + badge tone for a program item — a media item refines its generic

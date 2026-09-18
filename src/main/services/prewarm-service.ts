@@ -1,0 +1,122 @@
+import { randomUUID } from "node:crypto";
+import { SLIDES_BATCH_SIZE } from "@shared/constants";
+import type { DeckStatusSummary, PrewarmProgress } from "@shared/types/deck";
+import { slideThumbUrl } from "@shared/urls";
+import { broadcast } from "./broadcast";
+import { getSlidesRepo } from "./repos";
+import { cacheUsage, cancelBackgroundJobs, prepareDeck, warmBatchPdfCache } from "../slides/deck-service";
+
+/** How full the cache is allowed to get from prewarming alone before a batch
+ *  stops enqueueing more — converting 600 decks just to immediately evict
+ *  500 of them wastes minutes of CPU and a pile of disk writes for nothing.
+ *  Interactive conversions (the operator opening something for real) are
+ *  never subject to this — only a background batch checks it, between
+ *  assets. */
+const CACHE_BUDGET_FRACTION = 0.8;
+
+function cacheOverBudget(): boolean {
+  const { bytesOnDisk, maxBytes } = cacheUsage();
+  return bytesOnDisk >= maxBytes * CACHE_BUDGET_FRACTION;
+}
+
+type BatchState = { jobId: string; canceled: boolean };
+const activeBatches = new Map<string, BatchState>();
+
+/** One assetId → its deck's status and first-slide thumbnail, for assets that
+ *  have a deck row at all (an asset never opened has no row and no entry
+ *  here). One `IN (...)` query for the whole grid instead of a `getDeck()`
+ *  (SELECT + `existsSync`) per asset.
+ *
+ *  The `thumbUrl` is what replaced the library grid's old `useDeckThumb` hook,
+ *  which fired one `deck:get` per PPT tile — hundreds of round-trips to draw
+ *  one screen. It is only ever non-null for a `ready` deck: a deck still
+ *  converting has no slide 1 to point at, and asserting a URL that 404s would
+ *  make the tile flash a broken image on its way to being right. */
+export function deckStatuses(assetIds: readonly number[]): Record<number, DeckStatusSummary> {
+  const statuses = getSlidesRepo().statusesByAsset(assetIds);
+  const result: Record<number, DeckStatusSummary> = {};
+  for (const [assetId, { deckId, status }] of statuses) {
+    result[assetId] = { status, thumbUrl: status === "ready" ? slideThumbUrl(deckId, 1) : null };
+  }
+  return result;
+}
+
+/** Starts one tracked background batch over `assetIds` — already-ready decks
+ *  are counted as `skipped` and never touched. Returns immediately with the
+ *  real total (post-skip); the conversions themselves run asynchronously,
+ *  reported through `prewarm-progress`. */
+export function startPrewarmBatch(assetIds: readonly number[], label: string): { jobId: string; total: number } {
+  const jobId = randomUUID();
+  const state: BatchState = { jobId, canceled: false };
+  activeBatches.set(jobId, state);
+
+  const statuses = getSlidesRepo().statusesByAsset(assetIds);
+  const pending = assetIds.filter((id) => statuses.get(id)?.status !== "ready");
+  const progress: PrewarmProgress = {
+    jobId,
+    label,
+    total: pending.length,
+    done: 0,
+    skipped: assetIds.length - pending.length,
+    failed: 0,
+    currentAssetId: null,
+    status: "running",
+  };
+  broadcast("prewarm-progress", progress);
+
+  void runBatch(state, pending, progress);
+  return { jobId, total: pending.length };
+}
+
+async function runBatch(state: BatchState, assetIds: number[], progress: PrewarmProgress): Promise<void> {
+  for (let i = 0; i < assetIds.length; i++) {
+    if (state.canceled) {
+      broadcast("prewarm-progress", { ...progress, currentAssetId: null, status: "canceled" });
+      activeBatches.delete(state.jobId);
+      return;
+    }
+    if (cacheOverBudget()) {
+      broadcast("prewarm-progress", { ...progress, currentAssetId: null, status: "cache-full" });
+      activeBatches.delete(state.jobId);
+      return;
+    }
+
+    // At each chunk boundary, pre-convert the whole chunk's PDFs (and, for
+    // legacy decks, their .pptx upgrades) in one `soffice` invocation each —
+    // see `warmBatchPdfCache`'s own comment for the reasoning and its
+    // no-op-on-failure fallback. The per-asset loop below is otherwise
+    // unchanged: it's what actually inserts each deck and reports progress,
+    // one at a time, so cancellation/cache-budget checks stay exactly as
+    // granular as before.
+    if (i % SLIDES_BATCH_SIZE === 0) {
+      await warmBatchPdfCache(assetIds.slice(i, i + SLIDES_BATCH_SIZE));
+    }
+
+    const assetId = assetIds[i]!;
+    progress.currentAssetId = assetId;
+    broadcast("prewarm-progress", { ...progress });
+    try {
+      await prepareDeck(assetId, { priority: "background", scope: "batch", prewarmJobId: state.jobId });
+      progress.done += 1;
+    } catch {
+      // A canceled or genuinely failed conversion either way just doesn't
+      // count toward "done" — the operator sees it in `failed`, and a
+      // per-tile Callout (driven by `deck-progress`, unaffected by this) still
+      // shows the real error if they open that deck directly afterward.
+      progress.failed += 1;
+    }
+    broadcast("prewarm-progress", { ...progress });
+  }
+
+  broadcast("prewarm-progress", { ...progress, currentAssetId: null, status: "done" });
+  activeBatches.delete(state.jobId);
+}
+
+/** Stops enqueueing further assets in the batch and aborts whichever one of
+ *  its jobs is currently in flight (queued-but-not-started ones tagged with
+ *  this `jobId` are also dropped, via `cancelBackgroundJobs`). */
+export function cancelPrewarmBatch(jobId: string): void {
+  const state = activeBatches.get(jobId);
+  if (state) state.canceled = true;
+  cancelBackgroundJobs(jobId);
+}

@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
-import { EmptyState, Icon, IconButton, Input, ListRow, Select, Tooltip } from "@renderer/components/ui";
+import {
+  EmptyState,
+  HighlightedText,
+  Icon,
+  IconButton,
+  Input,
+  ListRow,
+  Select,
+  Tooltip,
+} from "@renderer/components/ui";
 import { PanelBody, PanelFooter } from "@renderer/components/shared/panel";
 import { useBibleStore } from "@renderer/stores/bible.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
@@ -10,21 +19,18 @@ import { addVerseToSchedule, buildVerseDrag, previewSearchHit } from "@renderer/
 import { previewVerse } from "@renderer/lib/actions/preview";
 import { goLive } from "@renderer/lib/actions/playback";
 import { setBibleVerseDrag } from "@renderer/lib/dnd";
-import type { BibleBookDTO, BibleSearchHit } from "@shared/types/bible";
+import { useDebouncedCallback } from "@renderer/lib/hooks/use-debounced-callback";
+import { normalizeForSearch } from "@renderer/lib/utils";
+import { parseSnippet, type BibleBookDTO, type BibleSearchHit } from "@shared/types/bible";
 
 const MIN_TEXT_QUERY_LENGTH = 3;
+/** One FTS query per keystroke was one round-trip per keystroke, each of them
+ *  a `MATCH` over the whole bible. */
+const TEXT_SEARCH_DEBOUNCE_MS = 200;
 
 type SearchMode = "reference" | "text";
 
 type ReferenceMatch = { book: BibleBookDTO; chapter: number | null };
-
-function normalize(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
-}
 
 /** Splits "juan 3" into name="juan"/chapter=3, or "juan" into name="juan"/chapter=null. */
 function parseReferenceQuery(query: string): { chapter: number | null; name: string } {
@@ -35,11 +41,13 @@ function parseReferenceQuery(query: string): { chapter: number | null; name: str
 
 function matchReference(books: BibleBookDTO[], query: string): ReferenceMatch[] {
   const { chapter, name } = parseReferenceQuery(query);
-  const normalizedName = normalize(name);
+  const normalizedName = normalizeForSearch(name);
   if (!normalizedName) return [];
 
   const matchingBooks = books.filter(
-    (b) => normalize(b.name).includes(normalizedName) || normalize(b.abbrev).includes(normalizedName),
+    (b) =>
+      normalizeForSearch(b.name).includes(normalizedName) ||
+      normalizeForSearch(b.abbrev).includes(normalizedName),
   );
 
   if (chapter === null) return matchingBooks.map((book) => ({ book, chapter: null }));
@@ -51,8 +59,16 @@ function matchReference(books: BibleBookDTO[], query: string): ReferenceMatch[] 
  *  a toggle switches it to full-text verse search. */
 export function BibleBrowser() {
   const t = useT();
-  const { books, currentVerseIndex, setBookAndChapter, setVersion, verses, versionId, versions } =
-    useBibleStore();
+  // Field-by-field, not `useBibleStore()` bare — the whole-store subscription
+  // re-rendered this panel (and its list of up to 500 verse rows) on every
+  // write, including ones it never reads.
+  const books = useBibleStore((s) => s.books);
+  const currentVerseIndex = useBibleStore((s) => s.currentVerseIndex);
+  const verses = useBibleStore((s) => s.verses);
+  const versionId = useBibleStore((s) => s.versionId);
+  const versions = useBibleStore((s) => s.versions);
+  const setBookAndChapter = useBibleStore((s) => s.setBookAndChapter);
+  const setVersion = useBibleStore((s) => s.setVersion);
   const loadVersions = useBibleStore((s) => s.loadVersions);
   const target = usePreviewStore((s) => s.target);
   const [pendingBook, setPendingBook] = useState("");
@@ -83,18 +99,47 @@ export function BibleBrowser() {
   // unrelated to what's on screen.
   useEffect(() => {
     setHighlightedIndex(0);
-  }, [referenceMatches, searchResults]);
+    // `itemRefs` is indexed positionally and only ever written by the rows
+    // that actually render, so going from 500 search hits to 3 left 497 dead
+    // slots behind for the rest of the session. Truncating keeps the array
+    // exactly as long as the list it describes.
+    itemRefs.current.length = resultCount;
+  }, [referenceMatches, searchResults, resultCount]);
 
   useEffect(() => {
     itemRefs.current[highlightedIndex]?.scrollIntoView({ block: "nearest" });
   }, [highlightedIndex]);
 
-  async function handleTextSearch(value: string) {
+  /** Monotonic request id. `invoke` has no cancellation, so two searches in
+   *  flight can resolve out of order and the LAST ONE TO ARRIVE wins — which,
+   *  typing at any speed, is regularly the results for a prefix the operator
+   *  has already moved past. Only the newest request is allowed to publish. */
+  const searchSeqRef = useRef(0);
+
+  const runTextSearch = useDebouncedCallback((value: string) => {
     if (versionId === null || value.trim().length < MIN_TEXT_QUERY_LENGTH) {
       setSearchResults([]);
       return;
     }
-    setSearchResults(await api.bible.search(versionId, value));
+    const seq = (searchSeqRef.current += 1);
+    void api.bible
+      .search(versionId, value)
+      .then((hits) => {
+        if (seq === searchSeqRef.current) setSearchResults(hits);
+      })
+      .catch(() => {
+        if (seq === searchSeqRef.current) setSearchResults([]);
+      });
+  }, TEXT_SEARCH_DEBOUNCE_MS);
+
+  function handleTextSearch(value: string) {
+    // Cleared synchronously so the list can never show hits for a query the
+    // input no longer holds while the debounce is pending.
+    if (value.trim().length < MIN_TEXT_QUERY_LENGTH) {
+      searchSeqRef.current += 1;
+      setSearchResults([]);
+    }
+    runTextSearch(value);
   }
 
   function toggleSearchMode() {
@@ -201,7 +246,7 @@ export function BibleBrowser() {
               onChange={(e) => {
                 const value = e.target.value;
                 setQuery(value);
-                if (searchMode === "text") void handleTextSearch(value);
+                if (searchMode === "text") handleTextSearch(value);
               }}
               onKeyDown={handleSearchKeyDown}
               placeholder={searchMode === "reference" ? t("bible.referenceSearch") : t("bible.search")}
@@ -228,7 +273,7 @@ export function BibleBrowser() {
                     }}
                     selected={highlightedIndex === index}
                   >
-                    <span dangerouslySetInnerHTML={{ __html: hit.snippet }} />
+                    <HighlightedText segments={parseSnippet(hit.snippet)} />
                   </ListRow>
                 ))}
               </ul>

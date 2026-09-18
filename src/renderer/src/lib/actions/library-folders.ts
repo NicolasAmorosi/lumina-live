@@ -2,6 +2,7 @@ import { useLibraryStore, type MediaSourceView } from "@renderer/stores/library.
 import { useSettingsStore } from "@renderer/stores/settings.store";
 import { api } from "@renderer/lib/api";
 import type { AssetKind } from "@shared/constants";
+import type { MediaSortOrder } from "@shared/types/media";
 
 /**
  * Linked folders and the last-picked view both live in settings (durable, one
@@ -37,4 +38,19 @@ export async function removeLinkedFolder(kind: AssetKind, folderPath: string): P
   });
 
   if (useLibraryStore.getState().activeView[kind] === folderPath) selectMediaSourceView(kind, "recent");
+  // An unlinked folder's listing is dead weight: nothing can select it again,
+  // and it was holding a full `MediaAsset[]` (hundreds of entries, for the
+  // folders this feature exists for) until the app closed.
+  useLibraryStore.getState().forgetFolder(kind, folderPath);
+}
+
+/**
+ * The remaining per-kind view preference, and the only one that never touches
+ * the library store: which files are on screen does not change, just their
+ * order, and the grid reads it straight from settings — `update` merges
+ * synchronously, so the grid re-sorts on the same tick the menu is clicked.
+ */
+export function setMediaSortOrder(kind: AssetKind, order: MediaSortOrder): void {
+  const current = useSettingsStore.getState().settings["library.sort"];
+  void useSettingsStore.getState().update({ "library.sort": { ...current, [kind]: order } });
 }

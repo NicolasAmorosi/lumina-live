@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { useT, type TParams } from "@renderer/lib/i18n/i18n-provider";
-import { Button, Callout, EmptyState, Icon, IconButton, Input, Skeleton, Switch, Title, Tooltip } from "@renderer/components/ui";
+import { useEffect, useRef, useState } from "react";
+import { useT, type Translate } from "@renderer/lib/i18n/i18n-provider";
+import { Button, Callout, EmptyState, Icon, IconButton, Input, Skeleton, Switch, Textarea, Title, Tooltip } from "@renderer/components/ui";
 import { cn } from "@renderer/lib/utils";
 import { api } from "@renderer/lib/api";
 import { toast } from "@renderer/lib/toast";
@@ -32,7 +32,7 @@ type FormValues = { favorite: boolean; name: string; notes: string };
  *  what's stored", not "the operator touched a field". Read once per mount —
  *  `ProgramsModal` keys the panel by mode + target id, so switching programs
  *  remounts it instead of leaving a stale form behind. */
-function initialForm(mode: PanelMode, t: (key: string, params?: TParams) => string): FormValues {
+function initialForm(mode: PanelMode, t: Translate): FormValues {
   if (mode.kind === "edit") {
     return { favorite: mode.program.favorite, name: mode.program.name, notes: mode.program.notes ?? "" };
   }
@@ -94,6 +94,7 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
   // discard guard.
   const [confirmArmed, setConfirmArmed] = useState(false);
   const skipDisarmRef = useRef(true);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   const dirty =
     isForm && (name !== initial.name || notes !== initial.notes || favorite !== initial.favorite);
@@ -111,7 +112,12 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
   }, [name, notes, favorite, openAfter]);
 
   const [previewProgram, setPreviewProgram] = useState<ProgramDTO | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
+  // Effects run after the first paint. Starting a preview as "not loading"
+  // briefly selected the real empty-state branch while `previewProgram` was
+  // still null, so switching programs flashed "Programa vacío" before the
+  // skeleton appeared. This component is keyed by panel mode/target, so the
+  // initializer is evaluated for every new preview target.
+  const [previewLoading, setPreviewLoading] = useState(mode.kind === "preview");
   const [previewError, setPreviewError] = useState(false);
 
   useEffect(() => {
@@ -125,7 +131,9 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
     setPreviewError(false);
     setPreviewLoading(true);
     void api.programs
-      .load(mode.program.id)
+      // `peek`, never `load`: this panel opens on a single click, and loading
+      // adopts the program in main (history attribution + deck pins).
+      .peek(mode.program.id)
       .then((full) => {
         if (!cancelled) setPreviewProgram(full);
       })
@@ -140,17 +148,24 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
     };
   }, [mode]);
 
-  function handleKeyDown(e: KeyboardEvent) {
+  // Escape and Enter are bound to the document in the CAPTURE phase, not to
+  // the panel's own element. Two reasons, and neither is style: bound to the
+  // element they only fire while focus happens to be inside the panel, so
+  // Escape with focus on the program list closed the whole modal instead of
+  // the panel; and capture is what lets `stopPropagation` beat `Modal`'s own
+  // document-level Escape listener, which is in the bubble phase. Enter still
+  // only counts from inside — outside the panel it belongs to whatever has
+  // focus.
+  const keyHandlerRef = useRef<(e: globalThis.KeyboardEvent) => void>(() => {});
+  keyHandlerRef.current = (e: globalThis.KeyboardEvent) => {
+    const target = e.target instanceof HTMLElement ? e.target : null;
     if (e.key === "Escape") {
-      // Stop here so the modal's own document-level Escape listener never
-      // sees it — Escape closes the panel first, the modal only on a second
-      // press.
       e.stopPropagation();
       onClose();
       return;
     }
     if (e.key !== "Enter" || !isForm) return;
-    const target = e.target as HTMLElement;
+    if (!target || !panelRef.current?.contains(target)) return;
     // A focused button already handles its own Enter (Cancel closes, Save
     // calls handleConfirm below); Notes is multi-line, so Enter there has to
     // stay a plain newline.
@@ -158,7 +173,13 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
     if (busy || name.trim().length === 0) return;
     e.preventDefault();
     void handleConfirm();
-  }
+  };
+
+  useEffect(() => {
+    const onKeyDown = (e: globalThis.KeyboardEvent) => keyHandlerRef.current(e);
+    document.addEventListener("keydown", onKeyDown, true);
+    return () => document.removeEventListener("keydown", onKeyDown, true);
+  }, []);
 
   async function handleConfirm() {
     setBusy(true);
@@ -190,7 +211,7 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
   }
 
   return (
-    <div className="flex w-80 shrink-0 flex-col border-l border-border" onKeyDown={handleKeyDown}>
+    <div className="flex min-h-0 flex-1 flex-col" ref={panelRef}>
       {/* `h-13` is shared with the list's search/filter bar in `ProgramsModal`
           so both seams line up when the panel expands the dialog sideways —
           change one and the other has to follow. */}
@@ -236,14 +257,14 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
                   onClick={() => setFavorite((v) => !v)}
                   variant="ghost"
                 >
-                  <Icon className={cn(favorite ? "fill-current text-primary" : "text-subtle")} name="favorite" />
+                  <Icon className={cn(favorite ? "fill-current text-primary-ink" : "text-subtle")} name="favorite" />
                 </IconButton>
               </Tooltip>
             </div>
             <label className="flex flex-col gap-1">
               <span className="text-sm font-medium text-foreground">{t("programs.notes")}</span>
-              <textarea
-                className="min-h-24 w-full resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+              <Textarea
+                className="min-h-24"
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder={t("programs.notesPlaceholder")}
                 value={notes}
@@ -259,7 +280,7 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
         ) : mode.kind === "delete" ? (
           <div className="flex flex-col gap-2 text-sm">
             <p className="text-foreground">{t("programs.deleteWarning", { name: mode.program.name })}</p>
-            <p className="flex items-start gap-1.5 text-warning">
+            <p className="flex items-start gap-1.5 text-warning-ink">
               <Icon className="mt-0.5 shrink-0" name="alert" />
               <span>{t("programs.itemCount", { count: mode.program.itemCount })}</span>
             </p>

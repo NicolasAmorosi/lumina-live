@@ -50,6 +50,42 @@ Dos consecuencias que importan al tocar la paleta:
 Los badges por tipo de contenido también son colores de la tabla (ppt = Campfire, video = Iris /
 Emperor, image = Tree Frog / Forest, audio = Ming / Cave, bible = Bluejay / Denim).
 
+### Un color no puede ser relleno y texto a la vez — la rampa `-ink`
+
+Un token de color tiene **dos roles incompatibles** y el tema oscuro los enfrenta: como **relleno**
+(`bg-danger` con blanco encima) tiene que ser oscuro para que el blanco se lea; como **texto** sobre
+`bg-card` (#123054) tiene que ser claro para leerse él. Con un solo valor, uno de los dos falla — y
+el que fallaba era el texto: medido sobre los valores reales, `text-danger` daba **2,35:1**,
+`text-primary` 2,83, `text-success` 2,83, `text-badge-audio` 2,85 y `text-warning` 2,89, todos por
+debajo del 3:1 que WCAG pide hasta para un objeto gráfico, y muy lejos del 4,5:1 de texto chico.
+El peor caso no era decorativo: era el aviso de "este archivo no se pudo reproducir" en
+`MediaTrackRow`, justo lo que el operador tiene que leer a oscuras y de reojo.
+
+Por eso hay una segunda familia, `--color-<tono>-ink`, para los **cinco tonos que aparecen como
+texto o ícono suelto**. Mismo hue, aclarado hacia blanco — igual que el tema oscuro ya interpola
+Denim para superficies que ALPS no define:
+
+| Token | Oscuro | Derivación | Sobre `bg-card` |
+|---|---|---|---|
+| `--color-danger-ink` | `#e8808d` | Scarlett `#d0021b` + 50 % blanco | 2,35 → **5,01** |
+| `--color-primary-ink` | `#84adfc` | Denim `#84adfc`, tal cual de ALPS | 2,83 → **5,94** |
+| `--color-success-ink` | `#80b666` | Tree Frog `#2b8500` + 40 % | 2,83 → **5,58** |
+| `--color-warning-ink` | `#e6a480` | Campfire `#cd4900` + 50 % | 2,89 → **6,33** |
+| `--color-badge-audio-ink` | `#66b2c1` | Ming `#007f98` + 40 % | 2,85 → **5,52** |
+
+En el tema claro `-ink` vale lo mismo que el relleno: ahí ya pasaba en todos los pares donde se usa.
+Se parten igual, para que ningún componente tenga que saber en qué tema está.
+
+Los otros badges **no** tienen `-ink` a propósito: solo se pintan como tinte de `Badge`, que desde
+el arreglo `H7` lleva `text-foreground` (2,18–3,19 → 12,5–13,8). `--wa-text-muted` del tema oscuro
+se subió en su lugar, de `#7089a8` a `#92aac8` (3,70 → 5,59 sobre `bg-card`), porque `text-subtle`
+es texto y nada más — 32 usos, ninguno como fondo ni borde.
+
+**Lo que queda abierto:** el tema **claro** roza el límite en dos pares que nadie había medido —
+`--wa-warning` sobre `bg-muted` a 4,00 y `--wa-text-muted` sobre `bg-muted` a 4,22. No se tocó:
+subirlos significa mover neutros de ALPS y colapsaría la jerarquía contra `--wa-text-secondary`
+(`#4a4a4a`), que es una decisión de diseño, no un ajuste.
+
 Oscuro es el default (`DEFAULT_SETTINGS['ui.theme']` en `shared/types/settings.ts`) — pensado
 para operarse en una cabina de proyección a oscuras, igual que la versión legacy.
 
@@ -133,17 +169,23 @@ manualmente desde el TopBar.
   programa — eso es lo que hace el área de recursos de EW.
 - **`slides/`**: la grilla de lo que el ítem en preview puede poner en pantalla — diapositivas de
   un deck, versículos de un capítulo, o el propio archivo si es uno solo. Es también el único
-  lugar que dispara conversiones (`useDeck`). `SlideGrid` (`slide-grid.tsx`) tiene dos variantes:
-  `flow` (auto-fill, para versículos/asset único) y `fixed-2` (siempre 2 columnas, la que usa
-  `deck-slides.tsx` para que las diapositivas de un PPT se vean grandes en vez de una grilla
-  chica de N columnas).
-- **`monitors/`**: LIVE arriba, PREVIEW abajo, ambos con la primitiva `Monitor`. Cuando lo que
-  está en vivo es un deck (`base.kind === 'deck'`), el footer del monitor LIVE apila dos cosas:
-  `deck-transport.tsx` (play/pausa/reiniciar el auto-avance) y `live-slide-strip.tsx` — una tira
-  horizontal con las miniaturas de **todas** las diapositivas del deck en vivo; click en cualquiera
-  llama `gotoSlide()` y salta ahí al instante (esto es vivo, no preview: no hay una segunda
-  etapa). Es un componente distinto de `deck-slides.tsx`, que navega el deck *en preview*, no el
-  que está en el aire.
+  lugar que dispara conversiones (`useDeck`). Todo lo que puede crecer —las diapositivas de un
+  deck, los versículos de un capítulo— se pinta con **`VirtualGrid`**, con la geometría en
+  `components/ui/slide-grid.geometry.ts`: gap 12, ancho mínimo 144 para versículos y **2 columnas
+  fijas** para un deck (`columns`, excluyente con `minItemWidth`), para que las diapositivas de un
+  PPT se vean grandes en vez de una grilla chica de N columnas. `SlideGrid` (`slide-grid.tsx`)
+  quedó sólo para las grillas de un tile que no crecen nunca: el versículo agendado, un ítem de
+  texto, un asset suelto.
+- **`monitors/`**: el monitor LIVE arriba (la primitiva `Monitor`; el de PREVIEW se mudó a la
+  columna del centro, al lado de lo que previsualiza), debajo los transportes `deck-transport.tsx`
+  y `verse-transport.tsx` como filas hermanas —nunca como footer del monitor, para que no puedan
+  encoger el escenario—, y al final `live-content-grid.tsx`: la misma grilla que el centro, pero
+  de lo que **está en el aire**. Click en un tile llama `gotoSlide()`/`projectVerse()` y salta ahí
+  al instante (esto es vivo, no preview: no hay segunda etapa), y la grilla **sigue sola** al
+  proyector (`scrollToIndex` de `VirtualGrid`), auto-avance incluido — virtualizada, un tile fuera
+  de la ventana montada no existe, así que sin eso un deck largo dejaría al operador mirando una
+  parte del culto que ya pasó. Es un componente distinto de `deck-slides.tsx`, que navega el deck
+  *en preview*, no el que está en el aire.
 
 ### Flujo de dos etapas (estricto)
 

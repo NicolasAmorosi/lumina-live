@@ -1,6 +1,6 @@
 import type { AssetKind } from "../constants";
 import type { DisplayInfo } from "../types/display";
-import type { FileProbe, MediaAsset, MediaAssetUsage } from "../types/media";
+import type { ImportProgress, MediaAsset, MediaAssetUsage } from "../types/media";
 import type {
   BibleBookDTO,
   BibleSearchHit,
@@ -11,17 +11,27 @@ import type {
   AudioTrackPush,
   MediaCommand,
   MediaStatus,
+  ProjectionMediaError,
   ProjectionOutput,
 } from "../types/projection";
-import type { DeckDTO, DeckEnvironment, DeckProgress } from "../types/deck";
+import type {
+  DeckCacheStats,
+  DeckDTO,
+  DeckEnvironment,
+  DeckProgress,
+  DeckStatusSummary,
+  PrewarmProgress,
+} from "../types/deck";
 import type {
   ProgramDTO,
+  ProgramDraft,
   ProgramDuplicateInput,
   ProgramMetaUpsert,
   ProgramSummary,
   ProgramUpsert,
 } from "../types/program";
 import type { SettingsMap } from "../types/settings";
+import type { CloseDecision } from "../types/window";
 
 /**
  * The single source of truth for every main<->renderer call. Add a channel here
@@ -51,12 +61,16 @@ export type IpcContract = {
   /** Projection window -> main -> control window. The projection window is
    *  describing its own <video>/<audio> element, not making a decision. */
   "projection:reportMediaStatus": { req: MediaStatus; res: void };
+  /** Same direction and same rule as `reportMediaStatus` — the element is
+   *  describing its own failure. The projector itself never paints a notice
+   *  (the congregation must not see one); it reports, and the control window
+   *  is what tells the operator. */
+  "projection:reportMediaError": { req: ProjectionMediaError; res: void };
 
   /** `kind: "all"` combines every `AssetKind`'s extensions into one filter, for
    *  a single file dialog that accepts any supported media at once — the
    *  caller then classifies each returned path by its own extension. */
   "files:pick": { req: { kind: AssetKind | "all"; multiple: boolean }; res: string[] };
-  "files:probe": { req: { path: string }; res: FileProbe };
   "files:setLogo": { req: void; res: string | null };
   /** Opens a native directory picker. `null` means the user canceled. */
   "files:pickFolder": { req: void; res: string | null };
@@ -68,10 +82,45 @@ export type IpcContract = {
    *  conversion is in flight joins the same job instead of queuing another. */
   "deck:ensure": { req: { assetId: number; force?: boolean }; res: DeckDTO };
   "deck:cancel": { req: { assetId: number }; res: void };
-  "deck:progress": { req: { assetId: number }; res: DeckProgress | null };
   "deck:environment": { req: void; res: DeckEnvironment };
   /** Opens a native file picker so the user can point at soffice by hand. */
   "deck:locateSoffice": { req: void; res: DeckEnvironment };
+
+  /** Fire-and-forget background conversion for decks not already converted.
+   *  The scope is also the priority: main drains `program` before `explicit`
+   *  before `visible` before a "Preparar carpeta" batch, and a deck asked for
+   *  again under a higher scope is moved up, even if it was already queued.
+   *
+   *  `"program"` (in the order of service) and `"explicit"` (added via
+   *  `+`/drag&drop) never get cancelled by another call; `"visible"` REPLACES
+   *  the previous visible set — assets that scrolled out are dropped from the
+   *  queue (not-yet-running ones only), assets that scrolled in are added. */
+  "deck:prewarm": { req: { assetIds: number[]; scope: "program" | "explicit" | "visible" }; res: void };
+  /** Starts one tracked, cancelable batch — the "Preparar carpeta/vista"
+   *  button. `assetIds` is whatever the caller already has on screen (the
+   *  library tab or linked-folder view's current list); already-converted
+   *  ones are skipped and counted separately. Progress comes back on
+   *  `prewarm-progress`, keyed by the returned `jobId`. */
+  "deck:prewarmBatch": { req: { assetIds: number[]; label: string }; res: { jobId: string; total: number } };
+  "deck:cancelPrewarmBatch": { req: { jobId: string }; res: void };
+  /** One round-trip instead of one `deck:get` per tile — which of these
+   *  assets already have a ready deck (so the "Preparar carpeta" button can
+   *  show how many are actually left to convert) and where each ready deck's
+   *  first-slide thumbnail lives (so the library grid can draw a PPT tile
+   *  without asking for its whole `DeckDTO`). Omits ids with no deck row at
+   *  all; check `statuses[id] !== undefined` before assuming "ready". */
+  "deck:statuses": { req: { assetIds: number[] }; res: Record<number, DeckStatusSummary> };
+
+  /** How much disk the slide cache is using against its budget. Read-only and
+   *  cheap (one aggregate query plus a setting), so Ajustes can poll it on
+   *  open without coordinating with the conversion queue. */
+  "deck:cacheStats": { req: void; res: DeckCacheStats };
+  /** Deletes EVERY cached deck — rows and rasterized files alike — and answers
+   *  with the usage that is left. Nothing is spared, including a deck that is
+   *  on the projector right now: main deliberately has no way to know what is
+   *  live (see `.claude/knowledge/main-cannot-know-what-is-live-under-an-overlay.md`),
+   *  so the confirmation belongs to the control window, which does. */
+  "deck:clearCache": { req: void; res: DeckCacheStats };
 
   "bible:versions": { req: void; res: BibleVersionDTO[] };
   "bible:books": { req: { versionId: number }; res: BibleBookDTO[] };
@@ -107,9 +156,24 @@ export type IpcContract = {
   "library:listFolder": { req: { kind: AssetKind; path: string }; res: MediaAsset[] };
 
   "programs:list": { req: void; res: ProgramSummary[] };
+  /** ADOPTS the program: main starts attributing `projection_history` to it and
+   *  moves the anti-eviction deck pins onto its decks, and the row's
+   *  `lastOpenedAt` is bumped. Only the operator actually opening a service
+   *  may call this — see `programs:peek` for merely looking at one. */
   "programs:load": { req: { id: number }; res: ProgramDTO };
+  /** The same rows, read-only: no `setCurrentProgramId`, no `pinDecks`, no
+   *  `lastOpenedAt`. Exists because one click on a row in the programs modal
+   *  opens a side panel that lists its items, and doing that through
+   *  `programs:load` silently handed the open service's eviction pins and its
+   *  history attribution to a program the operator had only glanced at. */
+  "programs:peek": { req: { id: number }; res: ProgramDTO };
   "programs:save": { req: ProgramUpsert; res: ProgramSummary };
   "programs:delete": { req: { id: number }; res: void };
+  /** "Nuevo programa": the schedule is no longer any saved program, so history
+   *  rows must stop being attributed to the last one and its decks stop being
+   *  pinned against eviction. Deleting the open program is handled by
+   *  `programs:delete` itself — main knows there which id it just removed. */
+  "programs:releaseCurrent": { req: void; res: void };
   /** Renames/edits a program's metadata without touching its items or
    *  rewriting their ids — unlike `programs:save`, which always replaces the
    *  full item list. */
@@ -126,6 +190,19 @@ export type IpcContract = {
    *  its optimistic guess. */
   "programs:reorder": { req: { ids: number[] }; res: ProgramSummary[] };
 
+  /** Mirrors the unsaved schedule to disk. `null` clears it — sent as soon as
+   *  the schedule is saved or emptied, so a stale draft never comes back over
+   *  a service the operator already filed. */
+  "program:saveDraft": { req: ProgramDraft | null; res: void };
+  /** Read once at launch. Already filtered to items whose media assets still
+   *  exist (`DraftRepo.load`). */
+  "program:loadDraft": { req: void; res: ProgramDraft | null };
+
+  /** The control window's answer to `close-requested`. Main never decides on
+   *  its own whether unsaved work may be discarded — `CLAUDE.md`: that
+   *  decision belongs to the control window. See `CloseDecision`. */
+  "window:closeDecision": { req: { decision: CloseDecision }; res: void };
+
   "settings:get": { req: void; res: SettingsMap };
   "settings:set": { req: Partial<SettingsMap>; res: void };
 };
@@ -141,9 +218,35 @@ export type IpcEvents = {
   "media-command": MediaCommand;
   "audio-tracks": AudioTrackPush[];
   /** -> control window */
+  /** The projection window is gone and the control window did not ask for it:
+   *  the OS closed it (the default Electron menu binds Cmd+W and nothing calls
+   *  `Menu.setApplicationMenu`), the projection renderer crashed, or it was
+   *  force-closed. Without this the control keeps `presentationOpen: true`
+   *  forever, and that flag is what `openIfNeeded()` short-circuits on — so EN
+   *  VIVO, NEGRO and LOGO would all stop reaching any projector in complete
+   *  silence while the LIVE header kept claiming to be on air. */
+  "projection-closed": void;
   "media-status": MediaStatus;
+  "media-error": ProjectionMediaError;
   "deck-progress": DeckProgress;
+  "prewarm-progress": PrewarmProgress;
+  /** What `deck:statuses` would answer changed for reasons that are not a
+   *  conversion finishing — today, the startup content-hash backfill teaching
+   *  main which already-cached deck an asset's bytes belong to. The library
+   *  is untouched, so this is deliberately NOT `library-changed`: the grid
+   *  must re-ask for statuses without re-listing files. */
+  "deck-statuses-changed": { kind: AssetKind };
   "library-changed": { kind: AssetKind };
+  /** Only fired for a batch large enough to need a progress bar
+   *  (`library-import.ts`'s `PROGRESS_THRESHOLD`), throttled to a few per
+   *  second — never one event per file. */
+  "library-import-progress": ImportProgress;
+  /** The operator asked to close the control window and the schedule has
+   *  unsaved changes. Main has already vetoed the close and is asking the
+   *  control window what to do; the answer comes back as
+   *  `window:confirmClose`, or never, in which case main closes anyway after
+   *  a short grace — a wedged renderer must not make the app unquittable. */
+  "close-requested": void;
 };
 
 export type IpcEventName = keyof IpcEvents;

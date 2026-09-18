@@ -1,5 +1,15 @@
 import { useT } from "@renderer/lib/i18n/i18n-provider";
-import { Badge, EmptyState, MediaPanel, SlideGrid, ThumbTile } from "@renderer/components/ui";
+import {
+  Badge,
+  EmptyState,
+  MediaPanel,
+  SLIDE_GRID_GAP_PX,
+  SlideGrid,
+  ThumbTile,
+  VERSE_TILE_MIN_WIDTH_PX,
+  VirtualGrid,
+  thumbTileHeight,
+} from "@renderer/components/ui";
 import { MediaTrackRow } from "@renderer/components/shared/media-track-row";
 import { PanelBody, PanelHeader } from "@renderer/components/shared/panel";
 import { PreviewMissingState } from "@renderer/components/shared/preview-missing-state";
@@ -41,23 +51,31 @@ export function SlidesPanel() {
     // A verse being previewed brings its whole chapter along, so the operator
     // can walk the passage without going back to the resource tab.
     if (content.kind === "bible" && target?.kind === "verse" && verses.length > 0) {
+      const previewedVerseIndex = target.verseIndex;
       return (
-        <SlideGrid>
-          {verses.map((verse, index) => (
+        <VirtualGrid
+          aria-label={t("bible.title")}
+          gap={SLIDE_GRID_GAP_PX}
+          itemHeight={(columnWidth) => thumbTileHeight(columnWidth, { label: false })}
+          itemKey={(verse) => verse.id}
+          items={verses}
+          minItemWidth={VERSE_TILE_MIN_WIDTH_PX}
+          renderItem={(verse, index, { tabIndex }) => (
             <ThumbTile
               index={verse.verse}
-              key={verse.id}
               live={liveVerseIndex === index && base?.kind === "bible"}
               onClick={() => previewVerse(index)}
               onDoubleClick={() => {
                 previewVerse(index);
                 void goLive();
               }}
-              selected={target.verseIndex === index}
+              selected={previewedVerseIndex === index}
+              tabIndex={tabIndex}
               text={verse.text}
             />
-          ))}
-        </SlideGrid>
+          )}
+          scrollToIndex={previewedVerseIndex}
+        />
       );
     }
 
@@ -69,16 +87,8 @@ export function SlidesPanel() {
       );
     }
 
-    if (content.kind === "text") {
-      return (
-        <SlideGrid>
-          <ThumbTile index={1} selected text={content.body} />
-        </SlideGrid>
-      );
-    }
-
     if (content.kind === "media" && content.asset.missingSince !== null) {
-      return <PreviewMissingState />;
+      return <PreviewMissingState assetId={content.asset.id} />;
     }
 
     // A live image needs no grid content of its own — the preview monitor
@@ -114,13 +124,6 @@ export function SlidesPanel() {
       return (
         <MediaPanel className="w-full">
           <MediaTrackRow kind="bible" label={content.reference} onDelete={clearPreview} />
-        </MediaPanel>
-      );
-    }
-    if (content.kind === "text") {
-      return (
-        <MediaPanel className="w-full">
-          <MediaTrackRow kind="text" label={content.body} onDelete={clearPreview} />
         </MediaPanel>
       );
     }

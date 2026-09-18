@@ -8,10 +8,12 @@ import { api } from "@renderer/lib/api";
 import {
   SCHEDULE_INDEX_MIME,
   classifyExt,
+  hideDragGhost,
   readBibleVerseDrag,
   readMediaAssetDrag,
   readOsFilesDrag,
 } from "@renderer/lib/dnd";
+import { toast } from "@renderer/lib/toast";
 import { previewScheduleItem } from "@renderer/lib/actions/preview";
 import { goLive } from "@renderer/lib/actions/playback";
 import { ScheduleRow } from "./schedule-row";
@@ -20,7 +22,18 @@ import type { AssetKind } from "@shared/constants";
 /** The service running order — EasyWorship's "Schedule", top-left. */
 export function SchedulePanel() {
   const t = useT();
-  const { activeIndex, items, moveDown, moveUp, removeAt, reorder, selectedIndex } = useProgramStore();
+  // One selector per field, never `useProgramStore()` bare: subscribing to the
+  // whole store re-rendered this panel — and with it every row, since
+  // `ScheduleRow` takes inline callbacks and can't be memoized — on any write
+  // at all, including ones it doesn't read (a title edit, a saved-program id).
+  // Zustand's action identities are stable, so selecting them costs nothing.
+  const activeIndex = useProgramStore((s) => s.activeIndex);
+  const items = useProgramStore((s) => s.items);
+  const selectedIndex = useProgramStore((s) => s.selectedIndex);
+  const moveDown = useProgramStore((s) => s.moveDown);
+  const moveUp = useProgramStore((s) => s.moveUp);
+  const removeAt = useProgramStore((s) => s.removeAt);
+  const reorder = useProgramStore((s) => s.reorder);
   const addItem = useProgramStore((s) => s.addItem);
   const clear = useProgramStore((s) => s.clear);
   const dirty = useProgramStore((s) => s.dirty);
@@ -53,15 +66,24 @@ export function SchedulePanel() {
    *  routed to its own kind by extension, same classifier the OS-file drag
    *  uses, so a single selection can mix PPTs, videos, images and audio. */
   async function handleAddAll() {
-    const paths = await api.files.pick("all", true);
-    if (paths.length === 0) return;
-    const byKind = new Map<AssetKind, string[]>();
-    for (const filePath of paths) {
-      const ext = filePath.slice(filePath.lastIndexOf(".") + 1);
-      const kind = classifyExt(ext);
-      if (kind) byKind.set(kind, [...(byKind.get(kind) ?? []), filePath]);
+    try {
+      const paths = await api.files.pick("all", true);
+      if (paths.length === 0) return;
+      const byKind = new Map<AssetKind, string[]>();
+      for (const filePath of paths) {
+        const ext = filePath.slice(filePath.lastIndexOf(".") + 1);
+        const kind = classifyExt(ext);
+        if (kind) byKind.set(kind, [...(byKind.get(kind) ?? []), filePath]);
+      }
+      for (const [kind, kindPaths] of byKind) await addPaths(kindPaths, kind);
+    } catch (error) {
+      // An unreadable drive, a file removed between the dialog and the import,
+      // a database write that failed: the schedule is the operator's running
+      // order and silently adding nothing is the one outcome they must not be
+      // left guessing about.
+      console.error("[schedule] add failed", error);
+      toast.danger(t("schedule.addError"));
     }
-    for (const [kind, kindPaths] of byKind) await addPaths(kindPaths, kind);
   }
 
   function dropTargetIndex(e: DragEvent<HTMLDivElement>): number {
@@ -71,7 +93,19 @@ export function SchedulePanel() {
 
   function handleDragOver(e: DragEvent<HTMLDivElement>) {
     e.preventDefault();
-    setDragOverIndex(dropTargetIndex(e));
+    // `dragover` fires continuously while the pointer moves — dozens of times
+    // a second — and only a change of target row is worth anything.
+    const next = dropTargetIndex(e);
+    setDragOverIndex((current) => (current === next ? current : next));
+  }
+
+  function handleDragLeave(e: DragEvent<HTMLDivElement>) {
+    // `dragleave` also fires when the pointer crosses into a *child* of this
+    // panel, which between two rows is constantly — so clearing unconditionally
+    // made the drop indicator blink off and on all the way down the list.
+    const leavingTo = e.relatedTarget as Node | null;
+    if (leavingTo && e.currentTarget.contains(leavingTo)) return;
+    setDragOverIndex(null);
   }
 
   async function handleDrop(e: DragEvent<HTMLDivElement>) {
@@ -97,10 +131,20 @@ export function SchedulePanel() {
     }
     const byKind = new Map<AssetKind, string[]>();
     for (const file of osFiles) byKind.set(file.kind, [...(byKind.get(file.kind) ?? []), file.path]);
-    let at = targetIndex;
-    for (const [kind, paths] of byKind) {
-      await addPaths(paths, kind, at);
-      at += paths.length;
+    try {
+      // `at` is a position in the list as it stood when the drop landed, and
+      // `addPaths` awaits in between — so the schedule may have moved on. That
+      // is bounded rather than guarded: `addItem` clamps `insertAt` to the
+      // list's real bounds, so the worst case is a row landing at the end
+      // instead of at the drop point, never a hole or a crash.
+      let at = targetIndex;
+      for (const [kind, paths] of byKind) {
+        await addPaths(paths, kind, at);
+        at += paths.length;
+      }
+    } catch (error) {
+      console.error("[schedule] drop failed", error);
+      toast.danger(t("schedule.addError"));
     }
   }
 
@@ -118,7 +162,7 @@ export function SchedulePanel() {
       />
       <PanelBody
         className="p-1.5"
-        onDragLeave={() => setDragOverIndex(null)}
+        onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDrop={(e) => void handleDrop(e)}
       >
@@ -141,6 +185,10 @@ export function SchedulePanel() {
                 onDragStart={(e) => {
                   e.dataTransfer.effectAllowed = "move";
                   e.dataTransfer.setData(SCHEDULE_INDEX_MIME, String(index));
+                  // Same as the saved-programs list: the only drop feedback
+                  // here is a horizontal indicator, so the browser's
+                  // translucent ghost trailing sideways is pure noise.
+                  hideDragGhost(e);
                 }}
                 selected={selectedIndex === index}
               />

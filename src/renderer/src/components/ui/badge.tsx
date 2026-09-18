@@ -3,16 +3,33 @@ import { cn } from "@renderer/lib/utils";
 
 export type BadgeVariant = "blue" | "neutral" | "danger" | "success" | "ppt" | "video" | "image" | "audio" | "bible";
 
+/**
+ * Tint carries the meaning, `text-foreground` carries the text.
+ *
+ * Every colored variant used to be `bg-<color>/20 text-<color>` — tint and
+ * label in the same hue, which is the classic way to fail contrast. Measured
+ * against the real tokens in the dark theme (the default, and the one used in
+ * a darkened booth) the nine variants landed between **2,18:1 and 3,19:1**,
+ * against the 4,5:1 WCAG AA asks of text this size. Keeping the identical tint
+ * and only swapping the label to the foreground token takes the same badges to
+ * **~12,5–13,8:1**, and the color still says what kind of content it is —
+ * which is the entire job the `--wa-badge-*` tokens have.
+ *
+ * The three semantic tints match the content ones at /20 so no variant reads
+ * as a weaker version of the others now that none of them is carrying the hue
+ * in its text. `neutral` is left alone: it was never color-on-its-own-tint,
+ * and being quieter than the rest is the point of it.
+ */
 const variants: Record<BadgeVariant, string> = {
-  blue: "bg-primary/15 text-primary",
+  blue: "bg-primary/20 text-foreground",
   neutral: "bg-muted text-muted-foreground",
-  danger: "bg-danger/15 text-danger",
-  success: "bg-success/15 text-success",
-  ppt: "bg-badge-ppt/20 text-badge-ppt",
-  video: "bg-badge-video/20 text-badge-video",
-  image: "bg-badge-image/20 text-badge-image",
-  audio: "bg-badge-audio/20 text-badge-audio",
-  bible: "bg-badge-bible/20 text-badge-bible",
+  danger: "bg-danger/20 text-foreground",
+  success: "bg-success/20 text-foreground",
+  ppt: "bg-badge-ppt/20 text-foreground",
+  video: "bg-badge-video/20 text-foreground",
+  image: "bg-badge-image/20 text-foreground",
+  audio: "bg-badge-audio/20 text-foreground",
+  bible: "bg-badge-bible/20 text-foreground",
 };
 
 type BadgeProps = HTMLAttributes<HTMLSpanElement> & { variant?: BadgeVariant };

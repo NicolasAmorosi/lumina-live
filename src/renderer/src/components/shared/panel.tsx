@@ -33,7 +33,20 @@ export function PanelHeader({
 
 export function PanelBody({ children, className, ...props }: PanelProps) {
   return (
-    <div className={cn("relative flex min-h-0 flex-1 flex-col overflow-y-auto", className)} {...props}>
+    <div
+      className={cn(
+        // `scrollbar-gutter: stable` reserves the scrollbar's width whether or
+        // not one is showing. This is the scrolling ancestor `VirtualGrid`
+        // measures itself against, and its own height is what decides whether
+        // a scrollbar appears — so without the gutter, content that lands
+        // right on the boundary can add a scrollbar, lose the width that
+        // justified it, and oscillate. Inert where scrollbars are overlays
+        // (macOS's default), which is exactly where the problem doesn't exist.
+        "relative flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable]",
+        className,
+      )}
+      {...props}
+    >
       {children}
     </div>
   );

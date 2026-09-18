@@ -1,0 +1,224 @@
+import type { KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { cn } from "@renderer/lib/utils";
+import { computeMenuPosition, type MenuPosition } from "./floating-menu";
+import { Icon, type IconName } from "./icon";
+import { IconButton } from "./icon-button";
+
+export type MenuOption<T extends string> = { label: string; value: T };
+
+type MenuSize = "xs" | "sm";
+
+type MenuProps<T extends string> = {
+  align?: "start" | "end";
+  className?: string;
+  icon: IconName;
+  /** Accessible name of the trigger — it is a button with no text in it. */
+  label: string;
+  onSelect: (value: T) => void;
+  options: readonly MenuOption<T>[];
+  size?: MenuSize;
+  /** The option in effect, rendered checked. Every menu in this app picks one
+   *  out of a set (`menuitemradio`); there is no command-menu variant. */
+  value: T;
+};
+
+/** Sized by its longest label rather than by its trigger: an icon button is
+ *  28px and a list is not. Wide enough for the longest sort order in Spanish
+ *  without wrapping, narrow enough to sit inside the resource column. */
+const MENU_WIDTH_PX = 224;
+
+/** `Input`'s scale, not `IconButton`'s. A menu trigger always sits next to a
+ *  field in a toolbar row, and `IconButton`'s own xs (24px) next to an xs
+ *  input (28px) reads as a button that slipped. `cn` resolves the later class,
+ *  so this is the height that wins. */
+const triggerSizes: Record<MenuSize, string> = { xs: "size-7", sm: "size-9" };
+
+/**
+ * An icon button that opens a short list of choices, one of which is in
+ * effect.
+ *
+ * The list is a portal positioned against the viewport (`computeMenuPosition`,
+ * shared with `Select`), because every panel here clips its overflow.
+ *
+ * Unlike `Select`, focus MOVES into the list: each option is a real `<button
+ * role="menuitemradio">` and the arrows walk between them. That is the ARIA
+ * menu pattern, and it is also what keeps the global shortcuts off this
+ * widget — `use-global-shortcuts` suppresses Enter/Space/arrows for a focused
+ * `<button>`, so picking an order with the keyboard can never also send the
+ * preview to the projector.
+ */
+export function Menu<T extends string>({
+  align = "start",
+  className,
+  icon,
+  label,
+  onSelect,
+  options,
+  size = "xs",
+  value,
+}: MenuProps<T>) {
+  const id = useId();
+  const menuId = `${id}-menu`;
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState<MenuPosition | null>(null);
+  /** Which option holds focus while the menu is open. Opening lands on the one
+   *  in effect, so the first arrow key moves from where the operator is. */
+  const [focusIndex, setFocusIndex] = useState(0);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const reposition = () => {
+      if (triggerRef.current) setPosition(computeMenuPosition(triggerRef.current, MENU_WIDTH_PX, align));
+    };
+    reposition();
+    window.addEventListener("resize", reposition);
+    // capture: true — a scroll inside a nested panel never bubbles to window,
+    // only the capture phase sees it.
+    window.addEventListener("scroll", reposition, true);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+    };
+  }, [align, open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (triggerRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  // Focus follows the index while the menu is open — including on the frame it
+  // opens, which is what makes the keyboard path work at all.
+  useEffect(() => {
+    if (open) itemRefs.current[focusIndex]?.focus();
+  }, [focusIndex, open]);
+
+  function openMenu() {
+    if (options.length === 0 || !triggerRef.current) return;
+    setPosition(computeMenuPosition(triggerRef.current, MENU_WIDTH_PX, align));
+    const current = options.findIndex((option) => option.value === value);
+    setFocusIndex(current >= 0 ? current : 0);
+    setOpen(true);
+  }
+
+  function close(refocus: boolean) {
+    setOpen(false);
+    if (refocus) triggerRef.current?.focus();
+  }
+
+  function handleTriggerKeyDown(e: ReactKeyboardEvent<HTMLButtonElement>) {
+    if (open || (e.key !== "ArrowDown" && e.key !== "ArrowUp")) return;
+    e.preventDefault();
+    openMenu();
+  }
+
+  function handleItemKeyDown(e: ReactKeyboardEvent<HTMLButtonElement>, index: number) {
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setFocusIndex((index + 1) % options.length);
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setFocusIndex((index - 1 + options.length) % options.length);
+        break;
+      case "Home":
+        e.preventDefault();
+        setFocusIndex(0);
+        break;
+      case "End":
+        e.preventDefault();
+        setFocusIndex(options.length - 1);
+        break;
+      case "Escape":
+        e.preventDefault();
+        close(true);
+        break;
+      case "Tab":
+        // Not prevented: Tab out of an open menu closes it and lets focus go
+        // where the operator sent it.
+        close(false);
+        break;
+    }
+  }
+
+  const trigger = (
+    <IconButton
+      aria-controls={open ? menuId : undefined}
+      aria-expanded={open}
+      aria-haspopup="menu"
+      aria-label={label}
+      // Not `toggled`: that prop means `aria-pressed`, and a button that is
+      // already saying `aria-expanded` is not also a toggle — the two together
+      // are read out as two different states of the same control. The open
+      // look is the same one hover gives, held.
+      className={cn(triggerSizes[size], open && "border-primary bg-muted", className)}
+      onClick={() => (open ? close(false) : openMenu())}
+      onKeyDown={handleTriggerKeyDown}
+      ref={triggerRef}
+      size="xs"
+    >
+      <Icon name={icon} />
+    </IconButton>
+  );
+
+  const menu =
+    open && position
+      ? createPortal(
+          <ul
+            aria-label={label}
+            className="fixed z-[var(--z-popover)] overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-overlay"
+            id={menuId}
+            ref={menuRef}
+            role="menu"
+            style={{
+              left: position.left,
+              maxHeight: position.maxHeight,
+              width: position.width,
+              ...(position.top !== undefined ? { top: position.top } : { bottom: position.bottom }),
+            }}
+          >
+            {options.map((option, index) => (
+              <li key={option.value} role="none">
+                <button
+                  aria-checked={option.value === value}
+                  className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground hover:bg-hover focus-visible:bg-hover focus-visible:outline-none"
+                  onClick={() => {
+                    onSelect(option.value);
+                    close(true);
+                  }}
+                  onKeyDown={(e) => handleItemKeyDown(e, index)}
+                  ref={(el) => {
+                    itemRefs.current[index] = el;
+                  }}
+                  role="menuitemradio"
+                  tabIndex={-1}
+                  type="button"
+                >
+                  <span className="truncate">{option.label}</span>
+                  {option.value === value ? <Icon className="shrink-0 text-primary-ink" name="check" /> : null}
+                </button>
+              </li>
+            ))}
+          </ul>,
+          document.body,
+        )
+      : null;
+
+  return (
+    <>
+      {trigger}
+      {menu}
+    </>
+  );
+}

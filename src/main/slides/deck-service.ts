@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -6,6 +5,7 @@ import { screen } from "electron";
 import {
   SLIDES_CONVERTER_VERSION,
   SLIDES_MAX_RENDER_WIDTH,
+  SLIDES_MIN_ADVANCE_MS,
   SLIDES_MIN_RENDER_WIDTH,
 } from "@shared/constants";
 import type { DeckDTO, DeckProgress } from "@shared/types/deck";
@@ -15,11 +15,15 @@ import { broadcast } from "../services/broadcast";
 import type { DeckRow, NewAudio, NewSlide } from "../db/repositories/slides.repo";
 import { SlideError, isSlideError } from "./errors";
 import {
+  convertBatchToPdf,
+  convertBatchToPptx,
   convertTimeoutFor,
+  convertTimeoutForBatch,
   convertToPdf,
   convertToPptx,
   killRunningSoffice,
   locateSoffice,
+  reapOrphanedSoffice,
   resetSofficeProfile,
   warmProfile,
 } from "./libreoffice";
@@ -29,7 +33,9 @@ import {
   readPresentationMeta,
   type PresentationMeta,
 } from "./pptx-metadata";
+import { readBinarySlideTimings } from "./ppt-binary-timings";
 import { rasterizePdf, shutdownRasterizer } from "./rasterizer";
+import { hashFile } from "../media/content-hash";
 
 // ---------------------------------------------------------------------------
 // Render target
@@ -73,42 +79,6 @@ function needsRerender(cachedWidth: number, target: RenderTarget): boolean {
   return cachedWidth < target.width * 0.75;
 }
 
-// ---------------------------------------------------------------------------
-// Hashing
-// ---------------------------------------------------------------------------
-
-function hashFile(filePath: string): string {
-  const hash = createHash("sha256");
-  const fd = fs.openSync(filePath, "r");
-  try {
-    const buffer = Buffer.alloc(1024 * 1024);
-    let bytesRead = 0;
-    while ((bytesRead = fs.readSync(fd, buffer, 0, buffer.length, null)) > 0) {
-      hash.update(buffer.subarray(0, bytesRead));
-    }
-  } finally {
-    fs.closeSync(fd);
-  }
-  return hash.digest("hex");
-}
-
-function dirSize(dir: string): number {
-  let total = 0;
-  const walk = (current: string) => {
-    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
-      const full = path.join(current, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else total += fs.statSync(full).size;
-    }
-  };
-  try {
-    walk(dir);
-  } catch {
-    /* best-effort */
-  }
-  return total;
-}
-
 function assertFreeSpace(sourceSize: number): void {
   try {
     const stats = fs.statfsSync(slidesCacheDir);
@@ -130,66 +100,473 @@ function assertFreeSpace(sourceSize: number): void {
 // Progress
 // ---------------------------------------------------------------------------
 
-const progressByAsset = new Map<number, DeckProgress>();
-
+/** Progress is a push, and only a push. The last value per asset used to be
+ *  kept in a map here so `deck:progress` could be asked for it — a channel
+ *  with no consumer anywhere in the renderer, which left this process holding
+ *  a write-only map. The renderer's deck store is fed by `deck-progress` and
+ *  is the only place that value is read. */
 function emitProgress(next: DeckProgress): void {
-  progressByAsset.set(next.assetId, next);
   broadcast("deck-progress", next);
 }
 
-export function currentProgress(assetId: number): DeckProgress | null {
-  return progressByAsset.get(assetId) ?? null;
+/** Per-page progress, for the ONE deck the operator is waiting on.
+ *
+ *  A background prewarm deliberately gets no per-page events: a folder of 600
+ *  decks at ~30 slides each is ~18.000 IPC messages, every one of them a
+ *  `set()` in the renderer's deck store that clones a record holding an entry
+ *  per deck seen so far — quadratic work, during a service, for a number
+ *  nobody is reading tile by tile. The aggregate `prewarm-progress` channel
+ *  exists precisely to cover that case, and it only helps if the per-item
+ *  channel stays quiet. State transitions (converting/ready/failed) are still
+ *  emitted for every job, background included: that is what a tile's badge and
+ *  its skeleton are driven by. */
+function emitPageProgress(job: Job, next: DeckProgress): void {
+  if (job.priority === "background") return;
+  emitProgress(next);
 }
 
 // ---------------------------------------------------------------------------
-// Queue — one conversion at a time
+// Queue — one conversion at a time, two priority lanes
 // ---------------------------------------------------------------------------
+
+/** `interactive` is anything the operator is waiting on right now (a preview,
+ *  EN VIVO); `background` is a prewarm — an explicit add, a visible tile, or
+ *  a "Preparar carpeta" batch. Exactly one conversion runs at a time either
+ *  way (see the comment on `pump`), but an interactive job always jumps the
+ *  queue ahead of background work, and can soft-preempt a background job
+ *  already running. */
+export type JobPriority = "interactive" | "background";
+/** Why a background job was enqueued. Two jobs of it: it lets
+ *  `setVisiblePrewarm` replace only its own kind of job and a batch cancel
+ *  touch only its own jobId — and it *orders* background work, through
+ *  `BACKGROUND_LANES` below. */
+export type PrewarmScope = "program" | "explicit" | "visible" | "batch";
+
+/** Background lanes, drained in this order.
+ *
+ *  - `program`: a deck sitting in the order of service. The operator put it
+ *    there, so it is the background work most likely to be needed next — it
+ *    must not wait behind 600 decks of a "Preparar carpeta" batch.
+ *  - `explicit`: a file just added to the library (`+`, drag & drop).
+ *  - `visible`: a tile currently on screen in the library grid.
+ *  - `batch`: a whole folder/view being prepared on purpose.
+ *
+ *  Separate FIFO lanes rather than a priority field with a comparator: the
+ *  ordering is then a property of the data structure, O(1), and stable within
+ *  a lane — nobody can accidentally make it unstable later. */
+const BACKGROUND_LANES = ["program", "explicit", "visible", "batch"] as const;
+
+export type PrepareOptions = {
+  force?: boolean;
+  priority?: JobPriority;
+  scope?: PrewarmScope;
+  /** Tags a background job as belonging to one "Preparar carpeta/vista" batch,
+   *  so `cancelBackgroundJobs(jobId)` can cancel just that batch. */
+  prewarmJobId?: string;
+};
 
 type Job = {
   assetId: number;
   force: boolean;
+  priority: JobPriority;
+  scope: PrewarmScope | null;
+  prewarmJobId: string | undefined;
   controller: AbortController;
   promise: Promise<DeckDTO>;
   resolve: (dto: DeckDTO) => void;
   reject: (error: unknown) => void;
+  startedAt: number;
+  /** Set by `tryPreemptForInteractive` right before aborting a running
+   *  background job — tells `pump`'s catch to re-run this same job (same
+   *  promise) instead of surfacing `CANCELED` to whoever is awaiting it. */
+  preempted: boolean;
+  preemptCount: number;
 };
 
 const inFlight = new Map<number, Job>();
-const queue: Job[] = [];
+const interactiveQueue: Job[] = [];
+const backgroundQueue: Record<PrewarmScope, Job[]> = {
+  program: [],
+  explicit: [],
+  visible: [],
+  batch: [],
+};
 let running = false;
+let runningJob: Job | null = null;
 let consecutiveTimeouts = 0;
 
+// ---------------------------------------------------------------------------
+// Batch pre-warming — `warmBatchPdfCache` fills these before a chunk of
+// background jobs runs; `runConversion`/`prepareDeck` consume and release
+// them one-shot. See `warmBatchPdfCache`'s own comment for why this lives
+// beside the queues instead of inside a single conversion.
+// ---------------------------------------------------------------------------
+
+const precomputedPdfByAsset = new Map<number, string>();
+const precomputedPptxByAsset = new Map<number, string>();
+
+/** One shared temp directory can back several assets' precomputed files at
+ *  once (everything one batch `soffice` invocation produced) — it's only
+ *  safe to delete once every asset in the batch has either consumed its
+ *  file or given up on it. */
+type BatchDirRef = { dir: string; remaining: Set<number> };
+const batchDirByAsset = new Map<number, BatchDirRef>();
+
+/** The in-flight batch `soffice` invocation, if any.
+ *
+ *  A batch call is one process for a whole chunk, so it belongs to no single
+ *  `Job` and no single job's `AbortSignal` can stop it. Without this handle it
+ *  could only be waited out — and `runSoffice` serializes every invocation
+ *  against the shared profile, so an interactive `deck:ensure` arriving one
+ *  millisecond after a chunk started would queue behind the ENTIRE chunk
+ *  (`convertTimeoutForBatch` allows up to half an hour). That is the exact
+ *  failure mode preemption exists to prevent, reintroduced one level down. */
+let batchWarmController: AbortController | null = null;
+
+/** Stops the running batch warm-up, if any. Best-effort by construction:
+ *  `convertBatchToPdf`/`convertBatchToPptx` keep whatever files LibreOffice
+ *  already wrote, so an aborted chunk loses its remaining files, not its
+ *  progress. Honours `slides.preemptBackground` for the same reason
+ *  `tryPreemptForInteractive` does — see `soffice-shared-profile-race.md`. */
+function abortBatchWarm(): void {
+  if (!batchWarmController) return;
+  if (getSettingsRepo().get("slides.preemptBackground") === false) return;
+  batchWarmController.abort();
+}
+
+function registerBatchDir(dir: string, assetIds: readonly number[]): void {
+  const ref: BatchDirRef = { dir, remaining: new Set(assetIds) };
+  for (const assetId of assetIds) batchDirByAsset.set(assetId, ref);
+}
+
+/** Idempotent — safe to call more than once for the same assetId (every exit
+ *  path of `runConversion`/`prepareDeck` calls this defensively) and a no-op
+ *  for an assetId that was never part of a batch. */
+function releaseBatchDirFor(assetId: number): void {
+  const ref = batchDirByAsset.get(assetId);
+  if (!ref) return;
+  batchDirByAsset.delete(assetId);
+  ref.remaining.delete(assetId);
+  precomputedPdfByAsset.delete(assetId);
+  precomputedPptxByAsset.delete(assetId);
+  if (ref.remaining.size === 0) {
+    fs.rmSync(ref.dir, { recursive: true, force: true });
+  }
+}
+
+/** A background job always has a scope; `null` only happens for interactive
+ *  work, which never reaches these lanes. `batch` is the safe default: the
+ *  slowest lane, so a scope nobody declared can't jump ahead of one somebody
+ *  did. */
+function laneOf(job: Job): Job[] {
+  return backgroundQueue[job.scope ?? "batch"];
+}
+
+function enqueueBackground(job: Job): void {
+  laneOf(job).push(job);
+}
+
+/** Next background job to run: strict lane order, FIFO inside a lane. */
+function dequeueBackground(): Job | undefined {
+  for (const lane of BACKGROUND_LANES) {
+    const job = backgroundQueue[lane].shift();
+    if (job) return job;
+  }
+  return undefined;
+}
+
+/** Removes a still-queued job from whichever lane holds it. `false` means it
+ *  wasn't queued — it is the one running, or already finished. */
+function removeFromBackground(job: Job): boolean {
+  const lane = laneOf(job);
+  const index = lane.indexOf(job);
+  if (index < 0) return false;
+  lane.splice(index, 1);
+  return true;
+}
+
+/** Every queued background job, lane order preserved. */
+function queuedBackgroundJobs(): Job[] {
+  return BACKGROUND_LANES.flatMap((lane) => backgroundQueue[lane]);
+}
+
+function hasQueuedBackground(...lanes: readonly PrewarmScope[]): boolean {
+  return lanes.some((lane) => backgroundQueue[lane].length > 0);
+}
+
+let lastPreemptAt = 0;
+/** A background job must have been running at least this long before it's
+ *  worth interrupting — the cheap cache hits resolve in milliseconds anyway
+ *  (and, since `prepareDeck` now checks `tryCacheHit` up front, never even
+ *  reach here), and aborting one mid-`soffice` call is the only case that
+ *  matters. Lowered from 1.5s once the cache-hit-before-queue change
+ *  (`prepareDeck`) meant this only ever fires on a genuine conversion — the
+ *  operator hitting EN VIVO on something that's actually still converting
+ *  shouldn't wait a full 1.5s of background work before being prioritized. */
+const PREEMPT_MIN_RUNTIME_MS = 600;
+/** Caps how often *any* preemption can happen — an operator clicking rapidly
+ *  through several decks must not turn into a chain of aborted conversions.
+ *  Lowered alongside `PREEMPT_MIN_RUNTIME_MS` for the same reason. */
+const PREEMPT_MIN_INTERVAL_MS = 3_000;
+/** A background job preempted this many times is dropped instead of
+ *  re-queued again, so a busy operator can't livelock it forever. */
+const PREEMPT_MAX_ATTEMPTS = 2;
+
+/** Soft-preempts the currently running background job in favor of an
+ *  incoming interactive one — see `.claude/knowledge/soffice-shared-profile-race.md`
+ *  for why this is deliberately rare and bounded rather than instant: killing
+ *  `soffice` mid-conversion can leave its profile locked and time out every
+ *  conversion after it. `slides.preemptBackground` (default on) is the
+ *  escape hatch to disable this entirely without a release if that ever
+ *  turns out to be too aggressive in practice. */
+function tryPreemptForInteractive(incomingAssetId: number): void {
+  // First, and unconditionally: a batch warm-up holds the shared `soffice`
+  // chain for its whole chunk, so it has to be stopped even when there is no
+  // per-job conversion to preempt (the chunk's own `soffice` IS what the
+  // interactive job would otherwise wait behind).
+  abortBatchWarm();
+  if (getSettingsRepo().get("slides.preemptBackground") === false) return;
+  const job = runningJob;
+  if (!job || job.priority !== "background" || job.assetId === incomingAssetId) return;
+  const now = Date.now();
+  if (now - job.startedAt < PREEMPT_MIN_RUNTIME_MS) return;
+  if (now - lastPreemptAt < PREEMPT_MIN_INTERVAL_MS) return;
+  if (job.preemptCount >= PREEMPT_MAX_ATTEMPTS) return;
+  lastPreemptAt = now;
+  job.preempted = true;
+  job.controller.abort();
+}
+
 /** LibreOffice isn't reentrant against one UserInstallation, and rasterizing
- *  already saturates a core — so exactly one job runs at a time. */
+ *  already saturates a core — so exactly one job runs at a time: interactive
+ *  jobs first, then background work in `BACKGROUND_LANES` order. */
 async function pump(): Promise<void> {
   if (running) return;
-  const job = queue.shift();
+  const job = interactiveQueue.shift() ?? dequeueBackground();
   if (!job) return;
 
   running = true;
+  runningJob = job;
+  job.startedAt = Date.now();
   try {
     const dto = await runConversion(job);
     job.resolve(dto);
-  } catch (error) {
-    job.reject(error);
-  } finally {
     inFlight.delete(job.assetId);
+  } catch (error) {
+    if (job.preempted && job.preemptCount < PREEMPT_MAX_ATTEMPTS) {
+      // Our own soft-preemption aborted this run — not a real failure. Retry
+      // the SAME job (same promise, same `inFlight` entry) at the back of
+      // the background queue instead of rejecting whoever is awaiting it.
+      job.preempted = false;
+      job.preemptCount += 1;
+      job.controller = new AbortController();
+      enqueueBackground(job);
+    } else {
+      inFlight.delete(job.assetId);
+      job.reject(error);
+    }
+  } finally {
     running = false;
+    runningJob = null;
     void pump();
   }
+}
+
+/** Idempotent per assetId: a second call while a conversion is in flight
+ *  joins the same job rather than queuing another. A `background` job asked
+ *  for again as `interactive` (the operator opened something the prewarm was
+ *  already converting) is promoted in place — moved to the front of the
+ *  interactive queue if still waiting, or left running but now immune to
+ *  preemption if it already started. */
+export function prepareDeck(assetId: number, opts: PrepareOptions = {}): Promise<DeckDTO> {
+  const priority = opts.priority ?? "interactive";
+
+  // Checked before anything else, even before `inFlight`: a deck that's
+  // already ready must resolve immediately, with zero queueing and zero
+  // "converting" state — never wait behind whatever background prewarm job
+  // happens to be running right now. This is what makes EN VIVO instant on
+  // an already-prewarmed deck regardless of queue depth.
+  if (!inFlight.has(assetId)) {
+    const sourcePath = getMediaRepo().getPathById(assetId);
+    if (sourcePath) {
+      const cacheHit = tryCacheHit(assetId, sourcePath, opts.force ?? false);
+      if (cacheHit) {
+        // A deck that a batch warmed a PDF for but that turned out to
+        // already be ready (e.g. another job converted it in the meantime)
+        // must still release that PDF, or its shared batch dir never gets
+        // cleaned up.
+        releaseBatchDirFor(assetId);
+        return Promise.resolve(cacheHit);
+      }
+    }
+  }
+
+  const existing = inFlight.get(assetId);
+  if (existing) {
+    if (priority === "interactive") {
+      if (existing.priority === "background") {
+        // Set before moving: a job that is already RUNNING can't be requeued,
+        // but flipping its priority makes it immune to preemption, which is
+        // the whole point of asking for it interactively.
+        existing.priority = "interactive";
+        if (removeFromBackground(existing)) interactiveQueue.push(existing);
+      }
+      tryPreemptForInteractive(assetId);
+    } else if (existing.priority === "background") {
+      promoteBackgroundLane(existing, opts.scope ?? "batch");
+    }
+    return existing.promise;
+  }
+
+  let resolve!: (dto: DeckDTO) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<DeckDTO>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  const job: Job = {
+    assetId,
+    force: opts.force ?? false,
+    priority,
+    scope: opts.scope ?? null,
+    prewarmJobId: opts.prewarmJobId,
+    controller: new AbortController(),
+    promise,
+    resolve,
+    reject,
+    startedAt: 0,
+    preempted: false,
+    preemptCount: 0,
+  };
+  inFlight.set(assetId, job);
+  if (priority === "interactive") interactiveQueue.push(job);
+  else enqueueBackground(job);
+  if (priority === "interactive") tryPreemptForInteractive(assetId);
+  void pump();
+  return promise;
+}
+
+/** Moves a queued background job into a faster lane. Only ever forward: a
+ *  deck asked for twice keeps the best claim it was ever given, so scrolling
+ *  past a tile can't demote something the operator put in the schedule. */
+function promoteBackgroundLane(job: Job, scope: PrewarmScope): void {
+  const current = BACKGROUND_LANES.indexOf(job.scope ?? "batch");
+  const wanted = BACKGROUND_LANES.indexOf(scope);
+  if (wanted >= current) return;
+  // A job that is already running can't be requeued; recording the better
+  // scope still matters, because a soft-preemption requeues it by lane.
+  const wasQueued = removeFromBackground(job);
+  job.scope = scope;
+  if (wasQueued) enqueueBackground(job);
+}
+
+/** Enqueues background conversions for assets that aren't already converted —
+ *  never cancels anything. Used for everything the operator asked for by
+ *  name: a file added to the library (`explicit`) and a deck placed in the
+ *  order of service (`program`, which outranks every other background lane).
+ *
+ *  A deck that is already in flight is NOT skipped: `prepareDeck` dedupes it
+ *  and, crucially, promotes it out of a slower lane. Skipping it here is what
+ *  used to leave a deck that had been queued by a folder batch stuck behind
+ *  599 others after the operator dropped it into the schedule.
+ *
+ *  Looks up every asset's status in one query instead of `getDeck()` (a
+ *  SELECT + `fs.existsSync` per asset) in the loop — a folder-sized call
+ *  here must not cost hundreds of filesystem stats on the main thread just
+ *  to decide what's already done. */
+export function prewarmExplicit(assetIds: readonly number[], scope: PrewarmScope = "explicit"): void {
+  const statuses = getSlidesRepo().statusesByAsset(assetIds);
+  for (const assetId of assetIds) {
+    if (statuses.get(assetId)?.status === "ready") continue;
+    prepareDeck(assetId, { priority: "background", scope }).catch(() => undefined);
+  }
+}
+
+/** Replaces the "visible in the library grid right now" background set:
+ *  cancels queued-but-not-yet-running `visible`-scope jobs whose asset
+ *  scrolled out of view, then enqueues the ones that scrolled in. A job
+ *  already running is left to finish — a real conversion in progress is
+ *  never wasted just because a scroll passed it by. */
+export function setVisiblePrewarm(assetIds: readonly number[]): void {
+  const wanted = new Set(assetIds);
+  // Only the `visible` lane: a deck that was promoted out of it (into the
+  // schedule's lane) is no longer this function's to cancel.
+  const lane = backgroundQueue.visible;
+  for (let i = lane.length - 1; i >= 0; i--) {
+    const job = lane[i]!;
+    if (wanted.has(job.assetId)) continue;
+    lane.splice(i, 1);
+    settleCanceledJob(job, "Ya no está visible.");
+  }
+  const statuses = getSlidesRepo().statusesByAsset(assetIds);
+  for (const assetId of assetIds) {
+    if (inFlight.has(assetId)) continue;
+    if (statuses.get(assetId)?.status === "ready") continue;
+    prepareDeck(assetId, { priority: "background", scope: "visible" }).catch(() => undefined);
+  }
+}
+
+/** Cancels background jobs — every one, or just those tagged with
+ *  `prewarmJobId` (one "Preparar carpeta/vista" batch). A queued job is
+ *  rejected immediately; a running one is aborted and resolves through the
+ *  normal `pump` failure path. */
+export function cancelBackgroundJobs(prewarmJobId?: string): void {
+  const matches = (job: Job) =>
+    job.priority === "background" && (prewarmJobId === undefined || job.prewarmJobId === prewarmJobId);
+
+  for (const job of queuedBackgroundJobs()) {
+    if (!matches(job)) continue;
+    removeFromBackground(job);
+    job.controller.abort();
+    settleCanceledJob(job, "Preparación cancelada.");
+  }
+  if (runningJob && matches(runningJob)) runningJob.controller.abort();
+  // A batch `soffice` invocation is not tied to any single job's signal (one
+  // process covers a whole chunk), so cancelling the batch has to abort it
+  // explicitly — otherwise the chunk keeps converting for minutes after the
+  // operator pressed cancel, holding the shared `sofficeChain` the whole time.
+  abortBatchWarm();
+}
+
+/** Settles a job that was pulled out of a queue before it ever ran.
+ *
+ *  Dropping a queued job WITHOUT doing this is not a leak, it is a trap: the
+ *  entry left behind in `inFlight` makes every later `prepareDeck(assetId)`
+ *  return that dead promise — and, because the up-front cache-hit shortcut is
+ *  guarded by `if (!inFlight.has(assetId))`, it doesn't even get to answer
+ *  from the cache. That asset becomes unprojectable for the rest of the
+ *  session. A running job needs none of this: aborting it makes
+ *  `runConversion` throw and `pump`'s catch does exactly the same cleanup. */
+function settleCanceledJob(job: Job, message: string): void {
+  inFlight.delete(job.assetId);
+  releaseBatchDirFor(job.assetId);
+  job.reject(new SlideError("CANCELED", message));
 }
 
 export function cancel(assetId: number): void {
   const job = inFlight.get(assetId);
   if (!job) return;
   job.controller.abort();
-  const queued = queue.indexOf(job);
-  if (queued >= 0) queue.splice(queued, 1);
+  const interactiveIndex = interactiveQueue.indexOf(job);
+  const wasQueued = interactiveIndex >= 0;
+  if (wasQueued) interactiveQueue.splice(interactiveIndex, 1);
+  if (wasQueued || removeFromBackground(job)) {
+    settleCanceledJob(job, "Conversión cancelada.");
+  }
 }
 
 export function cancelAll(): void {
+  const queued = [...interactiveQueue, ...queuedBackgroundJobs()];
+  interactiveQueue.length = 0;
+  for (const lane of BACKGROUND_LANES) backgroundQueue[lane].length = 0;
   for (const job of inFlight.values()) job.controller.abort();
-  queue.length = 0;
+  // Unconditional, unlike `abortBatchWarm()`: this is shutdown, so the
+  // `slides.preemptBackground` escape hatch doesn't apply.
+  batchWarmController?.abort();
+  // The running job (if any) settles through `pump`; everything that never
+  // started has to be settled here or its awaiter hangs forever.
+  for (const job of queued) settleCanceledJob(job, "Conversión cancelada.");
 }
 
 // ---------------------------------------------------------------------------
@@ -203,13 +580,81 @@ function emptyMeta(): PresentationMeta {
 /** Assembles the DTO for a `ready` deck row, folding in the asset's *linked*
  *  soundtrack (an external file, resolved per media asset — see
  *  `linked-audio.ts`) as the fallback when the deck itself carries no
- *  embedded/transition audio. Re-resolves the link first so a stale or
- *  never-set `linked_audio_path` (e.g. a library entry added before this
- *  heuristic existed) gets picked up without forcing a reconversion. */
-function toDeckDTO(row: DeckRow, assetId: number): DeckDTO {
+ *  embedded/transition audio.
+ *
+ *  `resolve` (default `true`) re-resolves the link first, so a stale or
+ *  never-set `linked_audio_path` gets picked up without forcing a
+ *  reconversion — every caller in this file wants that, since it's already
+ *  paying for a real conversion or cache hit. `getDeck` (a cache-only,
+ *  called-on-every-render lookup) passes `resolve: false`: for a `.ppt`/`.pps`
+ *  that never had this resolved yet (e.g. imported by the fast batch import
+ *  in `library-import.ts`, or pre-warmed in bulk), resolving means reading
+ *  the whole file into memory — exactly the cost that must never happen just
+ *  because a tile scrolled into view. `deck:get`'s DTO is "the best we
+ *  currently know"; `deck:ensure`'s is authoritative. */
+function toDeckDTO(row: DeckRow, assetId: number, opts?: { resolve?: boolean }): DeckDTO {
   const mediaRepo = getMediaRepo();
-  mediaRepo.ensureLinkedAudio(assetId);
+  if (opts?.resolve !== false) mediaRepo.ensureLinkedAudio(assetId);
   return getSlidesRepo().toDTO(row, assetId, mediaRepo.linkedAudioPathById(assetId));
+}
+
+/** LibreOffice rounds an advance time to whole seconds on its way through
+ *  `.pptx`, so two readings of the same slide can legitimately differ by up to
+ *  half a second. Anything past a full second is not rounding — it means the
+ *  two readings are not describing the same slide. */
+const TIMING_AGREEMENT_TOLERANCE_MS = 1000;
+
+/**
+ * Fills in the auto-advance times LibreOffice's PPTX export threw away.
+ *
+ * The export only writes a `<p:transition>` element when the slide has a
+ * visual transition EFFECT, and `advTm` is an attribute of that element — so a
+ * slide set to "no transition, advance after 27 s" comes back with no timing
+ * at all. Measured on the user's hymnal: 222 of 1226 decks affected, 208 of
+ * them losing every slide's timing. LibreOffice's own import is fine (the
+ * same file exported to `.odp` has every `presentation:duration`), which is
+ * why re-reading the source is enough and no second conversion is needed.
+ *
+ * **Gap-filling only, and self-checked.** A value the `.pptx` already carries
+ * is left alone, and before filling anything the two readings are compared on
+ * every slide where both have a number: they come from completely independent
+ * paths, so if the binary reader's idea of presentation order were wrong, they
+ * would disagree. One disagreement and the whole merge is abandoned — a deck
+ * that silently advances on the WRONG slide's timing during a service is worse
+ * than one that does not advance at all. (Validated over the user's 673
+ * converted hymnal decks: 4940 slides where both had a value, zero
+ * disagreements, 976 gaps filled.)
+ */
+function mergeBinaryTimings(meta: PresentationMeta, sourcePath: string): PresentationMeta {
+  const binary = readBinarySlideTimings(sourcePath);
+  if (!binary || binary.length !== meta.slides.length) return meta;
+
+  for (const [index, slide] of meta.slides.entries()) {
+    const fromBinary = binary[index]?.autoAdvanceMs;
+    if (slide.autoAdvanceMs === null || fromBinary === null || fromBinary === undefined) continue;
+    if (Math.abs(slide.autoAdvanceMs - fromBinary) > TIMING_AGREEMENT_TOLERANCE_MS) {
+      console.warn(
+        `[slides] binary timings disagree with the converted .pptx at slide ${index + 1} ` +
+          `(${fromBinary}ms vs ${slide.autoAdvanceMs}ms) — not merging: ${sourcePath}`,
+      );
+      return meta;
+    }
+  }
+
+  let filled = 0;
+  const slides = meta.slides.map((slide, index) => {
+    if (slide.autoAdvanceMs !== null) return slide;
+    const fromBinary = binary[index]?.autoAdvanceMs;
+    if (fromBinary === null || fromBinary === undefined) return slide;
+    filled += 1;
+    return { ...slide, autoAdvanceMs: Math.max(SLIDES_MIN_ADVANCE_MS, fromBinary) };
+  });
+
+  if (filled === 0) return meta;
+  console.info(
+    `[slides] recovered ${filled} auto-advance time(s) from the source binary that the .pptx export dropped: ${sourcePath}`,
+  );
+  return { ...meta, slides };
 }
 
 /** Reads timings/audio out of the source. Legacy binary .ppt/.pps carry no
@@ -221,6 +666,7 @@ async function readMetadata(
   tempDir: string,
   sizeBytes: number,
   signal: AbortSignal,
+  precomputedPptxPath?: string,
 ): Promise<{ meta: PresentationMeta; timingsSource: "ooxml" | "ooxml-converted" | "none"; parsedFrom: string }> {
   const kind = containerKind(sourcePath);
 
@@ -235,16 +681,28 @@ async function readMetadata(
 
   if (kind === "binary") {
     try {
-      const upgradeDir = path.join(tempDir, "upgrade");
-      fs.mkdirSync(upgradeDir, { recursive: true });
-      const pptx = await convertToPptx({
-        sourcePath,
-        outDir: upgradeDir,
-        timeoutMs: convertTimeoutFor(sizeBytes),
-        signal,
-      });
+      // A background batch may already have produced this deck's .pptx
+      // upgrade in one shared `soffice` invocation covering the whole
+      // batch — reuse it instead of paying for a second, single-file one.
+      let pptx: string;
+      if (precomputedPptxPath && fs.existsSync(precomputedPptxPath)) {
+        pptx = precomputedPptxPath;
+      } else {
+        const upgradeDir = path.join(tempDir, "upgrade");
+        fs.mkdirSync(upgradeDir, { recursive: true });
+        pptx = await convertToPptx({
+          sourcePath,
+          outDir: upgradeDir,
+          timeoutMs: convertTimeoutFor(sizeBytes),
+          signal,
+        });
+      }
       return {
-        meta: readPresentationMeta(pptx),
+        // The `.pptx` is authoritative for structure and embedded audio, but
+        // NOT for auto-advance — LibreOffice drops the time whenever the slide
+        // has no visual transition to hang it on. The source binary still has
+        // it; see `mergeBinaryTimings`.
+        meta: mergeBinaryTimings(readPresentationMeta(pptx), sourcePath),
         timingsSource: "ooxml-converted",
         parsedFrom: pptx,
       };
@@ -263,6 +721,85 @@ async function readMetadata(
   return { meta: emptyMeta(), timingsSource: "none", parsedFrom: sourcePath };
 }
 
+/** The cheapest possible hit: same asset, same size+mtime, still on disk and
+ *  current — no hashing, no filesystem walk beyond one `statSync` and one
+ *  `existsSync`. Pulled out of `runConversion` so `prepareDeck` can call it
+ *  BEFORE a job ever touches `inFlight`/the queues: a deck prewarmed a
+ *  minute ago used to still queue behind whatever background conversion was
+ *  running when the operator hit EN VIVO, because this check only ran once
+ *  the job reached the front of the queue. Checking it up front means an
+ *  already-ready deck never announces "converting" and never waits on
+ *  anything. `runConversion` still calls this too, for the (normal, not a
+ *  bug) case where the deck finished converting while this job was sitting
+ *  in the queue behind another one. */
+function tryCacheHit(assetId: number, sourcePath: string, force: boolean): DeckDTO | null {
+  if (force) return null;
+  let stat: fs.Stats;
+  try {
+    stat = fs.statSync(sourcePath);
+  } catch {
+    return null;
+  }
+  const target = resolveRenderTarget();
+  const slidesRepo = getSlidesRepo();
+  const usable = (row: DeckRow): boolean =>
+    row.status === "ready" &&
+    row.converterVersion === SLIDES_CONVERTER_VERSION &&
+    row.imageFormat === target.format &&
+    !needsRerender(row.renderWidth, target) &&
+    fs.existsSync(row.cacheDir);
+
+  // No "converting" emission on either path — a cache hit must never announce
+  // work that isn't happening (this used to fire unconditionally at the top of
+  // `runConversion`, which is what produced a false "converting… N de N" flash
+  // for an already-ready deck).
+  const hit = (row: DeckRow): DeckDTO => {
+    slidesRepo.touchDeck(row.id);
+    const dto = toDeckDTO(row, assetId);
+    emitProgress({ assetId, status: "ready", done: dto.slideCount, total: dto.slideCount, error: null });
+    return dto;
+  };
+
+  // 1. This asset's own row, validated by size+mtime — no hashing, no
+  //    filesystem walk beyond the `statSync` above and one `existsSync`.
+  const byAsset = slidesRepo.findDeckByAsset(assetId);
+  if (
+    byAsset &&
+    byAsset.sourceSizeBytes === stat.size &&
+    byAsset.sourceMtimeMs === Math.trunc(stat.mtimeMs) &&
+    usable(byAsset)
+  ) {
+    return hit(byAsset);
+  }
+
+  // 2. The deck this asset's BYTES belong to, via its stamped content hash.
+  //    Without this, a duplicate file (the same hymn in two folders — 555 of
+  //    them in the library that motivated `N3`) fell all the way through to
+  //    `runConversion`, which re-read the whole file just to recompute a
+  //    digest the asset already carries, only to end in `relinkDeck`. The
+  //    stamp is invalidated by size+mtime in SQL, so a file edited behind our
+  //    back never matches here.
+  //
+  //    It still relinks: `mediaAssetId` is what `findDeckByAsset` and
+  //    `projection.ts`'s eviction pin read, and leaving it pointing at the
+  //    other copy would trade this bug for that one. What has changed is that
+  //    nothing DEPENDS on the relink any more — `statusesByAsset` asks by
+  //    content, so the asset that just lost the row keeps reporting `ready`.
+  const byContent = slidesRepo.findDeckByAssetContent(assetId, target.width, target.format);
+  if (byContent && usable(byContent)) {
+    const mtimeMs = Math.trunc(stat.mtimeMs);
+    slidesRepo.relinkDeck(byContent.id, assetId, sourcePath, stat.size, mtimeMs);
+    return hit({
+      ...byContent,
+      mediaAssetId: assetId,
+      sourcePath,
+      sourceSizeBytes: stat.size,
+      sourceMtimeMs: mtimeMs,
+    });
+  }
+  return null;
+}
+
 async function runConversion(job: Job): Promise<DeckDTO> {
   const { assetId, force, controller } = job;
   const signal = controller.signal;
@@ -270,9 +807,19 @@ async function runConversion(job: Job): Promise<DeckDTO> {
   const mediaRepo = getMediaRepo();
 
   const sourcePath = mediaRepo.getPathById(assetId);
-  if (!sourcePath) throw new SlideError("SOURCE_MISSING", "No se encontró el archivo en la biblioteca.");
+  if (!sourcePath) {
+    releaseBatchDirFor(assetId);
+    throw new SlideError("SOURCE_MISSING", "No se encontró el archivo en la biblioteca.");
+  }
   if (!fs.existsSync(sourcePath)) {
+    releaseBatchDirFor(assetId);
     throw new SlideError("SOURCE_MISSING", `El archivo ya no está disponible: ${sourcePath}`);
+  }
+
+  const cacheHit = tryCacheHit(assetId, sourcePath, force);
+  if (cacheHit) {
+    releaseBatchDirFor(assetId);
+    return cacheHit;
   }
 
   const stat = fs.statSync(sourcePath);
@@ -280,31 +827,22 @@ async function runConversion(job: Job): Promise<DeckDTO> {
 
   emitProgress({ assetId, status: "converting", done: 0, total: 0, error: null });
 
-  // 1. Cheapest hit: same asset, same size+mtime, still on disk and current.
-  if (!force) {
-    const byAsset = slidesRepo.findDeckByAsset(assetId);
-    if (
-      byAsset &&
-      byAsset.status === "ready" &&
-      byAsset.sourceSizeBytes === stat.size &&
-      byAsset.sourceMtimeMs === Math.trunc(stat.mtimeMs) &&
-      byAsset.converterVersion === SLIDES_CONVERTER_VERSION &&
-      byAsset.imageFormat === target.format &&
-      !needsRerender(byAsset.renderWidth, target) &&
-      fs.existsSync(byAsset.cacheDir)
-    ) {
-      slidesRepo.touchDeck(byAsset.id);
-      const dto = toDeckDTO(byAsset, assetId);
-      emitProgress({ assetId, status: "ready", done: dto.slideCount, total: dto.slideCount, error: null });
-      return dto;
-    }
+  try {
+    assertFreeSpace(stat.size);
+  } catch (error) {
+    releaseBatchDirFor(assetId);
+    throw error;
   }
-
-  assertFreeSpace(stat.size);
 
   // 2. Content-addressed hit: the same bytes, converted through another
   //    library entry or before the file was moved/copied.
-  const contentHash = hashFile(sourcePath);
+  const contentHash = await hashFile(sourcePath);
+  // Stamp the asset with the digest we just paid for. It is the identity every
+  // status question is answered by (`statusesByAsset`), so writing it here is
+  // what keeps the startup backfill from ever having to re-read a file that a
+  // conversion already opened — and what makes a newly imported deck answer
+  // correctly the moment it is converted, rather than at the next launch.
+  mediaRepo.setContentHash(assetId, contentHash, stat.size, Math.trunc(stat.mtimeMs));
   if (!force) {
     const byIdentity = slidesRepo.findDeckByIdentity(contentHash, target.width, target.format);
     if (
@@ -313,9 +851,14 @@ async function runConversion(job: Job): Promise<DeckDTO> {
       byIdentity.converterVersion === SLIDES_CONVERTER_VERSION &&
       fs.existsSync(byIdentity.cacheDir)
     ) {
-      slidesRepo.relinkDeck(byIdentity.id, assetId, sourcePath);
-      const dto = toDeckDTO({ ...byIdentity, mediaAssetId: assetId }, assetId);
+      const mtimeMs = Math.trunc(stat.mtimeMs);
+      slidesRepo.relinkDeck(byIdentity.id, assetId, sourcePath, stat.size, mtimeMs);
+      const dto = toDeckDTO(
+        { ...byIdentity, mediaAssetId: assetId, sourcePath, sourceSizeBytes: stat.size, sourceMtimeMs: mtimeMs },
+        assetId,
+      );
       emitProgress({ assetId, status: "ready", done: dto.slideCount, total: dto.slideCount, error: null });
+      releaseBatchDirFor(assetId);
       return dto;
     }
   }
@@ -334,13 +877,25 @@ async function runConversion(job: Job): Promise<DeckDTO> {
     // the serialization comment on `runSoffice` in `libreoffice.ts` for why
     // that no longer races the PDF conversion, but running them one after the
     // other keeps this call site honest about the shared resource either way.
-    const metaResult = await readMetadata(sourcePath, jobDir, stat.size, signal);
-    const pdfPath = await convertToPdf({
+    // Both steps prefer whatever a background batch already produced for
+    // this asset (`warmBatchPdfCache`) over spawning their own `soffice` call.
+    const metaResult = await readMetadata(
       sourcePath,
-      outDir: pdfDir,
-      timeoutMs: convertTimeoutFor(stat.size),
+      jobDir,
+      stat.size,
       signal,
-    });
+      precomputedPptxByAsset.get(assetId),
+    );
+    const precomputedPdf = precomputedPdfByAsset.get(assetId);
+    const pdfPath =
+      precomputedPdf && fs.existsSync(precomputedPdf)
+        ? precomputedPdf
+        : await convertToPdf({
+            sourcePath,
+            outDir: pdfDir,
+            timeoutMs: convertTimeoutFor(stat.size),
+            signal,
+          });
     consecutiveTimeouts = 0;
 
     const imagesDir = path.join(jobDir, "images");
@@ -352,7 +907,7 @@ async function runConversion(job: Job): Promise<DeckDTO> {
       quality: target.quality,
       signal,
       onPage: (_page, total) =>
-        emitProgress({
+        emitPageProgress(job, {
           assetId,
           status: "converting",
           done: _page.index,
@@ -450,6 +1005,15 @@ async function runConversion(job: Job): Promise<DeckDTO> {
       ? `${meta.slideSizeEmu.cx}:${meta.slideSizeEmu.cy}`
       : null;
 
+    // Every byte in `finalDir` was written by this function, and each writer
+    // already reported its size — so the total is a sum, not a directory walk.
+    // It used to be `dirSize(finalDir)`: a recursive `readdirSync` plus one
+    // `statSync` per file, i.e. ~800 synchronous stats after a 400-slide
+    // conversion, on the thread that serves the projection window.
+    const bytesOnDisk =
+      pages.reduce((total, page) => total + page.bytes + page.thumbBytes, 0) +
+      audio.reduce((total, track) => total + track.bytes, 0);
+
     const deckId = getSlidesRepo().insertDeck(
       {
         contentHash,
@@ -463,7 +1027,14 @@ async function runConversion(job: Job): Promise<DeckDTO> {
         cacheDir: finalDir,
         aspectRatio,
         timingsSource: effectiveTimingsSource,
-        bytesOnDisk: dirSize(finalDir),
+        bytesOnDisk,
+        // A background (prewarm) conversion is "converted just in case", not
+        // "used" — backdated past `evictIfOverCap`'s 24h grace so a folder
+        // prewarmed and never actually opened is the FIRST thing eviction
+        // reclaims, not something immune to it for a full day. Opening it for
+        // real calls `touchDeck` (the cache-hit paths above) and promotes it
+        // to the front of the LRU like any other real use.
+        ...(job.priority === "background" ? { lastUsedAt: Date.now() - 25 * 60 * 60 * 1000 } : {}),
       },
       slides,
       audio,
@@ -497,6 +1068,10 @@ async function runConversion(job: Job): Promise<DeckDTO> {
   } finally {
     // A failure never leaves garbage behind.
     fs.rmSync(jobDir, { recursive: true, force: true });
+    // Whether this asset's precomputed PDF/pptx was actually used above or
+    // this deck fell back to converting its own, its slot in the shared
+    // batch dir (if any) is spent either way.
+    releaseBatchDirFor(assetId);
   }
 }
 
@@ -504,52 +1079,183 @@ async function runConversion(job: Job): Promise<DeckDTO> {
 // Public API
 // ---------------------------------------------------------------------------
 
+/** Pre-converts a chunk of background (prewarm) decks' PDFs — and, for
+ *  legacy `.ppt`/`.pps`, their `.pptx` timing/audio upgrade — with ONE
+ *  `soffice` invocation covering the whole chunk instead of one per file.
+ *  This is what makes preparing a folder of hundreds of decks minutes
+ *  instead of tens of minutes: LibreOffice's own startup cost, not the
+ *  per-file conversion, is what dominates at that scale (see
+ *  `libreoffice.ts`'s `convertBatchToPdf`/`convertBatchToPptx`).
+ *
+ *  Purely an optimization: it populates `precomputedPdfByAsset`/
+ *  `precomputedPptxByAsset`, which `runConversion` prefers over its own
+ *  single-file `soffice` calls when present — every asset here still goes
+ *  through the normal `prepareDeck`/queue/preemption machinery afterward,
+ *  unchanged. A file this call fails to produce (interrupted batch, name
+ *  mangled beyond matching) just falls back to that normal single-file path,
+ *  so a failure here never blocks a conversion, only slows it back down to
+ *  what it already was.
+ *
+ *  Deliberately skips warming while an interactive job is running or
+ *  waiting: a batch `soffice` invocation is one process for every file in
+ *  it, so soft-preempting it (the operator hitting EN VIVO mid-batch) would
+ *  throw away every file's progress, not just one — the opposite of what
+ *  preemption is for. The caller (`prewarm-service.ts`) simply proceeds to
+ *  convert this chunk's decks one at a time in that case, exactly as before
+ *  this optimization existed.
+ *
+ *  The same reasoning covers the two prioritized background lanes: a deck in
+ *  the order of service must not wait a whole chunk's batch conversion, and
+ *  preempting the batch to let it through would be worse than not batching. */
+export async function warmBatchPdfCache(assetIds: readonly number[]): Promise<void> {
+  if (assetIds.length === 0) return;
+  if (interactiveQueue.length > 0 || runningJob?.priority === "interactive") return;
+  if (hasQueuedBackground("program", "explicit")) return;
+
+  const mediaRepo = getMediaRepo();
+  const statuses = getSlidesRepo().statusesByAsset(assetIds);
+  const items: { assetId: number; sourcePath: string; stat: fs.Stats }[] = [];
+  for (const assetId of assetIds) {
+    if (inFlight.has(assetId)) continue;
+    if (statuses.get(assetId)?.status === "ready") continue;
+    const sourcePath = mediaRepo.getPathById(assetId);
+    if (!sourcePath) continue;
+    try {
+      items.push({ assetId, sourcePath, stat: fs.statSync(sourcePath) });
+    } catch {
+      // Vanished — the per-file path will report SOURCE_MISSING as usual.
+    }
+  }
+  if (items.length === 0) return;
+
+  const batchDir = path.join(slidesTempDir, randomUUID());
+  fs.mkdirSync(batchDir, { recursive: true });
+  const totalSize = items.reduce((sum, item) => sum + item.stat.size, 0);
+  const timeoutMs = convertTimeoutForBatch(totalSize, items.length);
+  const controller = new AbortController();
+  batchWarmController = controller;
+
+  try {
+    const legacy = items.filter((item) => containerKind(item.sourcePath) === "binary");
+    if (legacy.length > 0) {
+      const upgradeDir = path.join(batchDir, "upgrade");
+      fs.mkdirSync(upgradeDir, { recursive: true });
+      try {
+        const pptxByPath = await convertBatchToPptx({
+          sourcePaths: legacy.map((item) => item.sourcePath),
+          outDir: upgradeDir,
+          timeoutMs,
+          signal: controller.signal,
+        });
+        for (const item of legacy) {
+          const pptx = pptxByPath.get(item.sourcePath);
+          if (pptx) precomputedPptxByAsset.set(item.assetId, pptx);
+        }
+      } catch {
+        // Best-effort — every legacy deck falls back to its own upgrade pass.
+      }
+    }
+
+    const pdfDir = path.join(batchDir, "pdf");
+    fs.mkdirSync(pdfDir, { recursive: true });
+    try {
+      const pdfByPath = await convertBatchToPdf({
+        sourcePaths: items.map((item) => item.sourcePath),
+        outDir: pdfDir,
+        timeoutMs,
+        signal: controller.signal,
+      });
+      for (const item of items) {
+        const pdf = pdfByPath.get(item.sourcePath);
+        if (pdf) precomputedPdfByAsset.set(item.assetId, pdf);
+      }
+    } catch {
+      // Best-effort — every deck falls back to its own PDF conversion.
+    }
+  } catch {
+    // Defensive: warming must never fail the caller's real conversion.
+  } finally {
+    if (batchWarmController === controller) batchWarmController = null;
+  }
+
+  registerBatchDir(
+    batchDir,
+    items.map((item) => item.assetId),
+  );
+}
+
 /** Cache-only read: safe to call while merely rendering a list. */
 export function getDeck(assetId: number): DeckDTO | null {
   const repo = getSlidesRepo();
   const row = repo.findDeckByAsset(assetId);
   if (!row || row.status !== "ready") return null;
   if (!fs.existsSync(row.cacheDir)) return null;
-  return toDeckDTO(row, assetId);
-}
-
-/** Idempotent per assetId: a second call while a conversion is in flight joins
- *  the same job rather than queuing another (the preview effect and "EN VIVO"
- *  can fire within milliseconds of each other). */
-export function prepareDeck(assetId: number, force = false): Promise<DeckDTO> {
-  const existing = inFlight.get(assetId);
-  if (existing) return existing.promise;
-
-  let resolve!: (dto: DeckDTO) => void;
-  let reject!: (error: unknown) => void;
-  const promise = new Promise<DeckDTO>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-
-  const job: Job = { assetId, force, controller: new AbortController(), promise, resolve, reject };
-  inFlight.set(assetId, job);
-  queue.push(job);
-  void pump();
-  return promise;
+  return toDeckDTO(row, assetId, { resolve: false });
 }
 
 export function cacheStats(): { deckCount: number; bytesOnDisk: number; maxBytes: number } {
   const repo = getSlidesRepo();
   return {
-    deckCount: repo.allDeckDirs().length,
+    deckCount: repo.deckCount(),
     bytesOnDisk: repo.totalBytes(),
-    maxBytes: getSettingsRepo().get("slides.cacheMaxMb") * 1024 * 1024,
+    maxBytes: cacheMaxBytes(),
   };
 }
 
-/** Deck ids that must never be evicted (currently projected). */
-const pinnedDeckIds = new Set<number>();
-
-export function pinDeck(deckId: number | null): void {
-  pinnedDeckIds.clear();
-  if (deckId !== null) pinnedDeckIds.add(deckId);
+/**
+ * Empties the slide cache completely and answers with what is left.
+ *
+ * Running conversions are cancelled first: a job that finishes after the wipe
+ * would insert a deck row pointing at a directory this just deleted, and the
+ * cache would come back non-empty seconds after the operator emptied it.
+ *
+ * Nothing is spared — not even a pinned deck. Pins exist to stop *eviction*
+ * from taking something out from under the projector; an explicit "empty the
+ * cache" is the operator saying to do exactly that, and main is in no position
+ * to second-guess it (it cannot tell what is live under an overlay). The
+ * control window is what warns, because it is the side that knows.
+ */
+export function clearCache(): { deckCount: number; bytesOnDisk: number; maxBytes: number } {
+  cancelBackgroundJobs();
+  getSlidesRepo().deleteAllDecks();
+  return cacheStats();
 }
+
+/** The half of `cacheStats` a background batch asks for between assets: two
+ *  numbers, one aggregate query and an in-memory setting. `cacheStats` itself
+ *  also counts rows, which that caller never reads. */
+export function cacheUsage(): { bytesOnDisk: number; maxBytes: number } {
+  return { bytesOnDisk: getSlidesRepo().totalBytes(), maxBytes: cacheMaxBytes() };
+}
+
+function cacheMaxBytes(): number {
+  return getSettingsRepo().get("slides.cacheMaxMb") * 1024 * 1024;
+}
+
+/** Deck ids that must never be evicted, grouped by why — the deck currently
+ *  on the projector, and the decks referenced by the loaded/saved program.
+ *  Each reason owns its own set so `programs:load` doesn't have to know
+ *  whether something is also currently live, and vice versa; eviction just
+ *  unions all of them. */
+export type PinReason = "projected" | "program";
+const pinnedByReason = new Map<PinReason, Set<number>>();
+
+export function pinDecks(reason: PinReason, deckIds: readonly number[]): void {
+  pinnedByReason.set(reason, new Set(deckIds));
+}
+
+function allPinnedDeckIds(): number[] {
+  const all = new Set<number>();
+  for (const set of pinnedByReason.values()) {
+    for (const id of set) all.add(id);
+  }
+  return [...all];
+}
+
+/** One page of eviction candidates. Big enough that the common case (a few
+ *  decks over) is a single query, small enough that it never materializes the
+ *  whole cache. */
+const EVICTION_PAGE = 64;
 
 export function evictIfOverCap(): void {
   const repo = getSlidesRepo();
@@ -558,10 +1264,16 @@ export function evictIfOverCap(): void {
   if (total <= maxBytes) return;
 
   const graceCutoff = Date.now() - 24 * 60 * 60 * 1000;
-  for (const row of repo.lruCandidates([...pinnedDeckIds], graceCutoff)) {
-    if (total <= maxBytes) break;
-    total -= row.bytesOnDisk;
-    repo.deleteDeck(row.id);
+  const pinned = allPinnedDeckIds();
+  for (;;) {
+    const page = repo.lruCandidates(pinned, graceCutoff, EVICTION_PAGE);
+    if (page.length === 0) return;
+    for (const row of page) {
+      if (total <= maxBytes) return;
+      total -= row.bytesOnDisk;
+      repo.deleteDeck(row.id);
+    }
+    if (page.length < EVICTION_PAGE) return;
   }
 }
 
@@ -574,6 +1286,13 @@ export function sweepCache(): void {
   fs.mkdirSync(slidesTempDir, { recursive: true });
 
   repo.deleteUnfinished();
+
+  // Children whose deck row is gone. Never expected (the FK cascades), found
+  // in the wild anyway — see `deleteOrphanDeckChildren`. Logged rather than
+  // silent: a non-zero count here is the only signal that whatever produces
+  // them is still alive.
+  const orphans = repo.deleteOrphanDeckChildren();
+  if (orphans > 0) console.warn(`[slides] swept ${orphans} orphan deck child row(s)`);
 
   const known = new Set(repo.allDeckDirs());
   try {
@@ -588,6 +1307,14 @@ export function sweepCache(): void {
 }
 
 export async function initSlidesSubsystem(): Promise<void> {
+  // Everything below is synchronous filesystem work — three `mkdirSync`, a
+  // recursive `rm` of the temp dir, a `readdir` of the whole slides cache and
+  // an eviction pass. The caller starts this with `void`, which only defers
+  // from the FIRST await: without this one the "non-blocking" init ran, in
+  // full, on the same tick that was supposed to be opening the window. One
+  // event-loop turn is all it takes to let the window get created first.
+  await new Promise<void>((resolve) => setImmediate(resolve));
+
   for (const dir of [slidesCacheDir, slidesTempDir, sofficeProfileDir]) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -598,6 +1325,11 @@ export async function initSlidesSubsystem(): Promise<void> {
   } catch (error) {
     console.warn("[slides] cache sweep failed", error);
   }
+
+  // Before anything touches the shared profile: a crash of the previous run
+  // skipped `before-quit`, and a `soffice` still holding that profile's lock
+  // makes every conversion this session fail silently.
+  await reapOrphanedSoffice();
 
   await locateSoffice({ force: true });
   await warmProfile();

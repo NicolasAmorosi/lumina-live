@@ -22,7 +22,50 @@ migración `0004_rename_programs.sql` con `ALTER TABLE ... RENAME` — un recrea
 perdido el `CHECK`, que Drizzle no materializa en el snapshot), `bible_versions`+`bible_books`+`bible_verses`+
 `bible_verses_fts` (FTS5 external-content), `bible_favorites`, `projection_history`,
 `slide_decks`+`deck_slides`+`deck_audio` (cache persistente de presentaciones convertidas,
-direccionado por hash de contenido — ver `03-slides-libreoffice.md`).
+direccionado por hash de contenido — ver `03-slides-libreoffice.md`), y `program_draft`.
+
+`program_draft` es **una sola fila** (`id = 1`), reescrita entera, con el orden de culto que el
+operador está armando y todavía no guardó. Era el único dato de usuario sin respaldo: vivía solo en
+`program.store` del renderer, así que una recarga, un cierre, un crash o un corte de luz se llevaban
+15–40 minutos de trabajo. `effects/draft-autosave.ts` lo escribe con debounce de 600 ms y `App` lo
+recupera al arrancar.
+
+Sus ítems son un **blob JSON**, no filas de `program_items`, y eso es deliberado: un borrador tiene
+que poder referenciar un asset que el operador está por borrar, que es exactamente lo que la FK
+`onDelete: "restrict"` de esa tabla existe para prohibir — un borrador nunca puede ser lo que
+bloquea un borrado. `DraftRepo.load()` filtra al leer los ítems cuyo asset ya no existe, del lado de
+main, que es el único que puede responder eso sin un round-trip IPC por ítem.
+
+## "¿Está convertido?" se pregunta por CONTENIDO, no por propiedad de la fila
+
+`media_assets.content_hash` (migración `0007_media_content_hash.sql`) guarda el SHA-256 del
+archivo — la misma identidad por la que `slide_decks` está indexado — junto a
+`content_hash_size` y `content_hash_mtime_ms`, que son el **sello** que lo valida: el hash sólo
+se usa mientras esos dos sigan coincidiendo con el `size_bytes`/`mtime_ms` de la fila. Es la misma
+regla de invalidación que `tryCacheHit` ya aplicaba a una fila de deck, y es lo que evita tener
+que releer el archivo para saber si el digest sigue describiéndolo.
+
+Existe porque `slide_decks.media_asset_id` es **exclusivo** y `relinkDeck` lo mueve: preguntar
+"¿este asset es dueño de una fila?" nunca puede dar "sí" para los dos archivos de un par idéntico.
+Con la biblioteca real eso eran 555 de 1235 presentaciones marcadas como pendientes sin trabajo
+real que hacer. Ahora `statusesByAsset` hace JOIN por hash y sólo cae a la propiedad de la fila
+como respaldo, para un asset que el backfill todavía no selló.
+
+El hash se escribe en dos lugares, nunca en otro:
+
+- `runConversion` (`deck-service.ts`) lo guarda apenas lo calcula — ya lo necesitaba, así que es
+  gratis y deja correcto un deck recién importado en el momento;
+- `backfillContentHashes()` (`src/main/media/content-hash.ts`) barre en background 2 s después
+  del arranque todo `ppt` sin sello válido, en chunks de 25 con un yield entre chunks, y emite
+  `deck-statuses-changed` para que la grilla se repinte. Es idempotente: el segundo arranque
+  cuesta una query indexada. Medido sobre la biblioteca real: 1235 archivos, 1,78 GB, 1,98 s.
+
+**No lo reemplaces por `(size, mtime)`.** Es tentador porque la fila ya los trae, pero en la
+biblioteca del usuario hay 34 pares `(tamaño, mtime)` que corresponden a contenidos distintos —
+`Himnario Nuevo Cantado/035.pps` y `Himnario Nuevo Instrumental/035.pps` se copiaron juntos. La
+cuenta daría bien igual; la miniatura del tile y el pin de desalojo de `adoptProgram` apuntarían
+al deck equivocado. Diagnóstico completo en
+[`.claude/knowledge/deck-cache-is-content-addressed-but-status-is-asset-owned.md`](../../.claude/knowledge/deck-cache-is-content-addressed-but-status-is-asset-owned.md).
 
 ## El orden de `programs` es manual, no por recencia
 
@@ -48,7 +91,7 @@ en `load()` pero ya no ordena nada. Reglas del campo:
 se sincroniza con triggers `AFTER INSERT/UPDATE/DELETE`. El seed usa
 `INSERT INTO bible_verses_fts(bible_verses_fts) VALUES('rebuild')` una sola vez al final en vez
 de dejar que los triggers corran 31.102 veces — la carga completa mide ~550ms en esta máquina
-(`npm run db:smoke`).
+(`npm run test`, proyecto `main`).
 
 ## Archivos faltantes — nunca se borran filas
 
@@ -83,9 +126,32 @@ no vuelve a sembrar nada.
 
 ## Migraciones y backup
 
-`src/main/db/migrate.ts` copia `worship.db` (+ `-wal`/`-shm`) a `userData/backups/` antes de
-correr `drizzle-orm`'s `migrate()`, conservando las últimas 3. Si una migración falla, el usuario
-ve un diálogo con la ubicación del backup en vez de una pantalla en blanco.
+`src/main/db/migrate.ts` saca una copia de `worship.db` a `userData/backups/` antes de correr
+`drizzle-orm`'s `migrate()`, conservando las últimas 3. Si una migración falla, el usuario ve un
+diálogo con la ubicación del backup en vez de una pantalla en blanco.
+
+**`VACUUM INTO`, no `copyFileSync`**, y verificada con `PRAGMA integrity_check` sobre la copia. La
+base corre en `journal_mode = WAL`: las transacciones recientes viven en `worship.db-wal`, no en el
+archivo principal, así que copiarlo solo descarta en silencio todo lo posterior al último
+checkpoint. Normalmente salía completa —esta función corre antes de que la app abra la base, con el
+WAL ya checkpointeado— y fallaba justo cuando hacía falta: después de un cierre sucio, un corte de
+luz o un SIGKILL. Medido en `npm run test` (`tests/main/data-layer.test.ts`) con un `-wal` caliente de 4,1 MB:
+`VACUUM INTO` captura las 5000 filas, `copyFileSync` 4977. `backupBeforeMigrate` devuelve un
+`BackupResult` y el diálogo de error dice la verdad: promete una copia solo si de verdad la hay y
+pasó el `integrity_check`.
+
+La otra mitad es la salida: `closeDatabase()` corre en `will-quit` con
+`wal_checkpoint(TRUNCATE)` + `close()`. Sin eso el `-wal` crecía entre sesiones, que es lo que hacía
+más probable el escenario de arriba. Un cierre limpio **borra** `-wal` y `-shm`; que sobrevivan a
+una salida es la forma más rápida de detectar que esto se rompió.
+
+**Solo cuando hay algo pendiente**, y eso es correctitud, no rendimiento. `hasPendingMigrations()`
+compara el `when` más nuevo de `drizzle/meta/_journal.json` contra `MAX(created_at)` de
+`__drizzle_migrations`, abriendo la base en modo lectura. Antes copiaba en **todos** los arranques:
+como las migraciones corren una sola vez, tres arranques normales después de migrar llenaban los
+tres cupos con copias post-migración y **rotaban afuera la única copia que esta función existe para
+guardar**. Se veía en la carpeta real del usuario: las 3 copias eran del mismo día y del mismo
+tamaño, todas posteriores a la última migración.
 
 ## Parseo defensivo de la Biblia
 

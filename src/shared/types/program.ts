@@ -26,8 +26,7 @@ export type ProgramItemDTO =
       verseTo: number | null;
       reference: string;
       text: string;
-    }
-  | { id: number; position: number; kind: "text"; body: string; title: string | null };
+    };
 
 export type ProgramDTO = ProgramSummary & {
   items: ProgramItemDTO[];
@@ -49,8 +48,7 @@ export type ProgramItemUpsert =
       verseTo: number | null;
       reference: string;
       text: string;
-    }
-  | { id?: number; kind: "text"; body: string; title: string | null };
+    };
 
 export type ProgramUpsert = {
   id?: number;
@@ -75,4 +73,21 @@ export type ProgramDuplicateInput = {
   name: string;
   notes?: string | null;
   favorite?: boolean;
+};
+
+/**
+ * The order of service as the operator currently has it, saved to disk behind
+ * their back so nothing is lost to a reload, a close, a crash or a power cut.
+ *
+ * Deliberately shaped like `ProgramUpsert` rather than `ProgramDTO`: item ids
+ * and positions are re-derived on restore anyway (the unsaved rows carry
+ * provisional negative ids that only mean anything within one session), and
+ * not persisting them is what keeps a draft from looking like a saved program.
+ */
+export type ProgramDraft = {
+  programId: number | null;
+  name: string;
+  notes: string | null;
+  items: ProgramItemUpsert[];
+  updatedAt: number;
 };

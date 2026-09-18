@@ -1,10 +1,11 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
-import { mediaTargetKey } from "@shared/types/projection";
+import { mediaErrorKey, mediaTargetKey } from "@shared/types/projection";
 import type {
   BaseContent,
   MediaStatus,
   OverlayState,
+  ProjectionMediaError,
   ProjectionOutput,
   ProjectionOutputKind,
   SceneTransition,
@@ -13,6 +14,7 @@ import type {
 } from "@shared/types/projection";
 import type { DeckSlide, DeckSoundtrack } from "@shared/types/deck";
 import { assetUrl, LOGO_URL } from "@shared/urls";
+import { defaultMediaVolume } from "@renderer/stores/settings.store";
 
 /** The deck currently loaded for projection — slide urls are durable, DB-backed
  *  and stable across restarts, so this is plain data with no session lifecycle. */
@@ -46,6 +48,11 @@ export type ProjectionStoreState = {
    *  Reset to `false` whenever `base` changes, so a fresh EN VIVO always
    *  starts playing. */
   videoPaused: boolean;
+  /** 0..1 for the live video — the counterpart of `videoPaused`, and pushed
+   *  the same way (inside `VideoUnderlay`). Reset by `setBase` to the
+   *  `media.volume` default, so a level balanced for one clip never carries
+   *  into the next one silently. */
+  videoVolume: number;
 
   liveDeck: LiveDeck | null;
   autoplay: AutoplayState;
@@ -55,9 +62,19 @@ export type ProjectionStoreState = {
    *  live audio track) so two elements reporting at once can never overwrite
    *  each other's clock. */
   mediaStatus: Record<string, MediaStatus>;
+  /** Keyed by `mediaErrorKey`, so it shares "video"/"audio:<id>" with
+   *  `mediaStatus` and adds "scene" for the still image. At most one entry per
+   *  element — a later failure of the same element replaces the earlier one.
+   *
+   *  Nothing here is authoritative about what the operator sees: a stored
+   *  error only surfaces while its `url` is still what's live (see
+   *  `ProjectionMediaError`), which is why an entry going stale costs nothing
+   *  and needs no timer. */
+  mediaErrors: Record<string, ProjectionMediaError>;
 
   /** Bumped exactly once per "send something new live" action — `goLive()`,
-   *  `clearLive()`, `clearBaseContent()`, `setOverlayDirect()` — never by
+   *  `clearLive()`, `clearBaseContent()`, `toggleOverlay()`,
+   *  `setOverlayDirect()` — never by
    *  `setBase`/`setSlideIndex`/`projectVerse` themselves. That asymmetry is
    *  what makes advancing a slide or a verse an instant cut while sending a
    *  new scene live fades: the projection window fades only when this
@@ -71,12 +88,36 @@ export type ProjectionStoreState = {
   setLogoUrl: (url: string | null) => void;
   setPresentationOpen: (open: boolean) => void;
   setVideoPaused: (paused: boolean) => void;
+  /** Moves where the live video would resume from if its element had to be
+   *  mounted again — a projection window that died or is about to be recreated
+   *  (see `lib/actions/live-positions.ts`). Patches `base` in place instead of
+   *  going through `setBase`, which resets `videoPaused` and means "something
+   *  new is live"; nothing about what the projector shows changes here, and
+   *  `epoch` deliberately stays put so no `<video>` remounts. */
+  setVideoResumeAt: (startAtSeconds: number) => void;
+  /** Clamped here, not at the call sites: `HTMLMediaElement.volume` throws on
+   *  an out-of-range value, and a slider can overshoot by a rounding error. */
+  setVideoVolume: (volume: number) => void;
 
   setLiveDeck: (deck: LiveDeck | null) => void;
   setSlideIndex: (index: number) => void;
   setAutoplay: (state: AutoplayState) => void;
   setAutoplayMode: (mode: AutoplayMode) => void;
   setMediaStatus: (status: MediaStatus) => void;
+  /** Records what the projector reported it could not load or decode. */
+  setMediaError: (error: ProjectionMediaError) => void;
+  /** Drops the status slot of every audio track that no longer exists.
+   *
+   *  Needed because a track's key embeds its epoch (`asset:<id>:<epoch>`, see
+   *  `audio.store.ts`) and the epoch is bumped on every go-live — so sending
+   *  the same audio live ten times created ten keys, and nothing ever removed
+   *  any of them: not `removeTrack`, not `clear`. A long rehearsal left
+   *  hundreds of dead entries, each one copied again on every single
+   *  `setMediaStatus` (which runs ~4x/second per playing element).
+   *
+   *  Prunes `mediaErrors`'s audio entries in the same pass — they are keyed
+   *  the same way and go stale for exactly the same reason. */
+  pruneMediaStatus: (liveTrackIds: readonly string[]) => void;
 
   /** Marks "this is a new scene" — see `sceneEpoch`. Called once by every
    *  action that sends something new live, before it touches `base`/`overlay`,
@@ -96,22 +137,37 @@ export const useProjectionStore = create<ProjectionStoreState>()(
     logoUrl: null,
     presentationOpen: false,
     videoPaused: false,
+    videoVolume: defaultMediaVolume(),
 
     liveDeck: null,
     autoplay: "off",
     autoplayMode: "synced",
     soundtrackEpoch: 0,
     mediaStatus: {},
+    mediaErrors: {},
 
     sceneEpoch: 0,
     transitionStyle: "crossfade",
     transitionDurationMs: 300,
 
-    setBase: (base) => set({ base, videoPaused: false }),
+    setBase: (base) => set({ base, videoPaused: false, videoVolume: defaultMediaVolume() }),
     setOverlay: (overlay) => set({ overlay }),
     setLogoUrl: (logoUrl) => set({ logoUrl }),
     setPresentationOpen: (presentationOpen) => set({ presentationOpen }),
     setVideoPaused: (videoPaused) => set({ videoPaused }),
+    setVideoVolume: (volume) =>
+      set((state) => {
+        const clamped = Math.min(1, Math.max(0, volume));
+        // No-op when nothing moved: this field is an input of `selectOutput`,
+        // and a slider drag reports the same rounded value many times over.
+        return state.videoVolume === clamped ? state : { videoVolume: clamped };
+      }),
+    setVideoResumeAt: (startAtSeconds) =>
+      set((state) => {
+        const { base } = state;
+        if (base?.kind !== "video" || base.startAtSeconds === startAtSeconds) return state;
+        return { base: { ...base, startAtSeconds } };
+      }),
 
     setLiveDeck: (liveDeck) =>
       set((state) => ({
@@ -140,7 +196,47 @@ export const useProjectionStore = create<ProjectionStoreState>()(
         mediaStatus: { ...state.mediaStatus, [mediaTargetKey(status.target)]: status },
       })),
 
-    beginScene: () => set((state) => ({ sceneEpoch: state.sceneEpoch + 1 })),
+    setMediaError: (error) =>
+      set((state) => ({
+        mediaErrors: { ...state.mediaErrors, [mediaErrorKey(error.target)]: error },
+      })),
+
+    pruneMediaStatus: (liveTrackIds) =>
+      set((state) => {
+        const keep = new Set(
+          liveTrackIds.map((trackId) => mediaTargetKey({ kind: "audio", trackId })),
+        );
+        const isStale = (key: string) => key.startsWith("audio:") && !keep.has(key);
+        const staleStatus = Object.keys(state.mediaStatus).filter(isStale);
+        const staleErrors = Object.keys(state.mediaErrors).filter(isStale);
+        // No-op when there is nothing to drop: this runs on every change to
+        // the live track list, and handing back a fresh object would make
+        // every subscriber recompute for nothing.
+        if (staleStatus.length === 0 && staleErrors.length === 0) return state;
+        const mediaStatus = { ...state.mediaStatus };
+        for (const key of staleStatus) delete mediaStatus[key];
+        const mediaErrors = { ...state.mediaErrors };
+        for (const key of staleErrors) delete mediaErrors[key];
+        return { mediaStatus, mediaErrors };
+      }),
+
+    // Dropping the scene/video error slots here is what makes re-sending the
+    // very same file a real retry: matching on url alone would keep painting
+    // the old warning over a file the operator has since fixed or plugged
+    // back in. Audio slots are deliberately untouched — they belong to the
+    // track list's lifecycle, and `pruneMediaStatus` is what retires them.
+    beginScene: () =>
+      set((state) => {
+        const sceneEpoch = state.sceneEpoch + 1;
+        const keys = [mediaErrorKey({ kind: "scene" }), mediaErrorKey({ kind: "video" })];
+        // The common case by far is that there is nothing to drop, and this
+        // runs on every go-live: handing back a fresh `mediaErrors` object
+        // would make its subscribers recompute for nothing.
+        if (!keys.some((key) => key in state.mediaErrors)) return { sceneEpoch };
+        const mediaErrors = { ...state.mediaErrors };
+        for (const key of keys) delete mediaErrors[key];
+        return { sceneEpoch, mediaErrors };
+      }),
     setTransitionSettings: (transitionStyle, transitionDurationMs) =>
       set({ transitionStyle, transitionDurationMs }),
   })),
@@ -161,6 +257,7 @@ function selectVideoUnderlay(state: ProjectionStoreState): VideoUnderlay {
     epoch: state.base.epoch,
     paused: state.videoPaused,
     startAtSeconds: state.base.startAtSeconds,
+    volume: state.videoVolume,
   };
 }
 
@@ -198,8 +295,6 @@ function selectOutputWithoutUnderlay(state: ProjectionStoreState): ProjectionOut
       return { kind: "image", url: assetUrl(state.base.assetId) };
     case "bible":
       return { kind: "bible", text: state.base.text, reference: state.base.reference };
-    case "text":
-      return { kind: "text", body: state.base.body };
   }
 }
 
@@ -226,17 +321,61 @@ export function selectOutput(state: ProjectionStoreState): ProjectionOutput {
  * effect subscription and the live monitor use the default comparator, instead
  * of each carrying its own workaround (a JSON equalityFn here, a useShallow
  * there) for the same problem.
+ *
+ * The memo compares the *inputs* `selectOutput` actually reads, by reference,
+ * rather than serializing its result. It used to build the output and
+ * `JSON.stringify` it on every single store notification — and the store's
+ * busiest writer by far is `setMediaStatus`, which the projection window
+ * drives at roughly 4 Hz per playing element and which no field of the output
+ * depends on. Every one of those notifications paid for a full object build
+ * plus a serialization of a deck's worth of slide urls, only to conclude
+ * nothing had changed.
+ *
+ * Reference comparison is sound here because every one of these fields is
+ * replaced immutably by the store, never mutated in place. It is also what
+ * makes the identity stable no matter which subscriber calls first: two
+ * states that differ only in `mediaStatus` produce the same input tuple and
+ * therefore the same cached object, instead of racing over one slot of
+ * serialized output — the single-slot thrash React documents as a cause of
+ * `useSyncExternalStore` render loops.
  */
+type OutputInputs = readonly [
+  ProjectionStoreState["base"],
+  ProjectionStoreState["overlay"],
+  ProjectionStoreState["logoUrl"],
+  ProjectionStoreState["videoPaused"],
+  ProjectionStoreState["videoVolume"],
+  ProjectionStoreState["liveDeck"],
+  ProjectionStoreState["sceneEpoch"],
+  ProjectionStoreState["transitionStyle"],
+  ProjectionStoreState["transitionDurationMs"],
+];
+
+function outputInputs(state: ProjectionStoreState): OutputInputs {
+  return [
+    state.base,
+    state.overlay,
+    state.logoUrl,
+    state.videoPaused,
+    state.videoVolume,
+    state.liveDeck,
+    state.sceneEpoch,
+    state.transitionStyle,
+    state.transitionDurationMs,
+  ];
+}
+
+let lastInputs: OutputInputs | null = null;
 let lastOutput: ProjectionOutput | null = null;
-let lastKey = "";
 
 export function selectOutputMemo(state: ProjectionStoreState): ProjectionOutput {
-  const next = selectOutput(state);
-  const key = JSON.stringify(next);
-  if (lastOutput !== null && key === lastKey) return lastOutput;
-  lastOutput = next;
-  lastKey = key;
-  return next;
+  const inputs = outputInputs(state);
+  if (lastOutput !== null && lastInputs !== null && lastInputs.every((value, i) => Object.is(value, inputs[i]))) {
+    return lastOutput;
+  }
+  lastInputs = inputs;
+  lastOutput = selectOutput(state);
+  return lastOutput;
 }
 
 /** Cumulative audio timestamps for a deck's slides, used by the autoplay

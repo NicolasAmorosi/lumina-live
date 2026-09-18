@@ -12,10 +12,16 @@ import { getDbHandle, getMediaRepo, getProgramsRepo } from "./repos";
  */
 export function removeMediaAsset(id: number, force: boolean): void {
   if (!force) {
+    // `remove()` throws MEDIA_ASSET_IN_USE when a saved program references the
+    // asset, so the job is cancelled only once the row is actually gone —
+    // cancelling first would kill a conversion for an asset that survives.
     getMediaRepo().remove(id);
+    cancelDeckJob(id);
     return;
   }
 
+  // Before the transaction, not after: a conversion that finished mid-delete
+  // would insert a slides row for an asset that no longer exists.
   cancelDeckJob(id);
   const { sqlite } = getDbHandle();
   const run = sqlite.transaction(() => {

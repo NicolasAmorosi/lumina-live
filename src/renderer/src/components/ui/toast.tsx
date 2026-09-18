@@ -1,13 +1,15 @@
+import { createPortal } from "react-dom";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { cn } from "@renderer/lib/utils";
 import { useToastStore, type ToastItem, type ToastTone } from "@renderer/stores/toast.store";
+import { Button } from "./button";
 import { Icon } from "./icon";
 import { IconButton } from "./icon-button";
 
 const toneClassName: Record<ToastTone, string> = {
   info: "border-border-light bg-card text-foreground",
   success: "border-success/40 bg-card text-foreground",
-  warning: "border-badge-ppt/40 bg-card text-foreground",
+  warning: "border-warning/40 bg-card text-foreground",
   danger: "border-danger/40 bg-card text-foreground",
 };
 const toneIcon: Record<ToastTone, "check" | "alert"> = {
@@ -17,10 +19,10 @@ const toneIcon: Record<ToastTone, "check" | "alert"> = {
   danger: "alert",
 };
 const toneIconClassName: Record<ToastTone, string> = {
-  info: "text-primary",
-  success: "text-success",
-  warning: "text-badge-ppt",
-  danger: "text-danger",
+  info: "text-primary-ink",
+  success: "text-success-ink",
+  warning: "text-warning-ink",
+  danger: "text-danger-ink",
 };
 
 function Toast({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }) {
@@ -28,25 +30,32 @@ function Toast({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }) 
   return (
     <div
       className={cn(
-        "wa-toast-enter pointer-events-auto flex items-start gap-2 rounded-xl border p-3 text-sm shadow-overlay",
+        "flex items-start gap-2 rounded-xl border p-3 text-sm shadow-overlay",
         toneClassName[item.tone],
+        // A dismissed toast keeps its box while it fades, but stops taking
+        // clicks: its action button is on its way out and pressing it would
+        // fire whatever it offered a second time.
+        item.exiting ? "wa-toast-exit pointer-events-none" : "wa-toast-enter pointer-events-auto",
       )}
       role="status"
     >
       <Icon className={cn("mt-0.5 shrink-0", toneIconClassName[item.tone])} name={toneIcon[item.tone]} />
       <div className="min-w-0 flex-1">
-        <p>{item.message}</p>
+        {/* Selectable for the same reason as `LoadingState`'s hint: some
+            messages carry a name or a count the operator needs to repeat over
+            the phone. */}
+        <p className="select-text">{item.message}</p>
         {item.action ? (
-          <button
-            className="mt-1 text-sm font-medium text-primary hover:underline"
+          <Button
+            className="mt-1"
             onClick={() => {
               item.action!.onClick();
               onDismiss();
             }}
-            type="button"
+            variant="link"
           >
             {item.action.label}
-          </button>
+          </Button>
         ) : null}
       </div>
       <IconButton aria-label={t("common.dismiss")} onClick={onDismiss} size="xs" variant="ghost">
@@ -56,19 +65,33 @@ function Toast({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }) 
   );
 }
 
-/** Mounted once in `App.tsx`, hermano of the modals. `z-[60]` sits above the
- *  `z-50` modal stack so a toast fired from inside a modal is still visible. */
+/**
+ * Mounted once in `App.tsx`. `--z-toast` is the top of the stacking scale so a
+ * toast fired from inside a modal is still visible.
+ *
+ * Portaled to `document.body`, like the modals and for the same reason: a
+ * modal marks `#root` `inert` (see `shared/modal/modal-stack.ts`), and a toast
+ * rendered inside it would still be readable but its action — "Deshacer",
+ * "Eliminar igualmente" — would silently stop being clickable.
+ *
+ * The container is always mounted, empty or not: a screen reader generally
+ * does not announce content inserted into a live region that was created in
+ * the same tick, so a host that appears together with its first toast
+ * announces nothing at all.
+ */
 export function ToastHost() {
   const toasts = useToastStore((s) => s.toasts);
   const dismiss = useToastStore((s) => s.dismiss);
 
-  if (toasts.length === 0) return null;
-
-  return (
-    <div className="pointer-events-none fixed bottom-4 left-1/2 z-[60] flex w-full max-w-sm -translate-x-1/2 flex-col gap-2 px-4">
+  return createPortal(
+    <div
+      aria-live="polite"
+      className="pointer-events-none fixed bottom-4 left-1/2 z-[var(--z-toast)] flex w-full max-w-sm -translate-x-1/2 flex-col gap-2 px-4"
+    >
       {toasts.map((item) => (
         <Toast item={item} key={item.id} onDismiss={() => dismiss(item.id)} />
       ))}
-    </div>
+    </div>,
+    document.body,
   );
 }

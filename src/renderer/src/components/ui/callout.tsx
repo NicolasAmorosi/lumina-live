@@ -17,14 +17,14 @@ type CalloutProps = HTMLAttributes<HTMLDivElement> & {
 
 const toneClassName: Record<Tone, string> = {
   info: "border-border-light bg-muted text-foreground",
-  warning: "border-badge-ppt/40 bg-badge-ppt/10 text-foreground",
+  warning: "border-warning/40 bg-warning/10 text-foreground",
   danger: "border-danger/40 bg-danger/10 text-foreground",
 };
 const toneIcon: Record<Tone, "alert"> = { info: "alert", warning: "alert", danger: "alert" };
 const toneIconClassName: Record<Tone, string> = {
-  info: "text-primary",
-  warning: "text-badge-ppt",
-  danger: "text-danger",
+  info: "text-primary-ink",
+  warning: "text-warning-ink",
+  danger: "text-danger-ink",
 };
 
 export function Callout({
@@ -41,7 +41,7 @@ export function Callout({
       {...props}
     >
       <Icon className={cn("mt-0.5 shrink-0", toneIconClassName[tone])} name={toneIcon[tone]} />
-      <div className="min-w-0 flex-1">{children}</div>
+      <div className="min-w-0 flex-1 select-text">{children}</div>
       {onDismiss ? (
         <IconButton aria-label={dismissLabel} onClick={onDismiss} size="xs" variant="ghost">
           <Icon name="close" />

@@ -3,10 +3,17 @@ import type { AssetKind } from "@shared/constants";
 import type {
   AudioTrackPush,
   MediaCommand,
+  ProjectionMediaError,
   ProjectionOutput,
 } from "@shared/types/projection";
-import type { ProgramDuplicateInput, ProgramMetaUpsert, ProgramUpsert } from "@shared/types/program";
+import type {
+  ProgramDraft,
+  ProgramDuplicateInput,
+  ProgramMetaUpsert,
+  ProgramUpsert,
+} from "@shared/types/program";
 import type { SettingsMap } from "@shared/types/settings";
+import type { CloseDecision } from "@shared/types/window";
 
 /** Thin per-domain facade over `invoke` — pure readability sugar in the
  *  renderer, not a second definition of the contract: every method's types
@@ -22,10 +29,10 @@ export const api = {
     mediaCommand: (command: MediaCommand) => invoke("projection:mediaCommand", command),
     setAudioTracks: (tracks: AudioTrackPush[]) => invoke("projection:setAudioTracks", tracks),
     getSnapshot: () => invoke("projection:getSnapshot", undefined),
+    reportMediaError: (error: ProjectionMediaError) => invoke("projection:reportMediaError", error),
   },
   files: {
     pick: (kind: AssetKind | "all", multiple: boolean) => invoke("files:pick", { kind, multiple }),
-    probe: (path: string) => invoke("files:probe", { path }),
     setLogo: () => invoke("files:setLogo", undefined),
     pickFolder: () => invoke("files:pickFolder", undefined),
   },
@@ -34,9 +41,15 @@ export const api = {
     ensure: (assetId: number, force?: boolean) =>
       invoke("deck:ensure", { assetId, ...(force !== undefined ? { force } : {}) }),
     cancel: (assetId: number) => invoke("deck:cancel", { assetId }),
-    progress: (assetId: number) => invoke("deck:progress", { assetId }),
     environment: () => invoke("deck:environment", undefined),
     locateSoffice: () => invoke("deck:locateSoffice", undefined),
+    prewarm: (assetIds: number[], scope: "program" | "explicit" | "visible") =>
+      invoke("deck:prewarm", { assetIds, scope }),
+    prewarmBatch: (assetIds: number[], label: string) => invoke("deck:prewarmBatch", { assetIds, label }),
+    cancelPrewarmBatch: (jobId: string) => invoke("deck:cancelPrewarmBatch", { jobId }),
+    statuses: (assetIds: number[]) => invoke("deck:statuses", { assetIds }),
+    cacheStats: () => invoke("deck:cacheStats", undefined),
+    clearCache: () => invoke("deck:clearCache", undefined),
   },
   bible: {
     versions: () => invoke("bible:versions", undefined),
@@ -61,12 +74,25 @@ export const api = {
   programs: {
     list: () => invoke("programs:list", undefined),
     load: (id: number) => invoke("programs:load", { id }),
+    /** Read-only: use this anywhere the operator is looking at a program
+     *  rather than opening one. `load` adopts it in main. */
+    peek: (id: number) => invoke("programs:peek", { id }),
     save: (input: ProgramUpsert) => invoke("programs:save", input),
     delete: (id: number) => invoke("programs:delete", { id }),
+    releaseCurrent: () => invoke("programs:releaseCurrent", undefined),
     updateMeta: (input: ProgramMetaUpsert) => invoke("programs:updateMeta", input),
     duplicate: (input: ProgramDuplicateInput) => invoke("programs:duplicate", input),
     setFavorite: (input: { id: number; favorite: boolean }) => invoke("programs:setFavorite", input),
     reorder: (ids: number[]) => invoke("programs:reorder", { ids }),
+  },
+  /** The unsaved schedule, mirrored to disk — see `effects/draft-autosave.ts`. */
+  draft: {
+    save: (draft: ProgramDraft | null) => invoke("program:saveDraft", draft),
+    load: () => invoke("program:loadDraft", undefined),
+  },
+  window: {
+    /** Answers main's `close-requested` — see `CloseDecision`. */
+    closeDecision: (decision: CloseDecision) => invoke("window:closeDecision", { decision }),
   },
   settings: {
     get: () => invoke("settings:get", undefined),

@@ -7,10 +7,15 @@
   `...\27 himnario\001 Cantad alegres al Señor.mp3`, extractable as a UTF-16LE string. Modern
   `.pptx` can do the same via a slide `_rels` `Relationship` with `TargetMode="External"`.
 - `readMetadata`'s legacy-binary upgrade pass converts `.pps → .pptx` with LibreOffice specifically
-  to recover `advTm` (see [soffice-shared-profile-race.md](soffice-shared-profile-race.md)) — that
-  round-trip preserves the auto-advance timings perfectly but **drops the external audio link
-  entirely**: no `a:audioFile`, no surviving external relationship, nothing to parse afterward.
-  The link must be read from the *original* file, never from the converted one.
+  to recover `advTm` (see [soffice-shared-profile-race.md](soffice-shared-profile-race.md)) — and
+  it **drops the external audio link entirely**: no `a:audioFile`, no surviving external
+  relationship, nothing to parse afterward. The link must be read from the *original* file, never
+  from the converted one.
+  **Correction (2026-09-13):** this entry used to claim that same round-trip "preserves the
+  auto-advance timings perfectly". It does not — it drops `advTm` on every slide with no visual
+  transition effect, which is 222 of the user's 1226 hymnal decks. The timings are now also read
+  from the original file. See
+  [libreoffice-pptx-export-drops-advtm-without-a-transition-effect.md](libreoffice-pptx-export-drops-advtm-without-a-transition-effect.md).
 - The pre-existing `findLinkedAudio()` only tried `<basename>.mp3` (e.g. `001.mp3`) — the actual
   file was `001 Cantad alegres al Señor.mp3`, so it never matched, and there was no fallback to
   the hint the file itself carries.
@@ -31,4 +36,4 @@
   share the same deck. It's resolved per media asset and served by reference
   (`worship://linked-audio/<assetId>`, `MediaRepo.linkedAudioPathById`) instead.
 
-**Last updated:** 2026-09-08
+**Last updated:** 2026-09-13

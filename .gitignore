@@ -6,5 +6,10 @@ release/
 .env
 *.log
 *.tsbuildinfo
-package-lock.json
+# `package-lock.json` at the root IS versioned on purpose: without it every
+# `npm install` resolves a different tree, and this project ships a native
+# module (better-sqlite3) plus an Electron binary whose Chromium decodes the
+# operator's own media. An installer built twice has to be the same installer.
+# The legacy app's lockfile is not: `legacy/` is frozen reference material.
+legacy/package-lock.json
 .DS_Store

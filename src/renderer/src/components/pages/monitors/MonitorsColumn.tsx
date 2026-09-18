@@ -1,7 +1,7 @@
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { Badge } from "@renderer/components/ui";
 import { PanelBody, PanelHeader } from "@renderer/components/shared/panel";
-import { useProjectionStore } from "@renderer/stores/projection.store";
+import { selectOutputMemo, useProjectionStore } from "@renderer/stores/projection.store";
 import { useLiveHeading } from "@renderer/lib/hooks/use-live";
 import { cn } from "@renderer/lib/utils";
 import { LiveMonitor } from "./live-monitor";
@@ -27,13 +27,22 @@ import { VerseTransport } from "./verse-transport";
 function useLiveStatus(): string {
   const t = useT();
   const presentationOpen = useProjectionStore((s) => s.presentationOpen);
-  const overlay = useProjectionStore((s) => s.overlay);
-  const base = useProjectionStore((s) => s.base);
+  // Read off the SAME value the monitor renders, never a second reading of
+  // `overlay`/`base`: this badge used to re-derive the precedence by hand and
+  // got it wrong for the one case the two disagree on. With nothing selected
+  // and no overlay, `selectOutputWithoutUnderlay` falls back to the logo — so
+  // the stage showed the logo while the badge beside it said "Sin señal".
+  // A badge that contradicts the stage it labels is the monitor lying to the
+  // operator, which is the one thing this column may never do.
+  // `.kind` and not the whole output: a string is comparable by `Object.is`,
+  // so this subscription only wakes the column when the badge would actually
+  // change — not on every slide advance. `selectOutputMemo` makes the call
+  // inside the selector free.
+  const outputKind = useProjectionStore((s) => selectOutputMemo(s).kind);
 
   if (!presentationOpen) return t("live.disconnected");
-  if (overlay === "black") return t("status.black");
-  if (overlay === "logo") return t("status.logo");
-  if (base === null) return t("live.noSignal");
+  if (outputKind === "black") return t("status.black");
+  if (outputKind === "logo") return t("status.logo");
   return "";
 }
 

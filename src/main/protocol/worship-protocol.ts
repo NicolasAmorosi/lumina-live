@@ -6,6 +6,7 @@ import type { MediaRepo } from "../db/repositories/media.repo";
 import { getSettingsRepo, getSlidesRepo } from "../services/repos";
 import { slidesCacheDir, slidesTempDir } from "../paths";
 import { resolveRasterPdf } from "../slides/rasterizer";
+import { ensureThumbnail } from "../media/thumbnail-service";
 
 /** Must run before app.whenReady(). `standard: true` gives worship:// URLs a
  *  hostname + pathname like http, which is what the parsing below relies on. */
@@ -88,10 +89,65 @@ function parseRange(
   return { start, end };
 }
 
-function streamFile(filePath: string, range?: { start: number; end: number }): ReadableStream {
+/**
+ * A file descriptor must never outlive its request.
+ *
+ * Chromium normally cancels the web stream when it is done (a seek abandons the
+ * previous range mid-read, and `<video>` issues a lot of those), and cancelling
+ * it destroys the Node stream underneath. But that is the *only* thing that was
+ * closing these descriptors: nothing was tied to `request.signal`, so a request
+ * aborted before the body was consumed left the handle open, and a read error —
+ * the USB drive holding a video unplugged mid-service, the exact scenario the
+ * media-error notice exists for — was swallowed with no record anywhere.
+ */
+/** A read the consumer walked away from, not a read that failed. `AbortError`
+ *  is what `Readable.toWeb`'s cancel path destroys the stream with;
+ *  `ERR_STREAM_PREMATURE_CLOSE` is the same event seen from the other end. */
+function isExpectedCancellation(error: unknown): boolean {
+  if (typeof error !== "object" || error === null) return false;
+  const { name, code } = error as { name?: unknown; code?: unknown };
+  return (
+    name === "AbortError" || code === "ABORT_ERR" || code === "ERR_STREAM_PREMATURE_CLOSE"
+  );
+}
+
+function streamFile(
+  filePath: string,
+  signal: AbortSignal | undefined,
+  range?: { start: number; end: number },
+): ReadableStream {
   const stream = range
     ? fs.createReadStream(filePath, { start: range.start, end: range.end })
     : fs.createReadStream(filePath);
+
+  // `Readable.toWeb` forwards the error to the web stream, which is what makes
+  // the element fire `onerror` — but it writes nothing anywhere, and the log is
+  // the only record left once the on-screen notice expires.
+  //
+  // Everything EXCEPT a cancellation, which is not a failure: cancelling the
+  // web stream destroys the Node stream with an `AbortError`, and Chromium
+  // cancels constantly — every seek in a video abandons the range it was
+  // reading, and so does every scene change. Logging those buried the real
+  // read errors (an unplugged drive mid-service) in noise that looked exactly
+  // like them.
+  stream.on("error", (error) => {
+    if (isExpectedCancellation(error)) return;
+    console.error(`[worship] read failed: ${filePath}`, error);
+  });
+
+  if (signal) {
+    if (signal.aborted) stream.destroy();
+    else {
+      const onAbort = (): void => {
+        stream.destroy();
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+      // Symmetric teardown: without this, a long-lived request's signal keeps
+      // the closure (and the stream with it) reachable after the file is done.
+      stream.once("close", () => signal.removeEventListener("abort", onAbort));
+    }
+  }
+
   return Readable.toWeb(stream) as ReadableStream;
 }
 
@@ -146,11 +202,17 @@ async function serveFile(
     const length = range.end - range.start + 1;
     headers.set("Content-Range", `bytes ${range.start}-${range.end}/${size}`);
     headers.set("Content-Length", String(length));
-    return new Response(wantsBody ? streamFile(filePath, range) : null, { status: 206, headers });
+    return new Response(wantsBody ? streamFile(filePath, request.signal, range) : null, {
+      status: 206,
+      headers,
+    });
   }
 
   headers.set("Content-Length", String(size));
-  return new Response(wantsBody ? streamFile(filePath) : null, { status: 200, headers });
+  return new Response(wantsBody ? streamFile(filePath, request.signal) : null, {
+    status: 200,
+    headers,
+  });
 }
 
 /** Defence in depth: these paths are already capability-derived (a DB row, not
@@ -180,6 +242,34 @@ export function registerWorshipProtocolHandler(mediaRepo: MediaRepo): void {
       switch (resource) {
         case "asset": {
           const id = Number(segments[0]);
+          if (!Number.isFinite(id)) return new Response("Not found", { status: 404 });
+
+          // worship://asset/<id>/thumb?v=<size>-<mtime> — a small cached
+          // preview, generated on demand. No IPC channel precedes it: with a
+          // virtualized grid, an <img> asking for the bytes IS the signal
+          // that this tile is on screen right now.
+          if (segments[1] === "thumb") {
+            const asset = mediaRepo.getById(id);
+            // The signal is what retires a queued generation whose tile has
+            // scrolled away: Chromium aborts the <img> request when the
+            // virtualized grid unmounts it, and there is no point stalling the
+            // main thread to decode something nobody can see any more.
+            const thumbPath = asset ? await ensureThumbnail(asset, request.signal) : null;
+            // 404 rather than a placeholder image: the renderer owns the
+            // fallback, so it can paint it with its own theme tokens instead
+            // of us baking a colour into a JPEG. Explicitly uncached, so an
+            // asset that gains a thumbnail later isn't pinned to this answer.
+            if (!thumbPath) {
+              return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
+            }
+            // Safe to serve immutably: `?v=` carries the file's size+mtime, so
+            // editing the source yields a different URL. Omitting that buster
+            // is impossible by construction — `assetThumbUrl` requires it.
+            return serveFile(request, thumbPath, {
+              "Cache-Control": "public, max-age=31536000, immutable",
+            });
+          }
+
           return serveFile(request, mediaRepo.getPathById(id));
         }
         case "logo": {
@@ -236,7 +326,11 @@ export function registerWorshipProtocolHandler(mediaRepo: MediaRepo): void {
         default:
           return new Response("Not found", { status: 404 });
       }
-    } catch {
+    } catch (error) {
+      // A mute 500 is indistinguishable from a black slide. Everything reaching
+      // here is a bug (a repo throwing, a thumbnail that failed to generate),
+      // so it has to leave a trace even though the renderer only sees a status.
+      console.error(`[worship] handler failed: ${request.url}`, error);
       return new Response("Internal error", { status: 500 });
     }
   });

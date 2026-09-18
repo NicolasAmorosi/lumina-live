@@ -1,5 +1,6 @@
 import { app, BrowserWindow, screen } from "electron";
 import path from "node:path";
+import { trustWindow } from "../ipc/trusted-senders";
 
 const PRELOAD = path.join(__dirname, "../preload/index.js");
 
@@ -40,11 +41,14 @@ export function createProjectionWindow(displayId?: number): BrowserWindow {
     },
   });
 
+  trustWindow(win);
+
   const devServerUrl = process.env["ELECTRON_RENDERER_URL"];
+  // See `control-window.ts` for why these are `void` and not `.catch`.
   if (!app.isPackaged && devServerUrl) {
-    win.loadURL(`${devServerUrl}/projection.html`);
+    void win.loadURL(`${devServerUrl}/projection.html`);
   } else {
-    win.loadFile(path.join(__dirname, "../renderer/projection.html"));
+    void win.loadFile(path.join(__dirname, "../renderer/projection.html"));
   }
 
   win.once("ready-to-show", () => win.show());

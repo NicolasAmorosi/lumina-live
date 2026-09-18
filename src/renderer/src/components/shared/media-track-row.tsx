@@ -1,16 +1,23 @@
-import { IconButton, Icon, MediaScrubber, type IconName } from "@renderer/components/ui";
+import { useState } from "react";
+import { IconButton, Icon, MediaScrubber, VolumeControl, type IconName } from "@renderer/components/ui";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { cn, formatClock } from "@renderer/lib/utils";
 
-export type MediaTrackKind = "video" | "audio" | "image" | "bible" | "text";
+export type MediaTrackKind = "video" | "audio" | "image" | "bible";
 
 type MediaTrackRowProps = {
   className?: string;
   currentSeconds?: number;
   /** Omit entirely for content with no timeline (an image) — the row then
-   *  skips the pause button, the clock readouts and the scrubber outright,
-   *  instead of showing a meaningless 0:00/0:00. */
+   *  skips the pause button and the whole transport line below, instead of
+   *  showing a meaningless 0:00/0:00 and an empty bar. Such a row stays a
+   *  single line: the different height is real information ("this has no
+   *  time"), not an alignment defect. */
   durationSeconds?: number;
+  /** What the projector reported it could not play, already translated.
+   *  Replaces `hint` and re-tones the row — a track the operator believes is
+   *  sounding, and isn't, is worth more than a tidy row. */
+  error?: string | undefined;
   kind: MediaTrackKind;
   label: string;
   /** Compact second line under the label — e.g. "no suena hasta EN VIVO".
@@ -32,6 +39,11 @@ type MediaTrackRowProps = {
    *  Absent in the preview bar, which only picks a start point. */
   onTogglePause?: (() => void) | undefined;
   paused?: boolean;
+  /** Omit the pair to render the row without a level control — an image or a
+   *  verse has nothing to turn down, and the preview bar reaches no speaker. */
+  onVolumeChange?: ((volume: number) => void) | undefined;
+  /** 0..1. Required whenever `onVolumeChange` is given. */
+  volume?: number | undefined;
 };
 
 const kindIcon: Record<MediaTrackKind, IconName> = {
@@ -39,26 +51,23 @@ const kindIcon: Record<MediaTrackKind, IconName> = {
   audio: "audio",
   image: "image",
   bible: "bible",
-  text: "fileText",
 };
-// "bible"/"text" never carry a duration, so this is never actually read for
-// them — present only to keep the Record exhaustive.
+// "bible" never carries a duration, so this is never actually read for it —
+// present only to keep the Record exhaustive.
 const kindTone: Record<MediaTrackKind, "primary" | "audio"> = {
   video: "primary",
   audio: "audio",
   image: "primary",
   bible: "primary",
-  text: "primary",
 };
 
 /**
  * `formatClock` widens its output past a bucket boundary (`m:ss` → `mm:ss` →
- * `h:mm:ss`), and a fixed `w-10` clock box left several pixels of dead space
- * inside itself on the shorter formats — on top of the row's own `gap-2`,
- * that read as a bigger gap around the clocks than anywhere else in the row.
- * Sizing the box to the widest string a given duration can actually produce
- * (in `ch`, which matches `tabular-nums` digit width) removes that dead
- * space without the box ever resizing while the clock ticks.
+ * `h:mm:ss`), so both clocks are sized to the widest string this particular
+ * duration can actually produce (in `ch`, which matches `tabular-nums` digit
+ * width). Two effects, both load-bearing now that the scrubber sits between
+ * them: no dead space inside a short clock, and the bar never resizes under
+ * the pointer when the running clock crosses 9:59.
  */
 function clockWidthClass(durationSeconds: number): string {
   if (durationSeconds >= 3600) return "w-[7ch]"; // h:mm:ss
@@ -72,18 +81,31 @@ function clockWidthClass(durationSeconds: number): string {
  * drift in shape. Everything the operator needs to read (what it is, where it
  * is, how long it is) is always visible; nothing is behind a hover.
  *
- * Every trailing control is a fixed-size `IconButton`, and the label is the
- * only element allowed to grow or shrink (`min-w-0 flex-1 truncate`) — a very
- * long file name eats into the label's own space, it never pushes a button
- * out of the row, and the controls always land in the same spot regardless
- * of label length. Every element in the row sits on the same flat `gap-2`
- * (see `clockWidthClass` above for why the clocks needed a content-sized box
- * to actually honor that gap instead of padding it out further).
+ * ## The two lines
+ *
+ * **Identity and commands on top, position below.** The first line is icon,
+ * name and every *control* (pause, level, dismiss); the second is the seek
+ * bar spanning the full width, flanked by its two clocks. Stacking them is
+ * what makes a row with several controls legible: while the scrubber shared
+ * the first line it was squeezed to a `w-28` stub between fixed-size buttons,
+ * which is both an unusable seek target and a visually crowded row. Full
+ * width also means the bar's pixels map to the track at a useful resolution —
+ * a second of a 40-minute sermon is no longer a sub-pixel.
+ *
+ * Every control on the first line is a fixed-size `IconButton`, and the label
+ * is the only element allowed to grow or shrink (`min-w-0 flex-1 truncate`) —
+ * a very long file name eats into the label's own space, it never pushes a
+ * button out of the row, and the controls always land in the same spot
+ * regardless of label length.
+ *
+ * Content with no timeline (an image, a verse, a text) renders the first line
+ * only — see `durationSeconds`.
  */
 export function MediaTrackRow({
   className,
   currentSeconds = 0,
   durationSeconds,
+  error,
   kind,
   label,
   hint,
@@ -92,16 +114,27 @@ export function MediaTrackRow({
   onStop,
   onTogglePause,
   paused = false,
+  onVolumeChange,
+  volume,
 }: MediaTrackRowProps) {
   const t = useT();
   const hasTiming = durationSeconds !== undefined;
+  // Where the scrubber is painting while it is ahead of the reported position
+  // — dragging, or holding a committed seek until the projector confirms it.
+  // The clock reads this instead of `currentSeconds` so the operator can see
+  // the second he is about to jump to, and so the two halves of the same
+  // control can never show different positions.
+  const [scrubSeconds, setScrubSeconds] = useState<number | null>(null);
 
   return (
-    <div className={cn("flex flex-col gap-0.5 px-2 py-1", className)}>
+    <div className={cn("flex flex-col gap-1 px-2 py-1.5", className)}>
       <div className={cn("flex items-center gap-2", paused && "opacity-70")}>
         <Icon
-          className={cn("size-4 shrink-0", kind === "audio" ? "text-badge-audio" : "text-primary")}
-          name={kindIcon[kind]}
+          className={cn(
+            "size-4 shrink-0",
+            error ? "text-danger-ink" : kind === "audio" ? "text-badge-audio-ink" : "text-primary-ink",
+          )}
+          name={error ? "alert" : kindIcon[kind]}
         />
 
         <span
@@ -121,24 +154,14 @@ export function MediaTrackRow({
           </IconButton>
         ) : null}
 
-        {hasTiming ? (
-          <>
-            <span className={cn(clockWidthClass(durationSeconds), "shrink-0 text-right text-xs tabular-nums text-subtle")}>
-              {formatClock(currentSeconds)}
-            </span>
-
-            <MediaScrubber
-              className="w-28 shrink-0"
-              currentSeconds={currentSeconds}
-              durationSeconds={durationSeconds}
-              onSeek={onSeek}
-              tone={kindTone[kind]}
-            />
-
-            <span className={cn(clockWidthClass(durationSeconds), "shrink-0 text-xs tabular-nums text-subtle")}>
-              {formatClock(durationSeconds)}
-            </span>
-          </>
+        {onVolumeChange && volume !== undefined ? (
+          <VolumeControl
+            label={t("media.volumeFor", { name: label })}
+            muteLabel={volume === 0 ? t("media.unmute") : t("media.mute")}
+            onChange={onVolumeChange}
+            tone={kindTone[kind]}
+            value={volume}
+          />
         ) : null}
 
         {onStop ? (
@@ -158,7 +181,39 @@ export function MediaTrackRow({
         )}
       </div>
 
-      {hint ? <p className="truncate pl-6 text-xs text-subtle">{hint}</p> : null}
+      {error ? (
+        <p className="truncate pl-6 text-xs text-danger-ink">{error}</p>
+      ) : hint ? (
+        <p className="truncate pl-6 text-xs text-subtle">{hint}</p>
+      ) : null}
+
+      {hasTiming ? (
+        // Deliberately not dimmed while paused, unlike the line above: a
+        // paused track is exactly when the operator is aiming a seek, so the
+        // one control he is about to use stays at full contrast.
+        <div className="flex items-center gap-2">
+          <span className={cn(clockWidthClass(durationSeconds), "shrink-0 text-xs tabular-nums text-subtle")}>
+            {formatClock(scrubSeconds ?? currentSeconds)}
+          </span>
+
+          <MediaScrubber
+            className="min-w-0 flex-1"
+            currentSeconds={currentSeconds}
+            durationSeconds={durationSeconds}
+            label={t("media.scrubberLabel", { name: label })}
+            onPositionChange={setScrubSeconds}
+            onSeek={onSeek}
+            tone={kindTone[kind]}
+            valueTextFormatter={(current, total) => t("media.scrubberValue", { current, total })}
+          />
+
+          <span
+            className={cn(clockWidthClass(durationSeconds), "shrink-0 text-right text-xs tabular-nums text-subtle")}
+          >
+            {formatClock(durationSeconds)}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }

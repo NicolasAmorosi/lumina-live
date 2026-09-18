@@ -2,6 +2,31 @@ import { resolve } from "node:path";
 import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import type { Plugin } from "vite";
+
+/** The dev server's HMR socket, and the only reason `connect-src` is not just
+ *  `'self'`. */
+const DEV_CONNECT_SRC = " ws://localhost:*";
+
+/**
+ * Drops the HMR origin from the shipped CSP.
+ *
+ * The policy lives in a `<meta>` tag in each HTML file, so what dev needs used
+ * to be what production shipped. Writing the permissive one in the file and
+ * narrowing it here (rather than the reverse) keeps `npm run dev` working with
+ * no transform at all, and makes the build strictly tighter than dev — never
+ * the other way round.
+ */
+function stripDevCsp(): Plugin {
+  return {
+    name: "worship-strip-dev-csp",
+    apply: "build",
+    transformIndexHtml: {
+      order: "post",
+      handler: (html) => html.replaceAll(DEV_CONNECT_SRC, ""),
+    },
+  };
+}
 
 export default defineConfig({
   main: {
@@ -12,6 +37,11 @@ export default defineConfig({
       },
     },
     build: {
+      // `reportCrash` (src/main/index.ts) appends `error.stack` to
+      // `crash.log`, and that is the only trace a machine in a booth leaves
+      // behind. Without a map the stack points at a minified bundle, so the
+      // one artifact the operator can send back says nothing.
+      sourcemap: true,
       rollupOptions: {
         input: {
           index: resolve("src/main/index.ts"),
@@ -27,6 +57,9 @@ export default defineConfig({
       },
     },
     build: {
+      // Same reason as main: a preload failure is reported through the same
+      // process-level handlers.
+      sourcemap: true,
       rollupOptions: {
         input: {
           index: resolve("src/preload/index.ts"),
@@ -52,7 +85,7 @@ export default defineConfig({
         "@shared": resolve("src/shared"),
       },
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), stripDevCsp()],
     build: {
       rollupOptions: {
         input: {

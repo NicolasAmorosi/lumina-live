@@ -22,7 +22,7 @@ CONTEXT=$(printf '%s\n' \
   "   durable (algo no derivable del codigo, que costo descubrir y volvera a importar). Si si," \
   "   registralo con la skill /learn en .claude/knowledge/ + una linea en INDEX.md." \
   "3. BARRA MINIMA antes de dar una tarea por buena: npm run typecheck && npm run lint" \
-  "   && npm run db:smoke." \
+  "   && npm run test." \
   "" \
   "Indice de hallazgos ya registrados en .claude/knowledge/ (leelo antes de tocar esas areas):" \
   "$INDEX_BODY")

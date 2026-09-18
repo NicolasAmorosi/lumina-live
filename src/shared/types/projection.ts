@@ -26,6 +26,12 @@ export type VideoUnderlay = {
   epoch: number;
   paused: boolean;
   startAtSeconds: number;
+  /** 0..1, straight onto `HTMLMediaElement.volume`. Declarative, like
+   *  `paused` and for the same reason: a one-shot command would be lost by
+   *  every remount — a new epoch, or the projection window being rebuilt onto
+   *  another screen — and the operator would be left with a level the app
+   *  believes it is at and the room cannot hear. */
+  volume: number;
 } | null;
 
 export type ProjectionOutputKind =
@@ -34,7 +40,6 @@ export type ProjectionOutputKind =
   | { kind: "image"; url: string }
   | { kind: "video"; url: string; epoch: number }
   | { kind: "bible"; text: string; reference: string }
-  | { kind: "text"; body: string }
   | {
       kind: "slide";
       /** media_assets.id of the source deck — lets HistoryRepo coalesce a whole
@@ -56,7 +61,8 @@ export type ProjectionOutputKind =
  *  in over the old one without ever going fully black; "fade-through-black"
  *  fades out to black first, then in. Configurable from Settings →
  *  Projection. */
-export type TransitionStyle = "none" | "crossfade" | "fade-through-black";
+export const TRANSITION_STYLES = ["none", "crossfade", "fade-through-black"] as const;
+export type TransitionStyle = (typeof TRANSITION_STYLES)[number];
 
 /** Carried on every `ProjectionOutput` so the projection window (and the
  *  LIVE monitor) can tell "the same scene, re-sent" from "a genuinely new
@@ -95,13 +101,49 @@ export function mediaTargetKey(target: MediaTarget): string {
   return target.kind === "video" ? "video" : `audio:${target.trackId}`;
 }
 
-/** Play/pause are declarative now (`VideoUnderlay.paused`, `AudioTrackPush.paused`)
+/** Which element of the projection window failed. "scene" is the still image
+ *  of an image/slide/logo output — the only one without a `MediaTarget`,
+ *  because nothing ever commands it. */
+export type MediaErrorTarget = MediaTarget | { kind: "scene" };
+
+/** The key `mediaErrors` is indexed by. Deliberately shares the namespace of
+ *  `mediaTargetKey` — "video"/"audio:<id>" mean the same element in both
+ *  records, so one prune pass can keep status and error in step. */
+export function mediaErrorKey(target: MediaErrorTarget): string {
+  return target.kind === "scene" ? "scene" : mediaTargetKey(target);
+}
+
+/**
+ * Something the projector was told to show could not be loaded or decoded —
+ * a file deleted or a drive unplugged mid-service, a codec Chromium refuses.
+ * Reported by the failing element itself, exactly like `MediaStatus`: the
+ * element is describing itself, nothing is inferred.
+ *
+ * Without this the projection just goes black and, because the confidence
+ * monitors render the very same `ProjectionOutput` through the very same
+ * component, they repeat the lie — the one thing the monitors are not allowed
+ * to do.
+ *
+ * `url` is what makes the notice self-expiring: the control window only
+ * paints it while what is live still IS that url, so moving to the next slide
+ * or sending anything else live drops it with no explicit clearing and no
+ * chance of a stale warning outliving the content it describes.
+ */
+export type ProjectionMediaError = {
+  target: MediaErrorTarget;
+  url: string;
+  /** `HTMLMediaElement.error.code` when there is one; `null` for an `<img>`,
+   *  which reports no reason at all. Diagnostic only — nothing branches on it. */
+  code: number | null;
+};
+
+/** Play/pause and volume are declarative (`VideoUnderlay`, `AudioTrackPush`)
  *  so they survive a projection-window reload the same way "what's on screen"
- *  does. Only actions that are genuinely one-shot commands remain here. */
+ *  does. Only actions that are genuinely one-shot commands remain here — a
+ *  seek and a restart say "move now", they do not describe a state to hold. */
 export type MediaCommand =
   | { target: MediaTarget; action: "seek"; timeSeconds: number }
-  | { target: MediaTarget; action: "restart" }
-  | { target: MediaTarget; action: "setVolume"; volume: number };
+  | { target: MediaTarget; action: "restart" };
 
 /** Reported by whichever media element is playing in the projection window.
  *  Generalizes the never-implemented `video-status`: it now drives both the
@@ -136,6 +178,8 @@ export type AudioTrackPush = {
   epoch: number;
   paused: boolean;
   startAtSeconds: number;
+  /** 0..1 — see `VideoUnderlay.volume`. */
+  volume: number;
 };
 
 /** What the control window has selected as "base" content (before black/logo overlay). */
@@ -143,7 +187,6 @@ export type BaseContent =
   | { kind: "deck"; assetId: number; slideIndex: number }
   | { kind: "video"; assetId: number; epoch: number; startAtSeconds: number }
   | { kind: "image"; assetId: number }
-  | { kind: "bible"; text: string; reference: string }
-  | { kind: "text"; body: string };
+  | { kind: "bible"; text: string; reference: string };
 
 export type OverlayState = "none" | "black" | "logo";

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
-import { Modal } from "@renderer/components/shared/modal";
+import { Modal, ModalTitle } from "@renderer/components/shared/modal";
 import {
+  Button,
   Callout,
   DialogHeader,
   EmptyState,
@@ -12,10 +13,9 @@ import {
   ListRow,
   Select,
   Skeleton,
-  Title,
   Tooltip,
 } from "@renderer/components/ui";
-import { cn } from "@renderer/lib/utils";
+import { cn, normalizeForSearch } from "@renderer/lib/utils";
 import { api } from "@renderer/lib/api";
 import { toast } from "@renderer/lib/toast";
 import { PROGRAM_ROW_MIME } from "@renderer/lib/dnd";
@@ -29,14 +29,6 @@ import {
 import { ProgramRow } from "./program-row";
 import { ProgramSidePanel, type PanelMode } from "./program-side-panel";
 import type { ProgramSummary } from "@shared/types/program";
-
-function normalize(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "");
-}
 
 type FavoriteFilter = "all" | "favorites" | "others";
 
@@ -176,9 +168,9 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
   const reorderEnabled = !filtersActive && programs.length > 1;
 
   const filtered = useMemo(() => {
-    const q = normalize(query);
+    const q = normalizeForSearch(query);
     return programs
-      .filter((p) => (q ? normalize(p.name).includes(q) : true))
+      .filter((p) => (q ? normalizeForSearch(p.name).includes(q) : true))
       .filter((p) => {
         if (favoriteFilter === "favorites") return p.favorite;
         if (favoriteFilter === "others") return !p.favorite;
@@ -193,6 +185,11 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
 
   useEffect(() => {
     setHighlightedIndex(-1);
+    // Refs are written by index, so filtering a long list down to a short one
+    // leaves entries pointing at `<li>`s that are no longer mounted. Nothing
+    // reads past `highlightedIndex`, so this retains detached nodes rather
+    // than misbehaving — but it retains them for as long as the modal lives.
+    itemRefs.current.length = filtered.length;
   }, [filtered]);
 
   useEffect(() => {
@@ -247,10 +244,16 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
     if (!moved || insertAt === -1) return;
     next.splice(insertAt, 0, moved);
     setPrograms(next);
-    void reorderPrograms(next.map((p) => p.id)).then((stored) => {
-      if (stored) setPrograms(stored);
-      else void refreshList();
-    });
+    void reorderPrograms(next.map((p) => p.id))
+      .then((stored) => {
+        if (stored) setPrograms(stored);
+        else void refreshList();
+      })
+      // `reorderPrograms` already returns `null` on failure, so only a throw
+      // from the `then` itself lands here. Without this it would escape to the
+      // global `unhandledrejection` handler as a generic error toast, leaving
+      // the optimistic order on screen and the stored one unknown.
+      .catch(() => void refreshList());
   }
 
   function handleSearchKeyDown(e: KeyboardEvent<HTMLInputElement>) {
@@ -260,7 +263,12 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
       setHighlightedIndex((i) => Math.min(i + 1, filtered.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setHighlightedIndex((i) => Math.max(i - 1, 0));
+      // Only the "nothing highlighted" case (-1) differs: Up enters the list
+      // from the LAST row, mirroring Down entering it from the first.
+      // `Math.max(i - 1, 0)` entered from the first row in both directions,
+      // which reads as the list ignoring the key. Inside the list it still
+      // clamps rather than wrapping, exactly like Down.
+      setHighlightedIndex((i) => (i < 0 ? filtered.length - 1 : Math.max(i - 1, 0)));
     } else if (e.key === "Enter") {
       e.preventDefault();
       const target = filtered[highlightedIndex];
@@ -272,7 +280,18 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
 
   return (
     <Modal
-      className={cn("modal-expand", panelMode !== null && "max-w-[84rem]")}
+      className={cn(
+        "overflow-hidden",
+        // `84rem` = the base `2xl` width (`64rem`) + the side panel's own
+        // `w-80` (`20rem`) — see `program-side-panel.tsx`. No transition here:
+        // animating `max-width` stretched the header's empty middle (it
+        // spans the full dialog width, but its title/close button don't grow
+        // with it). The dialog jumps straight to its final size and only the
+        // Its shell animates only when it opens — see
+        // `.wa-program-panel-enter`. The keyed content inside may still
+        // remount to reset its form state when the selected program changes.
+        panelMode !== null && "max-w-[84rem]",
+      )}
       height="tall"
       onOpenChange={(next) => {
         if (!next) requestClose();
@@ -282,7 +301,7 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
       size="2xl"
     >
       <DialogHeader className="border-b border-border">
-        <Title as="h3">{t("programs.title")}</Title>
+        <ModalTitle>{t("programs.title")}</ModalTitle>
         <IconButton onClick={requestClose} size="xs" title={t("settings.close")} variant="ghost">
           <Icon name="close" />
         </IconButton>
@@ -343,13 +362,11 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
             ) : loadError ? (
               <Callout tone="danger">
                 <p>{t("programs.loadError")}</p>
-                <button
-                  className="mt-1 text-sm font-medium underline"
-                  onClick={() => void refreshList()}
-                  type="button"
-                >
+                {/* `text-current` rather than the variant's own ink: a link
+                    inside a toned Callout reads as part of that message. */}
+                <Button className="mt-1 text-current" onClick={() => void refreshList()} variant="link">
                   {t("common.retry")}
-                </button>
+                </Button>
               </Callout>
             ) : programs.length === 0 && !showDraftRow ? (
               <EmptyState icon="folderOpen" title={t("programs.empty")} />
@@ -418,32 +435,37 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
         </div>
 
         {panelMode ? (
-          <ProgramSidePanel
-            key={panelKey(panelMode)}
-            mode={panelMode}
-            onClose={() => setPanel(null)}
-            onDirtyChange={handlePanelDirtyChange}
-            onDone={(done, opened) => {
-              // A completed action is never "unsaved changes": the panel
-              // closes here without going through the guard.
-              setPanelDirty(false);
-              discardArmedRef.current = false;
-              setPanelMode(null);
-              void refreshList();
-              // `discard` always switches the schedule; `new` only does when
-              // "crear y abrir" was checked — either way, once the schedule
-              // has moved on there's nothing left to manage here.
-              if (done.kind === "discard" || opened) onOpenChange(false);
-            }}
-            onRequestOpen={requestOpen}
-          />
+          // This shell stays mounted when only `panelMode` changes, so its
+          // entrance animation runs once per opening. The child remains keyed:
+          // swapping modes must still reset form state to its new target.
+          <div className="wa-program-panel-enter flex w-80 shrink-0 flex-col border-l border-border">
+            <ProgramSidePanel
+              key={panelKey(panelMode)}
+              mode={panelMode}
+              onClose={() => setPanel(null)}
+              onDirtyChange={handlePanelDirtyChange}
+              onDone={(done, opened) => {
+                // A completed action is never "unsaved changes": the panel
+                // closes here without going through the guard.
+                setPanelDirty(false);
+                discardArmedRef.current = false;
+                setPanelMode(null);
+                void refreshList();
+                // `discard` always switches the schedule; `new` only does when
+                // "crear y abrir" was checked — either way, once the schedule
+                // has moved on there's nothing left to manage here.
+                if (done.kind === "discard" || opened) onOpenChange(false);
+              }}
+              onRequestOpen={requestOpen}
+            />
+          </div>
         ) : null}
       </div>
 
       {dragPreview
         ? createPortal(
             <div
-              className="pointer-events-none fixed z-[100] flex items-center gap-2 rounded-md border border-border bg-card px-4 text-sm text-foreground shadow-overlay"
+              className="pointer-events-none fixed z-[var(--z-drag)] flex items-center gap-2 rounded-md border border-border bg-card px-4 text-sm text-foreground shadow-overlay"
               style={{
                 height: dragPreview.height,
                 left: dragPreview.left,

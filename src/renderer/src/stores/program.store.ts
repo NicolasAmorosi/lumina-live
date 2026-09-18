@@ -1,5 +1,11 @@
 import { create } from "zustand";
-import type { ProgramDTO, ProgramItemDTO, ProgramItemUpsert } from "@shared/types/program";
+import type {
+  ProgramDraft,
+  ProgramDTO,
+  ProgramItemDTO,
+  ProgramItemUpsert,
+} from "@shared/types/program";
+import { api } from "@renderer/lib/api";
 
 type ProgramMeta = {
   name: string;
@@ -20,6 +26,10 @@ type ProgramStoreState = {
   dirty: boolean;
 
   loadProgram: (program: ProgramDTO) => void;
+  /** Puts back the schedule the operator was editing when the window last
+   *  went away. Unlike `loadProgram` this leaves `dirty` true: a draft is by
+   *  definition work that was never saved. */
+  restoreDraft: (draft: ProgramDraft) => void;
   newProgram: () => void;
   setProgramMeta: (meta: ProgramMeta) => void;
   /** `insertAt` places the item before that position; omitted (or past the end)
@@ -39,6 +49,46 @@ function reindex(items: ProgramItemDTO[]): ProgramItemDTO[] {
   return items.map((item, position) => ({ ...item, position }));
 }
 
+/**
+ * Provisional id for a row that hasn't been saved yet.
+ *
+ * Monotonic, NOT derived from `items.length`. Deriving it collided: add A(-1)
+ * and B(-2), remove A, add C → C is handed `-2` as well (the length is 1
+ * again), and both rows then answer to the same React `key`. React reuses the
+ * wrong DOM node for them, the async label from `useMediaAsset` sticks to the
+ * wrong row, and the `data-index` the drop target reads stops matching the
+ * row under the cursor. `ProgramsRepo.save()` renumbers everything from
+ * position 0, so this only ever has to be unique within a session.
+ */
+let provisionalId = 0;
+function nextProvisionalId(): number {
+  provisionalId += 1;
+  return -provisionalId;
+}
+
+/** Shifts a cursor to follow its row through an insertion at `at`. */
+function shiftForInsert(index: number | null, at: number): number | null {
+  if (index === null) return null;
+  return index >= at ? index + 1 : index;
+}
+
+/** Shifts a cursor to follow its row through the removal of `at`; `null` when
+ *  the removed row IS the one the cursor pointed at. */
+function shiftForRemoval(index: number | null, at: number): number | null {
+  if (index === null) return null;
+  if (index === at) return null;
+  return index > at ? index - 1 : index;
+}
+
+/** Follows a cursor through a move of `from` → `insertAt` (post-removal
+ *  coordinates, i.e. what `reorder` computes). */
+function shiftForMove(index: number | null, from: number, insertAt: number): number | null {
+  if (index === null) return null;
+  if (index === from) return insertAt;
+  const afterRemoval = index > from ? index - 1 : index;
+  return afterRemoval >= insertAt ? afterRemoval + 1 : afterRemoval;
+}
+
 export const useProgramStore = create<ProgramStoreState>((set, get) => ({
   currentProgramId: null,
   currentProgramName: "",
@@ -48,7 +98,15 @@ export const useProgramStore = create<ProgramStoreState>((set, get) => ({
   activeIndex: null,
   dirty: true,
 
-  loadProgram: (program) =>
+  loadProgram: (program) => {
+    // Opening a saved service is the strongest signal there is about which
+    // decks are going to be needed, and the operator usually does it well
+    // before the service starts — so every unconverted deck in it goes into
+    // the priority background lane, in the order of service, ahead of any
+    // folder batch or on-screen prewarm already queued.
+    const deckIds = program.items.filter((item) => item.kind === "ppt").map((item) => item.mediaAssetId);
+    if (deckIds.length > 0) void api.deck.prewarm(deckIds, "program");
+
     set({
       currentProgramId: program.id,
       currentProgramName: program.name,
@@ -57,7 +115,29 @@ export const useProgramStore = create<ProgramStoreState>((set, get) => ({
       selectedIndex: null,
       activeIndex: null,
       dirty: false,
-    }),
+    });
+  },
+
+  restoreDraft: (draft) => {
+    // Same reasoning as `loadProgram`: the decks in a restored schedule are
+    // the ones about to be needed, and the operator has just reopened the app
+    // — usually well before the service.
+    const deckIds = draft.items.flatMap((item) => (item.kind === "ppt" ? [item.mediaAssetId] : []));
+    if (deckIds.length > 0) void api.deck.prewarm(deckIds, "program");
+
+    set({
+      currentProgramId: draft.programId,
+      currentProgramName: draft.name,
+      currentProgramNotes: draft.notes,
+      // Fresh provisional ids: the ones from the previous session were negative
+      // counters that only ever had to be unique within that session, and the
+      // draft deliberately does not carry them (see `ProgramDraft`).
+      items: reindex(draft.items.map((item) => ({ ...item, id: nextProvisionalId() }) as ProgramItemDTO)),
+      selectedIndex: null,
+      activeIndex: null,
+      dirty: true,
+    });
+  },
 
   newProgram: () =>
     set({
@@ -77,23 +157,42 @@ export const useProgramStore = create<ProgramStoreState>((set, get) => ({
       dirty: true,
     }),
 
-  addItem: (item, insertAt) =>
+  addItem: (item, insertAt) => {
+    // Added to the schedule counts as an explicit intent to eventually show
+    // this — pre-warm its deck in the background rather than waiting for the
+    // operator to click it into preview. `"program"` rather than
+    // `"explicit"`: this is the lane that outranks a folder batch, so a deck
+    // dropped into the order of service during one doesn't wait behind it.
+    if (item.kind === "ppt") void api.deck.prewarm([item.mediaAssetId], "program");
+
     set((state) => {
-      // Negative ids mark not-yet-persisted rows; ProgramsRepo.save() rewrites
-      // everything from `position` 0 anyway, so the id only needs to be a
-      // stable, unique React key until the program is saved.
-      const newItem = { ...item, id: -(state.items.length + 1) } as ProgramItemDTO;
+      // Negative ids mark not-yet-persisted rows — see `nextProvisionalId`.
+      const newItem = { ...item, id: nextProvisionalId() } as ProgramItemDTO;
       const items = [...state.items];
       const at = insertAt === undefined ? items.length : Math.min(Math.max(insertAt, 0), items.length);
       items.splice(at, 0, newItem);
-      return { items: reindex(items), dirty: true };
-    }),
+      return {
+        items: reindex(items),
+        selectedIndex: shiftForInsert(state.selectedIndex, at),
+        activeIndex: shiftForInsert(state.activeIndex, at),
+        dirty: true,
+      };
+    });
+  },
 
   removeAt: (index) =>
     set((state) => {
       const items = reindex(state.items.filter((_, i) => i !== index));
-      const selectedIndex = state.selectedIndex === index ? null : state.selectedIndex;
-      return { items, selectedIndex, dirty: true };
+      // Both cursors, not just the selection: `activeIndex` drives the on-air
+      // rail, and leaving it on a raw position after the list shifted made a
+      // monitor claim a DIFFERENT row was on the projector — the one thing
+      // the on-air treatment is never allowed to get wrong.
+      return {
+        items,
+        selectedIndex: shiftForRemoval(state.selectedIndex, index),
+        activeIndex: shiftForRemoval(state.activeIndex, index),
+        dirty: true,
+      };
     }),
 
   /** Used when a media/ppt asset is force-deleted from the library: every item
@@ -123,25 +222,38 @@ export const useProgramStore = create<ProgramStoreState>((set, get) => ({
 
   moveUp: (index) => {
     if (index <= 0) return;
-    const items = [...get().items];
+    const state = get();
+    const items = [...state.items];
     const [prev, current] = [items[index - 1]!, items[index]!];
     items[index - 1] = current;
     items[index] = prev;
-    set({ items: reindex(items), selectedIndex: index - 1, dirty: true });
+    set({
+      items: reindex(items),
+      selectedIndex: index - 1,
+      activeIndex: shiftForMove(state.activeIndex, index, index - 1),
+      dirty: true,
+    });
   },
 
   moveDown: (index) => {
-    const items = [...get().items];
+    const state = get();
+    const items = [...state.items];
     if (index >= items.length - 1) return;
     const [current, next] = [items[index]!, items[index + 1]!];
     items[index] = next;
     items[index + 1] = current;
-    set({ items: reindex(items), selectedIndex: index + 1, dirty: true });
+    set({
+      items: reindex(items),
+      selectedIndex: index + 1,
+      activeIndex: shiftForMove(state.activeIndex, index, index + 1),
+      dirty: true,
+    });
   },
 
   reorder: (from, to) => {
     if (from === to) return;
-    const items = [...get().items];
+    const state = get();
+    const items = [...state.items];
     const moved = items[from];
     if (!moved) return;
     items.splice(from, 1);
@@ -149,7 +261,12 @@ export const useProgramStore = create<ProgramStoreState>((set, get) => ({
     // once the dragged item is spliced out from before that position.
     const insertAt = to > from ? to - 1 : to;
     items.splice(insertAt, 0, moved);
-    set({ items: reindex(items), selectedIndex: insertAt, dirty: true });
+    set({
+      items: reindex(items),
+      selectedIndex: insertAt,
+      activeIndex: shiftForMove(state.activeIndex, from, insertAt),
+      dirty: true,
+    });
   },
 
   clear: () => set({ items: [], selectedIndex: null, activeIndex: null, dirty: true }),

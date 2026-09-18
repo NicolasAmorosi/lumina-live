@@ -13,7 +13,7 @@ type MediaSourceBarProps = {
 
 const baseButton =
   "min-w-0 shrink-0 truncate rounded-md border px-2 py-1 text-left text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-const activeButton = "border-border bg-surface text-primary";
+const activeButton = "border-border bg-surface text-primary-ink";
 const inactiveButton = "border-transparent bg-muted/50 text-subtle hover:bg-hover hover:text-foreground";
 
 /**
@@ -56,7 +56,7 @@ export function MediaSourceBar({ activeView, folders, onAddFolder, onRemoveFolde
             </Tooltip>
             <Tooltip
               align="end"
-              className="absolute top-1/2 right-0.5 z-20 hidden -translate-y-1/2 group-hover/folder:inline-flex"
+              className="absolute top-1/2 right-0.5 z-[var(--z-sticky)] hidden -translate-y-1/2 group-hover/folder:inline-flex"
               content={t("resources.removeFolderHint")}
               placement="bottom"
             >

@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, Ref } from "react";
 import { cn } from "@renderer/lib/utils";
 
-type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger" | "live";
+type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger" | "live" | "link";
 type ButtonSize = "xs" | "sm" | "md" | "lg";
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -20,6 +20,23 @@ const variants: Record<ButtonVariant, string> = {
   ghost: "text-foreground hover:bg-muted active:bg-muted/80",
   danger: "bg-danger text-danger-foreground shadow-surface hover:bg-danger/90 active:bg-danger/75",
   live: "bg-success text-white shadow-surface hover:bg-success/90 active:bg-success/75",
+  // Text that acts, inside a sentence: a toast's "Deshacer", a callout's
+  // "Reintentar", the deck transport's "Resincronizar". It had been written by
+  // hand in three features before it became a variant. No box of its own — it
+  // drops the height, padding and background every other variant carries, so
+  // it sits on the line of the text around it.
+  link: "h-auto rounded-sm bg-transparent p-0 text-primary-ink underline-offset-2 hover:underline active:opacity-80",
+};
+
+// `link` has no box, so the size scale can only mean type size. Kept as its
+// own Record rather than a special case inside `sizes` because a link and a
+// button of the same `size` are not the same height, and pretending otherwise
+// is how one of them ends up nudged by hand at a call site.
+const linkSizes: Record<ButtonSize, string> = {
+  xs: "text-xs",
+  sm: "text-sm",
+  md: "text-sm",
+  lg: "text-base",
 };
 
 const sizes: Record<ButtonSize, string> = {
@@ -50,7 +67,7 @@ export function Button({
       className={cn(
         "relative inline-flex cursor-pointer items-center justify-center overflow-hidden rounded-lg font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60",
         variants[variant],
-        sizes[size],
+        variant === "link" ? linkSizes[size] : sizes[size],
         toggled && "ring-2 ring-ring",
         className,
       )}

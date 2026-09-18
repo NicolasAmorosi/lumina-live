@@ -31,12 +31,27 @@ const DECK_AUDIO_STATUS_KEY = mediaTargetKey(DECK_AUDIO_TARGET);
  *   resumes relative to the slide they picked.
  */
 
+/**
+ * Scheduler state, deliberately module-level: the imperative half of this
+ * module (`notifyManualNavigation`, `pauseAutoplay`, `resyncDeck`, …) is called
+ * from `lib/actions/*`, which hold no handle on any instance and never will —
+ * there is exactly one projector and therefore exactly one deck clock.
+ *
+ * `activeInstance` is what makes that assumption explicit instead of implicit.
+ * Only the newest `startDeckAutoplay` owns this state, so a teardown that is
+ * really a re-setup (StrictMode's double mount, an HMR swap) cannot reset the
+ * state belonging to the setup that replaced it — and, symmetrically, the owner
+ * that does tear down leaves nothing behind: `seededEpoch` used to survive it,
+ * so a deck reopened afterwards found its epoch already "seeded" and started
+ * the soundtrack from 0 instead of from the slide that was up.
+ */
 let timer: ReturnType<typeof setTimeout> | null = null;
 /** Bumped on every manual navigation so a `media-status` already in flight
  *  can't yank the slide back a beat later. */
 let navEpoch = 0;
 let deadline = 0;
 let seededEpoch = -1;
+let activeInstance = 0;
 
 function clearTimer(): void {
   if (timer !== null) {
@@ -187,7 +202,34 @@ export function restartDeck(): void {
   }
 }
 
+/** Rejoins the audio clock after a manual navigation ("detached"): snaps the
+ *  slide cursor back to whatever the soundtrack (still playing right where it
+ *  was) says it should be, then hands scheduling back to `scheduleSynced`. A
+ *  deck with no soundtrack has no clock to rejoin — for it this only clears
+ *  the "detached" label, since `scheduleDetached` already drives both modes
+ *  identically in that case (see `startDeckAutoplay`'s deck-key subscription). */
+export function resyncDeck(): void {
+  const state = useProjectionStore.getState();
+  if (state.base?.kind !== "deck" || !state.liveDeck || state.autoplayMode !== "detached") return;
+  navEpoch += 1;
+  deadline = performance.now();
+
+  const status = state.mediaStatus[DECK_AUDIO_STATUS_KEY];
+  if (state.liveDeck.soundtrack && status) {
+    const expected = slideAtAudioTime(state.liveDeck, status.currentTimeSeconds * 1000);
+    if (expected !== state.base.slideIndex) state.setSlideIndex(expected);
+  }
+
+  state.setAutoplayMode("synced");
+  if (state.autoplay !== "playing") return;
+  if (state.liveDeck.soundtrack && status) scheduleSynced(status.currentTimeSeconds * 1000);
+  else scheduleDetached();
+}
+
 export function startDeckAutoplay(): () => void {
+  activeInstance += 1;
+  const instance = activeInstance;
+
   // Re-arm whenever a deck is loaded or autoplay is toggled from elsewhere.
   const unsubscribeDeck = useProjectionStore.subscribe(
     (state) => `${state.liveDeck?.assetId ?? "none"}:${state.autoplay}:${state.autoplayMode}`,
@@ -266,9 +308,19 @@ export function startDeckAutoplay(): () => void {
   );
 
   return () => {
-    clearTimer();
+    // Always: these belong to this instance alone.
     unsubscribeDeck();
     unsubscribeStatus();
     unsubscribeOverlay();
+
+    // The shared scheduler state belongs to whichever instance is current —
+    // resetting it from a superseded one would clear the live deck's clock.
+    if (instance !== activeInstance) return;
+    clearTimer();
+    // Retires any timeout that escaped `clearTimer` by already being in its
+    // callback: they all re-check `navEpoch` before touching the store.
+    navEpoch += 1;
+    deadline = 0;
+    seededEpoch = -1;
   };
 }

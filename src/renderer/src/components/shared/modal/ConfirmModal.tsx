@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
-import { Button, DialogContent, DialogFooter, DialogHeader, Title } from "@renderer/components/ui";
+import { Button, DialogContent, DialogFooter, DialogHeader } from "@renderer/components/ui";
+import { ModalTitle } from "./ModalTitle";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { Modal } from "./Modal";
 
@@ -40,14 +41,14 @@ export function ConfirmModal({
   return (
     <Modal onOpenChange={onOpenChange} open={open} size="sm">
       <DialogHeader>
-        <Title as="h3">{title}</Title>
+        <ModalTitle>{title}</ModalTitle>
       </DialogHeader>
       {description ? <DialogContent className="text-sm text-muted-foreground">{description}</DialogContent> : null}
       <DialogFooter>
         <Button onClick={() => onOpenChange(false)} variant="ghost">
           {t("common.cancel")}
         </Button>
-        <Button loading={loading} onClick={handleConfirm} variant={danger ? "danger" : "primary"}>
+        <Button loading={loading} onClick={() => void handleConfirm()} variant={danger ? "danger" : "primary"}>
           {confirmLabel ?? t("common.confirm")}
         </Button>
       </DialogFooter>

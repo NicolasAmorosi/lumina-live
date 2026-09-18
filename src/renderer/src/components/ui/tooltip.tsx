@@ -15,7 +15,7 @@ type TooltipProps = {
   content: ReactNode;
   /** Renders the bubble through a portal to `document.body`, positioned in
    *  viewport coordinates (clamped so it never crosses the screen edge)
-   *  instead of the in-flow CSS bubble — see `Select`'s `computePosition` for
+   *  instead of the in-flow CSS bubble — see `computeMenuPosition` for
    *  the same pattern. Use it when the trigger sits in a narrow column and
    *  the content (e.g. a full filesystem path) needs to render at its
    *  natural width on a single line without being clipped by an ancestor's
@@ -49,7 +49,7 @@ export function Tooltip(props: TooltipProps) {
       {children}
       <span
         className={cn(
-          "pointer-events-none absolute z-10 w-64 rounded-lg border border-border bg-card p-2 text-xs text-foreground opacity-0 shadow-raised transition-opacity group-hover:opacity-100 group-has-[:focus-visible]:opacity-100",
+          "pointer-events-none absolute z-[var(--z-raised)] w-64 rounded-lg border border-border bg-card p-2 text-xs text-foreground opacity-0 shadow-raised transition-opacity group-hover:opacity-100 group-has-[:focus-visible]:opacity-100",
           placement === "top" ? "bottom-full mb-1.5" : "top-full mt-1.5",
           align === "start" ? "left-0" : "right-0",
         )}
@@ -125,7 +125,7 @@ function FloatingTooltip({ children, className, content }: TooltipProps) {
         ? createPortal(
             <span
               className={cn(
-                "pointer-events-none fixed z-[100] w-max max-w-[calc(100vw-1rem)] rounded-lg border border-border bg-card p-2 text-xs break-all text-foreground shadow-raised",
+                "pointer-events-none fixed z-[var(--z-popover)] w-max max-w-[calc(100vw-1rem)] rounded-lg border border-border bg-card p-2 text-xs break-all text-foreground shadow-raised",
                 !position && "invisible",
               )}
               ref={bubbleRef}
