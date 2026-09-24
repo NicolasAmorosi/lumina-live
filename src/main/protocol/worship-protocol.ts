@@ -318,9 +318,16 @@ export function registerWorshipProtocolHandler(mediaRepo: MediaRepo): void {
           const pdfPath = jobId ? resolveRasterPdf(jobId) : null;
           if (!pdfPath) return new Response("Not found", { status: 404 });
           const resolved = path.resolve(pdfPath);
-          if (!resolved.startsWith(slidesTempDir + path.sep)) {
-            return new Response("Forbidden", { status: 403 });
-          }
+          // Two legitimate origins, and the second one is easy to forget: a
+          // PDF we just produced lives under `slidesTempDir`, but a deck whose
+          // SOURCE is already a PDF is rasterized straight from wherever the
+          // operator keeps it (see `deckRequiresSoffice`) — the temp-dir prefix
+          // alone answered 403 for every one of those. A library row is the
+          // positive assertion that replaces it: the same "the operator added
+          // this file" property `worship://asset/<id>` rests on.
+          const allowed =
+            resolved.startsWith(slidesTempDir + path.sep) || mediaRepo.hasPath(resolved);
+          if (!allowed) return new Response("Forbidden", { status: 403 });
           return serveFile(request, resolved);
         }
         default:

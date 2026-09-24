@@ -416,6 +416,14 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   con lo que el `.pptx` sí trajo — avanzar con el tiempo de otra diapositiva en pleno culto es peor
   que no avanzar. Diagnóstico en
   [`.claude/knowledge/libreoffice-pptx-export-drops-advtm-without-a-transition-effect.md`](.claude/knowledge/libreoffice-pptx-export-drops-advtm-without-a-transition-effect.md).
+- **Un PDF es un deck y NO se convierte con LibreOffice.** Es el formato intermedio del pipeline,
+  así que `runConversion` lo manda directo al rasterizador (`containerKind === "pdf"`) y
+  `warmBatchPdfCache` lo saca del lote. `--convert-to pdf` sobre un `.pdf` lo importa a **Draw** y
+  lo vuelve a dibujar — medido, 157 KB → 1,76 MB. De ahí se sigue que **un PDF se proyecta sin
+  LibreOffice instalado**: la pregunta es `deckRequiresSoffice(ext)` y se hace por deck, nunca por
+  entorno. Vive en el `AssetKind` `ppt` a propósito, porque en todo el renderer `kind === "ppt"`
+  ya significa "esto es un deck". Diagnóstico en
+  [`.claude/knowledge/a-pdf-source-breaks-two-assumptions-the-pipeline-made-about-its-own-output.md`](.claude/knowledge/a-pdf-source-breaks-two-assumptions-the-pipeline-made-about-its-own-output.md).
 - **Nunca leas un `.pptx` entero para sacarle sus partes XML.** Un zip es de acceso aleatorio: va
   todo por `readZipEntries` (`src/main/slides/zip-reader.ts`), que lee el directorio central y solo
   los rangos pedidos. `unzipSync` con `filter` **no** evita el `readFileSync` de 200 MB, solo el

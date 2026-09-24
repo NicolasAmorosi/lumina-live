@@ -670,6 +670,15 @@ async function readMetadata(
 ): Promise<{ meta: PresentationMeta; timingsSource: "ooxml" | "ooxml-converted" | "none"; parsedFrom: string }> {
   const kind = containerKind(sourcePath);
 
+  // A PDF carries no presentation structure at all: no transitions, so no
+  // auto-advance, and no media parts, so no embedded soundtrack. Stated as its
+  // own branch rather than left to the fallthrough below, because "there is
+  // nothing to read" is a fact about the format here, not a parse that failed.
+  // A *linked* sibling .mp3 still resolves for it, like any other deck.
+  if (kind === "pdf") {
+    return { meta: emptyMeta(), timingsSource: "none", parsedFrom: sourcePath };
+  }
+
   if (kind === "ooxml") {
     try {
       return { meta: readPresentationMeta(sourcePath), timingsSource: "ooxml", parsedFrom: sourcePath };
@@ -886,17 +895,29 @@ async function runConversion(job: Job): Promise<DeckDTO> {
       signal,
       precomputedPptxByAsset.get(assetId),
     );
+    // A PDF source IS the intermediate format, so it goes to the rasterizer
+    // untouched — no `soffice`, and therefore no LibreOffice requirement for
+    // this deck at all. Round-tripping it would route the file through Draw's
+    // PDF *importer* and re-render every glyph; see `deckRequiresSoffice`.
     const precomputedPdf = precomputedPdfByAsset.get(assetId);
-    const pdfPath =
-      precomputedPdf && fs.existsSync(precomputedPdf)
-        ? precomputedPdf
-        : await convertToPdf({
-            sourcePath,
-            outDir: pdfDir,
-            timeoutMs: convertTimeoutFor(stat.size),
-            signal,
-          });
-    consecutiveTimeouts = 0;
+    let pdfPath: string;
+    if (containerKind(sourcePath) === "pdf") {
+      pdfPath = sourcePath;
+    } else {
+      pdfPath =
+        precomputedPdf && fs.existsSync(precomputedPdf)
+          ? precomputedPdf
+          : await convertToPdf({
+              sourcePath,
+              outDir: pdfDir,
+              timeoutMs: convertTimeoutFor(stat.size),
+              signal,
+            });
+      // Only meaningful when `soffice` actually ran: this counter is what
+      // `resetSofficeProfile` watches, and a PDF that never launched it must
+      // not clear a streak of real LibreOffice timeouts.
+      consecutiveTimeouts = 0;
+    }
 
     const imagesDir = path.join(jobDir, "images");
     const pages = await rasterizePdf({
@@ -1156,21 +1177,28 @@ export async function warmBatchPdfCache(assetIds: readonly number[]): Promise<vo
       }
     }
 
-    const pdfDir = path.join(batchDir, "pdf");
-    fs.mkdirSync(pdfDir, { recursive: true });
-    try {
-      const pdfByPath = await convertBatchToPdf({
-        sourcePaths: items.map((item) => item.sourcePath),
-        outDir: pdfDir,
-        timeoutMs,
-        signal: controller.signal,
-      });
-      for (const item of items) {
-        const pdf = pdfByPath.get(item.sourcePath);
-        if (pdf) precomputedPdfByAsset.set(item.assetId, pdf);
+    // A PDF is already the output of this step, so it is left out of the batch
+    // rather than handed to `soffice` — which would re-render it through Draw.
+    // `runConversion` rasterizes it straight from its source path, so there is
+    // nothing to pre-compute for it and nothing lost by skipping it here.
+    const convertible = items.filter((item) => containerKind(item.sourcePath) !== "pdf");
+    if (convertible.length > 0) {
+      const pdfDir = path.join(batchDir, "pdf");
+      fs.mkdirSync(pdfDir, { recursive: true });
+      try {
+        const pdfByPath = await convertBatchToPdf({
+          sourcePaths: convertible.map((item) => item.sourcePath),
+          outDir: pdfDir,
+          timeoutMs,
+          signal: controller.signal,
+        });
+        for (const item of convertible) {
+          const pdf = pdfByPath.get(item.sourcePath);
+          if (pdf) precomputedPdfByAsset.set(item.assetId, pdf);
+        }
+      } catch {
+        // Best-effort — every deck falls back to its own PDF conversion.
       }
-    } catch {
-      // Best-effort — every deck falls back to its own PDF conversion.
     }
   } catch {
     // Defensive: warming must never fail the caller's real conversion.

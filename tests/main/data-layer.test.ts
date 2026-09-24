@@ -319,6 +319,22 @@ describe("Media library", () => {
     const afterReappear = mediaRepo.getById(firstAsset.id);
     assert(afterReappear?.missingSince === null, "sweep must clear missingSince once the file is back");
   });
+
+  test("hasPath answers the worship://raster guard, and only for real rows", () => {
+    // This is a security guard, not a convenience lookup: it is what lets the
+    // rasterizer read a PDF that IS the source (kept wherever the operator
+    // keeps it) instead of one we produced under `slidesTempDir`, so a false
+    // positive would turn a capability token into an arbitrary file read.
+    assert(mediaRepo.hasPath(filePaths[0]!), "a file that was imported must be recognized");
+    assert(
+      !mediaRepo.hasPath(path.join(mediaDir, "never-imported.pdf")),
+      "a path with no row must never be served, however plausible it looks",
+    );
+    assert(
+      !mediaRepo.hasPath(mediaDir),
+      "the containing folder is not an asset — the match is exact, not a prefix",
+    );
+  });
 });
 
 describe("Deck status is answered by CONTENT, not by row ownership", () => {

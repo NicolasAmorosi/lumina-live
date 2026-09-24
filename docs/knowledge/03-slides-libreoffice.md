@@ -22,6 +22,35 @@ currentSlide/close` — el cursor vive en el store del renderer y es la única c
 
 `soffice --convert-to png` **solo exporta la primera diapositiva** — de ahí el paso por PDF.
 
+## Un PDF entra por el medio del pipeline
+
+Un `.pdf` es un deck más (`ASSET_EXTENSIONS.ppt`, `kind = "ppt"`, `ProgramItemKind` `"ppt"`) —
+no un `AssetKind` propio. En todo el renderer `kind === "ppt"` ya significa "esto es un deck",
+así que sumar la extensión alcanza para heredar el filtro del diálogo, el drag & drop, el import
+de carpeta, el cache direccionado por contenido, el prewarm, "Preparar carpeta", los thumbs y los
+badges sin una sola rama nueva.
+
+Lo que sí cambia es que **el PDF ya ES el formato intermedio**: `runConversion` lo manda directo
+al rasterizador y `warmBatchPdfCache` lo saca del lote. Pasarlo por `soffice` no es "más lento",
+es peor: LibreOffice lo importa a **Draw** y lo vuelve a dibujar glifo por glifo
+(`convert … as a Draw document … using filter: draw_pdf_Export`; medido, 157 KB → 1,76 MB).
+
+Dos consecuencias que la UI tiene que respetar:
+
+- **Un PDF no necesita LibreOffice.** `deckRequiresSoffice(ext)` (`shared/constants.ts`) es la
+  única fuente de esa pregunta, y el cartel "instalá LibreOffice" (`deck-slides.tsx`) y el botón
+  "Preparar carpeta" (`media-browser.tsx`) la hacen **por deck**, nunca por entorno.
+- **Un PDF no tiene metadata de presentación**: ni transiciones (⇒ `timings_source = "none"`, sin
+  auto-avance) ni partes de media (⇒ sin banda sonora embebida). El `.mp3` hermano *vinculado* sí
+  se resuelve, como en cualquier otro deck.
+
+El rasterizado escala para entrar en un cuadrado de `targetWidth`, no solo por ancho: toda
+diapositiva de Impress/PowerPoint es apaisada y el ancho siempre mandaba, pero una página de PDF
+puede ser vertical. Diagnóstico y mediciones —incluido por qué esto **no** obliga a bumpear
+`SLIDES_CONVERTER_VERSION`— en
+[`.claude/knowledge/a-pdf-source-breaks-two-assumptions-the-pipeline-made-about-its-own-output.md`](../../.claude/knowledge/a-pdf-source-breaks-two-assumptions-the-pipeline-made-about-its-own-output.md),
+que además explica el caso de las fuentes no embebidas y el nuevo error `PDF_PASSWORD`.
+
 ## Por qué el rasterizado va en una `BrowserWindow` oculta
 
 Rasterizar necesita un Canvas2D real. La alternativa (`@napi-rs/canvas` en un `utilityProcess`)

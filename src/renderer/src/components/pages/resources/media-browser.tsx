@@ -34,7 +34,7 @@ import { MediaFilterBar } from "./media-filter-bar";
 import { MediaSourceBar } from "./media-source-bar";
 import { PanelProgressRow } from "./panel-progress-row";
 import { PrewarmConfirmModal } from "./prewarm-confirm-modal";
-import { PREWARM_VISIBLE_MAX, type AssetKind } from "@shared/constants";
+import { PREWARM_VISIBLE_MAX, deckRequiresSoffice, type AssetKind } from "@shared/constants";
 import type { DeckStatusSummary } from "@shared/types/deck";
 import type { MediaAsset } from "@shared/types/media";
 
@@ -292,16 +292,22 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
   // and the modal quotes a count back, so with a filter up it has to prepare
   // the matches the operator can see rather than the thousand decks behind
   // them.
-  const pendingDeckAssetIds = useMemo(
+  const pendingDeckAssets = useMemo(
     () =>
       kind !== "ppt" || deckStatuses === null
         ? []
-        : assets
-            .filter((a) => a.missingSince === null && deckStatuses[a.id]?.status !== "ready")
-            .map((a) => a.id),
+        : assets.filter((a) => a.missingSince === null && deckStatuses[a.id]?.status !== "ready"),
     [assets, deckStatuses, kind],
   );
+  const pendingDeckAssetIds = useMemo(() => pendingDeckAssets.map((a) => a.id), [pendingDeckAssets]);
   const pendingDeckCount = pendingDeckAssetIds.length;
+  /** Whether this batch would need LibreOffice at all. A view holding only
+   *  PDFs converts without it, so refusing the button on the environment flag
+   *  alone would block work that has no such dependency. */
+  const pendingNeedsSoffice = useMemo(
+    () => pendingDeckAssets.some((a) => deckRequiresSoffice(a.ext)),
+    [pendingDeckAssets],
+  );
 
   async function handleAdd() {
     const paths = await api.files.pick(kind, true);
@@ -466,7 +472,7 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
           <Tooltip align="start" content={t("prewarm.actionHint")} placement="top">
             <IconButton
               aria-label={t("prewarm.action")}
-              disabled={deckEnvironment?.available === false}
+              disabled={pendingNeedsSoffice && deckEnvironment?.available === false}
               onClick={() => setConfirmPrewarmOpen(true)}
               size="sm"
               variant="outline"

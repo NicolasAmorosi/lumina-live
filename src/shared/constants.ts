@@ -5,13 +5,38 @@ export type AssetKind = (typeof ASSET_KINDS)[number];
 
 /** `pptm`/`ppsx`/`ppsm` are the same OOXML zip as `pptx`; `pps` is the legacy
  *  binary format like `ppt` (the v1 vanilla app accepted both and the TS
- *  migration dropped them). `odp` works now that LibreOffice is the engine. */
+ *  migration dropped them). `odp` works now that LibreOffice is the engine.
+ *
+ *  `pdf` is deliberately a `ppt`, not an `AssetKind` of its own: everywhere in
+ *  the renderer `kind === "ppt"` already means "this is a deck" (the tile's
+ *  deck badge, the deck store, pre-warming, the `ppt` `ProgramItemKind` and
+ *  its CHECK constraint), and a PDF is a deck whose pages happen to be
+ *  rendered already. Listing the extension here is what gives it the file
+ *  dialog's filter, drag & drop, folder import, the content-addressed cache
+ *  and "Preparar carpeta" without a single branch. */
 export const ASSET_EXTENSIONS: Record<AssetKind, readonly string[]> = {
   video: ["mp4", "mov", "mkv", "avi", "webm"],
   image: ["jpg", "jpeg", "png", "gif", "webp", "bmp"],
   audio: ["mp3", "wav", "ogg", "m4a", "flac"],
-  ppt: ["ppt", "pptx", "pptm", "pps", "ppsx", "ppsm", "odp"],
+  ppt: ["ppt", "pptx", "pptm", "pps", "ppsx", "ppsm", "odp", "pdf"],
 };
+
+/**
+ * Whether converting this deck needs LibreOffice at all.
+ *
+ * The pipeline is `source → PDF → one image per page`, so a PDF enters it
+ * halfway: it is handed straight to the rasterizer. That is not just faster —
+ * running one through `soffice` imports it into **Draw** and re-renders it
+ * (measured on a real file: 157 KB in, 1,76 MB out), which costs typographic
+ * fidelity for nothing.
+ *
+ * The consequence the UI has to honour: a PDF is projectable on a machine with
+ * no LibreOffice installed, so the "instalá LibreOffice" gate must not stand in
+ * front of one.
+ */
+export function deckRequiresSoffice(ext: string): boolean {
+  return ext.replace(/^\./, "").toLowerCase() !== "pdf";
+}
 
 // A `text` kind used to live here too: schema column, DTO, repo mapping,
 // preview, projector output — everything except a way to create one. It was

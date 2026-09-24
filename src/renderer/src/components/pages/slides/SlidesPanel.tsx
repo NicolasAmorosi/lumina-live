@@ -46,7 +46,7 @@ export function SlidesPanel() {
     }
 
     if (content.kind === "deck") {
-      return <DeckSlides assetId={content.assetId} missingSince={content.missingSince} />;
+      return <DeckSlides assetId={content.assetId} ext={content.ext} missingSince={content.missingSince} />;
     }
 
     // A verse being previewed brings its whole chapter along, so the operator

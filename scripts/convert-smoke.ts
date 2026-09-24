@@ -101,11 +101,19 @@ async function main(): Promise<void> {
       const kind = containerKind(file);
       console.log(`   contenedor: ${kind}`);
 
-      const started = Date.now();
-      const pdf = await convert(soffice, profileDir, file, path.join(work, "pdf"), "pdf");
-      const pdfMs = Date.now() - started;
-      const pdfSize = (fs.statSync(pdf).size / 1024 / 1024).toFixed(1);
-      console.log(`   PDF: ${pdfMs}ms, ${pdfSize} MB`);
+      // A PDF is already the intermediate format: `deck-service` hands it to
+      // the rasterizer untouched, so this must not convert it either — running
+      // it through `soffice` would re-render it via Draw's PDF importer and
+      // measure something the app never does.
+      if (kind === "pdf") {
+        const mb = (fs.statSync(file).size / 1024 / 1024).toFixed(1);
+        console.log(`   PDF: origen, sin conversión (${mb} MB) — no requiere LibreOffice`);
+      } else {
+        const started = Date.now();
+        const pdf = await convert(soffice, profileDir, file, path.join(work, "pdf"), "pdf");
+        const mb = (fs.statSync(pdf).size / 1024 / 1024).toFixed(1);
+        console.log(`   PDF: ${Date.now() - started}ms, ${mb} MB`);
+      }
 
       // Legacy binary .ppt has no OOXML: round-trip through .pptx to recover
       // timings and audio, exactly like deck-service does.
@@ -120,7 +128,11 @@ async function main(): Promise<void> {
       }
 
       if (timingsSource === "none") {
-        console.log("   sin metadata (contenedor no soportado)\n");
+        console.log(
+          kind === "pdf"
+            ? "   sin metadata (un PDF no tiene transiciones ni media embebida)\n"
+            : "   sin metadata (contenedor no soportado)\n",
+        );
         continue;
       }
 

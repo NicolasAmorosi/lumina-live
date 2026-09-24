@@ -142,7 +142,10 @@ type PagePayload = {
 };
 
 type DonePayload = { jobId: string; total: number };
-type ErrorPayload = { jobId: string; message: string };
+/** `kind` is the rasterizer window's own coarse classification of the failure
+ *  — it does not know `SlideErrorCode`, and nothing here trusts it beyond
+ *  picking between two fixed messages. */
+type ErrorPayload = { jobId: string; kind?: "password" | "unknown"; message: string };
 
 type JobHandlers = {
   onPage: (payload: PagePayload) => void;
@@ -281,7 +284,16 @@ export async function rasterizePdf(request: RasterRequest): Promise<RasterPage[]
       },
       onDone: () => finish(() => resolve(pages.sort((a, b) => a.index - b.index))),
       onError: (payload) =>
-        finish(() => reject(new SlideError("RASTER_FAILED", payload.message))),
+        finish(() =>
+          reject(
+            payload.kind === "password"
+              ? new SlideError(
+                  "PDF_PASSWORD",
+                  "El PDF está protegido con contraseña y no se puede convertir.",
+                )
+              : new SlideError("RASTER_FAILED", payload.message),
+          ),
+        ),
     });
 
     request.signal?.addEventListener("abort", onAbort, { once: true });

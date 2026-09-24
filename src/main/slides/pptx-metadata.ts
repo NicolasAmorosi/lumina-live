@@ -4,7 +4,7 @@ import { XMLParser } from "fast-xml-parser";
 import { SLIDES_MIN_ADVANCE_MS } from "@shared/constants";
 import { readZipEntries } from "./zip-reader";
 
-export type ContainerKind = "ooxml" | "binary" | "odf" | "unknown";
+export type ContainerKind = "ooxml" | "binary" | "odf" | "pdf" | "unknown";
 
 export type SlideTiming = {
   /** 1-based, in presentation order. */
@@ -109,6 +109,13 @@ export function containerKind(filePath: string): ContainerKind {
     // OLE2 compound file (legacy .ppt/.pps)
     if (head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0) {
       return "binary";
+    }
+    // "%PDF" — already the intermediate format the whole pipeline converts to,
+    // so it skips LibreOffice entirely. Sniffed rather than taken from the
+    // extension for the same reason the two above are: the extension is what
+    // the library filters on, the magic is what the converter trusts.
+    if (head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46) {
+      return "pdf";
     }
     if (head[0] === 0x50 && head[1] === 0x4b) {
       // A zip: OOXML or ODF. Distinguish by extension, cheap and reliable here.

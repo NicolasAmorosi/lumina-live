@@ -18,7 +18,10 @@ import type { ProjectionOutput } from "@shared/types/projection";
  * "what am I looking at" from three stores.
  */
 export type PreviewContent =
-  | { kind: "deck"; assetId: number; title: string; missingSince: number | null }
+  /** `ext` rides along so the panel can tell a deck that needs LibreOffice
+   *  from a PDF, which is rasterized straight from its source and must not sit
+   *  behind the "instalá LibreOffice" gate (`deckRequiresSoffice`). */
+  | { kind: "deck"; assetId: number; ext: string; title: string; missingSince: number | null }
   | { kind: "media"; asset: MediaAsset }
   | { kind: "bible"; reference: string; text: string; verseIndex: number | null }
   | { kind: "utility"; scene: UtilityScene };
@@ -60,7 +63,13 @@ export function usePreviewContent(): PreviewContent | null {
   if (target.kind === "asset") {
     if (!directAsset) return null;
     return target.assetKind === "ppt"
-      ? { kind: "deck", assetId: directAsset.id, title: directAsset.name, missingSince: directAsset.missingSince }
+      ? {
+          kind: "deck",
+          assetId: directAsset.id,
+          ext: directAsset.ext,
+          title: directAsset.name,
+          missingSince: directAsset.missingSince,
+        }
       : { kind: "media", asset: directAsset };
   }
 
@@ -71,6 +80,7 @@ export function usePreviewContent(): PreviewContent | null {
         ? {
             kind: "deck",
             assetId: scheduleAsset.id,
+            ext: scheduleAsset.ext,
             title: scheduleItem.title ?? scheduleAsset.name,
             missingSince: scheduleAsset.missingSince,
           }

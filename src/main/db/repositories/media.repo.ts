@@ -255,6 +255,7 @@ export class MediaRepo {
    */
   private byIdStatement: Database.Statement | null = null;
   private pathStatement: Database.Statement | null = null;
+  private hasPathStatement: Database.Statement | null = null;
   private linkedAudioStatement: Database.Statement | null = null;
 
   getById(id: number): MediaAsset | null {
@@ -275,6 +276,25 @@ export class MediaRepo {
     this.pathStatement ??= this.sqlite.prepare(`SELECT path FROM media_assets WHERE id = ?`);
     const row = this.pathStatement.get(id) as { path: string } | undefined;
     return row?.path ?? null;
+  }
+
+  /**
+   * Whether this exact file is a row in the library.
+   *
+   * The reverse of `getPathById`, and it exists for one caller: the
+   * `worship://raster/<jobId>` guard. A deck is normally rasterized from a PDF
+   * *we* just produced under `slidesTempDir`, but a PDF source is rasterized
+   * from where the operator keeps it — so "under our temp dir" stopped being
+   * the whole answer to "is main allowed to serve this". This is the positive
+   * assertion that replaces the missing half: the file is one the operator
+   * added, which is the same property `worship://asset/<id>` already rests on.
+   * Matched on `pathKey` (NFC + lowercased on Windows), never the raw string.
+   */
+  hasPath(filePath: string): boolean {
+    this.hasPathStatement ??= this.sqlite.prepare(
+      `SELECT 1 FROM media_assets WHERE path_key = ? LIMIT 1`,
+    );
+    return this.hasPathStatement.get(toPathKey(filePath)) !== undefined;
   }
 
   linkedAudioPathById(id: number): string | null {
