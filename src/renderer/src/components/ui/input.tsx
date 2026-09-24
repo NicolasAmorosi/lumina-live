@@ -2,7 +2,7 @@ import type { InputHTMLAttributes, Ref } from "react";
 import { cn } from "@renderer/lib/utils";
 import { Icon, type IconName } from "./icon";
 
-type InputSize = "xs" | "sm";
+type InputSize = "xs" | "sm" | "md";
 
 // `size` is re-typed away from the native numeric attribute (character width),
 // which this design system never uses, to the same scale as `Select`.
@@ -17,11 +17,13 @@ type InputProps = Omit<InputHTMLAttributes<HTMLInputElement>, "size"> & {
 const sizes: Record<InputSize, string> = {
   xs: "h-7 px-2 text-xs",
   sm: "h-9 px-3 text-sm",
+  md: "h-10 px-3 text-sm",
 };
 
 const iconOffsets: Record<InputSize, { icon: string; padding: string }> = {
   xs: { icon: "left-2", padding: "pl-7" },
   sm: { icon: "left-2.5", padding: "pl-8" },
+  md: { icon: "left-2.5", padding: "pl-8" },
 };
 
 export function Input({ className, icon, ref, size = "sm", ...props }: InputProps) {

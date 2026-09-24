@@ -10,12 +10,14 @@ import {
   Icon,
   IconButton,
   ListRow,
+  Switch,
 } from "@renderer/components/ui";
 import { api } from "@renderer/lib/api";
 import { toast } from "@renderer/lib/toast";
 import { hideDragGhost, UTILITY_SCENE_MIME } from "@renderer/lib/dnd";
 import { deleteScene, duplicateScene, reorderScenes, saveScene, sceneUsages } from "@renderer/lib/actions/utility";
 import { useUtilityStore } from "@renderer/stores/utility.store";
+import { isCountdownTool } from "@shared/types/timer";
 import type { MediaAsset } from "@shared/types/media";
 import type { UtilityScene, UtilitySceneUsage } from "@shared/types/utility";
 import { emptySceneDraft, isDraftSavable, toDraft, toUpsert, type SceneDraft } from "./scene-draft";
@@ -58,6 +60,11 @@ export function ScenesModal({ onOpenChange, open }: { onOpenChange: (open: boole
   const [dragOverId, setDragOverId] = useState<number | null>(null);
   const [imageAssets, setImageAssets] = useState<readonly MediaAsset[]>([]);
   const [addingImages, setAddingImages] = useState(false);
+  /** Whether the preview above the form is drawing the scene as it rests or as
+   *  it ends. A view of the editor, not part of the draft: it must never reach
+   *  a row, and it survives switching scenes on purpose — an operator dressing
+   *  the end state of several countdowns keeps looking at the end state. */
+  const [previewAtEnd, setPreviewAtEnd] = useState(false);
 
   const dirty = editing !== null && JSON.stringify(editing.draft) !== JSON.stringify(editing.baseline);
   /** A scene that does not exist yet has nothing to differ FROM, so `dirty` is
@@ -175,7 +182,7 @@ export function ScenesModal({ onOpenChange, open }: { onOpenChange: (open: boole
       }
     } catch (error) {
       console.warn("[scenes] could not add images", error);
-      toast.danger(t("scenes.addImageError"));
+      toast.danger(t("style.addImageError"));
     } finally {
       setAddingImages(false);
     }
@@ -282,8 +289,20 @@ export function ScenesModal({ onOpenChange, open }: { onOpenChange: (open: boole
             ) : (
               <>
                 <div className="shrink-0 border-b border-border bg-background px-6 py-3">
-                  <div className="mx-auto w-full max-w-md">
-                    <ScenePreview draft={editing.draft} />
+                  <div className="mx-auto flex w-full max-w-md flex-col gap-2">
+                    <ScenePreview atEnd={previewAtEnd} draft={editing.draft} />
+                    {/* Only where there is an end to look at. A clock and a
+                        stopwatch never run out, so the switch would toggle
+                        nothing. */}
+                    {isCountdownTool(editing.draft.tool) ? (
+                      <label
+                        className="flex items-center justify-end gap-2 text-xs text-muted-foreground"
+                        title={t("scenes.endPreviewHint")}
+                      >
+                        {t("scenes.endPreview")}
+                        <Switch checked={previewAtEnd} onChange={(e) => setPreviewAtEnd(e.target.checked)} />
+                      </label>
+                    ) : null}
                   </div>
                 </div>
                 <div className="min-w-0 flex-1 overflow-y-auto p-6">
@@ -295,7 +314,7 @@ export function ScenesModal({ onOpenChange, open }: { onOpenChange: (open: boole
                     value={editing.draft}
                   />
                 </div>
-                <DialogFooter className="border-t border-border pt-4">
+                <DialogFooter className="border-t border-border py-2.5">
                   {editing.sceneId !== null ? (
                     <>
                       <Button

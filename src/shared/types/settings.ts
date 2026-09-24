@@ -5,7 +5,7 @@ import {
   SLIDES_DEFAULT_RENDER_WIDTH,
 } from "../constants";
 import { MEDIA_SORT_ORDERS, type MediaSortOrder } from "./media";
-import { TRANSITION_STYLES, type TransitionStyle } from "./projection";
+import { TRANSITION_MAX_DURATION_MS, TRANSITION_STYLES, type TransitionStyle } from "./transition";
 
 export const THEMES = ["dark", "light"] as const;
 export type Theme = (typeof THEMES)[number];
@@ -150,7 +150,7 @@ export const SETTINGS_VALIDATORS: Record<keyof SettingsMap, (value: unknown) => 
   "ui.locale": isOneOf(LOCALES),
   "media.volume": isNumberIn(0, 1),
   "projection.transition.style": isOneOf(TRANSITION_STYLES),
-  "projection.transition.durationMs": isNumberIn(0, 5_000),
+  "projection.transition.durationMs": isNumberIn(0, TRANSITION_MAX_DURATION_MS),
   "slides.sofficePath": isNullOr(isString),
   "slides.sofficePathResolved": isNullOr(isString),
   "slides.profileWarmedVersion": isNullOr(isString),

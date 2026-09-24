@@ -1,5 +1,6 @@
-import { useT, type MessageKey } from "@renderer/lib/i18n/i18n-provider";
+import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { Button, FieldGroup, FieldRow, Icon, Select, Tooltip, VolumeControl } from "@renderer/components/ui";
+import { transitionDurationOptions, transitionStyleOptions } from "@renderer/lib/transition";
 import { useDisplayStore } from "@renderer/stores/display.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { useSettingsStore } from "@renderer/stores/settings.store";
@@ -8,15 +9,7 @@ import { api } from "@renderer/lib/api";
 import { toast } from "@renderer/lib/toast";
 import { IpcError } from "@shared/ipc/result";
 import { LOGO_URL } from "@shared/urls";
-import type { TransitionStyle } from "@shared/types/projection";
-
-const TRANSITION_STYLE_LABEL_KEYS: Record<TransitionStyle, MessageKey> = {
-  none: "settings.transitionStyles.none",
-  crossfade: "settings.transitionStyles.crossfade",
-  "fade-through-black": "settings.transitionStyles.fadeThroughBlack",
-};
-
-const TRANSITION_DURATION_OPTIONS = [150, 300, 600] as const;
+import type { TransitionStyle } from "@shared/types/transition";
 
 /** Everything about what the projector shows: which screen, the fallback
  *  logo, and clearing whatever is currently live. */
@@ -129,10 +122,7 @@ export function ProjectionSection() {
           <Select
             className="min-w-48"
             onChange={(value) => void updateSettings({ "projection.transition.style": value as TransitionStyle })}
-            options={(Object.keys(TRANSITION_STYLE_LABEL_KEYS) as TransitionStyle[]).map((style) => ({
-              label: t(TRANSITION_STYLE_LABEL_KEYS[style]),
-              value: style,
-            }))}
+            options={transitionStyleOptions(t)}
             size="md"
             value={transitionStyle}
           />
@@ -142,10 +132,7 @@ export function ProjectionSection() {
             className="min-w-40"
             disabled={transitionStyle === "none"}
             onChange={(value) => void updateSettings({ "projection.transition.durationMs": Number(value) })}
-            options={TRANSITION_DURATION_OPTIONS.map((ms) => ({
-              label: t(`settings.transitionDurationOptions.${ms}`),
-              value: String(ms),
-            }))}
+            options={transitionDurationOptions(t)}
             size="md"
             value={String(transitionDurationMs)}
           />

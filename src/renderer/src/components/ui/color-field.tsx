@@ -39,13 +39,25 @@ const PICKER_WIDTH_PX = 232;
 /** Exactly `#rrggbb` — the one canonical form the row validator accepts. */
 const HEX = /^#[0-9a-fA-F]{6}$/;
 
+type ColorFieldSize = "xs" | "sm" | "md";
+
 type ColorFieldProps = {
   className?: string;
   /** Accessible name of the trigger: it shows a swatch and a hex, neither of
    *  which says WHICH colour of the scene this is. */
   label: string;
   onChange: (value: string) => void;
+  /** The same scale as `Input` and `Select`, so a colour sitting in a
+   *  `FieldRow` next to a dropdown lines up with it instead of being the one
+   *  short control in the group. */
+  size?: ColorFieldSize;
   value: string;
+};
+
+const sizes: Record<ColorFieldSize, string> = {
+  xs: "h-7 px-2 text-xs",
+  sm: "h-9 px-3 text-sm",
+  md: "h-10 px-3 text-sm",
 };
 
 /**
@@ -62,7 +74,7 @@ type ColorFieldProps = {
  * one a designer handed over. Both commit only a valid `#rrggbb`, so the row
  * never holds a half-typed value.
  */
-export function ColorField({ className, label, onChange, value }: ColorFieldProps) {
+export function ColorField({ className, label, onChange, size = "sm", value }: ColorFieldProps) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<MenuPosition | null>(null);
   /** What is in the hex box while it is being typed. `null` means "show the
@@ -128,7 +140,8 @@ export function ColorField({ className, label, onChange, value }: ColorFieldProp
         aria-haspopup="dialog"
         aria-label={label}
         className={cn(
-          "flex h-7 cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-2 text-xs text-foreground transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+          "flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface text-foreground transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+          sizes[size],
           open && "border-primary",
           className,
         )}

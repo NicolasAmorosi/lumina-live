@@ -26,7 +26,11 @@ export function timerOutputFor(
     clock,
     format: scene.config.format,
     style: scene.style,
-    backgroundUrl: background.kind === "image" ? assetUrl(background.assetId) : null,
+    // `assetId === 0` is the image background that has not been given a file
+    // yet (see `backgroundOfKind`): a url for it would 404, and the projector —
+    // and the editor's preview with it — would paint the browser's broken-image
+    // glyph over the scene. No url is what "nothing" looks like.
+    backgroundUrl: background.kind === "image" && background.assetId > 0 ? assetUrl(background.assetId) : null,
     title: scene.title,
     message: scene.message,
     endMessage: scene.config.endMessage,

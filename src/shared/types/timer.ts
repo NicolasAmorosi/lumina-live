@@ -17,6 +17,14 @@
 export const TIMER_TOOLS = ["countdown", "countdown-to-time", "clock", "stopwatch"] as const;
 export type TimerTool = (typeof TIMER_TOOLS)[number];
 
+/** The two tools that can RUN OUT — the only ones with an end message, an
+ *  overrun and an end state to compose (`SceneEnd`). A clock and a stopwatch
+ *  never reach zero, so every control that belongs to the end of a count is
+ *  hidden for them rather than shown disabled. */
+export function isCountdownTool(tool: TimerTool): boolean {
+  return tool === "countdown" || tool === "countdown-to-time";
+}
+
 /**
  * What the projection window renders, as an absolute mark it subtracts against
  * its own `Date.now()` once per second.

@@ -74,6 +74,36 @@ export function initialClock(tool: TimerTool, config: TimerConfig, now: number):
   }
 }
 
+/** What a «comenzamos a una hora» scene rests at in the EDITOR once today's
+ *  target has gone by: ten minutes, held. A plausible number to dress a scene
+ *  against, and the same ten minutes the feature exists for. */
+export const EDITOR_SAMPLE_REMAINING_MS = 10 * 60_000;
+
+/**
+ * The clock the scene editor's preview rests at — `initialClock` with exactly
+ * one exception.
+ *
+ * «Comenzamos a una hora» resolves against TODAY's occurrence even when it has
+ * already gone by, on purpose (see `resolveTargetMs`). Live that is right; in
+ * the editor it means every scene of that kind reads as FINISHED for the rest
+ * of the day — the end message replacing the line below and both `SceneEnd`
+ * hides applying — with the operator never having asked to see the end state.
+ * The preview must show the end state only when the «Ver como termina» switch
+ * says so.
+ *
+ * So a target that has gone by rests at an illustrative value instead, and
+ * HELD: a frozen clock cannot count its way into zero while the form is open,
+ * which is what would bring the same surprise back a few minutes later.
+ * Nothing projected ever goes through here.
+ */
+export function editorRestingClock(tool: TimerTool, config: TimerConfig, now: number): TimerClock {
+  const clock = initialClock(tool, config, now);
+  if (clock.mode === "countdown" && clock.state === "running" && clock.endsAtMs <= now) {
+    return { mode: "countdown", state: "held", remainingMs: EDITOR_SAMPLE_REMAINING_MS };
+  }
+  return clock;
+}
+
 /**
  * Freezes a running clock at the value it has right now.
  *
@@ -106,6 +136,43 @@ export function resumeClock(clock: TimerClock, now: number): TimerClock {
     case "stopwatch":
       return clock.state === "running" ? clock : { mode: "stopwatch", state: "running", startedAtMs: now - clock.elapsedMs };
   }
+}
+
+/**
+ * Moves a countdown so that `remainingMs` are left, keeping it exactly as
+ * running or as held as it was.
+ *
+ * A seek, not a transport command: it changes WHERE the count is, never
+ * whether it is counting — the same split `MediaScrubber` already makes for a
+ * video, and the reason the transport row can offer both on one line. Anything
+ * that is not a countdown has no position to move and comes back untouched.
+ *
+ * Nothing is clamped here: the caller owns the range (the bar cannot report a
+ * position outside `[0, duration]`), and a negative remainder is a legal
+ * countdown — it is what overrun is.
+ */
+export function seekCountdown(clock: TimerClock, remainingMs: number, now: number): TimerClock {
+  if (clock.mode !== "countdown") return clock;
+  return clock.state === "running"
+    ? { mode: "countdown", state: "running", endsAtMs: now + remainingMs }
+    : { mode: "countdown", state: "held", remainingMs };
+}
+
+/**
+ * How far a countdown has already run, in seconds — the position its transport
+ * bar paints inside the configured duration.
+ *
+ * Clamped into `[0, duration]`, which is the difference between this and the
+ * displayed value: a countdown in overrun pins the bar at the end instead of
+ * running off it, and the big readout beside the bar is the one that goes
+ * negative. Anything that is not a countdown has no total to be a position
+ * inside and answers 0.
+ */
+export function countdownElapsedSeconds(clock: TimerClock, now: number, durationMs: number): number {
+  if (clock.mode !== "countdown") return 0;
+  const duration = Math.max(0, durationMs);
+  const elapsed = Math.min(Math.max(duration - rawValueMs(clock, now), 0), duration);
+  return elapsed / MS_PER_SECOND;
 }
 
 /**

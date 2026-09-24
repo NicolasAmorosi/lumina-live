@@ -6,6 +6,7 @@
  */
 import type { SceneStyle } from "./scene-style";
 import type { TimerClock, TimerFormat } from "./timer";
+import type { TransitionSpec } from "./transition";
 import type { UtilityScene } from "./utility";
 
 /** Which video (if any) is the current *base* content, independent of NEGRO/
@@ -86,15 +87,6 @@ export type ProjectionOutputKind =
       endMessage: string | null;
     };
 
-/** How the projector should move from whatever it was showing to a new
- *  scene. "none" cuts instantly (today's behaviour, and always what a
- *  confidence monitor other than LIVE gets). "crossfade" fades the new scene
- *  in over the old one without ever going fully black; "fade-through-black"
- *  fades out to black first, then in. Configurable from Settings →
- *  Projection. */
-export const TRANSITION_STYLES = ["none", "crossfade", "fade-through-black"] as const;
-export type TransitionStyle = (typeof TRANSITION_STYLES)[number];
-
 /** Carried on every `ProjectionOutput` so the projection window (and the
  *  LIVE monitor) can tell "the same scene, re-sent" from "a genuinely new
  *  scene" without any side channel. `epoch` only advances when the control
@@ -105,12 +97,11 @@ export type TransitionStyle = (typeof TRANSITION_STYLES)[number];
  *  `projection.transition.*` settings, folded in here (not sent over a
  *  separate channel) for the same reason `videoUnderlay` lives here: the
  *  projection window stays a pure function of one input, and the value
- *  survives the snapshot replay in `main/services/projection-state.ts`. */
-export type SceneTransition = {
-  epoch: number;
-  style: TransitionStyle;
-  durationMs: number;
-};
+ *  survives the snapshot replay in `main/services/projection-state.ts`. The
+ *  fade itself is the shared `TransitionSpec` (`./transition`), the same one a
+ *  time scene's end state carries — "none" here is always what a confidence
+ *  monitor other than LIVE gets. */
+export type SceneTransition = TransitionSpec & { epoch: number };
 
 /** Used by every preview output (`use-preview.ts`) — stage one of the
  *  two-stage flow never fades, no matter what the projector is configured

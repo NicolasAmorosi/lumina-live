@@ -223,11 +223,10 @@ export function BibleBrowser() {
         </div>
         <div className="flex items-center gap-1.5">
           <Tooltip
-            align="start"
             content={
               searchMode === "reference" ? t("bible.searchModeToggleHint") : t("bible.searchModeToggleHintReference")
             }
-            placement="top"
+            floating
           >
             <IconButton
               aria-label={

@@ -107,8 +107,53 @@ describe("normalizeSceneStyle", () => {
     expect(isSceneStyle(normalized)).toBe(true);
   });
 
+  test("a row written before the end state existed keeps drawing its end message the same way", () => {
+    // The fallback is the ROW's own message style, never the app default: a
+    // scene saved with a 9cqw message must not start drawing its end message
+    // at 4.5 the first time this build reads it.
+    const { end: _end, ...withoutEnd } = DEFAULT_SCENE_STYLE;
+    const normalized = normalizeSceneStyle({
+      ...withoutEnd,
+      message: { sizeCqw: 9, color: "#ff0000", weight: 700, shadow: false },
+    });
+    expect(normalized.end.message).toEqual({ sizeCqw: 9, color: "#ff0000", weight: 700, shadow: false });
+    // And nothing disappears from a scene that never asked for it.
+    expect(normalized.end.hideValue).toBe(false);
+    expect(normalized.end.hideTitle).toBe(false);
+  });
+
+  test("a row written before the end fade existed keeps cutting straight into its end state", () => {
+    // Same rule as the end message above, reached from the other side: there
+    // is no sibling field that describes how this scene used to change, so the
+    // fallback is the app default — and the app default is "none", which IS
+    // the cut every existing scene already did.
+    const { transition: _transition, ...endWithoutTransition } = DEFAULT_SCENE_STYLE.end;
+    const normalized = normalizeSceneStyle({ ...DEFAULT_SCENE_STYLE, end: endWithoutTransition });
+    expect(normalized.end.transition.style).toBe("none");
+  });
+
+  test("a broken fade costs the fade and not the rest of the end state", () => {
+    const normalized = normalizeSceneStyle({
+      ...DEFAULT_SCENE_STYLE,
+      end: {
+        ...DEFAULT_SCENE_STYLE.end,
+        hideValue: true,
+        transition: { style: "dissolve-ish", durationMs: 99_000 },
+      },
+    });
+    expect(normalized.end.transition).toEqual(DEFAULT_SCENE_STYLE.end.transition);
+    expect(normalized.end.hideValue).toBe(true);
+  });
+
   test("whatever comes out is always valid — that is the contract the repo relies on", () => {
-    for (const input of [null, {}, { background: 3 }, { value: { sizeCqw: -1 } }, { triggers: { warningAtMs: "soon" } }]) {
+    for (const input of [
+      null,
+      {},
+      { background: 3 },
+      { value: { sizeCqw: -1 } },
+      { triggers: { warningAtMs: "soon" } },
+      { end: { message: { sizeCqw: 0 }, hideValue: "yes" } },
+    ]) {
       expect(isSceneStyle(normalizeSceneStyle(input))).toBe(true);
     }
   });

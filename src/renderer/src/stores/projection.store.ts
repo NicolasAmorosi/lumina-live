@@ -9,9 +9,9 @@ import type {
   ProjectionOutput,
   ProjectionOutputKind,
   SceneTransition,
-  TransitionStyle,
   VideoUnderlay,
 } from "@shared/types/projection";
+import type { TransitionStyle } from "@shared/types/transition";
 import type { DeckSlide, DeckSoundtrack } from "@shared/types/deck";
 import type { TimerClock } from "@shared/types/timer";
 import type { UtilityScene } from "@shared/types/utility";

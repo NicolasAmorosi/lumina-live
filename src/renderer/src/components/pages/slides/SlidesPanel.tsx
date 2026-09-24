@@ -11,6 +11,7 @@ import {
   thumbTileHeight,
 } from "@renderer/components/ui";
 import { MediaTrackRow } from "@renderer/components/shared/media-track-row";
+import { UtilityTrackRow } from "@renderer/components/shared/utility-track-row";
 import { PanelBody, PanelHeader } from "@renderer/components/shared/panel";
 import { PreviewMissingState } from "@renderer/components/shared/preview-missing-state";
 import { PreviewMonitor } from "@renderer/components/pages/monitors/preview-monitor";
@@ -127,10 +128,14 @@ export function SlidesPanel() {
         </MediaPanel>
       );
     }
+    // The same transport the LIVE panel gives a projected scene, so a
+    // countdown can be armed, paused and aimed here and reach the projector
+    // already running — and so the two rows, which can be on screen at once,
+    // never show two numbers for one scene (`clockForScene`).
     if (content.kind === "utility") {
       return (
         <MediaPanel className="w-full">
-          <MediaTrackRow kind="utility" label={content.scene.name} onDelete={clearPreview} />
+          <UtilityTrackRow onDelete={clearPreview} scene={content.scene} />
         </MediaPanel>
       );
     }

@@ -8,6 +8,7 @@ export { Menu, type MenuOption } from "./menu";
 export { Select, type SelectOption } from "./select";
 export { Textarea } from "./textarea";
 export { Switch } from "./checkbox";
+export { Slider } from "./slider";
 export { EmptyState } from "./empty-state";
 export { LinearLoader, Skeleton } from "./linear-loader";
 export { ProgressBar } from "./progress-bar";

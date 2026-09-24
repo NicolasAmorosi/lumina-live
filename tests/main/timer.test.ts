@@ -15,6 +15,9 @@
 import { describe, expect, test } from "vitest";
 import {
   clampTickDelay,
+  countdownElapsedSeconds,
+  editorRestingClock,
+  EDITOR_SAMPLE_REMAINING_MS,
   formatDuration,
   formatMinuteOfDay,
   formatSignedSeconds,
@@ -30,6 +33,7 @@ import {
   pickValueColor,
   resolveTargetMs,
   resumeClock,
+  seekCountdown,
   timerDisplaySeconds,
 } from "../../src/shared/timer";
 import { DEFAULT_TIMER_FORMAT, type TimerClock, type TimerConfig } from "../../src/shared/types/timer";
@@ -78,6 +82,33 @@ describe("a tool becomes one of three clocks", () => {
     expect(isTimerRunning(initialClock("countdown-to-time", config(), NOW))).toBe(true);
     expect(isTimerRunning(initialClock("countdown", config(), NOW))).toBe(false);
     expect(isTimerRunning(initialClock("stopwatch", config(), NOW))).toBe(false);
+  });
+});
+
+describe("the editor's resting clock", () => {
+  const afterTen = new Date(2026, 8, 17, 10, 5, 0, 0).getTime();
+
+  test("a target still ahead is the ordinary running count", () => {
+    expect(editorRestingClock("countdown-to-time", config(), NOW)).toEqual(
+      initialClock("countdown-to-time", config(), NOW),
+    );
+  });
+
+  test("a target already past rests at a sample value instead of at zero", () => {
+    // The bug this exists for: dressing a 10:00 scene in the afternoon showed
+    // the END state — the end message in place of the line below, and both
+    // hides applied — without the operator ever asking to see it.
+    const clock = editorRestingClock("countdown-to-time", config(), afterTen);
+    expect(clock).toEqual({ mode: "countdown", state: "held", remainingMs: EDITOR_SAMPLE_REMAINING_MS });
+    expect(hasReachedZero(clock, afterTen)).toBe(false);
+    // Held, so it cannot count its way into zero while the form is open.
+    expect(hasReachedZero(clock, afterTen + 3 * 60 * MINUTE)).toBe(false);
+  });
+
+  test("nothing else is touched — only the one tool that rests against a mark", () => {
+    for (const tool of ["countdown", "clock", "stopwatch"] as const) {
+      expect(editorRestingClock(tool, config(), afterTen)).toEqual(initialClock(tool, config(), afterTen));
+    }
   });
 });
 
@@ -292,5 +323,58 @@ describe("The editor's two text fields", () => {
     expect(parseMinuteOfDay("10:75")).toBeNull();
     expect(parseMinuteOfDay("1000")).toBeNull();
     expect(parseMinuteOfDay("10:0")).toBeNull();
+  });
+});
+
+/**
+ * The transport bar of a countdown: where the count is inside its own
+ * duration, and moving it there.
+ *
+ * Both exist because the row that draws a countdown is the same
+ * `MediaTrackRow` a video uses, and that row speaks in elapsed seconds — while
+ * a countdown's own number runs the other way and may be negative. These two
+ * are the whole translation, which is why they are here and not in the
+ * component.
+ */
+describe("dragging a countdown", () => {
+  const running: TimerClock = { mode: "countdown", state: "running", endsAtMs: NOW + 4 * MINUTE };
+  const held: TimerClock = { mode: "countdown", state: "held", remainingMs: 4 * MINUTE };
+
+  test("the bar reads elapsed seconds while the number reads what is left", () => {
+    expect(countdownElapsedSeconds(running, NOW, 10 * MINUTE)).toBe(6 * 60);
+    expect(timerDisplaySeconds(running, NOW, DEFAULT_TIMER_FORMAT)).toBe(4 * 60);
+  });
+
+  test("overrun pins the bar at the end instead of running off it", () => {
+    const over: TimerClock = { mode: "countdown", state: "running", endsAtMs: NOW - MINUTE };
+    // The number is the one that goes negative — the bar has nowhere past 100%
+    // to paint, and a negative width is not a reading of anything.
+    expect(countdownElapsedSeconds(over, NOW, 10 * MINUTE)).toBe(10 * 60);
+    expect(timerDisplaySeconds(over, NOW, overrun)).toBe(-60);
+  });
+
+  test("a seek moves where the count is, never whether it is counting", () => {
+    const seeked = seekCountdown(running, 90_000, NOW);
+    expect(seeked).toEqual({ mode: "countdown", state: "running", endsAtMs: NOW + 90_000 });
+    expect(isTimerRunning(seeked)).toBe(true);
+
+    const paused = seekCountdown(held, 90_000, NOW);
+    expect(paused).toEqual({ mode: "countdown", state: "held", remainingMs: 90_000 });
+    expect(isTimerRunning(paused)).toBe(false);
+  });
+
+  test("dropping the bar where the number already is changes nothing about the value", () => {
+    // The round trip the operator actually performs: pick up the thumb at
+    // 06:00 and let go without moving it.
+    const elapsed = countdownElapsedSeconds(running, NOW, 10 * MINUTE);
+    const seeked = seekCountdown(running, 10 * MINUTE - elapsed * 1_000, NOW);
+    expect(timerDisplaySeconds(seeked, NOW, DEFAULT_TIMER_FORMAT)).toBe(4 * 60);
+  });
+
+  test("a tool with no total has no position, and comes back untouched", () => {
+    const stopwatch: TimerClock = { mode: "stopwatch", state: "running", startedAtMs: NOW };
+    expect(countdownElapsedSeconds(stopwatch, NOW, 10 * MINUTE)).toBe(0);
+    expect(seekCountdown(stopwatch, 1_000, NOW)).toBe(stopwatch);
+    expect(seekCountdown({ mode: "clock" }, 1_000, NOW)).toEqual({ mode: "clock" });
   });
 });

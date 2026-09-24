@@ -742,6 +742,12 @@ describe("Utility scenes", () => {
         value: { sizeCqw: 24, color: "#ffffff", weight: 300, shadow: true },
         title: { sizeCqw: 4, color: "#84adfc", weight: 600, shadow: false },
         message: { sizeCqw: 4.5, color: "#f5f5f5", weight: 400, shadow: true },
+        end: {
+          message: { sizeCqw: 8, color: "#ffffff", weight: 700, shadow: true },
+          hideValue: true,
+          hideTitle: false,
+          transition: { style: "crossfade", durationMs: 600 },
+        },
         triggers: { warningAtMs: 60_000, warningColor: "#cd4900", endColor: "#d0021b" },
       },
       title: "El culto comienza en",
@@ -751,6 +757,12 @@ describe("Utility scenes", () => {
     assert(created.style.background.kind === "gradient", "the background kind must survive the JSON round trip");
     assert(created.config.format.overrun, "the format flags must survive the JSON round trip");
     assert(created.style.triggers?.warningAtMs === 60_000, "the colour triggers must survive the JSON round trip");
+    assert(created.style.end.hideValue, "the end state must survive the JSON round trip");
+    assert(created.style.end.message.sizeCqw === 8, "the end message keeps a type of its own");
+    assert(
+      created.style.end.transition.style === "crossfade" && created.style.end.transition.durationMs === 600,
+      "the end fade must survive the JSON round trip",
+    );
 
     const { id: _id, ...fields } = created;
     const renamed = utilityRepo.update(created.id, { ...fields, name: "Cuenta 5 minutos", tool: "stopwatch" });

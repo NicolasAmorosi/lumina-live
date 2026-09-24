@@ -36,7 +36,7 @@ elige de una lista.
 | ¿Es un ítem del orden de culto? | **Sí.** `program_items.kind = 'utility'`, con migración, borrador y programas guardados detrás |
 | Al llegar a cero | **Overrun** (sigue en negativo), **cambio de texto** al terminar y **cambio de color** al acercarse a cero (los *color triggers* de ProPresenter). Los tres, opcionales por escena |
 | Temporizadores simultáneos | **Uno**, y **sigue corriendo aunque proyectes otra cosa**: el reloj vive en el control, no en la escena proyectada |
-| Visible sin proyectar | **Sí**: un transporte fijo en la pestaña Utilidades, con el número corriendo y arrancar/pausar/reiniciar |
+| Visible sin proyectar | **Sí** — *reformulado el 2026-09-18, ver la cuarta tanda:* el transporte dejó de vivir en la pestaña y pasó a la fila de PREVIEW y de EN VIVO; en la lista queda el número corriendo y un botón de detener |
 | Dónde se edita | **Modal propio «Escenas»**, abierto desde la pestaña Funciones. Mismo lenguaje visual que Ajustes, con vista previa 16:9 arriba renderizada con el **mismo `OutputView`** que el proyector |
 | ¿Modo esquina? | **No todavía.** Pantalla completa ahora; «encima de lo proyectado» llega con Overlays y reusa esta misma maquinaria de tiempo. El texto de la pestaña, que hoy promete «solas o encima de lo que ya está en pantalla», se corrige |
 
@@ -56,6 +56,30 @@ escena por su cuenta — eso es la regla 2 de `PLAN.md`.
 Decisión derivada, no preguntada: **`utility:usages` NO se implementa en F2.** Nada referencia una
 escena hasta que llegue `program_items.kind = 'utility'` en F3, así que hoy sólo podría responder
 un array vacío. Llega junto con la FK que le da algo que mirar.
+
+---
+
+## Decisiones cerradas con el usuario (2026-09-18, cuarta tanda — F4)
+
+El transporte se mueve de la pestaña Utilidades a la fila de medios, para que una escena de
+tiempo se controle donde el operador ya controla todo lo demás: debajo del monitor que la está
+mostrando.
+
+| Tema | Decisión |
+|---|---|
+| Dónde se controla una escena | **En la fila de medios (`MediaTrackRow`) de la columna en la que está**: la barra bajo el monitor PREVIEW antes de mandarla, y el panel EN VIVO una vez proyectada. La pestaña Utilidades deja de tener transporte |
+| Qué controles, por columna | **Los mismos en las dos.** Cuenta regresiva y cronómetro: valor + arrancar/pausar + reiniciar + cerrar. Reloj y cuenta-a-hora: valor + cerrar (no tienen nada que arrancar) |
+| Segunda línea de la fila | **Sí, y arrastrable**, sólo para la **cuenta regresiva por duración** — la única herramienta con un total del que ser una posición. Un cronómetro y un reloj no tienen fin; una cuenta a una hora no tiene principio, y arrastrarla sería editar la hora objetivo, que es trabajo del editor |
+| Un timer armado que no está ni en preview ni EN VIVO | **Se ve en su fila de la lista**: el número corriendo en lugar del nombre de la herramienta, más **un solo botón** —detener— que lo devuelve a su valor inicial. Sin transporte: controlar es trabajo de la fila de la columna |
+| Dos escenas con reloj a la vez | **Independientes.** Lo proyectado vive en `base.clock` y sigue corriendo; lo armado vive en `run`. Pausar lo que está EN VIVO **no** desarma el timer que el operador preparó para otra escena |
+| La misma escena en las dos columnas | **Un solo número, siempre**: `clockForScene` lee lo proyectado primero, así que la fila de PREVIEW, la de EN VIVO, la lista y el monitor PREVIEW no pueden discrepar |
+
+Decisión derivada, no preguntada: **ninguna acción del transporte decide su transición y su
+destino a la vez.** La transición es pura y vive en `shared/timer.ts` (`holdClock`,
+`resumeClock`, `seekCountdown`, `initialClock`); el destino es de `commitClock`, en la capa de
+acciones. Por eso `utility.store` perdió `hold`/`resume`/`reset` y ganó un único `arm`: tres
+métodos que sólo sabían escribir en el slot armado no podían servir a una fila que a veces está
+escribiendo en el proyector.
 
 ---
 
@@ -414,6 +438,25 @@ una fila al orden también verificado. La actualización 0010→0011 se probó a
 con filas `media` y `bible`: sobreviven con su id y su título, `integrity_check` ok,
 `foreign_key_check` vacío y el índice recreado.
 
+### F4 — El transporte en la fila de medios ✅
+
+`UtilityTrackRow` (`components/shared/`) envuelve a `MediaTrackRow`, que gana lo que le faltaba
+para servir a algo que no es un archivo: `readout` (un valor que no es una posición en ninguna
+línea de tiempo), `onRestart`, y los dos nombres accesibles del botón de play, porque un timer no
+se «reproduce» — se arranca, se pausa y se reanuda. `LiveMediaPanel` y la barra del centro montan
+la misma fila; `timer-transport.tsx` se eliminó y `scene-readout.tsx` ocupa el `trailing` de la
+fila de la lista. `clockForScene` pasó a recibir `base` y `commitClock` nació con él.
+
+**Gate:** la misma escena previsualizada y proyectada muestra el mismo número en las dos filas;
+arrastrar la barra de una cuenta regresiva EN VIVO la mueve en el proyector sin fundido; y pausar
+lo proyectado con otra escena armada deja esa otra corriendo.
+
+**Verificación (2026-09-18):** `typecheck` limpio, `lint` con los 5 warnings de siempre, **197**
+tests (16 nuevos: 5 en `tests/main/timer.test.ts` para `seekCountdown`/`countdownElapsedSeconds`
+y 11 en `tests/renderer/utility-transport.test.ts` para dónde aterriza cada gesto y para que
+`sceneEpoch` no se mueva) y `build` limpio. La app arranca sin errores. **Falta la pasada a mano
+contra el proyector real** — el puerto de CDP no es alcanzable desde este entorno.
+
 ### Fuera de alcance, explícito
 
 - **Video de fondo** (ver decisiones).
@@ -437,7 +480,11 @@ con filas `media` y `bible`: sobreviven con su id y su título, `integrity_check
 - Arrancar una cuenta, mandar un video EN VIVO y volver a la cuenta muestra el número que
   corresponde, no el que tenía al salir.
 - Con overrun apagado la cuenta se queda en `00:00`; con overrun prendido muestra `-01:23`.
-- El cronómetro se puede leer en la pestaña Utilidades sin estar proyectado.
+- El cronómetro se puede leer sin estar proyectado: en su fila de PREVIEW, y —si el operador se
+  fue a mirar otra cosa— en su fila de la lista de Utilidades, que además lo puede detener (F4).
+- La misma escena en PREVIEW y EN VIVO muestra el mismo número en las dos filas (F4).
+- Arrastrar la barra de una cuenta regresiva la mueve sin arrancarla si estaba detenida, y sin
+  detenerla si estaba corriendo (F4).
 - Mandar cualquier otra cosa EN VIVO reemplaza la escena; volver a ella la muestra tal como quedó.
 - El historial de proyección no tiene una fila por reloj.
 - Una escena creada en un culto sigue estando la semana siguiente, sin volver a configurarla (F2). ✅

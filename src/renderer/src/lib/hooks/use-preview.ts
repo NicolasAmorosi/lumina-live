@@ -2,6 +2,7 @@ import { useBibleStore } from "@renderer/stores/bible.store";
 import { useDeckStore } from "@renderer/stores/deck.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
 import { useProgramStore } from "@renderer/stores/program.store";
+import { useProjectionStore } from "@renderer/stores/projection.store";
 import { useMediaAsset } from "@renderer/lib/hooks/use-media-asset";
 import { clockForScene, findScene, useUtilityStore } from "@renderer/stores/utility.store";
 import { timerOutputFor } from "@renderer/lib/utility-output";
@@ -106,6 +107,7 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
   const slideIndex = usePreviewStore((s) => s.slideIndex);
   const playing = usePreviewStore((s) => s.playing);
   const run = useUtilityStore((s) => s.run);
+  const liveBase = useProjectionStore((s) => s.base);
   const deckEntry = useDeckStore((s) => (content?.kind === "deck" ? s.byAssetId[content.assetId] : undefined));
 
   if (!content) return null;
@@ -177,11 +179,13 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
         transition: INSTANT_TRANSITION,
       };
     case "utility":
-      // The SAME clock the transport shows, so an operator who started the
+      // The SAME clock the row below shows, so an operator who started the
       // countdown sees it running here before deciding to send it — and the
-      // same builder the projector's own output uses.
+      // same builder the projector's own output uses. Previewing the scene
+      // that is already live reads the projector's copy, so this monitor can
+      // never disagree with the one beside it.
       return {
-        ...timerOutputFor(content.scene, clockForScene(run, content.scene, Date.now())),
+        ...timerOutputFor(content.scene, clockForScene(liveBase, run, content.scene, Date.now())),
         videoUnderlay: null,
         transition: INSTANT_TRANSITION,
       };

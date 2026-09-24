@@ -19,16 +19,37 @@
  * `Record<keyof X, …>` throughout, so adding a field to `SceneStyle` or
  * `TimerConfig` without deciding what a valid value is becomes a compile
  * error rather than an unchecked write.
+ *
+ * What is NOT here: the predicates that describe a style rather than a scene
+ * (a colour, a `SceneTextStyle`, a `SceneBackground`, a `TransitionSpec`).
+ * Those live in `style-validators.ts`, because the Bible verse's own style
+ * reuses the very same pieces and two spellings of "what a colour is" is how
+ * one writer starts accepting what the other rejects.
  */
 import {
-  BACKGROUND_FITS,
+  isBoolean,
+  isColor,
+  isIntegerIn,
+  isNumberIn,
+  isOneOf,
+  isRecord,
+  isSceneBackground,
+  isTextOrNull,
+  isTextStyle,
+  isTransitionSpec,
+  keepOr,
+  matchesAll,
+  normalizeTextStyle,
+  normalizeTransition,
+  STYLE_TEXT_MAX_CQW,
+  STYLE_TEXT_MIN_CQW,
+} from "./style-validators";
+import {
   DEFAULT_SCENE_STYLE,
-  GRADIENT_DIRECTIONS,
   isSafeFontFamily,
-  SCENE_FONT_WEIGHTS,
   SCENE_STYLE_VERSION,
   SCENE_VERTICAL_ALIGNS,
-  type SceneBackground,
+  type SceneEnd,
   type SceneStyle,
   type SceneTextStyle,
   type SceneTriggers,
@@ -44,6 +65,13 @@ import {
 } from "./types/timer";
 import type { UtilityScene, UtilitySceneUpsert } from "./types/utility";
 
+/** Re-exported so a scene's own editor keeps one import: these are the limits
+ *  of a scene's text, spelled once in `style-validators.ts` because the Bible
+ *  verse is bounded by exactly the same numbers. */
+export { isSceneBackground };
+export const SCENE_TEXT_MIN_CQW = STYLE_TEXT_MIN_CQW;
+export const SCENE_TEXT_MAX_CQW = STYLE_TEXT_MAX_CQW;
+
 /* -------------------------------------------------------------------------
  * Field-level limits
  * ---------------------------------------------------------------------- */
@@ -53,115 +81,9 @@ import type { UtilityScene, UtilitySceneUpsert } from "./types/utility";
 export const SCENE_NAME_MAX_LENGTH = 80;
 export const SCENE_TEXT_MAX_LENGTH = 200;
 
-/** Percent of the output's WIDTH. The floor is "still legible on a confidence
- *  monitor"; the ceiling is "a single glyph does not overflow the frame". */
-export const SCENE_TEXT_MIN_CQW = 0.5;
-export const SCENE_TEXT_MAX_CQW = 60;
-
 /** A colour trigger can be armed at most an hour out — past that it is not a
  *  warning, it is the scene's normal colour. */
 export const TRIGGER_MAX_WARNING_MS = 3_600_000;
-
-/** Exactly `#rrggbb`. One canonical form on purpose: the editor's colour
- *  control only ever emits this, and accepting `#rgb` too would mean two
- *  spellings of the same colour in the database and a comparison that fails
- *  on a value the operator never sees. */
-const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
-
-/* -------------------------------------------------------------------------
- * Primitives
- * ---------------------------------------------------------------------- */
-
-const isBoolean = (v: unknown): boolean => typeof v === "boolean";
-
-const isColor = (v: unknown): boolean => typeof v === "string" && HEX_COLOR.test(v);
-
-const isOneOf =
-  (values: readonly (string | number)[]) =>
-  (v: unknown): boolean =>
-    (typeof v === "string" || typeof v === "number") && values.includes(v);
-
-/** Finite on purpose, for the same reason `SETTINGS_VALIDATORS` says so:
- *  `NaN` and `Infinity` are numbers, survive `JSON.stringify` as `null`, and
- *  come back as a default-shaped hole. */
-const isNumberIn =
-  (min: number, max: number) =>
-  (v: unknown): boolean =>
-    typeof v === "number" && Number.isFinite(v) && v >= min && v <= max;
-
-const isIntegerIn =
-  (min: number, max: number) =>
-  (v: unknown): boolean =>
-    isNumberIn(min, max)(v) && Number.isInteger(v);
-
-/** Text the operator typed. Empty is allowed here and meaningful: the editor
- *  turns a blank field into `null`, and `null` is what hides the line. */
-const isTextOrNull =
-  (maxLength: number) =>
-  (v: unknown): boolean =>
-    v === null || (typeof v === "string" && v.length <= maxLength);
-
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" && v !== null && !Array.isArray(v);
-
-/** Every entry of a `Record`-of-validators holds for the same object. */
-function matchesAll(value: unknown, validators: Record<string, (v: unknown) => boolean>): boolean {
-  if (!isRecord(value)) return false;
-  return Object.entries(validators).every(([key, ok]) => ok(value[key]));
-}
-
-/* -------------------------------------------------------------------------
- * SceneTextStyle
- * ---------------------------------------------------------------------- */
-
-const TEXT_STYLE_VALIDATORS: Record<keyof SceneTextStyle, (v: unknown) => boolean> = {
-  sizeCqw: isNumberIn(SCENE_TEXT_MIN_CQW, SCENE_TEXT_MAX_CQW),
-  color: isColor,
-  weight: isOneOf(SCENE_FONT_WEIGHTS),
-  shadow: isBoolean,
-};
-
-const isTextStyle = (v: unknown): boolean => matchesAll(v, TEXT_STYLE_VALIDATORS);
-
-function normalizeTextStyle(value: unknown, fallback: SceneTextStyle): SceneTextStyle {
-  if (!isRecord(value)) return fallback;
-  return {
-    sizeCqw: TEXT_STYLE_VALIDATORS.sizeCqw(value.sizeCqw) ? (value.sizeCqw as number) : fallback.sizeCqw,
-    color: TEXT_STYLE_VALIDATORS.color(value.color) ? (value.color as string) : fallback.color,
-    weight: TEXT_STYLE_VALIDATORS.weight(value.weight)
-      ? (value.weight as SceneTextStyle["weight"])
-      : fallback.weight,
-    shadow: TEXT_STYLE_VALIDATORS.shadow(value.shadow) ? (value.shadow as boolean) : fallback.shadow,
-  };
-}
-
-/* -------------------------------------------------------------------------
- * SceneBackground
- * ---------------------------------------------------------------------- */
-
-/** One `Record` per variant, keyed by the discriminant, so a fourth kind
- *  cannot be added to `SceneBackground` without listing its fields here. */
-const BACKGROUND_VALIDATORS: {
-  [K in SceneBackground["kind"]]: Record<
-    Exclude<keyof Extract<SceneBackground, { kind: K }>, "kind">,
-    (v: unknown) => boolean
-  >;
-} = {
-  solid: { color: isColor },
-  gradient: { from: isColor, to: isColor, direction: isOneOf(GRADIENT_DIRECTIONS) },
-  // A positive integer, because it is a `media_assets` row id. Whether that
-  // row still exists is not a shape question and is deliberately not asked
-  // here: the projector resolves a missing asset into a reported image error,
-  // exactly like any other picture the operator moved.
-  image: { assetId: isIntegerIn(1, Number.MAX_SAFE_INTEGER), fit: isOneOf(BACKGROUND_FITS) },
-};
-
-export function isSceneBackground(value: unknown): value is SceneBackground {
-  if (!isRecord(value)) return false;
-  const kind = value.kind;
-  if (typeof kind !== "string" || !(kind in BACKGROUND_VALIDATORS)) return false;
-  return matchesAll(value, BACKGROUND_VALIDATORS[kind as SceneBackground["kind"]]);
-}
 
 /* -------------------------------------------------------------------------
  * SceneTriggers
@@ -176,6 +98,49 @@ const TRIGGER_VALIDATORS: Record<keyof SceneTriggers, (v: unknown) => boolean> =
 const isTriggers = (v: unknown): boolean => v === null || matchesAll(v, TRIGGER_VALIDATORS);
 
 /* -------------------------------------------------------------------------
+ * SceneEnd
+ * ---------------------------------------------------------------------- */
+
+const END_VALIDATORS: Record<keyof SceneEnd, (v: unknown) => boolean> = {
+  message: isTextStyle,
+  hideValue: isBoolean,
+  hideTitle: isBoolean,
+  transition: isTransitionSpec,
+};
+
+const isSceneEnd = (v: unknown): boolean => matchesAll(v, END_VALIDATORS);
+
+/**
+ * The fallback is the ROW's own message style, not the app default.
+ *
+ * A scene written before the end line had a style of its own has no `end` at
+ * all, and it must come back drawing its end message exactly the way it always
+ * did — which is with the message style the operator set. Falling back to
+ * `DEFAULT_SCENE_STYLE.end.message` would silently restyle every existing
+ * scene the first time this build read it.
+ */
+function normalizeSceneEnd(value: unknown, message: SceneTextStyle): SceneEnd {
+  // `transition` is the one field here whose app default IS the old
+  // behaviour: a row written before it existed cut into its end state, and
+  // "none" is that cut. So it falls back to the default rather than to a
+  // sibling of the row — there is no sibling that describes how this scene
+  // used to change, because it never changed gradually at all.
+  const fallback: SceneEnd = {
+    message,
+    hideValue: false,
+    hideTitle: false,
+    transition: DEFAULT_SCENE_STYLE.end.transition,
+  };
+  if (!isRecord(value)) return fallback;
+  return {
+    message: normalizeTextStyle(value.message, fallback.message),
+    hideValue: keepOr(isBoolean(value.hideValue), value.hideValue, fallback.hideValue),
+    hideTitle: keepOr(isBoolean(value.hideTitle), value.hideTitle, fallback.hideTitle),
+    transition: normalizeTransition(value.transition, fallback.transition),
+  };
+}
+
+/* -------------------------------------------------------------------------
  * SceneStyle
  * ---------------------------------------------------------------------- */
 
@@ -187,6 +152,7 @@ export const SCENE_STYLE_VALIDATORS: Record<keyof SceneStyle, (value: unknown) =
   value: isTextStyle,
   title: isTextStyle,
   message: isTextStyle,
+  end: isSceneEnd,
   triggers: isTriggers,
 };
 
@@ -206,19 +172,31 @@ export function isSceneStyle(value: unknown): value is SceneStyle {
  */
 export function normalizeSceneStyle(value: unknown): SceneStyle {
   if (!isRecord(value)) return DEFAULT_SCENE_STYLE;
+  // Read once and reused: it is both the message's own style and what the end
+  // message falls back to (see `normalizeSceneEnd`).
+  const message = normalizeTextStyle(value.message, DEFAULT_SCENE_STYLE.message);
   return {
     version: SCENE_STYLE_VERSION,
-    background: isSceneBackground(value.background) ? value.background : DEFAULT_SCENE_STYLE.background,
-    fontFamily: SCENE_STYLE_VALIDATORS.fontFamily(value.fontFamily)
-      ? (value.fontFamily as string | null)
-      : DEFAULT_SCENE_STYLE.fontFamily,
-    verticalAlign: SCENE_STYLE_VALIDATORS.verticalAlign(value.verticalAlign)
-      ? (value.verticalAlign as SceneStyle["verticalAlign"])
-      : DEFAULT_SCENE_STYLE.verticalAlign,
+    background: keepOr(
+      isSceneBackground(value.background),
+      value.background,
+      DEFAULT_SCENE_STYLE.background,
+    ),
+    fontFamily: keepOr(
+      SCENE_STYLE_VALIDATORS.fontFamily(value.fontFamily),
+      value.fontFamily,
+      DEFAULT_SCENE_STYLE.fontFamily,
+    ),
+    verticalAlign: keepOr(
+      SCENE_STYLE_VALIDATORS.verticalAlign(value.verticalAlign),
+      value.verticalAlign,
+      DEFAULT_SCENE_STYLE.verticalAlign,
+    ),
     value: normalizeTextStyle(value.value, DEFAULT_SCENE_STYLE.value),
     title: normalizeTextStyle(value.title, DEFAULT_SCENE_STYLE.title),
-    message: normalizeTextStyle(value.message, DEFAULT_SCENE_STYLE.message),
-    triggers: isTriggers(value.triggers) ? (value.triggers as SceneTriggers | null) : null,
+    message,
+    end: normalizeSceneEnd(value.end, message),
+    triggers: keepOr<SceneTriggers | null>(isTriggers(value.triggers), value.triggers, null),
   };
 }
 
@@ -247,14 +225,14 @@ export function isTimerConfig(value: unknown): value is TimerConfig {
 function normalizeTimerFormat(value: unknown): TimerFormat {
   if (!isRecord(value)) return DEFAULT_TIMER_FORMAT;
   return {
-    hour12: isBoolean(value.hour12) ? (value.hour12 as boolean) : DEFAULT_TIMER_FORMAT.hour12,
-    showSeconds: isBoolean(value.showSeconds)
-      ? (value.showSeconds as boolean)
-      : DEFAULT_TIMER_FORMAT.showSeconds,
-    hideZeroHours: isBoolean(value.hideZeroHours)
-      ? (value.hideZeroHours as boolean)
-      : DEFAULT_TIMER_FORMAT.hideZeroHours,
-    overrun: isBoolean(value.overrun) ? (value.overrun as boolean) : DEFAULT_TIMER_FORMAT.overrun,
+    hour12: keepOr(isBoolean(value.hour12), value.hour12, DEFAULT_TIMER_FORMAT.hour12),
+    showSeconds: keepOr(isBoolean(value.showSeconds), value.showSeconds, DEFAULT_TIMER_FORMAT.showSeconds),
+    hideZeroHours: keepOr(
+      isBoolean(value.hideZeroHours),
+      value.hideZeroHours,
+      DEFAULT_TIMER_FORMAT.hideZeroHours,
+    ),
+    overrun: keepOr(isBoolean(value.overrun), value.overrun, DEFAULT_TIMER_FORMAT.overrun),
   };
 }
 
@@ -270,15 +248,21 @@ export function normalizeTimerConfig(value: unknown): TimerConfig {
   };
   if (!isRecord(value)) return fallback;
   return {
-    durationMs: TIMER_CONFIG_VALIDATORS.durationMs(value.durationMs)
-      ? (value.durationMs as number)
-      : fallback.durationMs,
-    targetMinuteOfDay: TIMER_CONFIG_VALIDATORS.targetMinuteOfDay(value.targetMinuteOfDay)
-      ? (value.targetMinuteOfDay as number)
-      : fallback.targetMinuteOfDay,
-    endMessage: TIMER_CONFIG_VALIDATORS.endMessage(value.endMessage)
-      ? (value.endMessage as string | null)
-      : fallback.endMessage,
+    durationMs: keepOr(
+      TIMER_CONFIG_VALIDATORS.durationMs(value.durationMs),
+      value.durationMs,
+      fallback.durationMs,
+    ),
+    targetMinuteOfDay: keepOr(
+      TIMER_CONFIG_VALIDATORS.targetMinuteOfDay(value.targetMinuteOfDay),
+      value.targetMinuteOfDay,
+      fallback.targetMinuteOfDay,
+    ),
+    endMessage: keepOr<string | null>(
+      TIMER_CONFIG_VALIDATORS.endMessage(value.endMessage),
+      value.endMessage,
+      fallback.endMessage,
+    ),
     format: normalizeTimerFormat(value.format),
   };
 }

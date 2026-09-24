@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { MediaPanel } from "@renderer/components/ui";
 import { MediaTrackRow } from "@renderer/components/shared/media-track-row";
+import { UtilityTrackRow } from "@renderer/components/shared/utility-track-row";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { useAudioStore } from "@renderer/stores/audio.store";
 import { useLiveHeading } from "@renderer/lib/hooks/use-live";
@@ -25,8 +26,10 @@ const VIDEO_ERROR_KEY = mediaErrorKey({ kind: "video" });
  * soundtrack (if it has one), and every standalone audio track sent live
  * independently. Any number of these can sound at once; this panel is what
  * keeps that legible instead of leaving the operator guessing what's on.
- * A live image or utility scene gets a row too, even though neither has
- * anything to play — just its name and a way to clear it back to empty.
+ * A live image gets a row too, even though it has nothing to play — just its
+ * name and a way to clear it back to empty. A live time scene gets the full
+ * transport of its clock, which is the one live thing whose value moves
+ * without anybody touching it.
  *
  * Renders nothing at all when silent, so a service with no audio in play
  * looks exactly like it did before this panel existed.
@@ -87,13 +90,14 @@ export function LiveMediaPanel() {
   }
 
   if (base?.kind === "utility") {
-    // Same reason the live image gets a row: it plays nothing, but every
-    // other kind of live content has a way to take it off the projector from
-    // here, and a countdown the operator cannot dismiss without pressing LOGO
-    // is the odd one out. The timer's own controls stay in the Utilities tab,
-    // where they work whether or not the scene is live.
+    // The whole transport of the live scene, not just a way to dismiss it:
+    // this panel is where the operator controls everything that is on the
+    // projector right now, and a countdown is the one live thing whose value
+    // changes on its own. Its own row (`UtilityTrackRow`) rather than a bare
+    // `MediaTrackRow`, because which controls a time scene deserves depends on
+    // its tool — see that component.
     rows.push(
-      <MediaTrackRow key="utility" kind="utility" label={heading ?? ""} onDelete={clearBaseContent} />,
+      <UtilityTrackRow key="utility" onDelete={clearBaseContent} scene={base.scene} />,
     );
   }
 

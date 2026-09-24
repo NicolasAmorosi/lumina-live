@@ -1,4 +1,4 @@
-# HANDOFF — Funciones ▸ Utilidades (time scenes), COMPLETE (F1, F2, F3)
+# HANDOFF — Funciones ▸ Utilidades (time scenes), COMPLETE (F1, F2, F3, F4, F5)
 
 **Date:** 2026-09-18
 **Branch:** `feat/funciones-utilidades` (branched off `main` at `8481322`)
@@ -25,8 +25,27 @@ now rows of the **order of service** like any other content.
   'utility'` + migration `0011` (a hand-written table rebuild), the DTO/upsert variants, the
   draft's dead-reference filter generalized to scenes, the schedule row, the preview branch, the
   go-live branch, and the delete guard (`utility:usages` + a forced delete).
+- **F4 (the transport on the media row) — done, suite-verified, real-app pass pending.** The
+  transport left the Utilities tab for `UtilityTrackRow`, the same row in the PREVIEW bar and in
+  the LIVE media panel: value, start/pause, restart, and a draggable bar for a countdown by
+  duration. `clockForScene` now reads the projector's copy first and `commitClock` decides where
+  a gesture lands, which is what keeps two rows for one scene showing one number. The list row
+  keeps the running value and a single STOP (`scene-readout.tsx`); `timer-transport.tsx` is gone.
+  See the fourth round of decisions in [`utilidades.md`](utilidades.md).
 
-All three phases were verified by **driving the real app**, not just the suite.
+- **F5 (the three aesthetic adjustments asked for on 2026-09-18) — done, suite-verified, real-app
+  pass pending.** (a) EN VIVO now starts a countdown **where the PREVIEW bar was left**
+  (`ensureStarted` resumes the armed clock instead of rebuilding it — the same promise a video's
+  preview scrub makes through `startAtSeconds`); (b) the Utilities list no longer paints the
+  on-air rail (`ListRow`'s new `rail` prop) — the live row already shows a running clock;
+  (c) a whole **«Al terminar la cuenta»** group: the end message, its own `SceneTextStyle`, and
+  two opt-in hides for the number and the title — `SceneStyle.end` (`SceneEnd`), validated,
+  normalized, drawn by `TimerScene`, and previewable in the editor with the «Ver como termina»
+  switch.
+
+F1–F3 were verified by **driving the real app**, not just the suite. F4 has `typecheck`, `lint`,
+197 tests and `build` green and the app booting clean — the CDP port was not reachable from the
+session that wrote it, so **its manual pass against the real projector is still owed**.
 
 Nothing of Utilidades is left. The next thing in `PLAN.md` is **Overlays**, which reuses
 `SceneStyle`, `ColorField` and the `FieldGroup`/`FieldRow` pair this feature built.
@@ -41,7 +60,7 @@ Run from the repo root. These are the numbers to check against; they were confir
 ```bash
 npm run typecheck   # PASS (tsc over the node and web projects)
 npm run lint        # 0 errors, 5 warnings
-npm run test        # 13 files, 181 tests
+npm run test        # 14 files, 200 tests
 npm run build       # electron-vite build, clean
 git status          # clean
 git log --oneline main..HEAD   # 7 commits
@@ -49,19 +68,19 @@ git log --oneline main..HEAD   # 7 commits
 
 | Check | Expected | Note |
 |---|---|---|
-| `npm run test` | **181** passing, 13 files | **103** in `main`, **78** in `renderer` (`npx vitest run --project main`) |
+| `npm run test` | **200** passing, 14 files | **108** in `main`, **89** in `renderer` (`npx vitest run --project main`) |
 | `npm run lint` | 0 errors, **5** warnings | all 5 pre-existing (`react-refresh/only-export-components` in `icon.tsx` ×1 and `i18n-provider.tsx` ×4). **A 6th is yours.** |
 | `ls drizzle/*.sql \| wc -l` | **12**, last is `0011_program_item_utility.sql` | F2 and F3 added exactly one migration each |
 | `git log --oneline main..HEAD` | 7 commits | see below |
 
 Test count history: **113** before this feature → **147** after F1 → **176** after F2 → **181**
-after F3. The 29 cases F2 added are `tests/main/scene-validators.test.ts` (17), the
+after F3 → **197** after F4 (the transport moved onto the media rows) → **200** after F5 (the preview seek surviving EN VIVO, a paused count surviving it too, and the end state's normalizer fallback). The 29 cases F2 added are `tests/main/scene-validators.test.ts` (17), the
 `describe("Utility scenes")` block in `tests/main/data-layer.test.ts` (5), `describe("The
 editor's two text fields")` in `tests/main/timer.test.ts` (4) and `describe("editing the scene
 that is live")` in `tests/renderer/select-output.test.ts` (3). F3's 5 are the
 `describe("A time scene as an order-of-service item")` block in `data-layer.test.ts`, which is
 where the widened CHECK, the `restrict` FK, the forced delete and the draft filter are asserted.
-`CLAUDE.md`'s command table says 181.
+`CLAUDE.md`'s command table says 200.
 
 The commits:
 
@@ -182,6 +201,21 @@ F3 added two more rules that must not be "simplified" away:
 `utility:usages`, deliberately left out of F2 because nothing referenced a scene yet, landed with
 F3's foreign key — the thing it was meant to look at.
 
+F5 adds one:
+
+5. **A new field of a JSON column that SPLITS an existing one falls back to the row's own
+   sibling, never to the app default.** `SceneEnd.message` is the end message's own type; every
+   row written before it existed drew that line with `style.message`, so `normalizeSceneEnd`
+   takes the row's normalized `message` as its fallback. Defaulting to
+   `DEFAULT_SCENE_STYLE.end.message` would have silently restyled every scene an operator had
+   already dressed, the first time this build read it. A test asserts it
+   (`scene-validators.test.ts`).
+
+Also F5: **`hideValue`/`hideTitle` apply at zero whether or not there is an end message.** The
+operator asked for the choice to be theirs — «quiero una opción que me dé la opción de elegir
+ocultar» — so the switches are opt-in, off by default, and the app never decides on its own that
+a finished countdown should erase itself.
+
 ---
 
 ## 5. Runbook
@@ -201,13 +235,15 @@ F3's foreign key — the thing it was meant to look at.
 | main | `db/repositories/utility.repo.ts` | CRUD + `reorder` (one `json_each` statement) + `insertMany` |
 | main | `db/seed/seed-utility-scenes.ts` | seeds the four defaults once, flag-guarded |
 | main | `ipc/handlers/utility.ts` | seven channels, every write validated |
-| renderer | `stores/utility.store.ts` | the scenes mirror + the ONE armed timer (`TimerRun`) |
+| renderer | `stores/utility.store.ts` | the scenes mirror + the ONE armed timer (`TimerRun`), and `clockForScene` — the projector's copy wins |
 | renderer | `stores/projection.store.ts` | `setTimerClock` + `setLiveScene`, both `base` patches |
-| renderer | `lib/actions/utility.ts` | transport + `loadScenes`/`saveScene`/`duplicateScene`/`deleteScene`/`reorderScenes` |
+| renderer | `lib/actions/utility.ts` | the transport (`toggleTimer`/`resetTimer`/`seekTimer` over `commitClock`) + `loadScenes`/`saveScene`/`duplicateScene`/`deleteScene`/`reorderScenes` |
 | renderer | `lib/utility-output.ts` | `timerOutputFor` — shared by `selectOutput` AND both previews |
 | renderer | `components/shared/timer-scene.tsx` | what the projector actually paints |
 | renderer | `components/ui/field.tsx`, `ui/color-field.tsx` | `FieldGroup`/`FieldRow`, `ColorField` |
-| renderer | `components/pages/functions/` | `utilities-panel` (its footer adds to the schedule), `timer-transport`, `ScenesModal` (+ `DeleteUsages`), `scene-form`, `scene-draft`, `scene-preview` |
+| renderer | `components/shared/utility-track-row.tsx` | F4: the transport row — which control each tool gets, and the memoized clock |
+| renderer | `components/shared/media-track-row.tsx` | F4: `readout`/`readoutTone`/`readoutNote`, `onRestart`, `playLabel`/`pauseLabel` |
+| renderer | `components/pages/functions/` | `utilities-panel` (its footer adds to the schedule), `scene-readout` (F4), `ScenesModal` (+ `DeleteUsages`), `scene-form`, `scene-draft`, `scene-preview` |
 | renderer | `lib/hooks/use-program-item-display.ts`, `lib/dnd.ts`, `pages/schedule/SchedulePanel.tsx` | F3: the schedule row's label/icon, the scene drag payload, the drop |
 | renderer | `lib/hooks/use-timer-now.ts`, `use-local-fonts.ts` | the self-correcting tick; `queryLocalFonts()` with a real fallback |
 

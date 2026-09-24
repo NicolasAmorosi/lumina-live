@@ -2,60 +2,105 @@ import { api } from "@renderer/lib/api";
 import { t } from "@renderer/lib/i18n/i18n-provider";
 import { toast } from "@renderer/lib/toast";
 import { useProjectionStore } from "@renderer/stores/projection.store";
-import { findScene, useUtilityStore } from "@renderer/stores/utility.store";
+import { clockForScene, findScene, useUtilityStore } from "@renderer/stores/utility.store";
 import { useProgramStore } from "@renderer/stores/program.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
+import { holdClock, initialClock, isTimerRunning, resumeClock, seekCountdown } from "@shared/timer";
 import type { TimerClock } from "@shared/types/timer";
 import type { UtilityScene, UtilitySceneUpsert, UtilitySceneUsage } from "@shared/types/utility";
 
 /**
- * The transport: start, pause, resume and reset the one armed timer.
+ * The transport: start, pause, resume, reset and seek a scene's clock.
  *
- * These live in the actions layer because every one of them spans two stores.
- * `utility.store` owns the timer the operator is working with; `projection.
- * store` owns the copy that is on the projector, and the two are deliberately
- * NOT the same object — a scene can be live while the operator arms a
- * different one, and a timer can run for ten minutes before anybody projects
- * it.
+ * These live in the actions layer because every one of them spans two stores
+ * and, above all, because none of them can decide on its own WHERE its result
+ * belongs. A scene's clock lives in one of two places, sometimes both:
+ * `projection.store`'s `base` holds the copy the projector is drawing, and
+ * `utility.store`'s `run` holds the one the operator armed without projecting
+ * anything. `clockForScene` reads those two back in that order and
+ * `commitClock` writes them in the same one — which is what lets the PREVIEW
+ * row, the LIVE row and the Utilities list all carry a transport for the same
+ * scene and still show one number.
  *
  * None of these begins a new scene. Pausing a countdown changes one field of
  * what is already on screen; treating it as a new scene would cross-fade the
  * projector into an almost identical copy of itself, mid-service.
  */
 
-/** Mirrors a clock change onto the projector, but only while THIS scene is
- *  what is live. Anything else is a timer the congregation is not watching. */
-function syncLiveClock(sceneId: number, clock: TimerClock | null): void {
-  if (clock === null) return;
-  const { base, setTimerClock } = useProjectionStore.getState();
-  if (base?.kind !== "utility" || base.sceneId !== sceneId) return;
-  setTimerClock(clock);
+/** Is this scene what the projector is showing right now? */
+function isLive(scene: UtilityScene): boolean {
+  const { base } = useProjectionStore.getState();
+  return base?.kind === "utility" && base.sceneId === scene.id;
 }
 
-/** Starts the scene's timer from its configured value, whatever state it was
- *  in. Shared by the transport's play button and by EN VIVO. */
-export function startTimer(scene: UtilityScene): void {
-  syncLiveClock(scene.id, useUtilityStore.getState().start(scene));
+/** The clock this scene is being drawn with at this instant, wherever it lives. */
+function currentClock(scene: UtilityScene): TimerClock {
+  return clockForScene(useProjectionStore.getState().base, useUtilityStore.getState().run, scene, Date.now());
 }
 
+/** Whether this scene's count was ever started — the bit `TimerClock`
+ *  deliberately does not carry, and the one that decides whether the button
+ *  offers ARRANCAR or REANUDAR. A live scene reached the projector through
+ *  `ensureStarted`, so it counts as started even after the armed slot has
+ *  moved on to another scene. */
+function isStarted(scene: UtilityScene): boolean {
+  const { run } = useUtilityStore.getState();
+  return run?.sceneId === scene.id ? run.started : isLive(scene);
+}
+
+/**
+ * Writes a clock the transport just computed to every place this scene's clock
+ * lives.
+ *
+ * The projector gets it whenever the scene is live, through `setTimerClock`,
+ * which patches `base` in place — **never** `beginScene()`. The armed slot gets
+ * it when it already holds this scene, and also whenever the scene is not live
+ * at all, which is what makes pressing play on a PREVIEW row arm the timer in
+ * the first place.
+ *
+ * What it deliberately does not do is arm a live scene while a DIFFERENT
+ * scene's timer is armed: the operator prepared that other countdown on
+ * purpose, and pausing what is on screen is no reason to throw it away.
+ */
+function commitClock(scene: UtilityScene, clock: TimerClock, started: boolean): void {
+  const live = isLive(scene);
+  if (live) useProjectionStore.getState().setTimerClock(clock);
+  const { run, arm } = useUtilityStore.getState();
+  if (!live || run?.sceneId === scene.id) arm(scene.id, clock, started);
+}
+
+/** Back to the scene's starting value, stopped: what the row's «reiniciar» and
+ *  the list's STOP both do. */
 export function resetTimer(scene: UtilityScene): void {
-  syncLiveClock(scene.id, useUtilityStore.getState().reset(scene));
+  commitClock(scene, initialClock(scene.tool, scene.config, Date.now()), false);
 }
 
 /**
  * The single play/pause control, so one button can never disagree with the
- * state it is describing: running → freeze it; paused → continue from where it
- * stopped; never started (or a different scene's timer is armed) → start it.
+ * state it is describing: running → freeze it; held → continue from where it
+ * stopped.
+ *
+ * There is no third branch for "never started". A scene nobody has armed rests
+ * at its starting value, so resuming it and starting it are the same operation
+ * on the same clock — the difference is only what the button is CALLED, which
+ * is `isStarted`'s job.
  */
 export function toggleTimer(scene: UtilityScene): void {
-  const store = useUtilityStore.getState();
-  const { run } = store;
-  if (!run || run.sceneId !== scene.id || !run.started) {
-    startTimer(scene);
-    return;
-  }
-  const clock = run.clock.mode !== "clock" && run.clock.state === "running" ? store.hold() : store.resume();
-  syncLiveClock(scene.id, clock);
+  const now = Date.now();
+  const clock = currentClock(scene);
+  commitClock(scene, isTimerRunning(clock) ? holdClock(clock, now) : resumeClock(clock, now), true);
+}
+
+/**
+ * Moves a countdown to the point the operator dropped the bar on.
+ *
+ * Only a countdown by duration offers this — the one tool with a total for a
+ * position to be inside — and it changes nothing about whether the count is
+ * running: a paused countdown stays paused where it landed, and one that was
+ * never started stays un-started, so the button still reads ARRANCAR.
+ */
+export function seekTimer(scene: UtilityScene, remainingMs: number): void {
+  commitClock(scene, seekCountdown(currentClock(scene), remainingMs, Date.now()), isStarted(scene));
 }
 
 /* -------------------------------------------------------------------------
@@ -106,8 +151,11 @@ export async function saveScene(input: UtilitySceneUpsert): Promise<UtilityScene
 
     useProjectionStore.getState().setLiveScene(scene);
     if (previous !== null && previous.tool !== scene.tool) {
+      // Only where a clock for this scene actually exists. Anywhere else
+      // `resetTimer` would ARM the scene (see `commitClock`), turning an edit
+      // in a modal into "the operator armed this timer", which they did not.
       const { run } = useUtilityStore.getState();
-      if (run?.sceneId === scene.id) resetTimer(scene);
+      if (run?.sceneId === scene.id || isLive(scene)) resetTimer(scene);
     }
     return scene;
   } catch (error) {

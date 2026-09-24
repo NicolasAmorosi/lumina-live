@@ -3,7 +3,7 @@ import { cn } from "@renderer/lib/utils";
 import { Icon } from "./icon";
 
 type ListRowProps = Omit<LiHTMLAttributes<HTMLLIElement>, "children"> & {
-  /** On the projector right now — an on-air dot plus a coloured rail. */
+  /** On the projector right now — the on-air rail plus a heavier label. */
   active?: boolean;
   children: ReactNode;
   /** Drop indicator while a drag hovers just above this row. */
@@ -24,6 +24,13 @@ type ListRowProps = Omit<LiHTMLAttributes<HTMLLIElement>, "children"> & {
    *  disarms it on mouseup/dragend, so a drag can only start from the grip. */
   onGripMouseDown?: ((e: MouseEvent<HTMLSpanElement>) => void) | undefined;
   onGripMouseUp?: ((e: MouseEvent<HTMLSpanElement>) => void) | undefined;
+  /** Paint the on-air rail for an `active` row. Off for a list that already
+   *  says so in the row itself — the time scenes show the running clock as
+   *  their trailing content, and `bg-on-air` is the app's reserved «this is on
+   *  the projector NOW» mark: a second one beside a ticking countdown is
+   *  decoration, not information. The row stays `active` either way, so the
+   *  heavier label and anything else keyed off it are unaffected. */
+  rail?: boolean;
   ref?: Ref<HTMLLIElement>;
   selected?: boolean;
   trailing?: ReactNode;
@@ -41,6 +48,7 @@ export function ListRow({
   leading,
   onGripMouseDown,
   onGripMouseUp,
+  rail = true,
   ref,
   selected = false,
   trailing,
@@ -59,7 +67,7 @@ export function ListRow({
       ref={ref}
       {...props}
     >
-      {active ? <span className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-on-air" /> : null}
+      {active && rail ? <span className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-on-air" /> : null}
       {grip ? (
         <span
           className={cn(

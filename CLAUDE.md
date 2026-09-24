@@ -342,6 +342,17 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   posterior al último checkpoint — medido, 5000 filas contra 4977 con un `-wal` caliente. Y la base
   se cierra en `will-quit` (`closeDatabase()`), que es lo que vacía el `-wal` en vez de dejarlo
   crecer entre sesiones.
+- **El transporte de una escena de tiempo vive en la FILA, y la fila de al lado no puede mostrar
+  otro número.** `UtilityTrackRow` (`components/shared/`) es el mismo control en PREVIEW y en EN
+  VIVO — valor, arrancar/pausar, reiniciar, y la barra arrastrable sólo para la cuenta regresiva,
+  la única herramienta con un total del que ser una posición. El reloj de una escena vive en dos
+  lugares (`base.clock`, lo proyectado; `utility.store.run`, lo armado sin proyectar) y las dos
+  filas pueden estar en pantalla a la vez: `clockForScene` los lee **en ese orden — lo proyectado
+  gana** y `commitClock` (`lib/actions/utility.ts`) los escribe en el mismo, que es lo único que
+  impide que un timer tenga dos valores. Por eso ninguna acción del transporte decide su
+  transición y su destino a la vez: la transición es pura (`shared/timer.ts`), el destino es de
+  `commitClock`. Y pausar lo que está EN VIVO **no** desarma el timer que el operador preparó para
+  otra escena.
 - **Editar lo que ya está EN VIVO parchea `base` en el lugar; nunca es una escena nueva.**
   `setTimerClock` (pausar, reanudar, reiniciar) y `setLiveScene` (el operador editó la escena que
   está proyectada) escriben sobre `base` sin tocar `sceneEpoch`, igual que `setVideoResumeAt`.
@@ -354,7 +365,11 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   normaliza al leer (`normalizeSceneStyle`) porque una fila que YA está guardada hay que mostrarla
   igual, y un color roto tiene que costar el color y no la escena — mucho menos el arranque. Misma
   disciplina que `DraftRepo.load` y el seed de la Biblia. Y lo que sale de un normalizador siempre
-  pasa el validador, con un test que lo afirma.
+  pasa el validador, con un test que lo afirma. **Un campo nuevo que PARTE uno existente cae al
+  valor hermano de la fila, no al default de la app**: `SceneEnd.message` (el tipo del mensaje
+  final) se normaliza contra el `style.message` de esa misma fila, porque toda escena escrita
+  antes dibujaba esa línea así — caer al default habría re-estilado en silencio cada escena ya
+  vestida la primera vez que este build la leyó.
 - **La ventana de proyección no tiene lógica de dominio.** Es una función pura del último
   `ProjectionOutput` recibido (`src/shared/types/projection.ts`). Si necesitás que "sepa" algo del
   culto, calculalo en el control y mandalo por `projection:show`.

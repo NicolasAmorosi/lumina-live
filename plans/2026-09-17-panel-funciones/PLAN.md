@@ -2,7 +2,8 @@
 
 **Fecha:** 2026-09-17
 **Estado:** interfaz entregada (commit `c8a47c0`). **Utilidades COMPLETA** (F1 proyección, F2
-persistencia + editor, F3 ítem del orden de culto — 2026-09-18). Entradas y Overlays, sin empezar.
+persistencia + editor, F3 ítem del orden de culto, F4 transporte en la fila de medios —
+2026-09-18). Entradas y Overlays, sin empezar.
 
 La primera columna de abajo pasó de cinco pestañas planas a tres con un segundo nivel:
 
@@ -101,7 +102,7 @@ contenido base y sí respetan las dos etapas.
 
 Uno por vez, de menor a mayor riesgo. Ninguno depende del anterior salvo donde se dice.
 
-1. **Utilidades.** ✅ completa (F1–F3). Es la única de las tres que no necesita dependencias nativas, y
+1. **Utilidades.** ✅ completa (F1–F4). Es la única de las tres que no necesita dependencias nativas, y
    obliga a resolver el patrón «el proyector dibuja el tiempo desde una marca absoluta» que
    Overlays después reutiliza para su animación. De paso dejó hechas dos piezas que Overlays da
    por sentadas: `SceneStyle` con sus validadores, y el par `FieldGroup`/`FieldRow` + `ColorField`

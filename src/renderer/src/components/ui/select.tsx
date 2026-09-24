@@ -1,7 +1,8 @@
 import type { ButtonHTMLAttributes, KeyboardEvent as ReactKeyboardEvent } from "react";
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { cn } from "@renderer/lib/utils";
+import { useT } from "@renderer/lib/i18n/i18n-provider";
+import { cn, normalizeForSearch } from "@renderer/lib/utils";
 import { computeMenuPosition, type MenuPosition } from "./floating-menu";
 import { Icon } from "./icon";
 
@@ -11,6 +12,12 @@ type SelectProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "onChange" | "t
   onChange: (value: string) => void;
   options: SelectOption[];
   placeholder?: string;
+  /** Puts a filter box at the top of the menu, for a list nobody can scan —
+   *  the machine's installed font families. It REPLACES the type-ahead: with a
+   *  real text field open, a letter belongs to the query, not to a jump. Off by
+   *  default, because for a handful of options the box is one more thing
+   *  between the operator and the value. */
+  searchable?: boolean;
   size?: "xs" | "sm" | "md";
   value: string;
 };
@@ -33,19 +40,44 @@ const sizes: Record<NonNullable<SelectProps["size"]>, string> = {
  * highlight (opening the menu first if closed), Home/End jump to the first/
  * last enabled option, Enter/Space commits, Escape closes, typing letters
  * jumps to a matching label, and Tab closes without stealing focus.
+ *
+ * With `searchable`, the same keys work from the filter box instead, which is
+ * what holds focus while the menu is open — so every index in here is an index
+ * into the VISIBLE options, never into `options`.
  */
-export function Select({ className, disabled, onChange, options, placeholder, size = "sm", value, ...props }: SelectProps) {
+export function Select({
+  className,
+  disabled,
+  onChange,
+  options,
+  placeholder,
+  searchable = false,
+  size = "sm",
+  value,
+  ...props
+}: SelectProps) {
+  const t = useT();
   const id = useId();
   const listboxId = `${id}-listbox`;
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<MenuPosition | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [query, setQuery] = useState("");
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLUListElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const typeaheadRef = useRef({ buffer: "", timer: 0 });
 
-  const selectedIndex = options.findIndex((o) => o.value === value);
-  const selectedOption = selectedIndex >= 0 ? options[selectedIndex] : undefined;
+  const selectedOption = options.find((o) => o.value === value);
+
+  /** What the menu actually lists. Everything below indexes into THIS: with a
+   *  filter applied, an index into `options` points at a row that is not on
+   *  screen, which is how a keyboard commit picks the wrong font. */
+  const visible = useMemo(() => {
+    const needle = normalizeForSearch(query);
+    if (!searchable || needle === "") return options;
+    return options.filter((option) => normalizeForSearch(option.label).includes(needle));
+  }, [options, query, searchable]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -74,6 +106,13 @@ export function Select({ className, disabled, onChange, options, placeholder, si
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [open]);
 
+  // The filter box is what takes the keyboard while the menu is open, so it
+  // has to get focus by itself: the operator opened the menu with the mouse
+  // and expects to type straight into it.
+  useEffect(() => {
+    if (open && searchable) searchRef.current?.focus();
+  }, [open, searchable]);
+
   // The typeahead buffer's reset timer is the one thing in here that can
   // outlive the component: a Select unmounted within 500 ms of a keystroke
   // (a modal closing under the operator's hands) left it counting down
@@ -93,40 +132,50 @@ export function Select({ className, disabled, onChange, options, placeholder, si
     // eslint-disable-next-line react-hooks/exhaustive-deps -- optionId is a pure function of `id`, stable across renders
   }, [open, highlightedIndex]);
 
-  function firstEnabledIndex(): number {
-    return options.findIndex((o) => !o.disabled);
+  function firstEnabledIndex(list: readonly SelectOption[] = visible): number {
+    return list.findIndex((o) => !o.disabled);
   }
 
   function lastEnabledIndex(): number {
-    for (let i = options.length - 1; i >= 0; i--) {
-      if (!options[i]?.disabled) return i;
+    for (let i = visible.length - 1; i >= 0; i--) {
+      if (!visible[i]?.disabled) return i;
     }
     return -1;
   }
 
   function openMenu(initialIndex?: number) {
     if (disabled || options.length === 0 || !triggerRef.current) return;
+    // A stale query would open the menu already filtered down to whatever the
+    // operator looked for last time, hiding the value that is actually set.
+    if (searchable) setQuery("");
+    // `options`, not `visible`: a searchable menu opens unfiltered (the query
+    // was just cleared) and a plain one never filters at all.
+    const selectedIndex = options.findIndex((o) => o.value === value);
     setPosition(computeMenuPosition(triggerRef.current));
-    setHighlightedIndex(initialIndex ?? (selectedIndex >= 0 ? selectedIndex : firstEnabledIndex()));
+    setHighlightedIndex(initialIndex ?? (selectedIndex >= 0 ? selectedIndex : firstEnabledIndex(options)));
     setOpen(true);
   }
 
+  function closeMenu(refocusTrigger: boolean) {
+    setOpen(false);
+    if (refocusTrigger) triggerRef.current?.focus();
+  }
+
   function selectOption(index: number) {
-    const option = options[index];
+    const option = visible[index];
     if (!option || option.disabled) return;
     onChange(option.value);
-    setOpen(false);
-    triggerRef.current?.focus();
+    closeMenu(true);
   }
 
   function moveHighlight(delta: number) {
     setHighlightedIndex((current) => {
-      const count = options.length;
+      const count = visible.length;
       if (count === 0) return -1;
       let index = current;
       for (let i = 0; i < count; i++) {
         index = (index + delta + count) % count;
-        if (!options[index]?.disabled) return index;
+        if (!visible[index]?.disabled) return index;
       }
       return current;
     });
@@ -153,7 +202,17 @@ export function Select({ className, disabled, onChange, options, placeholder, si
     }
   }
 
-  function handleKeyDown(e: ReactKeyboardEvent<HTMLButtonElement>) {
+  function handleQueryChange(next: string) {
+    setQuery(next);
+    // The highlight is an index into a list that just changed under it, so it
+    // is re-seeded rather than kept: Enter must commit the row the operator is
+    // looking at, which after typing is the first match.
+    const needle = normalizeForSearch(next);
+    const list = needle === "" ? options : options.filter((o) => normalizeForSearch(o.label).includes(needle));
+    setHighlightedIndex(firstEnabledIndex(list));
+  }
+
+  function handleKeyDown(e: ReactKeyboardEvent<HTMLElement>) {
     if (disabled) return;
     switch (e.key) {
       case "ArrowDown":
@@ -179,7 +238,15 @@ export function Select({ className, disabled, onChange, options, placeholder, si
         }
         break;
       case "Enter":
+        e.preventDefault();
+        if (open) selectOption(highlightedIndex);
+        else openMenu();
+        break;
       case " ":
+        // A space inside the filter box is part of a font's name («Noto
+        // Sans»), not a commit — that is the one key the two modes cannot
+        // share.
+        if (searchable && open) break;
         e.preventDefault();
         if (open) selectOption(highlightedIndex);
         else openMenu();
@@ -187,25 +254,28 @@ export function Select({ className, disabled, onChange, options, placeholder, si
       case "Escape":
         if (open) {
           e.preventDefault();
-          // No `triggerRef.focus()` here, unlike `selectOption`: this handler
-          // is on the trigger itself and the options are never focusable, so a
-          // keydown can only arrive while the trigger already has focus.
-          // `selectOption` needs it because a pointer press on an option blurs
-          // the button first.
-          setOpen(false);
+          // Focus goes back to the trigger here (unlike the non-searchable
+          // path, where the handler runs on the trigger and it never left):
+          // while the menu is open it is the filter box that holds it, and
+          // that box is about to be unmounted.
+          closeMenu(searchable);
         }
         break;
       case "Tab":
-        setOpen(false);
+        // Focus is handed back to the trigger BEFORE Tab does its own work, so
+        // the browser moves on from the control the operator was on. Without
+        // it the element holding focus (the filter box) is unmounted mid-key
+        // and the tab order restarts from the top of the dialog.
+        closeMenu(searchable);
         break;
       default:
-        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) handleTypeahead(e.key);
+        if (!searchable && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) handleTypeahead(e.key);
     }
   }
 
   const trigger = (
     <button
-      aria-activedescendant={open && highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined}
+      aria-activedescendant={!searchable && open && highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined}
       aria-controls={listboxId}
       aria-expanded={open}
       aria-haspopup="listbox"
@@ -242,11 +312,9 @@ export function Select({ className, disabled, onChange, options, placeholder, si
   const menu =
     open && position
       ? createPortal(
-          <ul
-            className="fixed z-[var(--z-popover)] overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-overlay focus:outline-none"
-            id={listboxId}
+          <div
+            className="fixed z-[var(--z-popover)] flex flex-col rounded-lg border border-border bg-card shadow-overlay"
             ref={menuRef}
-            role="listbox"
             style={{
               left: position.left,
               maxHeight: position.maxHeight,
@@ -254,35 +322,74 @@ export function Select({ className, disabled, onChange, options, placeholder, si
               ...(position.top !== undefined ? { top: position.top } : { bottom: position.bottom }),
             }}
           >
-            {options.map((option, index) => (
-              /* eslint-disable-next-line jsx-a11y/click-events-have-key-events --
-                 In the ARIA listbox pattern the options never take focus: the
-                 trigger keeps it and points at the active option with
-                 `aria-activedescendant`, so the keyboard equivalent of this
-                 click lives in the trigger's `onKeyDown`. A key handler here
-                 could never fire. */
-              <li
-                aria-disabled={option.disabled || undefined}
-                aria-selected={option.value === value}
-                className={cn(
-                  "flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm text-foreground",
-                  option.disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
-                  !option.disabled && index === highlightedIndex && "bg-hover",
-                )}
-                id={optionId(index)}
-                key={option.value}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  selectOption(index);
-                }}
-                onMouseEnter={() => !option.disabled && setHighlightedIndex(index)}
-                role="option"
-              >
-                <span className="truncate">{option.label}</span>
-                {option.value === value ? <Icon className="shrink-0 text-primary-ink" name="check" /> : null}
-              </li>
-            ))}
-        </ul>,
+            {searchable ? (
+              <div className="shrink-0 border-b border-border p-1">
+                <div className="relative">
+                  <Icon
+                    className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-subtle"
+                    name="search"
+                  />
+                  {/* Not the `Input` primitive: this one is chrome inside a
+                      menu, with no border of its own and sized by the menu
+                      rather than by the field scale. */}
+                  <input
+                    aria-activedescendant={highlightedIndex >= 0 ? optionId(highlightedIndex) : undefined}
+                    aria-autocomplete="list"
+                    aria-controls={listboxId}
+                    aria-expanded
+                    aria-label={t("common.search")}
+                    className="h-8 w-full rounded-md bg-muted pr-2 pl-7 text-sm text-foreground placeholder:text-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onChange={(e) => handleQueryChange(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={t("common.search")}
+                    ref={searchRef}
+                    role="combobox"
+                    spellCheck={false}
+                    value={query}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            <ul
+              className={cn("min-h-0 flex-1 overflow-y-auto focus:outline-none", visible.length > 0 && "p-1")}
+              id={listboxId}
+              role="listbox"
+            >
+              {visible.map((option, index) => (
+                /* eslint-disable-next-line jsx-a11y/click-events-have-key-events --
+                   In the ARIA listbox pattern the options never take focus: the
+                   trigger (or the filter box) keeps it and points at the active
+                   option with `aria-activedescendant`, so the keyboard
+                   equivalent of this click lives in that element's `onKeyDown`.
+                   A key handler here could never fire. */
+                <li
+                  aria-disabled={option.disabled || undefined}
+                  aria-selected={option.value === value}
+                  className={cn(
+                    "flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm text-foreground",
+                    option.disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
+                    !option.disabled && index === highlightedIndex && "bg-hover",
+                  )}
+                  id={optionId(index)}
+                  key={option.value}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    selectOption(index);
+                  }}
+                  onMouseEnter={() => !option.disabled && setHighlightedIndex(index)}
+                  role="option"
+                >
+                  <span className="truncate">{option.label}</span>
+                  {option.value === value ? <Icon className="shrink-0 text-primary-ink" name="check" /> : null}
+                </li>
+              ))}
+            </ul>
+
+            {visible.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-muted-foreground">{t("common.noResults")}</p>
+            ) : null}
+          </div>,
           document.body,
         )
       : null;

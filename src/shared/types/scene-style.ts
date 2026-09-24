@@ -22,6 +22,8 @@
  * scene nobody customizes still looks like the rest of the app.
  */
 
+import type { TransitionSpec } from "./transition";
+
 export const GRADIENT_DIRECTIONS = ["to-bottom", "to-right", "to-bottom-right", "radial"] as const;
 export type GradientDirection = (typeof GRADIENT_DIRECTIONS)[number];
 
@@ -73,6 +75,45 @@ export type SceneTriggers = {
   endColor: string;
 };
 
+/**
+ * What a countdown turns into once it passes zero.
+ *
+ * Countdown-only, like `triggers`, and for the same reason it lives here
+ * rather than in `TimerConfig`: reaching zero changes how the scene LOOKS, and
+ * every one of these is a pure function of the mark the projector is already
+ * holding — so the swap happens in the leaf that draws it, with no push at the
+ * instant zero passes (see `TimerScene`).
+ *
+ * `message` is its own `SceneTextStyle` rather than a reuse of the scene's:
+ * the line that says "faltan 10 minutos" and the one that says "¡Bienvenidos!"
+ * are read at different moments, from the same seats, and almost never want
+ * the same size. `hideValue`/`hideTitle` are opt-in and off by default — a
+ * countdown that erases itself at zero is a deliberate look, never something
+ * the app decides on the operator's behalf.
+ */
+export type SceneEnd = {
+  message: SceneTextStyle;
+  /** From zero on (including overrun), drop the big number. */
+  hideValue: boolean;
+  /** From zero on, drop the line above it. */
+  hideTitle: boolean;
+  /**
+   * How the scene crosses from how it reads while counting to how it reads
+   * once it has run out — the same three fades the projector uses between
+   * scenes (`TransitionSpec`), because from the seats it is the same kind of
+   * change.
+   *
+   * It fades the whole text block at once rather than line by line, and that
+   * is not an implementation detail: hiding the number re-centres everything
+   * left, so three independent fades would still end in one jump — at the
+   * exact moment the operator asked for the opposite. See `TimerScene`.
+   *
+   * Like the rest of `SceneEnd` it is a pure function of the mark the
+   * projector already holds, so crossing zero still costs no push.
+   */
+  transition: TransitionSpec;
+};
+
 export const SCENE_STYLE_VERSION = 1;
 
 /**
@@ -95,8 +136,21 @@ export type SceneStyle = {
   title: SceneTextStyle;
   /** The line below it. */
   message: SceneTextStyle;
+  /** How the scene reads once a countdown has run out. */
+  end: SceneEnd;
   triggers: SceneTriggers | null;
 };
+
+/** Shared by `message` and by the end message's own default — see
+ *  `SceneEnd.message`. */
+const DEFAULT_MESSAGE_STYLE: SceneTextStyle = { sizeCqw: 4.5, color: "#f5f5f5", weight: 400, shadow: true };
+
+/** "none" on purpose, and it is the same decision `SceneEnd.message` made:
+ *  every scene dressed before this field existed cut straight into its end
+ *  state, and it has to keep doing exactly that until the operator asks for a
+ *  fade. The duration rides along at the projector's own "normal", so turning
+ *  the style on lands somewhere sensible instead of at zero. */
+const DEFAULT_END_TRANSITION: TransitionSpec = { style: "none", durationMs: 300 };
 
 export const DEFAULT_SCENE_STYLE: SceneStyle = {
   version: SCENE_STYLE_VERSION,
@@ -107,7 +161,15 @@ export const DEFAULT_SCENE_STYLE: SceneStyle = {
   value: { sizeCqw: 20, color: "#ffffff", weight: 300, shadow: true },
   // Denim light, the palette's accent.
   title: { sizeCqw: 4, color: "#84adfc", weight: 600, shadow: true },
-  message: { sizeCqw: 4.5, color: "#f5f5f5", weight: 400, shadow: true },
+  message: DEFAULT_MESSAGE_STYLE,
+  // The end message starts out looking exactly like the message it replaces,
+  // so turning the group on changes nothing until the operator asks it to.
+  end: {
+    message: DEFAULT_MESSAGE_STYLE,
+    hideValue: false,
+    hideTitle: false,
+    transition: DEFAULT_END_TRANSITION,
+  },
   triggers: null,
 };
 

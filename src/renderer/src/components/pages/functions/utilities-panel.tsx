@@ -4,7 +4,7 @@ import { Badge, Button, EmptyState, Icon, IconButton, ListRow, Tooltip } from "@
 import { PanelBody, PanelFooter } from "@renderer/components/shared/panel";
 import { ModalBoundary } from "@renderer/components/shared/modal-boundary";
 import { toast } from "@renderer/lib/toast";
-import { findScene, useUtilityStore } from "@renderer/stores/utility.store";
+import { useUtilityStore } from "@renderer/stores/utility.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
 import { useProgramStore } from "@renderer/stores/program.store";
 import { setUtilitySceneDrag } from "@renderer/lib/dnd";
@@ -12,7 +12,7 @@ import { useProjectionStore } from "@renderer/stores/projection.store";
 import { previewUtilityScene } from "@renderer/lib/actions/preview";
 import { goLive } from "@renderer/lib/actions/playback";
 import { ScenesModal } from "./ScenesModal";
-import { TimerTransport } from "./timer-transport";
+import { SceneReadout } from "./scene-readout";
 import { TOOL_ICON, TOOL_LABEL } from "./tool-display";
 
 /**
@@ -24,7 +24,12 @@ import { TOOL_ICON, TOOL_LABEL } from "./tool-display";
  * projector. Starting the countdown is deliberately NOT part of selecting it:
  * a timer that started because somebody clicked a row is a timer nobody asked
  * for. EN VIVO starts it (see `goLiveWithUtilityScene`), and so does the
- * transport's own button.
+ * transport on the row of the column the scene is in — `UtilityTrackRow`,
+ * under the PREVIEW monitor and inside the LIVE media panel. This tab holds no
+ * transport of its own: controlling a scene belongs next to the picture of
+ * that scene, not next to a list of names. All a row keeps is the running
+ * value and a STOP, and only while its clock is actually going (see
+ * `SceneReadout`).
  *
  * Creating and editing is a modal of its own rather than an inline form: a
  * scene has some thirty fields and this column is the narrowest in the app.
@@ -40,23 +45,22 @@ export function UtilitiesPanel() {
   const [editorOpen, setEditorOpen] = useState(false);
   const scenes = useUtilityStore((s) => s.scenes);
   const runSceneId = useUtilityStore((s) => s.run?.sceneId ?? null);
+  const runStarted = useUtilityStore((s) => s.run?.started ?? false);
   const target = usePreviewStore((s) => s.target);
   const liveSceneId = useProjectionStore((s) => (s.base?.kind === "utility" ? s.base.sceneId : null));
   const addItem = useProgramStore((s) => s.addItem);
 
   const previewedId = target?.kind === "utility" ? target.sceneId : null;
-  // The transport follows what the operator is looking at, and falls back to
-  // whichever timer is armed — so a countdown started five minutes ago is
-  // still there after browsing the rest of the list, instead of disappearing
-  // the moment the selection moves.
-  const transportSceneId = previewedId ?? runSceneId ?? scenes[0]?.id ?? null;
-  const transportScene = transportSceneId === null ? null : findScene(scenes, transportSceneId);
+  // Whose clock is actually going: the projected one, and the armed one once
+  // it has been started. Decided here, per row, rather than inside the readout
+  // — a resting wall clock is still a *running* clock, so mounting a ticking
+  // component for every row would re-render the whole list once a second to
+  // paint values nobody asked for.
+  const startedSceneId = runStarted ? runSceneId : null;
 
   return (
     <>
       <PanelBody className="gap-1.5 p-1.5">
-        {transportScene ? <TimerTransport scene={transportScene} /> : null}
-
         {scenes.length === 0 ? (
           <EmptyState
             action={
@@ -74,6 +78,11 @@ export function UtilitiesPanel() {
               <ListRow
                 active={liveSceneId === scene.id}
                 key={scene.id}
+                // No on-air rail here: the live scene is already the one
+                // showing a running clock on its right (`SceneReadout`), and a
+                // red bar beside it reads as an alert rather than as «esto
+                // está proyectado». See `ListRow`'s `rail`.
+                rail={false}
                 leading={
                   <Badge className="px-2" variant="neutral">
                     <Icon className="size-3.5" name={TOOL_ICON[scene.tool]} />
@@ -87,7 +96,13 @@ export function UtilitiesPanel() {
                 }}
                 onDragStart={(e) => setUtilitySceneDrag(e, scene.id)}
                 selected={previewedId === scene.id}
-                trailing={<span className="text-xs text-subtle">{t(TOOL_LABEL[scene.tool])}</span>}
+                trailing={
+                  scene.id === liveSceneId || scene.id === startedSceneId ? (
+                    <SceneReadout scene={scene} />
+                  ) : (
+                    <span className="text-xs text-subtle">{t(TOOL_LABEL[scene.tool])}</span>
+                  )
+                }
               >
                 {scene.name}
               </ListRow>
@@ -102,7 +117,7 @@ export function UtilitiesPanel() {
           «Escenas…» on the left like the tab's own tools, «Agregar al
           programa» pinned right like the media browser's. */}
       <PanelFooter>
-        <Tooltip content={t("utilities.manageHint")} placement="top">
+        <Tooltip content={t("utilities.manageHint")} floating>
           <IconButton
             aria-label={t("utilities.manage")}
             onClick={() => setEditorOpen(true)}

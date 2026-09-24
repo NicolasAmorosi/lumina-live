@@ -13,7 +13,7 @@ type MediaTrackRowProps = {
    *  showing a meaningless 0:00/0:00 and an empty bar. Such a row stays a
    *  single line: the different height is real information ("this has no
    *  time"), not an alignment defect. */
-  durationSeconds?: number;
+  durationSeconds?: number | undefined;
   /** What the projector reported it could not play, already translated.
    *  Replaces `hint` and re-tones the row — a track the operator believes is
    *  sounding, and isn't, is worth more than a tidy row. */
@@ -38,12 +38,40 @@ type MediaTrackRowProps = {
   /** Present only for a row that actually controls playback (the live panel).
    *  Absent in the preview bar, which only picks a start point. */
   onTogglePause?: (() => void) | undefined;
+  /** Accessible names for that button. A timer is never «reproducido»: it is
+   *  started, paused and resumed, and which of the two words a stopped one
+   *  deserves is the caller's to know (see `UtilityTrackRow`). */
+  pauseLabel?: string | undefined;
+  playLabel?: string | undefined;
   paused?: boolean;
+  /** Back to the start, beside the pause button. Only where restarting means
+   *  something on its own: a timer restarts, a track is scrubbed to 0. */
+  onRestart?: (() => void) | undefined;
+  /** A value this row shows instead of deriving one from a timeline — a
+   *  timer's own digits, which no `currentSeconds` can produce (a wall clock
+   *  has no position, and a countdown's number runs backwards and may be
+   *  negative). Sits between the label and the controls, always visible. */
+  readout?: string | undefined;
+  readoutTone?: MediaTrackReadoutTone;
+  /** A word beside the readout, in the danger ink — «Terminó». Ignored
+   *  without a `readout`. */
+  readoutNote?: string | undefined;
   /** Omit the pair to render the row without a level control — an image or a
    *  verse has nothing to turn down, and the preview bar reaches no speaker. */
   onVolumeChange?: ((volume: number) => void) | undefined;
   /** 0..1. Required whenever `onVolumeChange` is given. */
   volume?: number | undefined;
+};
+
+/** What the readout means right now: counting, stopped, or a countdown that
+ *  has run out. The last one has to be readable from across a dark booth — the
+ *  projector will never say so (it just rests at 00:00). */
+export type MediaTrackReadoutTone = "default" | "muted" | "danger";
+
+const readoutToneClass: Record<MediaTrackReadoutTone, string> = {
+  default: "text-foreground",
+  muted: "text-subtle",
+  danger: "text-danger-ink",
 };
 
 const kindIcon: Record<MediaTrackKind, IconName> = {
@@ -96,6 +124,11 @@ function clockWidthClass(durationSeconds: number): string {
  * width also means the bar's pixels map to the track at a useful resolution —
  * a second of a 40-minute sermon is no longer a sub-pixel.
  *
+ * Between the two sits the optional `readout`: a value that is not a position
+ * on any timeline, which is what a timer's number is (a wall clock has none, a
+ * countdown's runs backwards and can go negative). It is text, not a control,
+ * so it goes with the identity half of the line rather than with the buttons.
+ *
  * Every control on the first line is a fixed-size `IconButton`, and the label
  * is the only element allowed to grow or shrink (`min-w-0 flex-1 truncate`) —
  * a very long file name eats into the label's own space, it never pushes a
@@ -115,9 +148,15 @@ export function MediaTrackRow({
   hint,
   onSeek,
   onDelete,
+  onRestart,
   onStop,
   onTogglePause,
+  pauseLabel,
+  playLabel,
   paused = false,
+  readout,
+  readoutNote,
+  readoutTone = "default",
   onVolumeChange,
   volume,
 }: MediaTrackRowProps) {
@@ -147,14 +186,35 @@ export function MediaTrackRow({
           {label}
         </span>
 
+        {readout ? (
+          <span
+            className={cn(
+              "shrink-0 whitespace-nowrap text-sm font-medium tabular-nums",
+              readoutToneClass[readoutTone],
+            )}
+          >
+            {readout}
+          </span>
+        ) : null}
+
+        {readout && readoutNote ? (
+          <span className="shrink-0 whitespace-nowrap text-xs text-danger-ink">{readoutNote}</span>
+        ) : null}
+
         {onTogglePause ? (
           <IconButton
-            aria-label={paused ? t("media.play") : t("media.pause")}
+            aria-label={paused ? (playLabel ?? t("media.play")) : (pauseLabel ?? t("media.pause"))}
             onClick={onTogglePause}
             size="xs"
             variant="ghost"
           >
             <Icon name={paused ? "play" : "pause"} />
+          </IconButton>
+        ) : null}
+
+        {onRestart ? (
+          <IconButton aria-label={t("media.restart")} onClick={onRestart} size="xs" variant="ghost">
+            <Icon name="restart" />
           </IconButton>
         ) : null}
 

@@ -1,13 +1,18 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type Ref } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type Ref } from "react";
 import { Icon } from "@renderer/components/ui";
 import { cn } from "@renderer/lib/utils";
+import {
+  isAnimatable,
+  transitionStyle,
+  LEAVE_FALLBACK_MARGIN_MS,
+  type LayerRole,
+} from "@renderer/lib/transition";
 import { TimerScene } from "./timer-scene";
 import type {
   MediaStatus,
   ProjectionMediaError,
   ProjectionOutput,
   SceneTransition,
-  TransitionStyle,
 } from "@shared/types/projection";
 
 /** Above this drift (seconds) the LIVE monitor's own video is resynced to the
@@ -15,32 +20,7 @@ import type {
  *  `LiveVideo`'s drift-correction effect. */
 const MONITOR_DRIFT_THRESHOLD_SECONDS = 0.35;
 
-/** Grace added to a transition's own duration before the outgoing layer is
- *  dropped without having reported `animationend`. Generous on purpose: it is
- *  a safety net for an animation that never ran at all, not a second clock
- *  racing the one that did. */
-const LEAVE_FALLBACK_MARGIN_MS = 400;
-
 export type OutputViewMode = "live" | "preview" | "monitor";
-
-/** A scene layer's (or the persistent video's) part in an in-flight
- *  transition. "steady" means no transition is currently in flight for this
- *  element — nothing else is competing with it for the same pixels, so its
- *  z-order doesn't matter and its opacity is whatever it rests at. */
-type LayerRole = "steady" | "entering" | "leaving";
-
-const LAYER_Z: Record<LayerRole, number> = { leaving: 0, steady: 1, entering: 2 };
-
-const FADE_KEYFRAMES: Record<Exclude<TransitionStyle, "none">, Record<"entering" | "leaving", string>> = {
-  crossfade: { entering: "wa-scene-fade-in", leaving: "wa-scene-fade-out" },
-  "fade-through-black": { entering: "wa-scene-black-then-in", leaving: "wa-scene-out-then-black" },
-};
-
-function isAnimatable(
-  transition: SceneTransition,
-): transition is SceneTransition & { style: Exclude<TransitionStyle, "none"> } {
-  return transition.style !== "none" && transition.durationMs > 0;
-}
 
 /**
  * Serializes everything in an output EXCEPT `transition` — used to tell a
@@ -55,32 +35,6 @@ function isAnimatable(
  */
 function sceneContentKey(output: ProjectionOutput): string {
   return JSON.stringify(output, (key: string, value: unknown) => (key === "transition" ? undefined : value));
-}
-
-/**
- * Inline style for one side of a transition — a scene layer or the
- * persistent video. `role === "steady"` (or a non-animatable transition)
- * means nothing is in flight: opacity is `restOpacity` directly, no
- * keyframe, no z-index competition. Otherwise it drives the CSS `animation`
- * shorthand (not `transition`): a `transition` property doesn't run when the
- * very same commit that mounts an element also gives it its target value, so
- * an `animation` — which always plays from its own keyframes regardless of
- * when it starts — is what actually fades the very first frame.
- */
-function transitionStyle(role: LayerRole, transition: SceneTransition, restOpacity: number): CSSProperties {
-  if (role === "steady" || !isAnimatable(transition)) {
-    return { zIndex: LAYER_Z[role], opacity: restOpacity };
-  }
-  return {
-    zIndex: LAYER_Z[role],
-    animationName: FADE_KEYFRAMES[transition.style][role === "entering" ? "entering" : "leaving"],
-    animationDuration: `${transition.durationMs}ms`,
-    animationTimingFunction: "ease-in-out",
-    // Holds the keyframe's start value until the animation actually starts
-    // and its end value once it finishes, instead of snapping back to the
-    // plain `opacity` this element would otherwise have.
-    animationFillMode: "both",
-  };
 }
 
 type LiveVideoProps = {
