@@ -73,8 +73,15 @@ export type IpcContract = {
    *  caller then classifies each returned path by its own extension. */
   "files:pick": { req: { kind: AssetKind | "all"; multiple: boolean }; res: string[] };
   "files:setLogo": { req: void; res: string | null };
-  /** Opens a native directory picker. `null` means the user canceled. */
-  "files:pickFolder": { req: void; res: string | null };
+  /** Opens a native directory picker. `null` means the user canceled.
+   *  `defaultPath` is where it opens — the folder being replaced, when there
+   *  is one, so "cambiar" starts from what is being changed. */
+  "files:pickFolder": { req: { defaultPath?: string | undefined }; res: string | null };
+  /** The OS's own folder per asset kind (Music, Videos, Pictures, Documents).
+   *  Read-only and platform-resolved in main, so Ajustes can SHOW the path a
+   *  kind falls back to instead of just saying "la del sistema" — the
+   *  operator has to be able to tell whether that is where his files are. */
+  "files:systemFolders": { req: void; res: Record<AssetKind, string> };
 
   /** Cache lookup only — never triggers a conversion, so it is safe to call
    *  while merely rendering a list or selecting an item. */

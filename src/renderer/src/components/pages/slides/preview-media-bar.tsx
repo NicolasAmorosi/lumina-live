@@ -45,6 +45,13 @@ export function PreviewMediaBar({ asset }: PreviewMediaBarProps) {
         kind={isVideo ? "video" : "audio"}
         label={asset.name}
         onDelete={clearPreview}
+        // Same button as the live panel's, doing the same thing one stage
+        // earlier: for a video it rewinds the preview element without
+        // starting or stopping it, for audio (which never sounds here) it
+        // drops the chosen start point back to the beginning. Hidden while
+        // the duration is unknown, exactly like the scrubber beside it —
+        // there is no timeline to be at the start of yet.
+        onRestart={duration ? () => seekPreview(0) : undefined}
         onSeek={duration ? seekPreview : undefined}
         onTogglePause={isVideo ? togglePreviewPlayback : undefined}
         paused={isVideo && !playing}

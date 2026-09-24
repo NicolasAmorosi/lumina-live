@@ -152,7 +152,8 @@ veces — Windows es case-insensitive y el legacy no lo contemplaba.
 
 `src/main/services/migrate-legacy-data.ts` corre una sola vez al primer arranque: si existen
 `settings.json`/`media_library.json` en `userData` (de una instalación de la versión vanilla),
-importa `logoPath`/`lastFolder` y cada entrada de biblioteca a SQLite, y renombra los archivos
+importa `logoPath` y cada entrada de biblioteca a SQLite (el `lastFolder` del archivo legacy
+ya no tiene dónde caer: el selector abre una carpeta por tipo, no la última usada), y renombra los archivos
 originales a `*.migrated` para que no se reprocesen. Best-effort: un JSON corrupto no bloquea el
 arranque.
 

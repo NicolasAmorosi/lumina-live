@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { Button, FieldGroup, FieldRow, Icon, Select, Tooltip, VolumeControl } from "@renderer/components/ui";
+import { ConfirmModal } from "@renderer/components/shared/modal";
 import { transitionDurationOptions, transitionStyleOptions } from "@renderer/lib/transition";
 import { useDisplayStore } from "@renderer/stores/display.store";
-import { useProjectionStore } from "@renderer/stores/projection.store";
+import { selectOutputMemo, useProjectionStore } from "@renderer/stores/projection.store";
 import { useSettingsStore } from "@renderer/stores/settings.store";
 import { clearLive } from "@renderer/lib/actions/playback";
 import { api } from "@renderer/lib/api";
@@ -18,6 +20,10 @@ export function ProjectionSection() {
   const { displayId, displays, setDisplayId } = useDisplayStore();
   const presentationOpen = useProjectionStore((s) => s.presentationOpen);
   const base = useProjectionStore((s) => s.base);
+  // What the projector is showing right now, read the same way the LIVE
+  // monitor reads it — the only honest way to know whether removing the logo
+  // is about to blank a screen the congregation is looking at.
+  const output = useProjectionStore(selectOutputMemo);
   const logoPath = useSettingsStore((s) => s.settings["logo.path"]);
   const transitionStyle = useSettingsStore((s) => s.settings["projection.transition.style"]);
   const transitionDurationMs = useSettingsStore((s) => s.settings["projection.transition.durationMs"]);
@@ -30,6 +36,8 @@ export function ProjectionSection() {
   // previous image after picking a new one (React sees an unchanged `src`
   // and never re-fetches).
   const logoUrl = logoPath ? `${LOGO_URL}?p=${encodeURIComponent(logoPath)}` : null;
+  const logoOnAir = presentationOpen && output.kind === "logo";
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   async function changeLogo() {
     try {
@@ -47,6 +55,19 @@ export function ProjectionSection() {
     // Refreshes `settings.store` from the DB — this drives both this
     // thumbnail and (via App.tsx) the logo actually shown on the projector.
     await useSettingsStore.getState().load();
+  }
+
+  /** Clears the setting, not a file: the image stays where it is on disk and
+   *  can be picked again. Written through the store (unlike `changeLogo`,
+   *  where main itself wrote the row and the store had to re-read it), so the
+   *  thumbnail below and the projector both follow immediately. */
+  async function removeLogo() {
+    await updateSettings({ "logo.path": null });
+  }
+
+  function handleRemoveLogo() {
+    if (logoOnAir) setConfirmRemove(true);
+    else void removeLogo();
   }
 
   return (
@@ -85,12 +106,26 @@ export function ProjectionSection() {
           <Button onClick={() => void changeLogo()} variant="secondary">
             {t("settings.chooseFile")}
           </Button>
+          {/* Asked first only when the logo IS the picture on the projector:
+              removing it then turns the screen black in front of everybody,
+              which is not what "quitar una preferencia" looks like. With
+              nothing on air it is a plain setting and gets no dialog. */}
+          <Button
+            disabled={logoPath === null}
+            onClick={handleRemoveLogo}
+            variant="outline"
+          >
+            <Icon name="close" /> {t("settings.logoRemove")}
+          </Button>
         </FieldRow>
-        <div className="flex h-64 items-center justify-center overflow-hidden bg-surface px-4 py-3">
+        <div className="flex h-64 flex-col items-center justify-center gap-2 overflow-hidden bg-surface px-4 py-3">
           {logoUrl ? (
             <img alt="" className="h-full max-w-full object-contain" src={logoUrl} />
           ) : (
-            <Icon className="text-subtle" name="image" />
+            <>
+              <Icon className="text-subtle" name="image" />
+              <span className="text-xs text-subtle">{t("settings.logoEmpty")}</span>
+            </>
           )}
         </div>
       </FieldGroup>
@@ -116,6 +151,15 @@ export function ProjectionSection() {
           />
         </FieldRow>
       </FieldGroup>
+
+      <ConfirmModal
+        confirmLabel={t("settings.logoRemove")}
+        description={t("settings.logoRemoveLiveBody")}
+        onConfirm={removeLogo}
+        onOpenChange={setConfirmRemove}
+        open={confirmRemove}
+        title={t("settings.logoRemoveTitle")}
+      />
 
       <FieldGroup title={t("settings.groups.transition")}>
         <FieldRow description={t("settings.transitionStyleDesc")} label={t("settings.transitionStyle")}>

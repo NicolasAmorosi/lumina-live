@@ -76,9 +76,13 @@ describe("the overlay wins over the base", () => {
     expect(output().kind).toBe("black");
   });
 
-  test("LOGO uses the operator's logo, and falls back to the built-in one", () => {
+  test("LOGO with no logo chosen is a null url, never a url that 404s", () => {
+    // The bare `worship://logo` this used to fall back to is answered with a
+    // 404 whenever `logo.path` is unset, so the projector painted the
+    // browser's broken-image icon and reported a media error for a file
+    // nobody had ever picked. A null url paints the layer's own black.
     useProjectionStore.getState().setOverlay("logo");
-    expect(output()).toMatchObject({ kind: "logo", url: LOGO_URL });
+    expect(output()).toMatchObject({ kind: "logo", url: null });
 
     useProjectionStore.getState().setLogoUrl("worship://asset/77");
     expect(output()).toMatchObject({ kind: "logo", url: "worship://asset/77" });
@@ -88,7 +92,8 @@ describe("the overlay wins over the base", () => {
     // What the projector shows between items of a service: the church's logo
     // is the resting state, and "no signal" is not a thing the congregation
     // should ever see.
-    expect(output()).toMatchObject({ kind: "logo", url: LOGO_URL });
+    useProjectionStore.getState().setLogoUrl(`${LOGO_URL}?p=%2Flogo.png`);
+    expect(output()).toMatchObject({ kind: "logo", url: `${LOGO_URL}?p=%2Flogo.png` });
   });
 });
 

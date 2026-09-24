@@ -1,5 +1,6 @@
 import { app } from "electron";
 import path from "node:path";
+import type { AssetKind } from "@shared/constants";
 
 /**
  * Single place that resolves every "where does X live" question so dev vs.
@@ -48,4 +49,37 @@ export function thumbCachePath(key: string): string {
 
 export function deckCacheDir(contentHash: string, renderWidth: number, imageFormat: string): string {
   return path.join(slidesCacheDir, `${contentHash.slice(0, 16)}-${renderWidth}-${imageFormat}`);
+}
+
+/** Only `ppt` has no folder of its own on any platform: a presentation is a
+ *  document, and Documents is where every office suite already saves one. */
+const SYSTEM_FOLDER_BY_KIND: Record<AssetKind, "music" | "videos" | "pictures" | "documents"> = {
+  audio: "music",
+  video: "videos",
+  image: "pictures",
+  ppt: "documents",
+};
+
+/**
+ * The operating system's own folder for one kind of asset — Music, Movies/
+ * Videos, Pictures and Documents.
+ *
+ * `app.getPath` goes through the platform API (`SHGetKnownFolderPath` on
+ * Windows, `NSSearchPathForDirectoriesInDomains` on macOS, `xdg-user-dir` on
+ * Linux), so the answer is right regardless of the language the machine is
+ * installed in and of where the user moved their home directory — which is
+ * exactly why these are resolved on every pick instead of being written into
+ * the settings table once.
+ *
+ * Electron throws rather than returning a fallback when a name cannot be
+ * resolved (a Linux box with no `xdg-user-dirs` installed is the real case),
+ * so every lookup falls back to the home directory: a file dialog that opens
+ * *somewhere* beats one that fails to open.
+ */
+export function systemMediaFolder(kind: AssetKind): string {
+  try {
+    return app.getPath(SYSTEM_FOLDER_BY_KIND[kind]);
+  } catch {
+    return app.getPath("home");
+  }
 }

@@ -15,7 +15,7 @@ import type { TransitionStyle } from "@shared/types/transition";
 import type { DeckSlide, DeckSoundtrack } from "@shared/types/deck";
 import type { TimerClock } from "@shared/types/timer";
 import type { UtilityScene } from "@shared/types/utility";
-import { assetUrl, LOGO_URL } from "@shared/urls";
+import { assetUrl } from "@shared/urls";
 import { timerOutputFor } from "@renderer/lib/utility-output";
 import { defaultMediaVolume } from "@renderer/stores/settings.store";
 
@@ -303,8 +303,15 @@ function selectVideoUnderlay(state: ProjectionStoreState): VideoUnderlay {
 
 function selectOutputWithoutUnderlay(state: ProjectionStoreState): ProjectionOutputKind {
   if (state.overlay === "black") return { kind: "black" };
-  if (state.overlay === "logo") return { kind: "logo", url: state.logoUrl ?? LOGO_URL };
-  if (state.base === null) return { kind: "logo", url: state.logoUrl ?? LOGO_URL };
+  // `logoUrl` is null while no logo has been chosen (`App.tsx` mirrors
+  // `logo.path` into it), and that null travels to the projector as-is: a
+  // logo-less LOGO is a black stage, not a broken <img>. It used to fall back
+  // to the bare `worship://logo`, which main answers with a 404 when there is
+  // no `logo.path` — so the projector painted the browser's own broken-image
+  // icon and reported a media error for a file nobody ever picked. Saying
+  // "there is no logo" is the control window's job instead (`LiveMonitor`).
+  if (state.overlay === "logo") return { kind: "logo", url: state.logoUrl };
+  if (state.base === null) return { kind: "logo", url: state.logoUrl };
 
   switch (state.base.kind) {
     case "deck": {

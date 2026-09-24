@@ -652,6 +652,16 @@ describe("settings:set validators reject what the types cannot", () => {
       SETTINGS_VALIDATORS["library.linkedFolders"]({ video: [], image: [], audio: [], ppt: ["/x"] }),
       "a complete per-kind record must pass",
     );
+    // `null` is the meaningful value here — "use the OS folder for this kind"
+    // — so it has to pass the validator, unlike the empty array above.
+    assert(
+      SETTINGS_VALIDATORS["files.defaultFolders"]({ video: null, image: null, audio: null, ppt: "/decks" }),
+      "a default-folder record must accept null for the kinds with no override",
+    );
+    assert(
+      !SETTINGS_VALIDATORS["files.defaultFolders"]({ video: 0, image: null, audio: null, ppt: null }),
+      "a default folder that is not a path must be rejected",
+    );
   });
 });
 

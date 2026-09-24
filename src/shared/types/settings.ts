@@ -18,7 +18,14 @@ export type SlideImageFormat = (typeof SLIDE_IMAGE_FORMATS)[number];
 
 export type SettingsMap = {
   "logo.path": string | null;
-  "files.lastFolder": string | null;
+  /** Where the file picker opens for each kind of asset. `null` means "the
+   *  operating system's own folder for this kind" (`systemMediaFolder` in
+   *  `main/paths.ts`), which is resolved fresh on every pick: it is looked up
+   *  through the OS API, so it follows a moved home directory and is spelled
+   *  in whatever language the machine is installed in. Storing the resolved
+   *  path instead would freeze both. A non-null value is an explicit override
+   *  the operator chose in Ajustes. */
+  "files.defaultFolders": Record<AssetKind, string | null>;
   "projection.displayId": number | null;
   "ui.theme": Theme;
   "ui.locale": Locale;
@@ -68,11 +75,15 @@ export type SettingsMap = {
 
 export const DEFAULT_SETTINGS: SettingsMap = {
   "logo.path": null,
-  "files.lastFolder": null,
+  "files.defaultFolders": { video: null, image: null, audio: null, ppt: null },
   "projection.displayId": null,
   "ui.theme": "dark",
   "ui.locale": "es",
-  "media.volume": 0.5,
+  // Full. Anything sent live is meant to be heard, and a level the operator
+  // never set is a level nobody can explain from the booth — halfway up just
+  // looks like the file is quiet. Balancing down is one drag away, per track,
+  // in the En Vivo panel.
+  "media.volume": 1,
   "projection.transition.style": "crossfade",
   "projection.transition.durationMs": 300,
   "slides.sofficePath": null,
@@ -144,7 +155,7 @@ const isStringArray = (v: unknown): boolean => Array.isArray(v) && v.every(isStr
 
 export const SETTINGS_VALIDATORS: Record<keyof SettingsMap, (value: unknown) => boolean> = {
   "logo.path": isNullOr(isString),
-  "files.lastFolder": isNullOr(isString),
+  "files.defaultFolders": isRecordOfKinds(isNullOr(isString)),
   "projection.displayId": isDisplayId,
   "ui.theme": isOneOf(THEMES),
   "ui.locale": isOneOf(LOCALES),

@@ -35,7 +35,8 @@ export const api = {
   files: {
     pick: (kind: AssetKind | "all", multiple: boolean) => invoke("files:pick", { kind, multiple }),
     setLogo: () => invoke("files:setLogo", undefined),
-    pickFolder: () => invoke("files:pickFolder", undefined),
+    pickFolder: (defaultPath?: string) => invoke("files:pickFolder", { defaultPath }),
+    systemFolders: () => invoke("files:systemFolders", undefined),
   },
   deck: {
     get: (assetId: number) => invoke("deck:get", { assetId }),

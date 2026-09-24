@@ -3,6 +3,7 @@ import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { Monitor } from "@renderer/components/ui";
 import { OutputView } from "@renderer/components/shared/output-view";
 import { selectOutputMemo, useProjectionStore } from "@renderer/stores/projection.store";
+import { useSettingsStore } from "@renderer/stores/settings.store";
 import { mediaTargetKey } from "@shared/types/projection";
 
 const VIDEO_TARGET_KEY = mediaTargetKey({ kind: "video" });
@@ -37,17 +38,31 @@ export function LiveMonitor() {
     () => Object.values(mediaErrors).map((error) => error.url),
     [mediaErrors],
   );
+  // LOGO with nothing to show. The projector is black and correct — the logo
+  // is simply not configured yet — so this is a notice and not an error, and
+  // it names the way out instead of the symptom.
+  //
+  // Gated on `loaded` because `logoUrl` is mirrored from the settings
+  // (`App.tsx`) and starts null: without it, every launch would flash "no hay
+  // logo" for as long as the first `settings:get` takes, on a machine that
+  // has one.
+  const settingsLoaded = useSettingsStore((s) => s.loaded);
+  const logoMissing = settingsLoaded && output.kind === "logo" && output.url === null;
 
   return (
     <Monitor empty={presentationOpen ? t("live.noSignal") : t("live.disconnected")}>
       {/* `black` and a logo-less LOGO both render as an empty stage, which is
-          exactly right — that IS what the projector is showing. A failure is
-          the one case where an empty stage would NOT be the truth, which is
-          what `errorLabel`/`reportedErrorUrls` exist to say out loud. */}
+          exactly right — that IS what the projector is showing. The two cases
+          where an empty stage would not be the whole truth get a band over it
+          instead: a file that failed to load (`errorLabel`/
+          `reportedErrorUrls`) and a LOGO with no logo to show
+          (`noticeLabel`). */}
       <OutputView
         errorLabel={t("media.loadError")}
         liveVideoStatus={liveVideoStatus}
         mode="monitor"
+        noticeDetail={logoMissing ? t("live.logoMissingHint") : undefined}
+        noticeLabel={logoMissing ? t("live.logoMissing") : undefined}
         output={output}
         reportedErrorUrls={reportedErrorUrls}
       />

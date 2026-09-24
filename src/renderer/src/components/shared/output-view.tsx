@@ -356,11 +356,30 @@ function SceneLayer({
   );
 }
 
-type OutputErrorNoticeProps = { label: string };
+type OutputNoticeTone = "danger" | "warning";
+type OutputNoticeProps = {
+  /** Second line, smaller and lighter: what to DO about the first one. Its own
+   *  string rather than a line break inside `label`, so the wording and the
+   *  layout stay in the places that own them — the dictionary and this
+   *  component. */
+  detail?: string | undefined;
+  label: string;
+  tone: OutputNoticeTone;
+};
+
+/** `danger` is "what you are looking at is broken"; `warning` is "the stage is
+ *  empty on purpose, and here is what to do about it". Two colours rather than
+ *  one because a black projector the operator CHOSE and a file that failed to
+ *  decode must not look the same from across a dark booth. */
+const noticeToneClass: Record<OutputNoticeTone, string> = {
+  danger: "bg-danger/90",
+  warning: "bg-warning/90",
+};
 
 /**
- * The band the LIVE and PREVIEW monitors paint over the stage when what they
- * are showing failed to load. Never painted on the projector itself
+ * The band the LIVE and PREVIEW monitors paint over the stage — when what they
+ * are showing failed to load, or when it is deliberately empty and needs the
+ * operator's attention. Never painted on the projector itself
  * (`mode === "live"` in `OutputView`) — the congregation must not see the
  * warning, only the operator.
  *
@@ -369,14 +388,26 @@ type OutputErrorNoticeProps = { label: string };
  * the middle of the frame — the operator still sees whatever *did* manage to
  * render underneath it.
  */
-function OutputErrorNotice({ label }: OutputErrorNoticeProps) {
+function OutputNotice({ detail, label, tone }: OutputNoticeProps) {
   return (
     <div
-      className="absolute inset-x-0 bottom-0 z-[var(--z-raised)] flex items-center justify-center gap-[1.5cqw] bg-danger/90 px-[3cqw] py-[1.6cqw] text-center text-[3cqw] leading-tight font-semibold text-white"
+      className={cn(
+        // The icon is pinned to the far left of the band while the text stays
+        // centred on the STAGE, not on what's left of the band beside the
+        // icon. That is why it is positioned rather than a flex sibling, and
+        // why the horizontal padding is symmetric and wide enough to clear
+        // it: a long notice on a narrow monitor then shrinks away from the
+        // icon instead of running under it.
+        "absolute inset-x-0 bottom-0 z-[var(--z-raised)] flex items-center justify-center px-[7cqw] py-[1.6cqw] text-center text-[3cqw] leading-tight font-semibold text-white",
+        noticeToneClass[tone],
+      )}
       role="status"
     >
-      <Icon className="size-[3.5cqw] shrink-0" name="alert" />
-      <span className="min-w-0">{label}</span>
+      <Icon className="absolute top-1/2 left-[2.5cqw] size-[3.5cqw] -translate-y-1/2" name="alert" />
+      <span className="flex min-w-0 flex-col gap-[0.4cqw]">
+        <span>{label}</span>
+        {detail ? <span className="text-[2.2cqw] font-normal opacity-90">{detail}</span> : null}
+      </span>
     </div>
   );
 }
@@ -400,6 +431,16 @@ type OutputViewProps = {
    *  passed) for `mode === "monitor"`; drives `LiveVideo`'s drift correction. */
   liveVideoStatus?: MediaStatus | null;
   mode: OutputViewMode;
+  /** Translated one-line notice for a stage that is empty ON PURPOSE and
+   *  shouldn't be — today, LOGO with no logo chosen. Passed in the same way
+   *  and for the same reason as `errorLabel`, and outranked by it: a file that
+   *  failed to load is the more urgent fact. The caller decides when it
+   *  applies; this component only paints it. */
+  /** Second line under `noticeLabel` — the way out of the state it names.
+   *  Ignored without one, and never shown for an error: a failure gets the
+   *  one line it has. */
+  noticeDetail?: string | undefined;
+  noticeLabel?: string | undefined;
   /** One of this view's own elements failed. The projection window forwards
    *  it to main (`projection:reportMediaError`); the monitors don't need to —
    *  a local failure already shows up in this view's own notice. */
@@ -523,6 +564,8 @@ export function OutputView({
   errorLabel,
   liveVideoStatus,
   mode,
+  noticeDetail,
+  noticeLabel,
   onMediaError,
   output,
   reportedErrorUrls,
@@ -735,6 +778,13 @@ export function OutputView({
     mode !== "live" && errorLabel && (hasFailed(videoUnderlayUrl) || hasFailed(sceneUrl))
       ? errorLabel
       : null;
+  // Same `mode !== "live"` guard, for the same reason: whatever a future
+  // caller passes, the congregation never reads a message off the stage.
+  const notice: { detail?: string | undefined; label: string; tone: OutputNoticeTone } | null = errorNotice
+    ? { label: errorNotice, tone: "danger" }
+    : mode !== "live" && noticeLabel
+      ? { detail: noticeDetail, label: noticeLabel, tone: "warning" }
+      : null;
 
   /**
    * Which side of the current transition (if any) the persistent video is on.
@@ -802,7 +852,7 @@ export function OutputView({
 
       {/* Last of all, above every layer and the video: the operator has to be
           able to read it whatever is (or isn't) painting underneath. */}
-      {errorNotice ? <OutputErrorNotice label={errorNotice} /> : null}
+      {notice ? <OutputNotice detail={notice.detail} label={notice.label} tone={notice.tone} /> : null}
     </div>
   );
 }

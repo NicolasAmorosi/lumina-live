@@ -47,6 +47,22 @@ export function seekMedia(target: MediaTarget, seconds: number): void {
   void api.projection.mediaCommand({ target, action: "seek", timeSeconds: Math.max(0, seconds) });
 }
 
+/**
+ * Back to the beginning, leaving play/pause exactly as it was.
+ *
+ * A seek to 0 and NOT the `"restart"` command, which also calls `play()` on
+ * the element (see `ProjectionApp`'s media-command handler) — that is what
+ * `restartDeck()` wants, because restarting a deck IS starting it again. Here
+ * it would be a lie twice over: the operator who paused a track and rewound
+ * it did not ask for it to sound, and `paused` is declarative state in the
+ * store (`CLAUDE.md`), so an element playing behind a store that still says
+ * "paused" leaves the panel showing a pause button while the room hears the
+ * track.
+ */
+export function restartMedia(target: MediaTarget): void {
+  seekMedia(target, 0);
+}
+
 /** Stops a standalone audio track and drops its row — never available for the
  *  video or the deck's soundtrack, so there is no button anywhere that can
  *  cut what's actually on the projector. */

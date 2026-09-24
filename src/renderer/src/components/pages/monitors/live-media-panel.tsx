@@ -7,6 +7,7 @@ import { useProjectionStore } from "@renderer/stores/projection.store";
 import { useAudioStore } from "@renderer/stores/audio.store";
 import { useLiveHeading } from "@renderer/lib/hooks/use-live";
 import {
+  restartMedia,
   seekMedia,
   setMediaVolume,
   stopAudioTrack,
@@ -68,6 +69,7 @@ export function LiveMediaPanel() {
         kind="video"
         label={heading ?? ""}
         onDelete={clearBaseContent}
+        onRestart={() => restartMedia({ kind: "video" })}
         onSeek={(seconds) => seekMedia({ kind: "video" }, seconds)}
         onTogglePause={toggleVideoPause}
         onVolumeChange={(volume) => setMediaVolume({ kind: "video" }, volume)}
@@ -112,6 +114,12 @@ export function LiveMediaPanel() {
         key={track.trackId}
         kind="audio"
         label={isDeck ? t("media.deckMusic", { title: heading ?? "" }) : track.label}
+        // Never on the deck's own music: the transport under the LIVE monitor
+        // already has a restart, and that one puts the slide cursor back to 1
+        // with it. A second button that rewound only the audio would leave the
+        // soundtrack playing under the wrong slide — the two are one clock
+        // (`effects/deck-autoplay.ts`).
+        onRestart={isDeck ? undefined : () => restartMedia({ kind: "audio", trackId: track.trackId })}
         onSeek={(seconds) => seekMedia({ kind: "audio", trackId: track.trackId }, seconds)}
         onStop={isDeck ? undefined : () => stopAudioTrack(track.trackId)}
         onTogglePause={() => toggleAudioTrackPause(track.trackId)}

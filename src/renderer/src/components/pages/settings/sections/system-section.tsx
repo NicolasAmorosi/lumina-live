@@ -1,7 +1,10 @@
+import { useEffect, useState } from "react";
+import { ASSET_KINDS, type AssetKind } from "@shared/constants";
 import type { Locale } from "@shared/types/settings";
 import { availableLocales, useT, type MessageKey } from "@renderer/lib/i18n/i18n-provider";
-import { Button, FieldGroup, FieldRow, Icon, Select } from "@renderer/components/ui";
+import { Button, Callout, FieldGroup, FieldRow, Icon, Select } from "@renderer/components/ui";
 import { useSettingsStore } from "@renderer/stores/settings.store";
+import { api } from "@renderer/lib/api";
 
 const LOCALE_LABEL_KEYS: Record<Locale, MessageKey> = {
   es: "settings.locales.es",
@@ -9,12 +12,54 @@ const LOCALE_LABEL_KEYS: Record<Locale, MessageKey> = {
   en: "settings.locales.en",
 };
 
-/** App-wide preferences that aren't about projection: theme and language. */
+const KIND_LABEL_KEYS: Record<AssetKind, MessageKey> = {
+  video: "library.videos",
+  image: "library.images",
+  audio: "library.audios",
+  ppt: "library.ppts",
+};
+
+/** App-wide preferences that aren't about projection: theme, language, how
+ *  hard the control window works, and where the file picker opens. */
 export function SystemSection() {
   const t = useT();
   const theme = useSettingsStore((s) => s.settings["ui.theme"]);
   const locale = useSettingsStore((s) => s.settings["ui.locale"]);
+  const defaultFolders = useSettingsStore((s) => s.settings["files.defaultFolders"]);
   const updateSettings = useSettingsStore((s) => s.update);
+
+  /** What each kind falls back to when it has no override — resolved by the
+   *  OS, so it can only be read from main. Fetched once: a machine does not
+   *  move its Music folder while Ajustes is open, and this section stays
+   *  mounted after the first visit (see `SettingsModal`). */
+  const [systemFolders, setSystemFolders] = useState<Record<AssetKind, string> | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void api.files
+      .systemFolders()
+      .then((folders) => {
+        if (alive) setSystemFolders(folders);
+      })
+      .catch(() => {
+        // Nothing to say: the rows fall back to naming the system folder
+        // without quoting its path, and every button still works.
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function setFolder(kind: AssetKind, folder: string | null) {
+    await updateSettings({ "files.defaultFolders": { ...defaultFolders, [kind]: folder } });
+  }
+
+  async function chooseFolder(kind: AssetKind) {
+    // Opens on the folder being replaced — the override if there is one, the
+    // system folder otherwise — so "Cambiar" starts from what it is changing.
+    const current = defaultFolders[kind] ?? systemFolders?.[kind];
+    const chosen = await api.files.pickFolder(current);
+    if (chosen !== null) await setFolder(kind, chosen);
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -54,6 +99,43 @@ export function SystemSection() {
           />
         </FieldRow>
       </FieldGroup>
+
+      {/* One row per kind, in `ASSET_KINDS` order, so this group cannot fall
+          out of step with the resource tabs it governs. */}
+      <FieldGroup title={t("settings.groups.folders")}>
+        {ASSET_KINDS.map((kind) => {
+          const override = defaultFolders[kind];
+          const systemFolder = systemFolders?.[kind];
+          return (
+            <FieldRow
+              description={
+                override ??
+                (systemFolder
+                  ? t("settings.folderSystemValue", { path: systemFolder })
+                  : t("settings.folderSystem"))
+              }
+              key={kind}
+              label={t(KIND_LABEL_KEYS[kind])}
+            >
+              <Button onClick={() => void chooseFolder(kind)} variant="secondary">
+                {t("settings.chooseFolder")}
+              </Button>
+              <Button
+                disabled={override === null}
+                onClick={() => void setFolder(kind, null)}
+                variant="ghost"
+              >
+                {t("settings.resetFolder")}
+              </Button>
+            </FieldRow>
+          );
+        })}
+      </FieldGroup>
+
+      <Callout tone="info">
+        <p className="font-medium">{t("settings.foldersTitle")}</p>
+        <p className="mt-1 text-xs text-muted-foreground">{t("settings.foldersBody")}</p>
+      </Callout>
     </div>
   );
 }

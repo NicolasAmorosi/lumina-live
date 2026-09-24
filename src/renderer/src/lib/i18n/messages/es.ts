@@ -365,7 +365,13 @@ const es = {
     mute: "Silenciar",
     unmute: "Activar sonido",
   },
-  live: { title: "En Vivo", disconnected: "Sin pantalla", noSignal: "Sin señal" },
+  live: {
+    title: "En Vivo",
+    disconnected: "Sin pantalla",
+    noSignal: "Sin señal",
+    logoMissing: "No hay logo cargado",
+    logoMissingHint: "Elegí uno en Configuración › Proyección",
+  },
   footer: { black: "NEGRO", logo: "LOGO", live: "VIVO", clear: "LIMPIAR" },
   projector: {
     closedUnexpectedly: "Se cerró la ventana de proyección",
@@ -466,6 +472,7 @@ const es = {
       slidesQuality: "Calidad de conversión",
       appearance: "Apariencia",
       language: "Idioma",
+      folders: "Carpetas de archivos",
     },
     bibleImport: "Importar versión",
     bibleImportDesc: "Agregá una nueva versión de la Biblia desde un archivo.",
@@ -482,6 +489,11 @@ const es = {
     logoDesc: "Se muestra en el proyector cuando no hay nada en vivo.",
     logoFormats: "Formatos aceptados: JPG, PNG, GIF, WEBP, BMP.",
     logoUnreadable: "Esa imagen no se pudo leer. Se conserva el logo anterior.",
+    logoRemove: "Quitar",
+    logoEmpty: "No hay ningún logo cargado",
+    logoRemoveTitle: "¿Quitar el logo?",
+    logoRemoveLiveBody:
+      "El proyector está mostrando el logo ahora mismo: al quitarlo, la pantalla queda en negro hasta que mandes algo EN VIVO. No se borra ningún archivo — el logo sale de la configuración y podés volver a elegirlo cuando quieras.",
     chooseFile: "Elegir archivo…",
     clearLive: "Limpiar contenido en vivo",
     clearLiveDesc: "Saca lo que está proyectado ahora y vuelve al logo.",
@@ -493,6 +505,13 @@ const es = {
     transitionDurationDesc: "Se ignora con el estilo Instantáneo.",
     language: "Idioma",
     languageDesc: "Idioma de la interfaz de control.",
+    chooseFolder: "Elegir carpeta…",
+    resetFolder: "Restablecer",
+    folderSystem: "Carpeta del sistema",
+    folderSystemValue: "Carpeta del sistema · {path}",
+    foldersTitle: "Dónde se abre el selector de archivos",
+    foldersBody:
+      "Al agregar archivos con el botón + de una pestaña de recursos, el selector abre siempre la carpeta de ese tipo. Sin tocar nada, es la carpeta del sistema operativo (Música, Videos, Imágenes y Documentos): WorshipApp la resuelve en cada equipo, así que funciona igual en Windows, macOS y Linux y no depende del idioma del sistema. Si tus archivos están en otro lado, fijá acá la carpeta de cada tipo.",
     // Endonyms: a language is named in itself, so the option is readable to
     // whoever is looking for it. The three cover `Locale` in full — the
     // picker only offers the ones with a dictionary (`availableLocales`),
