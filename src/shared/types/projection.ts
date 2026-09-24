@@ -4,6 +4,7 @@
  * `selectOutput` switch (renderer/stores/projection.store.ts) is a compile error,
  * not a runtime "stuck on logo" bug like the old `restorePrevious()`.
  */
+import type { SlideRect } from "./deck";
 import type { SceneStyle } from "./scene-style";
 import type { TimerClock, TimerFormat } from "./timer";
 import type { TransitionSpec } from "./transition";
@@ -36,6 +37,42 @@ export type VideoUnderlay = {
    *  every remount — a new epoch, or the projection window being rebuilt onto
    *  another screen — and the operator would be left with a level the app
    *  believes it is at and the room cannot hear. */
+  volume: number;
+} | null;
+
+/**
+ * A video embedded in the slide that is currently live, positioned inside it.
+ *
+ * Top-level on `ProjectionOutput` and NOT a field of the `slide` variant, for
+ * exactly the reason `videoUnderlay` is: NEGRO/LOGO replaces the output kind
+ * with `black`/`logo`, so a video that lived inside the `slide` variant would
+ * vanish from the push the instant the operator covered the stage — unmounting
+ * the element, losing its position, and recreating the hardware decoder on
+ * every toggle, which is the documented road to `PIPELINE_ERROR_DECODE`. The
+ * projector covers it (opacity 0) and pauses it instead, and uncovering
+ * resumes where it was. Same treatment as a full-screen video, deliberately:
+ * the video stops, a deck's soundtrack does not.
+ *
+ * `rect` is where it goes INSIDE the slide (fractions, 0..1) — so the
+ * projector has to lay it over the letterboxed image box, never over the whole
+ * stage. `paused`, `volume` and `startAtSeconds` are the same declarative
+ * fields, with the same meanings, that `VideoUnderlay` documents.
+ */
+export type SlideVideo = {
+  url: string;
+  /** Identity of THIS element for its whole mount. Advances when the live
+   *  slide changes, never when an overlay goes up — a slide video that keeps
+   *  its epoch is the same element, still holding its position. */
+  epoch: number;
+  rect: SlideRect;
+  /** The slide's own width/height ratio. The projector needs it to reproduce
+   *  the box `object-contain` gave the slide image, which is what `rect` is
+   *  relative to — the stage's own ratio is not it whenever the two differ. */
+  aspectRatio: number;
+  loop: boolean;
+  paused: boolean;
+  startAtSeconds: number;
+  /** 0..1 */
   volume: number;
 } | null;
 
@@ -110,17 +147,31 @@ export const INSTANT_TRANSITION: SceneTransition = { epoch: 0, style: "none", du
 
 export type ProjectionOutput = ProjectionOutputKind & {
   videoUnderlay: VideoUnderlay;
+  slideVideo: SlideVideo;
   transition: SceneTransition;
 };
 
-/** Identifies one media element in the projection window: the single video,
- *  or one of N simultaneous audio tracks by its `trackId`. */
-export type MediaTarget = { kind: "video" } | { kind: "audio"; trackId: string };
+/** Identifies one media element in the projection window: the full-screen
+ *  video, the video embedded in the live slide, or one of N simultaneous audio
+ *  tracks by its `trackId`. The first two are single slots because the
+ *  projector only ever sustains one of each. */
+export type MediaTarget =
+  | { kind: "video" }
+  | { kind: "slideVideo" }
+  | { kind: "audio"; trackId: string };
 
 /** The string key `mediaStatus` and command routing are indexed by — collapses
- *  `MediaTarget` to a value usable as an object/Map key. */
+ *  `MediaTarget` to a value usable as an object/Map key. A `switch` rather
+ *  than a ternary so a fourth target cannot be added without landing here. */
 export function mediaTargetKey(target: MediaTarget): string {
-  return target.kind === "video" ? "video" : `audio:${target.trackId}`;
+  switch (target.kind) {
+    case "video":
+      return "video";
+    case "slideVideo":
+      return "slideVideo";
+    case "audio":
+      return `audio:${target.trackId}`;
+  }
 }
 
 /** Which element of the projection window failed. "scene" is the still image

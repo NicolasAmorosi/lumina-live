@@ -132,8 +132,32 @@ sea 3× más lenta que leer el archivo completo.
 - Audio: `p:pic` con `a:audioFile` + los `_rels` del slide; `p:cMediaNode` da loop/volumen.
   OOXML no tiene un booleano de "suena en todo el deck" — es una heurística documentada
   (`loop` o `repeatCount="indefinite"` ⇒ `scope: "deck"`).
+- Video: `p:pic` con `a:videoFile` (o el `p14:media` del `p:extLst`), con la misma resolución por
+  `_rels`. Tres diferencias con el audio, y las tres importan:
+  1. **La geometría es obligatoria.** El rect sale de `p:spPr/a:xfrm` (EMU) contra `p:sldSz` y se
+     guarda como fracciones 0..1. Un `p:pic` **sin** `a:xfrm` propio hereda el del placeholder del
+     layout, que este parser no resuelve: se descarta y se anota en `skippedVideoParts`. Un default
+     sería un clip pegado en el lugar equivocado en pleno culto, y la diapositiva rasterizada ya
+     muestra el fotograma de portada en su sitio.
+  2. **`p:cMediaNode` se busca por `spid`**, no en agregado. Una diapositiva con narración *y* clip
+     tiene dos nodos, y darle al video el volumen de la narración es un clip mudo sin explicación.
+     Se cae al agregado de toda la diapositiva sólo cuando ningún nodo declara un `p:tgtEl`.
+  3. **Un rel `TargetMode="External"` no es una parte.** `parseRels` lo descarta: unir un
+     `C:\clips\intro.mp4` a `ppt/slides/` produce un nombre de parte verosímil que no nombra
+     nada. Era inofensivo mientras el valor sólo se logueaba.
 - `.ppt`/`.pps` binarios (OLE2, no zip): se convierten **también** a `.pptx` con una segunda pasada
   de LibreOffice para recuperar estructura y audio embebido (`timings_source = 'ooxml-converted'`).
+  El **video no sobrevive** ese round-trip, y PowerPoint 97-2003 casi nunca lo incrustaba (lo
+  enlazaba por ruta absoluta), así que la reproducción de video embebido es de `.pptx`/`.ppsx`.
+
+### Del OOXML a la diapositiva: el índice cambia de espacio
+
+Los índices del OOXML cuentan las diapositivas **ocultas**; `deck_slides.slide_index` cuenta
+**páginas** del PDF, que no las incluyen. El video se guarda ya traducido al espacio de páginas
+(mapa construido con la misma lista `visibleSlides` que alinea los timings), y si los conteos no
+coinciden se abandonan **todos** los videos del deck en vez de aproximar — la misma disciplina que
+`mergeBinaryTimings`, por la misma razón elevada al cubo: un timing corrido adelanta una
+diapositiva, un video corrido reproduce un clip sobre la diapositiva equivocada.
 
 ## Los timings de un binario legacy NO salen del `.pptx` convertido
 

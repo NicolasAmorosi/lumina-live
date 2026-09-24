@@ -9,10 +9,11 @@ import type {
   ProjectionOutput,
   ProjectionOutputKind,
   SceneTransition,
+  SlideVideo,
   VideoUnderlay,
 } from "@shared/types/projection";
 import type { TransitionStyle } from "@shared/types/transition";
-import type { DeckSlide, DeckSoundtrack } from "@shared/types/deck";
+import type { DeckSlide, DeckSlideVideo, DeckSoundtrack } from "@shared/types/deck";
 import type { TimerClock } from "@shared/types/timer";
 import type { UtilityScene } from "@shared/types/utility";
 import { assetUrl } from "@shared/urls";
@@ -26,6 +27,9 @@ export type LiveDeck = {
   deckId: number;
   slides: DeckSlide[];
   soundtrack: DeckSoundtrack | null;
+  /** The slides that carry a playable embedded video, by slide index. Almost
+   *  always empty — a `.pps` hymnal deck never has one. */
+  videos: DeckSlideVideo[];
   /** Audio timestamp at which slide i should appear; index 0 unused, so
    *  `cumulativeMs[n]` is the boundary for the 1-based slide n. */
   cumulativeMs: number[];
@@ -56,6 +60,25 @@ export type ProjectionStoreState = {
    *  `media.volume` default, so a level balanced for one clip never carries
    *  into the next one silently. */
   videoVolume: number;
+
+  /** Identity of the live slide's video element — see `SlideVideo.epoch`.
+   *  Advanced by everything that can change WHICH slide is live, and by
+   *  nothing else: an overlay going up must not remount the element, or the
+   *  video restarts every time the operator presses NEGRO. */
+  slideVideoEpoch: number;
+  /** Operator's declarative pause for the live slide's video. Reset with the
+   *  epoch, so a new slide always starts playing. */
+  slideVideoPaused: boolean;
+  /** Operator's level, or `null` while they haven't set one — the file's own
+   *  declared level then applies, and the app default when it declares none.
+   *  Three layers because each answers a different question, and collapsing
+   *  them would make a deck authored at 40% come back at 100% the moment
+   *  anyone touched any slider. */
+  slideVideoVolume: number | null;
+  /** Where the element would resume if it had to be mounted again — the same
+   *  mount-time seek `VideoUnderlay.startAtSeconds` is, written by
+   *  `freezeLivePositions()`. */
+  slideVideoStartAt: number;
 
   liveDeck: LiveDeck | null;
   autoplay: AutoplayState;
@@ -101,6 +124,13 @@ export type ProjectionStoreState = {
   /** Clamped here, not at the call sites: `HTMLMediaElement.volume` throws on
    *  an out-of-range value, and a slider can overshoot by a rounding error. */
   setVideoVolume: (volume: number) => void;
+
+  /** The three slide-video counterparts of `setVideoPaused`/`setVideoVolume`/
+   *  `setVideoResumeAt`, and they patch state in place for the same reason:
+   *  none of them is "something new is live". */
+  setSlideVideoPaused: (paused: boolean) => void;
+  setSlideVideoVolume: (volume: number) => void;
+  setSlideVideoResumeAt: (startAtSeconds: number) => void;
 
   /** Moves the live utility scene's clock: a pause, a resume, a reset.
    *
@@ -154,6 +184,24 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
+/** A new slide is a new element: a fresh identity, playing, at the level the
+ *  file asks for, from the beginning. Written as one object so the three
+ *  actions that can change which slide is live cannot each reset a different
+ *  subset of it. */
+function freshSlideVideo(epoch: number): {
+  slideVideoEpoch: number;
+  slideVideoPaused: boolean;
+  slideVideoVolume: number | null;
+  slideVideoStartAt: number;
+} {
+  return {
+    slideVideoEpoch: epoch + 1,
+    slideVideoPaused: false,
+    slideVideoVolume: null,
+    slideVideoStartAt: 0,
+  };
+}
+
 export const useProjectionStore = create<ProjectionStoreState>()(
   subscribeWithSelector((set, get) => ({
     base: null,
@@ -162,6 +210,11 @@ export const useProjectionStore = create<ProjectionStoreState>()(
     presentationOpen: false,
     videoPaused: false,
     videoVolume: defaultMediaVolume(),
+
+    slideVideoEpoch: 0,
+    slideVideoPaused: false,
+    slideVideoVolume: null,
+    slideVideoStartAt: 0,
 
     liveDeck: null,
     autoplay: "off",
@@ -174,7 +227,13 @@ export const useProjectionStore = create<ProjectionStoreState>()(
     transitionStyle: "crossfade",
     transitionDurationMs: 300,
 
-    setBase: (base) => set({ base, videoPaused: false, videoVolume: defaultMediaVolume() }),
+    setBase: (base) =>
+      set((state) => ({
+        base,
+        videoPaused: false,
+        videoVolume: defaultMediaVolume(),
+        ...freshSlideVideo(state.slideVideoEpoch),
+      })),
     setOverlay: (overlay) => set({ overlay }),
     setLogoUrl: (logoUrl) => set({ logoUrl }),
     setPresentationOpen: (presentationOpen) => set({ presentationOpen }),
@@ -192,6 +251,20 @@ export const useProjectionStore = create<ProjectionStoreState>()(
         if (base?.kind !== "video" || base.startAtSeconds === startAtSeconds) return state;
         return { base: { ...base, startAtSeconds } };
       }),
+
+    setSlideVideoPaused: (slideVideoPaused) => set({ slideVideoPaused }),
+    setSlideVideoVolume: (volume) =>
+      set((state) => {
+        const clamped = Math.min(1, Math.max(0, volume));
+        // Same no-op guard as `setVideoVolume`, for the same reason: this is
+        // an input of `selectOutput`'s memo and a slider drag reports the same
+        // rounded value many times over.
+        return state.slideVideoVolume === clamped ? state : { slideVideoVolume: clamped };
+      }),
+    setSlideVideoResumeAt: (startAtSeconds) =>
+      set((state) =>
+        state.slideVideoStartAt === startAtSeconds ? state : { slideVideoStartAt: startAtSeconds },
+      ),
 
     setTimerClock: (clock) =>
       set((state) => {
@@ -215,6 +288,7 @@ export const useProjectionStore = create<ProjectionStoreState>()(
         autoplay: "off",
         autoplayMode: "synced",
         soundtrackEpoch: state.soundtrackEpoch + 1,
+        ...freshSlideVideo(state.slideVideoEpoch),
       })),
 
     // Writing the cursor into `base` is what makes a slide change flow through
@@ -226,7 +300,13 @@ export const useProjectionStore = create<ProjectionStoreState>()(
       if (base?.kind !== "deck" || !liveDeck) return;
       const next = clamp(index, 1, Math.max(1, liveDeck.slides.length));
       if (next === base.slideIndex) return;
-      set({ base: { ...base, slideIndex: next } });
+      // The slide changed, so whatever video was on the old one is a different
+      // element now — even when the new slide has none, in which case the
+      // fresh identity is simply never used.
+      set((state) => ({
+        base: { ...base, slideIndex: next },
+        ...freshSlideVideo(state.slideVideoEpoch),
+      }));
     },
 
     setAutoplay: (autoplay) => set({ autoplay }),
@@ -268,7 +348,11 @@ export const useProjectionStore = create<ProjectionStoreState>()(
     beginScene: () =>
       set((state) => {
         const sceneEpoch = state.sceneEpoch + 1;
-        const keys = [mediaErrorKey({ kind: "scene" }), mediaErrorKey({ kind: "video" })];
+        const keys = [
+          mediaErrorKey({ kind: "scene" }),
+          mediaErrorKey({ kind: "video" }),
+          mediaErrorKey({ kind: "slideVideo" }),
+        ];
         // The common case by far is that there is nothing to drop, and this
         // runs on every go-live: handing back a fresh `mediaErrors` object
         // would make its subscribers recompute for nothing.
@@ -298,6 +382,34 @@ function selectVideoUnderlay(state: ProjectionStoreState): VideoUnderlay {
     paused: state.videoPaused,
     startAtSeconds: state.base.startAtSeconds,
     volume: state.videoVolume,
+  };
+}
+
+/**
+ * The video embedded in the live slide, if that slide has one.
+ *
+ * Reads `base`/`liveDeck` and deliberately NOT `overlay`: a slide video has to
+ * survive NEGRO/LOGO as a mounted, paused element, exactly like
+ * `selectVideoUnderlay`'s does — the projector is what covers it. Asking about
+ * the overlay here would unmount the element on every toggle and restart the
+ * clip each time the operator uncovered the stage.
+ */
+function selectSlideVideo(state: ProjectionStoreState): SlideVideo {
+  if (state.base?.kind !== "deck") return null;
+  const deck = state.liveDeck;
+  if (!deck || deck.assetId !== state.base.assetId || deck.slides.length === 0) return null;
+  const index = clamp(state.base.slideIndex, 1, deck.slides.length);
+  const video = deck.videos.find((candidate) => candidate.slideIndex === index);
+  if (!video) return null;
+  return {
+    url: video.url,
+    epoch: state.slideVideoEpoch,
+    rect: video.rect,
+    aspectRatio: video.aspectRatio,
+    loop: video.loop,
+    paused: state.slideVideoPaused,
+    startAtSeconds: state.slideVideoStartAt,
+    volume: state.slideVideoVolume ?? video.volume ?? defaultMediaVolume(),
   };
 }
 
@@ -361,6 +473,7 @@ export function selectOutput(state: ProjectionStoreState): ProjectionOutput {
   return {
     ...selectOutputWithoutUnderlay(state),
     videoUnderlay: selectVideoUnderlay(state),
+    slideVideo: selectSlideVideo(state),
     transition: selectTransition(state),
   };
 }
@@ -396,6 +509,10 @@ type OutputInputs = readonly [
   ProjectionStoreState["logoUrl"],
   ProjectionStoreState["videoPaused"],
   ProjectionStoreState["videoVolume"],
+  ProjectionStoreState["slideVideoEpoch"],
+  ProjectionStoreState["slideVideoPaused"],
+  ProjectionStoreState["slideVideoVolume"],
+  ProjectionStoreState["slideVideoStartAt"],
   ProjectionStoreState["liveDeck"],
   ProjectionStoreState["sceneEpoch"],
   ProjectionStoreState["transitionStyle"],
@@ -409,6 +526,10 @@ function outputInputs(state: ProjectionStoreState): OutputInputs {
     state.logoUrl,
     state.videoPaused,
     state.videoVolume,
+    state.slideVideoEpoch,
+    state.slideVideoPaused,
+    state.slideVideoVolume,
+    state.slideVideoStartAt,
     state.liveDeck,
     state.sceneEpoch,
     state.transitionStyle,

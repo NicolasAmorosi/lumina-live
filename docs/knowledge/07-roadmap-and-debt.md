@@ -23,8 +23,14 @@ canciones/letras con secciones proyectables.
 - **UI de favoritos e historial bíblico**: las tablas `bible_favorites` y `projection_history` y
   sus repos existen y funcionan (`HistoryRepo.record()` ya se llama en cada
   `projection:show`), pero no hay pantalla que los liste todavía.
-- **Video embebido dentro de una diapositiva**: se detecta y se loguea al convertir, pero no se
-  extrae ni se reproduce (fuera de alcance acordado). El audio embebido sí funciona.
+- ~~**Video embebido dentro de una diapositiva**~~: **implementado el 2026-09-20** como overlay
+  posicionado. Queda un límite duro que no es deuda sino formato: los `.ppt`/`.pps` legacy pierden
+  el video entero, así que la feature es solo para `.pptx`/`.ppsx` — medido en
+  [`.claude/knowledge/an-embedded-deck-video-survives-to-the-pdf-but-never-survives-a-ppt.md`](../../.claude/knowledge/an-embedded-deck-video-survives-to-the-pdf-but-never-survives-a-ppt.md).
+  Lo que sí queda abierto: un video cuyo `p:pic` no trae `a:xfrm` propio (hereda la geometría de un
+  placeholder del layout, que el parser no resuelve) se descarta en vez de adivinarse, y un
+  `.wmv`/`.avi` se extrae pero se marca `playable: false`. En los dos casos la diapositiva se sigue
+  viendo bien: el fotograma de portada ya está rasterizado en su lugar.
 - **Ajustes de proyección configurables** (tamaño de fuente, alineación) para biblia/texto: hoy
   siguen hardcodeados en `output-view.tsx`, igual que la legacy. La maquinaria para resolverlo ya
   existe y se construyó pensando en esto: `SceneStyle` (`shared/types/scene-style.ts`) con sus

@@ -12,7 +12,7 @@ import type { DeckDTO, DeckProgress } from "@shared/types/deck";
 import { deckCacheDir, slidesCacheDir, slidesTempDir, sofficeProfileDir } from "../paths";
 import { getMediaRepo, getSettingsRepo, getSlidesRepo } from "../services/repos";
 import { broadcast } from "../services/broadcast";
-import type { DeckRow, NewAudio, NewSlide } from "../db/repositories/slides.repo";
+import type { DeckRow, NewAudio, NewSlide, NewVideo } from "../db/repositories/slides.repo";
 import { SlideError, isSlideError } from "./errors";
 import {
   convertBatchToPdf,
@@ -30,6 +30,7 @@ import {
 import {
   containerKind,
   extractAudioParts,
+  extractVideoParts,
   readPresentationMeta,
   type PresentationMeta,
 } from "./pptx-metadata";
@@ -574,7 +575,7 @@ export function cancelAll(): void {
 // ---------------------------------------------------------------------------
 
 function emptyMeta(): PresentationMeta {
-  return { slideCount: 0, slideSizeEmu: null, slides: [], audio: [], skippedVideoParts: [] };
+  return { slideCount: 0, slideSizeEmu: null, slides: [], audio: [], video: [], skippedVideoParts: [] };
 }
 
 /** Assembles the DTO for a `ready` deck row, folding in the asset's *linked*
@@ -1007,9 +1008,49 @@ async function runConversion(job: Job): Promise<DeckDTO> {
       }
     }
 
+    // Video embedded in a slide. Its index has to cross from the OOXML's own
+    // slide numbering (hidden slides included) into PAGE numbering, which is
+    // what `deck_slides` stores — the same shift that would misalign a timing,
+    // except a misplaced video is not a slide arriving a beat early: it is a
+    // clip playing over the wrong slide, in front of the congregation. So the
+    // mapping is built from the same `visibleSlides` list, and when the counts
+    // disagree the videos are abandoned outright rather than approximated.
+    // Same discipline as `mergeBinaryTimings`.
+    const videoDir = path.join(jobDir, "video");
+    const videos: NewVideo[] = [];
+
+    if (meta.video.length > 0) {
+      const pageIndexByOoxmlIndex = new Map<number, number>();
+      visibleSlides.forEach((slide, position) => pageIndexByOoxmlIndex.set(slide.slideIndex, position + 1));
+      const mappable = visibleSlides.length === pages.length;
+
+      if (!mappable) {
+        console.warn(
+          `[slides] ${meta.video.length} embedded video(s) dropped — ${visibleSlides.length} visible slides vs ${pages.length} pages, so no slide they could be placed on with certainty`,
+        );
+      } else {
+        for (const extracted of extractVideoParts(metaResult.parsedFrom, meta.video, videoDir)) {
+          const slideIndex = pageIndexByOoxmlIndex.get(extracted.slideIndex);
+          // A video on a HIDDEN slide has no page to live on. Not an error:
+          // the slide itself was never rendered either.
+          if (slideIndex === undefined) continue;
+          videos.push({
+            slideIndex,
+            videoFile: extracted.file,
+            ext: extracted.ext,
+            bytes: extracted.bytes,
+            rect: extracted.rect,
+            loop: extracted.loop,
+            volume: extracted.volume,
+            playable: extracted.playable,
+          });
+        }
+      }
+    }
+
     if (meta.skippedVideoParts.length > 0) {
       console.info(
-        `[slides] ${meta.skippedVideoParts.length} embedded video part(s) skipped (out of scope): ${meta.skippedVideoParts.join(", ")}`,
+        `[slides] ${meta.skippedVideoParts.length} embedded video part(s) skipped (not usable): ${meta.skippedVideoParts.join(", ")}`,
       );
     }
 
@@ -1020,6 +1061,9 @@ async function runConversion(job: Job): Promise<DeckDTO> {
     fs.renameSync(imagesDir, finalDir);
     if (fs.existsSync(audioDir)) {
       fs.renameSync(audioDir, path.join(finalDir, "audio"));
+    }
+    if (fs.existsSync(videoDir)) {
+      fs.renameSync(videoDir, path.join(finalDir, "video"));
     }
 
     const aspectRatio = meta.slideSizeEmu
@@ -1033,7 +1077,8 @@ async function runConversion(job: Job): Promise<DeckDTO> {
     // conversion, on the thread that serves the projection window.
     const bytesOnDisk =
       pages.reduce((total, page) => total + page.bytes + page.thumbBytes, 0) +
-      audio.reduce((total, track) => total + track.bytes, 0);
+      audio.reduce((total, track) => total + track.bytes, 0) +
+      videos.reduce((total, video) => total + video.bytes, 0);
 
     const deckId = getSlidesRepo().insertDeck(
       {
@@ -1059,6 +1104,7 @@ async function runConversion(job: Job): Promise<DeckDTO> {
       },
       slides,
       audio,
+      videos,
     );
 
     const row = getSlidesRepo().getDeckById(deckId);

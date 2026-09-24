@@ -13,6 +13,7 @@ import type {
   ProjectionMediaError,
   ProjectionOutput,
   SceneTransition,
+  SlideVideo,
 } from "@shared/types/projection";
 
 /** Above this drift (seconds) the LIVE monitor's own video is resynced to the
@@ -220,6 +221,147 @@ function LiveVideo({
       src={url}
       style={transitionStyle(role, transition, covered ? 0 : 1)}
     />
+  );
+}
+
+type SlideVideoLayerProps = {
+  /** NEGRO/LOGO is over the slide right now, or something else entirely went
+   *  live. Hides and pauses; never unmounts. */
+  covered: boolean;
+  mode: OutputViewMode;
+  onError: (code: number | null) => void;
+  role: LayerRole;
+  slideVideo: NonNullable<SlideVideo>;
+  /** The projector's own report for this element — only passed in
+   *  `mode === "monitor"`, exactly like `LiveVideo`'s. */
+  status?: MediaStatus | null | undefined;
+  transition: SceneTransition;
+  videoRef?: Ref<HTMLVideoElement> | undefined;
+};
+
+/**
+ * A video embedded inside the live slide, laid over the slide image in the
+ * rect the source file declared for it.
+ *
+ * ## Why it reconstructs the image's box instead of filling the stage
+ *
+ * The slide is painted by an `<img class="size-full object-contain">`, so on a
+ * stage whose shape differs from the deck's it is letterboxed: the pixels the
+ * rect is relative to occupy only part of this element. Positioning against
+ * the stage would put the video off the slide by exactly the size of the black
+ * bars. So the box `object-contain` produced is rebuilt here — `min(100cqw,
+ * ratio * 100cqh)` is literally the contain formula — and the rect is applied
+ * inside it in percentages.
+ *
+ * That needs BOTH container-query axes, and `cqh` only exists under
+ * `container-type: size`; the view's own root is an `inline-size` container
+ * (which is all the `cqw` type sizes everywhere else need). Hence the private
+ * sized container here, which shadows nothing: no descendant of this element
+ * reads a container unit from the root.
+ *
+ * ## What it deliberately does NOT do
+ *
+ * It never unmounts on an overlay. Covering is opacity + pause, the same
+ * bargain `LiveVideo` makes and for the same reason — a `<video>` torn down
+ * and rebuilt on every NEGRO is the documented road to
+ * `PIPELINE_ERROR_DECODE`. And it captures no frozen frame on the way out:
+ * the still slide underneath already shows this video's poster frame, drawn
+ * there by LibreOffice, so there is nothing to preserve.
+ */
+function SlideVideoLayer({
+  covered,
+  mode,
+  onError,
+  role,
+  slideVideo,
+  status,
+  transition,
+  videoRef,
+}: SlideVideoLayerProps) {
+  const elementRef = useRef<HTMLVideoElement | null>(null);
+  const shouldPlay = !covered && !slideVideo.paused;
+  const { rect } = slideVideo;
+
+  function attach(element: HTMLVideoElement | null) {
+    elementRef.current = element;
+    // Same belt-and-suspenders as `LiveVideo`: only the projector is audible,
+    // whatever a future mode forgets to check.
+    if (element && mode !== "live") element.volume = 0;
+    if (typeof videoRef === "function") videoRef(element);
+    else if (videoRef) (videoRef as { current: HTMLVideoElement | null }).current = element;
+  }
+
+  // `autoPlay` only applies to a freshly loaded element, so every later
+  // transition — an overlay, an operator pause — is driven imperatively.
+  useEffect(() => {
+    const element = elementRef.current;
+    if (!element) return;
+    if (shouldPlay) element.play().catch(() => undefined);
+    else element.pause();
+  }, [shouldPlay]);
+
+  useEffect(() => {
+    const element = elementRef.current;
+    if (element && mode === "live") element.volume = slideVideo.volume;
+  }, [mode, slideVideo.volume]);
+
+  // Resyncs a confidence monitor's own independently decoding copy to the
+  // projector's real position — and, as a side effect, is how a seek from the
+  // media panel reaches this element at all. See `LiveVideo`'s twin.
+  const epoch = slideVideo.epoch;
+  useEffect(() => {
+    if (mode !== "monitor" || !status || status.epoch !== epoch) return;
+    const element = elementRef.current;
+    if (!element) return;
+    if (Math.abs(element.currentTime - status.currentTimeSeconds) > MONITOR_DRIFT_THRESHOLD_SECONDS) {
+      element.currentTime = status.currentTimeSeconds;
+    }
+  }, [mode, status, epoch]);
+
+  // Keyed by epoch at the call site, so this instance has exactly one
+  // `startAtSeconds` for its whole life — applied once, on mount.
+  useEffect(() => {
+    const element = elementRef.current;
+    if (!element || slideVideo.startAtSeconds <= 0) return;
+    const apply = () => {
+      element.currentTime = slideVideo.startAtSeconds;
+    };
+    if (element.readyState >= 1) apply();
+    else element.addEventListener("loadedmetadata", apply, { once: true });
+    return () => element.removeEventListener("loadedmetadata", apply);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div
+      className="absolute inset-0 flex items-center justify-center"
+      style={{ ...transitionStyle(role, transition, covered ? 0 : 1), containerType: "size" }}
+    >
+      <div
+        className="relative"
+        style={{
+          aspectRatio: `${slideVideo.aspectRatio}`,
+          width: `min(100cqw, ${slideVideo.aspectRatio} * 100cqh)`,
+        }}
+      >
+        <video
+          autoPlay={shouldPlay}
+          className="absolute object-contain"
+          loop={slideVideo.loop}
+          muted={mode !== "live"}
+          onError={(event) => onError(event.currentTarget.error?.code ?? null)}
+          preload="metadata"
+          ref={attach}
+          src={slideVideo.url}
+          style={{
+            left: `${rect.x * 100}%`,
+            top: `${rect.y * 100}%`,
+            width: `${rect.width * 100}%`,
+            height: `${rect.height * 100}%`,
+          }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -451,6 +593,15 @@ type OutputViewProps = {
    *  decoding copy of the same file — the monitor may well be able to play
    *  something the projector can't, and vice versa. */
   reportedErrorUrls?: readonly string[];
+  /** The projector's report for the live slide's own video — the `SlideVideo`
+   *  counterpart of `liveVideoStatus`, and passed under the same rule: only in
+   *  `mode === "monitor"`. */
+  slideVideoStatus?: MediaStatus | null;
+  /** The live slide's video element, so the projection window can route a
+   *  `MediaCommand` to it. Separate from `videoRef` because the two are
+   *  different elements with different lifetimes, even though only one of them
+   *  is ever mounted at a time. */
+  slideVideoRef?: Ref<HTMLVideoElement>;
   videoRef?: Ref<HTMLVideoElement>;
 };
 
@@ -569,6 +720,8 @@ export function OutputView({
   onMediaError,
   output,
   reportedErrorUrls,
+  slideVideoRef,
+  slideVideoStatus,
   videoRef,
 }: OutputViewProps) {
   // Warm the neighbouring slides so a change never waits on a decode. Plain
@@ -722,6 +875,7 @@ export function OutputView({
   // This is also why nothing ever has to clear them.
   const [failedSceneUrl, setFailedSceneUrl] = useState<string | null>(null);
   const [failedVideoUrl, setFailedVideoUrl] = useState<string | null>(null);
+  const [failedSlideVideoUrl, setFailedSlideVideoUrl] = useState<string | null>(null);
 
   function handleImageError(url: string) {
     setFailedSceneUrl(url);
@@ -751,18 +905,31 @@ export function OutputView({
     onMediaError?.({ target: { kind: "video" }, url, code });
   }
 
+  function handleSlideVideoError(code: number | null) {
+    const url = output.slideVideo?.url;
+    if (!url) return;
+    setFailedSlideVideoUrl(url);
+    onMediaError?.({ target: { kind: "slideVideo" }, url, code });
+  }
+
   /** A failure is only worth showing while the thing that failed is still the
    *  thing on screen — which is what keeps a warning from outliving its
    *  content without any explicit clearing (see `ProjectionMediaError.url`). */
   function hasFailed(url: string | null | undefined): url is string {
     if (!url) return false;
-    return failedSceneUrl === url || failedVideoUrl === url || (reportedErrorUrls?.includes(url) ?? false);
+    return (
+      failedSceneUrl === url ||
+      failedVideoUrl === url ||
+      failedSlideVideoUrl === url ||
+      (reportedErrorUrls?.includes(url) ?? false)
+    );
   }
 
   // The video wins when both could apply: with NEGRO/LOGO over a broken
   // video, "the video won't play" is the fact the operator needs — the
   // overlay itself is fine and is about to come off.
   const videoUnderlayUrl = output.videoUnderlay?.url ?? null;
+  const slideVideoUrl = output.slideVideo?.url ?? null;
   // A timer scene's own url is its background image, when it has one — the
   // only file a generated scene can fail to load.
   const sceneUrl =
@@ -775,7 +942,9 @@ export function OutputView({
   // not passing a label: whatever a future caller does, the congregation
   // never sees this.
   const errorNotice =
-    mode !== "live" && errorLabel && (hasFailed(videoUnderlayUrl) || hasFailed(sceneUrl))
+    mode !== "live" &&
+    errorLabel &&
+    (hasFailed(videoUnderlayUrl) || hasFailed(slideVideoUrl) || hasFailed(sceneUrl))
       ? errorLabel
       : null;
   // Same `mode !== "live"` guard, for the same reason: whatever a future
@@ -804,6 +973,12 @@ export function OutputView({
    */
   const videoRole: LayerRole =
     layers.length < 2 ? "steady" : layers[1]?.output.kind === "video" ? "entering" : "leaving";
+
+  /** The same question for the slide's own video, answered against the `slide`
+   *  kind instead: during a transition it belongs to whichever side is a
+   *  slide, and it is the incoming one whenever a slide is arriving. */
+  const slideVideoRole: LayerRole =
+    layers.length < 2 ? "steady" : layers[1]?.output.kind === "slide" ? "entering" : "leaving";
 
   return (
     <div
@@ -847,6 +1022,23 @@ export function OutputView({
           url={output.videoUnderlay.url}
           volume={output.videoUnderlay.volume}
           videoRef={videoRef}
+        />
+      ) : null}
+
+      {/* Over the slide image, under the notice. Mounted for as long as the
+          live slide has a video — an overlay only covers it, exactly like the
+          full-screen video above. */}
+      {output.slideVideo ? (
+        <SlideVideoLayer
+          covered={output.kind !== "slide"}
+          key={output.slideVideo.epoch}
+          mode={mode}
+          onError={handleSlideVideoError}
+          role={slideVideoRole}
+          slideVideo={output.slideVideo}
+          status={slideVideoStatus}
+          transition={transition}
+          videoRef={slideVideoRef}
         />
       ) : null}
 

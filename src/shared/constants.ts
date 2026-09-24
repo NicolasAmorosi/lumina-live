@@ -53,8 +53,12 @@ export type ProgramItemKind = (typeof PROGRAM_ITEM_KINDS)[number];
  *  Bumped to 2: decks converted before the `soffice` shared-profile race fix
  *  (see .claude/knowledge/soffice-shared-profile-race.md) can be cached with
  *  `timings_source: "none"` and every `advance_ms` null even though the
- *  source file has real timings — only a reconversion recovers them. */
-export const SLIDES_CONVERTER_VERSION = 2;
+ *  source file has real timings — only a reconversion recovers them.
+ *  Bumped to 3: a deck converted before slide-embedded video was extracted has
+ *  no `deck_videos` rows, and nothing else about it would ever look stale —
+ *  the images and timings are still perfectly good, so only the version can
+ *  say "this cache entry predates a source of content it does not know about". */
+export const SLIDES_CONVERTER_VERSION = 3;
 
 /** Bump to force every non-manual `media_assets` row to re-run
  *  `resolveLinkedAudio` once, next time its deck is opened, even though a

@@ -60,6 +60,7 @@ function toLiveDeck(deck: DeckDTO): LiveDeck {
     deckId: deck.deckId,
     slides: deck.slides,
     soundtrack: deck.soundtrack,
+    videos: deck.videos,
     cumulativeMs: buildCumulativeMs(deck.slides),
     autoAdvance: deck.autoAdvance,
   };

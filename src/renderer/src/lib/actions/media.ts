@@ -14,8 +14,17 @@ import type { MediaTarget } from "@shared/types/projection";
  * the panel showing a level the room cannot hear. Same rule as `paused`.
  */
 export function setMediaVolume(target: MediaTarget, volume: number): void {
-  if (target.kind === "video") useProjectionStore.getState().setVideoVolume(volume);
-  else useAudioStore.getState().setVolume(target.trackId, volume);
+  switch (target.kind) {
+    case "video":
+      useProjectionStore.getState().setVideoVolume(volume);
+      return;
+    case "slideVideo":
+      useProjectionStore.getState().setSlideVideoVolume(volume);
+      return;
+    case "audio":
+      useAudioStore.getState().setVolume(target.trackId, volume);
+      return;
+  }
 }
 
 /** Pauses/resumes the live video. Declarative — see `VideoUnderlay.paused` —
@@ -24,6 +33,18 @@ export function setMediaVolume(target: MediaTarget, volume: number): void {
 export function toggleVideoPause(): void {
   const { videoPaused, setVideoPaused } = useProjectionStore.getState();
   setVideoPaused(!videoPaused);
+}
+
+/** Pauses/resumes the video embedded in the live slide. Declarative for the
+ *  same reason `toggleVideoPause` is, and deliberately independent of it: a
+ *  slide video and a full-screen video are never live at the same time, but
+ *  they are two different elements with two different pauses, and sharing one
+ *  flag would make the projector's state depend on which of them was live
+ *  last. Never touches the deck's auto-advance: pausing a clip is not pausing
+ *  the presentation. */
+export function toggleSlideVideoPause(): void {
+  const { slideVideoPaused, setSlideVideoPaused } = useProjectionStore.getState();
+  setSlideVideoPaused(!slideVideoPaused);
 }
 
 /**

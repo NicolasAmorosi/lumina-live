@@ -61,6 +61,13 @@ export function deckAudioUrl(audioId: number): string {
   return `worship://deck-audio/${audioId}`;
 }
 
+/** A video embedded in one slide, extracted into the same content-addressed
+ *  deck cache as `deckAudioUrl`'s audio and addressed the same way: by row id,
+ *  never by a path. */
+export function deckVideoUrl(videoId: number): string {
+  return `worship://deck-video/${videoId}`;
+}
+
 /** A deck's *linked* soundtrack — an external file the source presentation
  *  points at (or sits next to), resolved per media asset rather than baked
  *  into the content-addressed deck cache. See `linked-audio.ts`. */

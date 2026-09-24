@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text, uniqueIndex, index } from "drizzle-orm/sqlite-core";
+import { integer, real, sqliteTable, text, uniqueIndex, index } from "drizzle-orm/sqlite-core";
 
 /** Key/value settings. Replaces the legacy settings.json. */
 export const settings = sqliteTable("settings", {
@@ -304,6 +304,47 @@ export const deckAudio = sqliteTable(
     playable: integer("playable").notNull().default(1),
   },
   (t) => [index("ix_deck_audio").on(t.deckId, t.startSlideIndex)],
+);
+
+/**
+ * A video embedded in one slide of a `.pptx`, extracted into the same
+ * content-addressed deck cache as `deck_audio`.
+ *
+ * Its own table rather than a nullable set of columns on `deck_slides`: a
+ * video has a geometry, a level and a loop flag that mean nothing for a slide
+ * without one, and a slide can carry more than one in the source file even
+ * though the projector sustains a single one.
+ *
+ * `slide_index` is in PAGE order (hidden slides already dropped) — the same
+ * index space as `deck_slides.slide_index`, mapped from the OOXML's own
+ * numbering in `deck-service.ts`. Storing the OOXML index here would make
+ * every reader re-do that mapping, and each one a chance to get it wrong.
+ *
+ * The rect is four `REAL`s in slide fractions (0..1). Not EMU: the value is
+ * meaningless without the slide size it was measured against, and that number
+ * does not live on this row.
+ */
+export const deckVideos = sqliteTable(
+  "deck_videos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    deckId: integer("deck_id")
+      .notNull()
+      .references(() => slideDecks.id, { onDelete: "cascade" }),
+    slideIndex: integer("slide_index").notNull(),
+    videoFile: text("video_file").notNull(),
+    ext: text("ext").notNull(),
+    bytes: integer("bytes").notNull(),
+    rectX: real("rect_x").notNull(),
+    rectY: real("rect_y").notNull(),
+    rectWidth: real("rect_width").notNull(),
+    rectHeight: real("rect_height").notNull(),
+    loop: integer("loop").notNull().default(0),
+    /** 0..100, like `deck_audio.volume` — percent, not a fraction. */
+    volume: integer("volume"),
+    playable: integer("playable").notNull().default(1),
+  },
+  (t) => [index("ix_deck_videos").on(t.deckId, t.slideIndex)],
 );
 
 // bible_verses_fts (FTS5 virtual table + sync triggers) is NOT declared here — drizzle-kit's

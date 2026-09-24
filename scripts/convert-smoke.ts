@@ -14,7 +14,12 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { containerKind, extractAudioParts, readPresentationMeta } from "../src/main/slides/pptx-metadata";
+import {
+  containerKind,
+  extractAudioParts,
+  extractVideoParts,
+  readPresentationMeta,
+} from "../src/main/slides/pptx-metadata";
 import { resolveLinkedAudio } from "../src/main/slides/linked-audio";
 import { readBinarySlideTimings } from "../src/main/slides/ppt-binary-timings";
 
@@ -186,8 +191,22 @@ async function main(): Promise<void> {
       } else {
         console.log("   audio: ninguno");
       }
+      if (meta.video.length > 0) {
+        const extracted = extractVideoParts(parseSource, meta.video, path.join(work, "video"));
+        console.log(
+          `   video: ${extracted.length} clip(s) -> ${extracted
+            .map((v) => {
+              const r = v.rect;
+              const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+              return `slide ${v.slideIndex} ${v.ext} ${(v.bytes / 1024).toFixed(0)}KB rect ${pct(r.x)},${pct(r.y)} ${pct(r.width)}x${pct(r.height)}${v.playable ? "" : " (NO reproducible)"}`;
+            })
+            .join(", ")}`,
+        );
+      } else {
+        console.log("   video: ninguno");
+      }
       if (meta.skippedVideoParts.length > 0) {
-        console.log(`   video embebido (fuera de alcance): ${meta.skippedVideoParts.length}`);
+        console.log(`   video no utilizable: ${meta.skippedVideoParts.join(", ")}`);
       }
 
       // Only relevant when the deck has no usable embedded/transition audio —

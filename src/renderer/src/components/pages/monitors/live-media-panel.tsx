@@ -3,7 +3,7 @@ import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { MediaPanel } from "@renderer/components/ui";
 import { MediaTrackRow } from "@renderer/components/shared/media-track-row";
 import { UtilityTrackRow } from "@renderer/components/shared/utility-track-row";
-import { useProjectionStore } from "@renderer/stores/projection.store";
+import { selectOutputMemo, useProjectionStore } from "@renderer/stores/projection.store";
 import { useAudioStore } from "@renderer/stores/audio.store";
 import { useLiveHeading } from "@renderer/lib/hooks/use-live";
 import {
@@ -12,6 +12,7 @@ import {
   setMediaVolume,
   stopAudioTrack,
   toggleAudioTrackPause,
+  toggleSlideVideoPause,
   toggleVideoPause,
 } from "@renderer/lib/actions/media";
 import { clearBaseContent } from "@renderer/lib/actions/playback";
@@ -20,6 +21,8 @@ import { assetUrl } from "@shared/urls";
 
 const VIDEO_STATUS_KEY = mediaTargetKey({ kind: "video" });
 const VIDEO_ERROR_KEY = mediaErrorKey({ kind: "video" });
+const SLIDE_VIDEO_STATUS_KEY = mediaTargetKey({ kind: "slideVideo" });
+const SLIDE_VIDEO_ERROR_KEY = mediaErrorKey({ kind: "slideVideo" });
 
 /**
  * The global media control — every audio-producing thing live right now, in
@@ -38,6 +41,13 @@ const VIDEO_ERROR_KEY = mediaErrorKey({ kind: "video" });
 export function LiveMediaPanel() {
   const t = useT();
   const base = useProjectionStore((s) => s.base);
+  // The memoized output, for the one live thing this panel cannot derive from
+  // `base` alone: whether the CURRENT slide of the live deck carries a video.
+  // Identity is stable across unrelated store writes, so subscribing to the
+  // whole output costs nothing beyond the re-render a slide change already
+  // causes here (the heading moves with it).
+  const slideVideo = useProjectionStore(selectOutputMemo).slideVideo;
+  const slideVideoPaused = useProjectionStore((s) => s.slideVideoPaused);
   const videoPaused = useProjectionStore((s) => s.videoPaused);
   const videoVolume = useProjectionStore((s) => s.videoVolume);
   // The whole record, not a per-target selector: the number of rows below is
@@ -98,8 +108,34 @@ export function LiveMediaPanel() {
     // changes on its own. Its own row (`UtilityTrackRow`) rather than a bare
     // `MediaTrackRow`, because which controls a time scene deserves depends on
     // its tool — see that component.
+    rows.push(<UtilityTrackRow key="utility" onDelete={clearBaseContent} scene={base.scene} />);
+  }
+
+  // A deck's slide can carry its own clip. Its own row rather than folded into
+  // the deck's music, because the two are genuinely separate elements: pausing
+  // the clip must not pause the presentation, which is exactly what pausing
+  // the soundtrack does (`toggleAudioTrackPause`).
+  //
+  // No `onDelete`: there is nothing here to clear on its own. Dismissing this
+  // would mean taking the deck off the projector, and that button belongs to
+  // the deck, not to one slide's video.
+  if (slideVideo) {
+    const status = mediaStatus[SLIDE_VIDEO_STATUS_KEY];
     rows.push(
-      <UtilityTrackRow key="utility" onDelete={clearBaseContent} scene={base.scene} />,
+      <MediaTrackRow
+        currentSeconds={status?.currentTimeSeconds ?? 0}
+        durationSeconds={status?.durationSeconds ?? 0}
+        error={errorFor(SLIDE_VIDEO_ERROR_KEY, slideVideo.url)}
+        key="slide-video"
+        kind="video"
+        label={t("media.slideVideo", { title: heading ?? "" })}
+        onRestart={() => restartMedia({ kind: "slideVideo" })}
+        onSeek={(seconds) => seekMedia({ kind: "slideVideo" }, seconds)}
+        onTogglePause={toggleSlideVideoPause}
+        onVolumeChange={(volume) => setMediaVolume({ kind: "slideVideo" }, volume)}
+        paused={slideVideoPaused}
+        volume={slideVideo.volume}
+      />,
     );
   }
 

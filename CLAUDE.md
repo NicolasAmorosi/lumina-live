@@ -450,6 +450,17 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   remonte: un comando se pierde en cada epoch nuevo y en cada reconstrucción de la ventana, y deja
   al operador con un panel que muestra un nivel que la sala no escucha. Por eso el volumen de
   `M2` no se implementó sobre el `setVolume` que ya existía — ese comando se borró.
+- **Un video embebido en una diapositiva viaja como `slideVideo`, al TOPE de `ProjectionOutput` y
+  no adentro de la variante `slide`.** Bajo NEGRO el `kind` pasa a `"black"`, así que un video que
+  viviera dentro de la variante desaparecería del push justo al taparlo — desmontando el elemento,
+  perdiendo la posición y recreando el decoder en cada toggle. Se tapa con opacidad y se pausa,
+  igual que `videoUnderlay`. Su `rect` está en fracciones de la DIAPOSITIVA, no del escenario: el
+  `<img>` del slide es `object-contain` y letterboxea, así que el overlay reconstruye esa caja con
+  `min(100cqw, ratio * 100cqh)` dentro de un contenedor propio `container-type: size` — el
+  `@container` de la vista es `inline-size` y no da eje de bloque, de modo que un `cqh` suelto
+  resuelve en silencio contra otra cosa. Diagnóstico en
+  [`.claude/knowledge/an-overlay-on-a-slide-must-rebuild-the-object-contain-box-and-cqh-needs-container-type-size.md`](.claude/knowledge/an-overlay-on-a-slide-must-rebuild-the-object-contain-box-and-cqh-needs-container-type-size.md).
+  La feature es solo de `.pptx`/`.ppsx`: un `.ppt`/`.pps` legacy pierde el video entero.
 - **NEGRO/LOGO pausa un video en vivo y mantiene su posición; la pista de audio de un deck sigue
   sonando.** El `<video>` no se desmonta al taparlo (`videoUnderlay` en `ProjectionOutput` +
   `LiveVideo` en `output-view.tsx`) — solo se oculta y se pausa, y al destapar reanuda donde

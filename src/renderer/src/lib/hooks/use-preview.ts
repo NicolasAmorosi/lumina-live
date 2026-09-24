@@ -136,6 +136,12 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
         // The projector warms neighbours; a monitor has no reason to.
         preload: [],
         videoUnderlay: null,
+        // Never plays here, even on a slide that carries one. Stage one of the
+        // two-stage flow shows what the slide LOOKS like, and the rasterized
+        // image already carries the video's poster frame — starting a clip
+        // because the operator arrowed past it is exactly the "selecting
+        // projects" behaviour this flow exists to prevent.
+        slideVideo: null,
         // The preview monitor never fades — it moves with every ↑/↓, and
         // `OutputView` also forces this by `mode`, but the value has to be
         // here too since it's part of `ProjectionOutput`.
@@ -152,6 +158,7 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
           kind: "image",
           url: assetUrl(content.asset.id),
           videoUnderlay: null,
+          slideVideo: null,
           transition: INSTANT_TRANSITION,
         };
       }
@@ -175,6 +182,7 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
           url: underlay.url,
           epoch: underlay.epoch,
           videoUnderlay: underlay,
+          slideVideo: null,
           transition: INSTANT_TRANSITION,
         };
       }
@@ -186,6 +194,7 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
         text: content.text,
         reference: content.reference,
         videoUnderlay: null,
+        slideVideo: null,
         transition: INSTANT_TRANSITION,
       };
     case "utility":
@@ -197,6 +206,7 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
       return {
         ...timerOutputFor(content.scene, clockForScene(liveBase, run, content.scene, Date.now())),
         videoUnderlay: null,
+        slideVideo: null,
         transition: INSTANT_TRANSITION,
       };
   }

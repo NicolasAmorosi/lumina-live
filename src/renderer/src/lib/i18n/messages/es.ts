@@ -352,6 +352,7 @@ const es = {
     pause: "Pausar",
     stop: "Detener",
     deckMusic: "{title} (música)",
+    slideVideo: "{title} (video de la diapositiva)",
     previewHint: "No suena hasta EN VIVO",
     previewMuted: "Sin sonido — no interrumpe la proyección",
     loadError: "No se pudo reproducir el archivo",

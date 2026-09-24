@@ -300,6 +300,16 @@ export function registerWorshipProtocolHandler(mediaRepo: MediaRepo): void {
           // No immutable header: a soundtrack is seeked through, not swapped.
           return serveFile(request, withinCache(getSlidesRepo().getAudioPath(audioId)));
         }
+        case "deck-video": {
+          // worship://deck-video/<id> — a clip pulled out of a .pptx, living
+          // in the same cache as the deck's own audio. `serveFile` honours
+          // Range, which is not optional for a `<video>`: without it the
+          // element gets an empty `seekable` range and playback dies with
+          // `PIPELINE_ERROR_DECODE`.
+          const videoId = Number(segments[0]);
+          if (!Number.isFinite(videoId)) return new Response("Not found", { status: 404 });
+          return serveFile(request, withinCache(getSlidesRepo().getVideoPath(videoId)));
+        }
         case "linked-audio": {
           // worship://linked-audio/<mediaAssetId> — an external file the
           // source .pps/.pptx points at (or sits next to), resolved per media

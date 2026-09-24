@@ -21,7 +21,7 @@ comparten el mismo problema de "el usuario movió el archivo"), `programs`+`prog
 migración `0004_rename_programs.sql` con `ALTER TABLE ... RENAME` — un recreate de tabla habría
 perdido el `CHECK`, que Drizzle no materializa en el snapshot), `bible_versions`+`bible_books`+`bible_verses`+
 `bible_verses_fts` (FTS5 external-content), `bible_favorites`, `projection_history`,
-`slide_decks`+`deck_slides`+`deck_audio` (cache persistente de presentaciones convertidas,
+`slide_decks`+`deck_slides`+`deck_audio`+`deck_videos` (cache persistente de presentaciones convertidas,
 direccionado por hash de contenido — ver `03-slides-libreoffice.md`), `program_draft` y
 `utility_scenes` (las escenas de tiempo guardadas de Funciones ▸ Utilidades).
 

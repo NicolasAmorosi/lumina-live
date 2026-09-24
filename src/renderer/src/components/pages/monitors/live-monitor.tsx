@@ -7,6 +7,7 @@ import { useSettingsStore } from "@renderer/stores/settings.store";
 import { mediaTargetKey } from "@shared/types/projection";
 
 const VIDEO_TARGET_KEY = mediaTargetKey({ kind: "video" });
+const SLIDE_VIDEO_TARGET_KEY = mediaTargetKey({ kind: "slideVideo" });
 
 /** What the congregation is seeing, rendered by the same component the
  *  projection window uses — so the monitor can't lie. Its status text (NEGRO,
@@ -29,6 +30,9 @@ export function LiveMonitor() {
   const output = useProjectionStore(selectOutputMemo);
   const presentationOpen = useProjectionStore((s) => s.presentationOpen);
   const liveVideoStatus = useProjectionStore((s) => s.mediaStatus[VIDEO_TARGET_KEY] ?? null);
+  // The same job for a video embedded in the live slide, which decodes here as
+  // its own second copy exactly like the full-screen one does.
+  const slideVideoStatus = useProjectionStore((s) => s.mediaStatus[SLIDE_VIDEO_TARGET_KEY] ?? null);
   // The record, not a derived array: a selector returning a fresh array on
   // every call makes `useSyncExternalStore` see a new snapshot each render and
   // loop. `mediaErrors` only changes when the projector actually reports
@@ -65,6 +69,7 @@ export function LiveMonitor() {
         noticeLabel={logoMissing ? t("live.logoMissing") : undefined}
         output={output}
         reportedErrorUrls={reportedErrorUrls}
+        slideVideoStatus={slideVideoStatus}
       />
     </Monitor>
   );

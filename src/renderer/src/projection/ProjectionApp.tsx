@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { api } from "@renderer/lib/api";
 import { onIpc } from "@renderer/lib/ipc";
 import { OutputView } from "@renderer/components/shared/output-view";
@@ -105,6 +105,25 @@ function AudioTrackElement({ registry, track }: AudioTrackElementProps) {
   );
 }
 
+/** Which element a one-shot `MediaCommand` is for. A `switch`, so a target
+ *  added to the contract cannot quietly fall through to the audio registry
+ *  and look up `undefined`. */
+function resolveCommandTarget(
+  target: MediaCommand["target"],
+  videoRef: RefObject<HTMLVideoElement | null>,
+  slideVideoRef: RefObject<HTMLVideoElement | null>,
+  audioRefs: Map<string, HTMLAudioElement>,
+): HTMLMediaElement | null {
+  switch (target.kind) {
+    case "video":
+      return videoRef.current;
+    case "slideVideo":
+      return slideVideoRef.current;
+    case "audio":
+      return audioRefs.get(target.trackId) ?? null;
+  }
+}
+
 /**
  * The projection window is a pure function of its declarative inputs — it owns
  * no domain logic (no schedule, no Bible, no deck timings) and no state of its
@@ -126,6 +145,7 @@ export function ProjectionApp() {
   const [output, setOutput] = useState<ProjectionOutput>({
     kind: "black",
     videoUnderlay: null,
+    slideVideo: null,
     transition: INSTANT_TRANSITION,
   });
   // Flips once, the first time real data (a push or the replayed snapshot)
@@ -137,6 +157,7 @@ export function ProjectionApp() {
   const [hasRealOutput, setHasRealOutput] = useState(false);
   const [tracks, setTracks] = useState<AudioTrackPush[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const slideVideoRef = useRef<HTMLVideoElement>(null);
   const audioRefs = useRef<Map<string, HTMLAudioElement>>(new Map());
 
   // A fresh `projection:open` shows this window before its page has loaded,
@@ -174,10 +195,7 @@ export function ProjectionApp() {
   useEffect(
     () =>
       onIpc("media-command", (command: MediaCommand) => {
-        const el =
-          command.target.kind === "video"
-            ? videoRef.current
-            : (audioRefs.current.get(command.target.trackId) ?? null);
+        const el = resolveCommandTarget(command.target, videoRef, slideVideoRef, audioRefs.current);
         if (!el) return;
         switch (command.action) {
           case "seek":
@@ -193,6 +211,7 @@ export function ProjectionApp() {
   );
 
   useMediaStatusReporter(videoRef, null, output.videoUnderlay?.epoch ?? 0);
+  useMediaStatusReporter(slideVideoRef, null, output.slideVideo?.epoch ?? 0, "slideVideo");
 
   return (
     <div className="h-screen w-screen bg-black">
@@ -201,6 +220,7 @@ export function ProjectionApp() {
         mode="live"
         onMediaError={reportMediaError}
         output={output}
+        slideVideoRef={slideVideoRef}
         videoRef={videoRef}
       />
 

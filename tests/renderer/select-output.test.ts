@@ -20,7 +20,7 @@ import {
   type LiveDeck,
 } from "@renderer/stores/projection.store";
 import { LOGO_URL, assetUrl, slideUrl } from "@shared/urls";
-import type { DeckSlide } from "@shared/types/deck";
+import type { DeckSlide, DeckSlideVideo } from "@shared/types/deck";
 import { DEFAULT_SCENE_STYLE } from "@shared/types/scene-style";
 import { DEFAULT_TIMER_FORMAT } from "@shared/types/timer";
 import type { UtilityScene } from "@shared/types/utility";
@@ -40,15 +40,29 @@ function slide(index: number, advanceAfterMs: number | null = null): DeckSlide {
   };
 }
 
-function deckOf(assetId: number, slideCount: number): LiveDeck {
+function deckOf(assetId: number, slideCount: number, videos: DeckSlideVideo[] = []): LiveDeck {
   const slides = Array.from({ length: slideCount }, (_, i) => slide(i + 1));
   return {
     assetId,
     deckId: 500,
     slides,
     soundtrack: null,
+    videos,
     cumulativeMs: buildCumulativeMs(slides),
     autoAdvance: false,
+  };
+}
+
+function slideVideoOn(slideIndex: number, overrides: Partial<DeckSlideVideo> = {}): DeckSlideVideo {
+  return {
+    slideIndex,
+    url: `worship://deck-video/${slideIndex}`,
+    rect: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
+    aspectRatio: 16 / 9,
+    loop: false,
+    volume: 0.8,
+    name: "1.mp4",
+    ...overrides,
   };
 }
 
@@ -221,6 +235,100 @@ describe("the video underlay survives the overlay", () => {
     useProjectionStore.getState().setBase({ kind: "image", assetId: 3 });
     useProjectionStore.getState().setVideoResumeAt(42);
     expect(useProjectionStore.getState().base).toMatchObject({ kind: "image", assetId: 3 });
+  });
+});
+
+describe("a video embedded in the live slide", () => {
+  // The whole reason `slideVideo` is a top-level field of `ProjectionOutput`
+  // and not part of the `slide` variant: under NEGRO the output kind is
+  // "black", and a video that lived inside the variant would vanish from the
+  // push — unmounting the element, losing its position and rebuilding the
+  // decoder on every single toggle.
+  test("it is described only on the slide that carries it", () => {
+    const store = useProjectionStore.getState();
+    store.setLiveDeck(deckOf(9, 4, [slideVideoOn(2)]));
+    store.setBase({ kind: "deck", assetId: 9, slideIndex: 1 });
+    expect(output().slideVideo).toBeNull();
+
+    useProjectionStore.getState().setSlideIndex(2);
+    expect(output().slideVideo).toMatchObject({
+      url: "worship://deck-video/2",
+      rect: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
+      loop: false,
+    });
+
+    useProjectionStore.getState().setSlideIndex(3);
+    expect(output().slideVideo).toBeNull();
+  });
+
+  test("NEGRO covers it without taking it away", () => {
+    const store = useProjectionStore.getState();
+    store.setLiveDeck(deckOf(9, 4, [slideVideoOn(2)]));
+    store.setBase({ kind: "deck", assetId: 9, slideIndex: 2 });
+    const epochBefore = output().slideVideo?.epoch;
+
+    useProjectionStore.getState().setOverlay("black");
+
+    const out = output();
+    expect(out.kind).toBe("black");
+    // Still described, and still the SAME element: an overlay that bumped the
+    // epoch would restart the clip every time the operator pressed NEGRO.
+    expect(out.slideVideo).not.toBeNull();
+    expect(out.slideVideo?.epoch).toBe(epochBefore);
+  });
+
+  test("a new slide is a new element", () => {
+    const store = useProjectionStore.getState();
+    store.setLiveDeck(deckOf(9, 4, [slideVideoOn(2), slideVideoOn(3)]));
+    store.setBase({ kind: "deck", assetId: 9, slideIndex: 2 });
+    const first = output().slideVideo?.epoch;
+
+    useProjectionStore.getState().setSlideIndex(3);
+    expect(output().slideVideo?.epoch).not.toBe(first);
+  });
+
+  test("pause and volume travel as state, and a new slide resets both", () => {
+    const store = useProjectionStore.getState();
+    store.setLiveDeck(deckOf(9, 4, [slideVideoOn(2), slideVideoOn(3)]));
+    store.setBase({ kind: "deck", assetId: 9, slideIndex: 2 });
+
+    useProjectionStore.getState().setSlideVideoPaused(true);
+    useProjectionStore.getState().setSlideVideoVolume(0.3);
+    expect(output().slideVideo).toMatchObject({ paused: true, volume: 0.3 });
+
+    useProjectionStore.getState().setSlideIndex(3);
+    // Back to playing, and back to the level the FILE asks for — not to the
+    // one the operator balanced for the previous clip.
+    expect(output().slideVideo).toMatchObject({ paused: false, volume: 0.8 });
+  });
+
+  test("the file's own level applies until the operator sets one", () => {
+    const store = useProjectionStore.getState();
+    store.setLiveDeck(deckOf(9, 2, [slideVideoOn(1, { volume: 0.4 })]));
+    store.setBase({ kind: "deck", assetId: 9, slideIndex: 1 });
+    expect(output().slideVideo).toMatchObject({ volume: 0.4 });
+
+    useProjectionStore.getState().setSlideVideoVolume(1);
+    expect(output().slideVideo).toMatchObject({ volume: 1 });
+  });
+
+  test("a deck the store has not loaded yet has no slide video", () => {
+    const store = useProjectionStore.getState();
+    store.setLiveDeck(deckOf(9, 2, [slideVideoOn(1)]));
+    // Another deck's id: the same guard that makes an out-of-sync deck black
+    // rather than a broken tile.
+    store.setBase({ kind: "deck", assetId: 11, slideIndex: 1 });
+    expect(output().slideVideo).toBeNull();
+  });
+
+  test("the slide video is an input of the memo", () => {
+    const store = useProjectionStore.getState();
+    store.setLiveDeck(deckOf(9, 2, [slideVideoOn(1)]));
+    store.setBase({ kind: "deck", assetId: 9, slideIndex: 1 });
+    const before = selectOutputMemo(useProjectionStore.getState());
+
+    useProjectionStore.getState().setSlideVideoPaused(true);
+    expect(selectOutputMemo(useProjectionStore.getState())).not.toBe(before);
   });
 });
 

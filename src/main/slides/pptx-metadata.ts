@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { XMLParser } from "fast-xml-parser";
 import { SLIDES_MIN_ADVANCE_MS } from "@shared/constants";
+import type { SlideRect } from "@shared/types/deck";
 import { readZipEntries } from "./zip-reader";
 
 export type ContainerKind = "ooxml" | "binary" | "odf" | "pdf" | "unknown";
@@ -27,17 +28,44 @@ export type AudioRef = {
   scope: "deck" | "slide";
 };
 
+/** A video `p:pic` we can actually use: its bytes are inside this archive and
+ *  it says where on the slide it goes. */
+export type VideoRef = {
+  partName: string;
+  /** 1-based, in PRESENTATION order — the same numbering `SlideTiming` uses,
+   *  hidden slides included. Mapping it onto rendered pages is the caller's
+   *  job (`deck-service.ts`), because only the caller knows how many pages
+   *  came out. */
+  slideIndex: number;
+  /** Fractions of the slide box, 0..1. */
+  rect: SlideRect;
+  loop: boolean;
+  /** 0..1, or null when the file doesn't say. */
+  volume: number | null;
+};
+
 export type PresentationMeta = {
   slideCount: number;
   slideSizeEmu: { cx: number; cy: number } | null;
   slides: SlideTiming[];
   audio: AudioRef[];
-  /** Media parts we deliberately do not extract (video is out of scope for
-   *  now) — recorded so it's visible how often it actually shows up. */
+  video: VideoRef[];
+  /** Video parts found but NOT usable — an external/linked file whose bytes
+   *  were never in the archive, or a `p:pic` with no geometry of its own
+   *  (it inherits a layout placeholder's, which this parser does not resolve;
+   *  guessing would put the video somewhere it is not). Recorded rather than
+   *  dropped so the log can say how often the unusable cases actually occur. */
   skippedVideoParts: string[];
 };
 
 export type ExtractedAudio = AudioRef & {
+  file: string;
+  ext: string;
+  bytes: number;
+  playable: boolean;
+};
+
+export type ExtractedVideo = VideoRef & {
   file: string;
   ext: string;
   bytes: number;
@@ -63,6 +91,12 @@ export const AUDIO_EXT = new Set([
   "midi",
 ]);
 const VIDEO_EXT = new Set(["mp4", "m4v", "mov", "wmv", "avi", "mkv", "webm"]);
+/** What Chromium will actually decode. The rest are extracted and marked
+ *  unplayable rather than mounted as a `<video>` that shows nothing: the
+ *  rasterized slide underneath already carries the poster frame LibreOffice
+ *  drew, so a deck with a `.wmv` in it still looks right — it just doesn't
+ *  move. Same treatment `UNPLAYABLE_AUDIO_EXT` gives a `.wma`. */
+const PLAYABLE_VIDEO_EXT = new Set(["mp4", "m4v", "mov", "webm"]);
 
 /** Repeated elements that must stay arrays even when a deck happens to have
  *  exactly one of them — otherwise a one-slide deck parses as an object and
@@ -145,7 +179,18 @@ function decode(entry: Uint8Array | undefined): string | null {
 
 type Rels = Map<string, string>;
 
-/** Relationship targets are relative to the part's own directory. */
+/**
+ * Relationship targets are relative to the part's own directory.
+ *
+ * Every entry in the returned map is a part INSIDE this archive. A rel marked
+ * `TargetMode="External"` points at the filesystem — typically an absolute
+ * Windows path from whichever machine authored the deck — and joining that
+ * onto `baseDir` produces a plausible-looking part name that names nothing:
+ * `ppt/slides/C:/Users/.../clip.mp4`. That was harmless while the value was
+ * only ever logged, and stops being harmless the moment anything tries to
+ * read the entry. The file it names is long gone from any machine the deck
+ * reaches anyway, so an external rel is no rel at all here.
+ */
 function parseRels(xml: string | null, baseDir: string): Rels {
   const map: Rels = new Map();
   if (!xml) return map;
@@ -155,6 +200,7 @@ function parseRels(xml: string | null, baseDir: string): Rels {
     const id = attr(rel, "@Id");
     const target = attr(rel, "@Target");
     if (!id || !target) continue;
+    if (attr(rel, "@TargetMode") === "External") continue;
     if (/^https?:/i.test(target)) continue;
     map.set(id, path.posix.normalize(path.posix.join(baseDir, target)));
   }
@@ -215,6 +261,83 @@ function collectMediaNodes(node: unknown, out: XmlNode[]): void {
   }
 }
 
+/** Which shape a media node is about: `p:cMediaNode/p:tgtEl/p:spTgt/@spid`,
+ *  matching a `p:pic`'s own `p:cNvPr/@id`. Undefined for a node that doesn't
+ *  say. */
+function mediaNodeTargetId(node: XmlNode): string | undefined {
+  return attr(asNode(asNode(node["p:tgtEl"])?.["p:spTgt"]), "@spid");
+}
+
+function mediaNodeLoops(node: XmlNode): boolean {
+  const loop = attr(node, "@loop");
+  return loop === "1" || loop === "true" || isIndefinite(node);
+}
+
+/** `@vol` is in thousandths of a percent (80000 = 80%). */
+function mediaNodeVolume(node: XmlNode): number | null {
+  const raw = attr(node, "@vol");
+  return raw !== undefined && Number.isFinite(Number(raw)) ? Number(raw) / 100000 : null;
+}
+
+/**
+ * A `p:pic`'s own rectangle, as fractions of the slide.
+ *
+ * `null` when the shape carries no `a:xfrm` of its own: it then inherits the
+ * geometry of a layout placeholder, which this parser does not resolve. A
+ * default (the whole slide, say) would be a guess that puts a video somewhere
+ * it demonstrably is not — and the rasterized slide already shows the poster
+ * frame in the right place, so being absent costs a still picture while being
+ * wrong costs a video pasted over the middle of the sermon.
+ */
+function picRect(pic: XmlNode, slideSizeEmu: { cx: number; cy: number } | null): SlideRect | null {
+  if (!slideSizeEmu || slideSizeEmu.cx <= 0 || slideSizeEmu.cy <= 0) return null;
+  const xfrm = asNode(asNode(pic["p:spPr"])?.["a:xfrm"]);
+  const off = asNode(xfrm?.["a:off"]);
+  const ext = asNode(xfrm?.["a:ext"]);
+  const x = Number(attr(off, "@x"));
+  const y = Number(attr(off, "@y"));
+  const cx = Number(attr(ext, "@cx"));
+  const cy = Number(attr(ext, "@cy"));
+  if (![x, y, cx, cy].every((value) => Number.isFinite(value))) return null;
+  if (cx <= 0 || cy <= 0) return null;
+  return {
+    x: x / slideSizeEmu.cx,
+    y: y / slideSizeEmu.cy,
+    width: cx / slideSizeEmu.cx,
+    height: cy / slideSizeEmu.cy,
+  };
+}
+
+/**
+ * The `r:embed` of the `p14:media` element PowerPoint 2010+ puts in a `p:pic`'s
+ * `p:extLst`, alongside the legacy `a:videoFile`. A fallback for a file that
+ * carries the extension but no usable `a:videoFile` rel — searched by walking
+ * the shape rather than by path, because the extension sits under an
+ * `mc:AlternateContent`/`p:extLst` nesting that varies by producer.
+ */
+function p14MediaRelId(node: unknown): string | undefined {
+  if (node === null || node === undefined || typeof node !== "object") return undefined;
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = p14MediaRelId(child);
+      if (found) return found;
+    }
+    return undefined;
+  }
+  for (const [key, value] of Object.entries(node as XmlNode)) {
+    if (key === "p14:media") {
+      const rid = asNodes(value)
+        .map((media) => attr(media, "@r:embed") ?? attr(media, "@r:link"))
+        .find((id) => id !== undefined);
+      if (rid) return rid;
+    } else if (typeof value === "object") {
+      const found = p14MediaRelId(value);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
 export function readPresentationMeta(filePath: string): PresentationMeta {
   const entries = readEntries(
     filePath,
@@ -248,6 +371,7 @@ export function readPresentationMeta(filePath: string): PresentationMeta {
 
   const slides: SlideTiming[] = [];
   const audio: AudioRef[] = [];
+  const video: VideoRef[] = [];
   const skippedVideoParts: string[] = [];
 
   sldIds.forEach((sldId, position) => {
@@ -303,15 +427,20 @@ export function readPresentationMeta(filePath: string): PresentationMeta {
     // Media playback semantics live in p:timing.
     const mediaNodes: XmlNode[] = [];
     collectMediaNodes(sld["p:timing"], mediaNodes);
-    const anyLoop = mediaNodes.some((node) => {
-      const loop = attr(node, "@loop");
-      return loop === "1" || loop === "true" || isIndefinite(node);
-    });
-    const volumeRaw = mediaNodes.map((node) => attr(node, "@vol")).find((v) => v !== undefined);
-    const volume =
-      volumeRaw !== undefined && Number.isFinite(Number(volumeRaw))
-        ? Number(volumeRaw) / 100000
-        : null;
+    // Slide-wide aggregate: whatever ANY media node on this slide says. Kept
+    // exactly as it was for audio, whose `scope` heuristic is built on it.
+    const anyLoop = mediaNodes.some(mediaNodeLoops);
+    const volume = mediaNodes.map(mediaNodeVolume).find((v) => v !== null) ?? null;
+    /** The node that is actually about one shape. Video asks by id rather than
+     *  taking the slide-wide aggregate above: a slide with narration AND a clip
+     *  has two media nodes, and handing the video the narration's level is a
+     *  silent clip (or a loud one) with nothing to point at. Falls back to the
+     *  aggregate when nothing declares a target, which is the single-media
+     *  case the aggregate was always right about. */
+    const mediaNodeFor = (shapeId: string | undefined): XmlNode | undefined =>
+      shapeId === undefined
+        ? undefined
+        : mediaNodes.find((node) => mediaNodeTargetId(node) === shapeId);
 
     // Slide-placed audio (p:pic with an a:audioFile) and transition sounds.
     const spTree = asNode(cSld?.["p:spTree"]);
@@ -321,9 +450,31 @@ export function readPresentationMeta(filePath: string): PresentationMeta {
       const videoFile = asNode(nvPr?.["a:videoFile"]);
 
       if (videoFile) {
-        const rid = attr(videoFile, "@r:link") ?? attr(videoFile, "@r:embed");
+        // `@r:link` first, and it is NOT the external case: PowerPoint files an
+        // embedded media part under a `video` relationship addressed as a link,
+        // and puts a second `media` relationship in a `p14:media` extension.
+        // A genuinely external target never reaches here at all — `parseRels`
+        // drops it, so `slideRels.get` simply misses.
+        const rid =
+          attr(videoFile, "@r:link") ?? attr(videoFile, "@r:embed") ?? p14MediaRelId(pic);
         const target = rid ? slideRels.get(rid) : undefined;
-        if (target) skippedVideoParts.push(target);
+        if (!target) {
+          if (rid) skippedVideoParts.push(`${partName}#${rid} (externo)`);
+          continue;
+        }
+        const rect = picRect(pic, slideSizeEmu);
+        if (!rect) {
+          skippedVideoParts.push(`${target} (sin geometría propia)`);
+          continue;
+        }
+        const node = mediaNodeFor(attr(asNode(asNode(pic["p:nvPicPr"])?.["p:cNvPr"]), "@id"));
+        video.push({
+          partName: target,
+          slideIndex,
+          rect,
+          loop: node ? mediaNodeLoops(node) : anyLoop,
+          volume: node ? mediaNodeVolume(node) : volume,
+        });
         continue;
       }
       if (!audioFile) continue;
@@ -375,7 +526,7 @@ export function readPresentationMeta(filePath: string): PresentationMeta {
     });
   });
 
-  return { slideCount: slides.length, slideSizeEmu, slides, audio, skippedVideoParts };
+  return { slideCount: slides.length, slideSizeEmu, slides, audio, video, skippedVideoParts };
 }
 
 /**
@@ -425,6 +576,55 @@ export function extractAudioParts(
     };
     seen.set(ref.partName, record);
     extracted.push(record);
+  });
+
+  return extracted;
+}
+
+/**
+ * Writes each referenced video part into `destDir`, exactly like
+ * `extractAudioParts` and with the same non-negotiable rule: output filenames
+ * are GENERATED, never derived from the zip entry name, because a hostile or
+ * merely odd `.pptx` can carry `../` in a part name.
+ *
+ * A sibling of that function rather than a shared generic one: the two agree
+ * on the bookkeeping and on nothing else. Audio dedupes a part shared by
+ * several slides into one file with one row per slide; a video belongs to one
+ * slide, so the same clip on two slides is two independent elements with two
+ * independent positions, and collapsing them would make pausing one pause the
+ * other.
+ */
+export function extractVideoParts(
+  filePath: string,
+  refs: VideoRef[],
+  destDir: string,
+): ExtractedVideo[] {
+  if (refs.length === 0) return [];
+
+  const wanted = new Set(refs.map((ref) => ref.partName));
+  const entries = readEntries(filePath, (name) => wanted.has(name));
+
+  fs.mkdirSync(destDir, { recursive: true });
+
+  const extracted: ExtractedVideo[] = [];
+
+  refs.forEach((ref, index) => {
+    const data = entries[ref.partName];
+    if (!data) return;
+
+    const rawExt = path.posix.extname(ref.partName).replace(/^\./, "").toLowerCase();
+    const ext = VIDEO_EXT.has(rawExt) ? rawExt : "bin";
+    const file = `${index + 1}.${ext}`;
+
+    fs.writeFileSync(path.join(destDir, file), data);
+
+    extracted.push({
+      ...ref,
+      file,
+      ext,
+      bytes: data.byteLength,
+      playable: PLAYABLE_VIDEO_EXT.has(ext),
+    });
   });
 
   return extracted;

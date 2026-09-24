@@ -29,6 +29,59 @@ export type DeckSoundtrack = {
   name: string;
 };
 
+/**
+ * A rectangle inside the slide, as fractions of the slide's own box (0..1:
+ * left, top, width, height).
+ *
+ * Fractions and not EMU, px or points on purpose: the projector paints the
+ * slide with `object-contain`, so the box the video has to land on is whatever
+ * the letterboxing left — a number in the source file's own units would have
+ * to be converted against that box by every consumer, and every consumer would
+ * be a chance to convert it differently.
+ */
+export type SlideRect = { x: number; y: number; width: number; height: number };
+
+/**
+ * A video embedded in one slide of a `.pptx`/`.ppsx`, pulled out of the OOXML
+ * into the deck cache and positioned by the rect the file itself declares.
+ *
+ * Only `.pptx`-family sources produce these: a legacy `.ppt`/`.pps` either
+ * never carried the bytes (PowerPoint 97-2003 linked video by absolute path)
+ * or loses them through LibreOffice's own exporter — see
+ * `.claude/knowledge/an-embedded-deck-video-survives-to-the-pdf-but-never-survives-a-ppt.md`.
+ *
+ * The rasterized slide underneath is NOT a hole to patch: LibreOffice draws
+ * the video's poster frame into exactly this rect, so a deck whose video
+ * cannot be extracted or decoded still looks right — it just does not move.
+ * That is why an unplayable video is simply absent here rather than reported.
+ */
+export type DeckSlideVideo = {
+  /** 1-based, and the SAME index space as `DeckSlide.index`: page order, with
+   *  hidden slides already dropped. The OOXML's own slide numbering counts
+   *  hidden slides and is mapped away in `deck-service.ts` before it ever
+   *  reaches this type. */
+  slideIndex: number;
+  /** worship://deck-video/<id> */
+  url: string;
+  rect: SlideRect;
+  /** Width/height of the RASTERIZED slide this rect was measured against.
+   *  The projector paints the slide with `object-contain`, so it has to
+   *  rebuild that letterboxed box before it can place `rect` inside it — and
+   *  taking the ratio from the rendered page rather than from the source's
+   *  `p:sldSz` makes it exact by construction: it is literally the image the
+   *  `<img>` beside the video is showing. */
+  aspectRatio: number;
+  /** From the slide's `p:cMediaNode` — PowerPoint's own "repeat until I move
+   *  on" flag. */
+  loop: boolean;
+  /** 0..1, the level the source file declares, or `null` when it declares
+   *  none — the app's own default then applies. The operator's level lives in
+   *  `projection.store` and overrides both. */
+  volume: number | null;
+  /** The file name inside the cache, for the media panel's row. */
+  name: string;
+};
+
 export type DeckDTO = {
   /** media_assets.id of the .pptx/.ppt — the only handle the renderer needs. */
   assetId: number;
@@ -38,6 +91,10 @@ export type DeckDTO = {
   /** Empty while converting. */
   slides: DeckSlide[];
   soundtrack: DeckSoundtrack | null;
+  /** One entry per slide that carries a playable embedded video. Almost always
+   *  empty, and never longer than `slides` — a slide with two videos keeps the
+   *  first, since `ProjectionOutput` sustains one at a time. */
+  videos: DeckSlideVideo[];
   /** True iff any slide carries an advanceAfterMs — drives whether autoplay
    *  starts automatically when the deck is presented. */
   autoAdvance: boolean;
