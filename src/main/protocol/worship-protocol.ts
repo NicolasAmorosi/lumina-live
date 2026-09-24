@@ -111,14 +111,23 @@ function isExpectedCancellation(error: unknown): boolean {
   );
 }
 
+/** Node's default is 64 KiB. A 4K video at 50–100 Mbps is 6–12 MB a second
+ *  per element, and the projector and the LIVE monitor each read their own
+ *  copy — at 64 KiB that is hundreds of chunks a second crossing from this
+ *  process into the renderer's media pipeline, each one a turn of main's
+ *  event loop. `Readable.toWeb` sizes its own queue from this value, so it is
+ *  the one knob for both. Small files are unaffected as long as the read is
+ *  bounded — `fs` never allocates past a range's `end` (see `serveFile`). */
+const READ_CHUNK_BYTES = 1024 * 1024;
+
 function streamFile(
   filePath: string,
   signal: AbortSignal | undefined,
   range?: { start: number; end: number },
 ): ReadableStream {
   const stream = range
-    ? fs.createReadStream(filePath, { start: range.start, end: range.end })
-    : fs.createReadStream(filePath);
+    ? fs.createReadStream(filePath, { start: range.start, end: range.end, highWaterMark: READ_CHUNK_BYTES })
+    : fs.createReadStream(filePath, { highWaterMark: READ_CHUNK_BYTES });
 
   // `Readable.toWeb` forwards the error to the web stream, which is what makes
   // the element fire `onerror` — but it writes nothing anywhere, and the log is
@@ -209,7 +218,11 @@ async function serveFile(
   }
 
   headers.set("Content-Length", String(size));
-  return new Response(wantsBody ? streamFile(filePath, request.signal) : null, {
+  // Bounded even when the whole file was asked for: an open-ended read
+  // allocates a full `READ_CHUNK_BYTES` buffer per turn, which for a 40 KB
+  // slide thumbnail is 1 MB of garbage per request.
+  const whole = size > 0 ? { start: 0, end: size - 1 } : undefined;
+  return new Response(wantsBody ? streamFile(filePath, request.signal, whole) : null, {
     status: 200,
     headers,
   });

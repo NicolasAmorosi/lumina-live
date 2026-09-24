@@ -32,6 +32,7 @@ import type {
   ProgramUpsert,
 } from "../types/program";
 import type { SettingsMap } from "../types/settings";
+import type { GpuStatus, InternalsPage, VideoDecoderReport } from "../types/system";
 import type { UtilityScene, UtilitySceneUpsert, UtilitySceneUsage } from "../types/utility";
 import type { CloseDecision } from "../types/window";
 
@@ -255,6 +256,16 @@ export type IpcContract = {
 
   "settings:get": { req: void; res: SettingsMap };
   "settings:set": { req: Partial<SettingsMap>; res: void };
+
+  "system:gpuStatus": { req: void; res: GpuStatus };
+  /** Opens `chrome://<page>` in its own window, child of the caller's. */
+  "system:openInternals": { req: { page: InternalsPage }; res: void };
+  /** Starts listening to the caller's media pipeline (CDP `Media` domain).
+   *  `false` when it can't — the probe then reports frames only. */
+  "system:probeBegin": { req: void; res: boolean };
+  /** Stops listening and answers for the player that loaded `src`, or `null`
+   *  when none reported anything. */
+  "system:probeEnd": { req: { src: string }; res: VideoDecoderReport | null };
 };
 
 export type IpcChannel = keyof IpcContract;

@@ -35,7 +35,7 @@ import { initRepos } from "../../src/main/services/repos";
 import { readBinarySlideTimings } from "../../src/main/slides/ppt-binary-timings";
 import { backfillDeckTimings } from "../../src/main/slides/backfill-timings";
 import { SNIPPET_MARK_END, SNIPPET_MARK_START, parseSnippet } from "../../src/shared/types/bible";
-import { SETTINGS_VALIDATORS, isSettingsKey } from "../../src/shared/types/settings";
+import { DEFAULT_SETTINGS, SETTINGS_VALIDATORS, isSettingsKey } from "../../src/shared/types/settings";
 import { BUILTIN_BIBLE_CODE } from "../../src/shared/constants";
 import { DEFAULT_UTILITY_SCENES } from "../../src/shared/types/utility";
 import { removeUtilityScene } from "../../src/main/services/utility-scene-removal";
@@ -672,6 +672,8 @@ describe("settings:set validators reject what the types cannot", () => {
     assert(SETTINGS_VALIDATORS["projection.displayId"](null), "a null display id is the default and must pass");
     assert(!SETTINGS_VALIDATORS["media.volume"](1.5), "a volume outside 0..1 must be rejected");
     assert(!SETTINGS_VALIDATORS["media.volume"](Number.NaN), "NaN must be rejected — it survives JSON as null");
+    assert(DEFAULT_SETTINGS["monitors.liveVideoMotion"] === true, "the LIVE monitor keeps its moving video by default");
+    assert(!SETTINGS_VALIDATORS["monitors.liveVideoMotion"]("false"), 'the STRING "false" must not pass as a boolean');
     assert(
       !SETTINGS_VALIDATORS["library.linkedFolders"]({ video: [], image: [], audio: [] }),
       "a per-kind record missing a kind must be rejected",

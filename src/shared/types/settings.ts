@@ -36,6 +36,10 @@ export type SettingsMap = {
   "projection.transition.style": TransitionStyle;
   /** Ignored when the style is "none". */
   "projection.transition.durationMs": number;
+  /** Whether the LIVE monitor plays its own moving copy of a live video (the
+   *  full-screen one and a slide's). Off, it shows the video's thumbnail and
+   *  the control window decodes nothing — the projector is never affected. */
+  "monitors.liveVideoMotion": boolean;
   /** Explicit user override for the LibreOffice binary. When set and invalid,
    *  discovery reports the error instead of silently falling back — a wrong
    *  override must never be invisible. */
@@ -117,6 +121,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   "slides.cacheMaxMb": SLIDES_DEFAULT_CACHE_MB,
   "slides.maxRenderWidth": SLIDES_DEFAULT_RENDER_WIDTH,
   "slides.preemptBackground": true,
+  "monitors.liveVideoMotion": true,
   "library.linkedFolders": { video: [], image: [], audio: [], ppt: [] },
   "library.activeView": { video: "recent", image: "recent", audio: "recent", ppt: "recent" },
   "library.sort": { video: "name-asc", image: "name-asc", audio: "name-asc", ppt: "name-asc" },
@@ -196,6 +201,7 @@ export const SETTINGS_VALIDATORS: Record<keyof SettingsMap, (value: unknown) => 
   "slides.cacheMaxMb": isNumberIn(1, 1_000_000),
   "slides.maxRenderWidth": isNumberIn(320, 16_384),
   "slides.preemptBackground": isBoolean,
+  "monitors.liveVideoMotion": isBoolean,
   "library.linkedFolders": isRecordOfKinds(isStringArray),
   "library.activeView": isRecordOfKinds(isString),
   "library.sort": isRecordOfKinds(isOneOf(MEDIA_SORT_ORDERS)),

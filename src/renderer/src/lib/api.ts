@@ -1,5 +1,6 @@
 import { invoke } from "./ipc";
 import type { AssetKind } from "@shared/constants";
+import type { InternalsPage } from "@shared/types/system";
 import type {
   AudioTrackPush,
   MediaCommand,
@@ -116,5 +117,11 @@ export const api = {
   settings: {
     get: () => invoke("settings:get", undefined),
     set: (partial: Partial<SettingsMap>) => invoke("settings:set", partial),
+  },
+  system: {
+    gpuStatus: () => invoke("system:gpuStatus", undefined),
+    openInternals: (page: InternalsPage) => invoke("system:openInternals", { page }),
+    probeBegin: () => invoke("system:probeBegin", undefined),
+    probeEnd: (src: string) => invoke("system:probeEnd", { src }),
   },
 };

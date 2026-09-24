@@ -1,0 +1,16 @@
+## Which decoder Chromium picked is only visible over CDP `Media`, and `Media.enable` hangs on a page that has not loaded
+**Area:** projection
+**Trigger:** asking "is this video hardware-decoded on this machine?", touching `src/main/ipc/handlers/system.ts` («Probar video»), or gating anything on a video's "first frame" (the video hold in `components/shared/output-view.tsx`)
+
+- **No web API says whether a `<video>` is GPU-decoded.** `getVideoPlaybackQuality()` gives frame counts only, and `navigator.mediaCapabilities.decodingInfo().powerEfficient` is a guess from playback history (true before any history exists). The pipeline's own answer lives in the CDP `Media` domain, the one `chrome://media-internals` reads, and main can reach it with `webContents.debugger`.
+- **What it reports, measured in Electron 44.3 (Chromium 152) on macOS on 2026-09-22.** Playing a 3840×2160 H.264 file produced:
+  - `Media.playerPropertiesChanged`: `kVideoDecoderName: "VideoToolboxVideoDecoder"` and `kIsPlatformVideoDecoder: "true"`.
+  - `kVideoTracks`: a JSON string with `codec: "h264"`, `profile: "h264 baseline"` and `coded size`.
+  - `kBitrate: "60483045"`.
+  - The media url is **not** a property. It only arrives in `Media.playerEventsAdded`, as `{"event":"kLoad","url":…}` inside a JSON-encoded `value`. Match players by that url. «Probar video» makes its own url unique (`?probe=<ts>`, which `worship://asset/<id>` ignores) so it can't be confused with the LIVE monitor playing the same file.
+  - On Windows the name to expect is `D3D11VideoDecoder` for hardware and `VpxVideoDecoder`/`FFmpegVideoDecoder`/`Dav1dVideoDecoder` for CPU. That comes from Chromium's sources and has not been measured on this project's Windows machine yet.
+- **`Media.enable` never answers if it is sent before the page has loaded.** Attaching and then enabling on a fresh `BrowserWindow`, before `loadFile`, hung forever on `about:blank` (not an error: the promise just never settles). Attaching **after** the load works, and it replays the players that already exist (`playerCreated` plus their accumulated properties and events), so nothing is lost by enabling late. `system:probeBegin` races the command against a 2 s timeout for this reason.
+- **`requestVideoFrameCallback` can fire while `readyState` still reads `1` (HAVE_METADATA).** This was sampled every 10 ms in the projector during a 4K EN VIVO: the hold released on the rVFC callback while `video.readyState` still said `1`, and `4` arrived one sample later. `readyState` is updated by an event posted to the main thread, and it lags the compositor. So never gate "has a frame on screen" on `readyState >= 2`. The rVFC callback *is* that signal. `loadeddata` is only the fallback where rVFC doesn't exist (jsdom).
+- Related: [the-projectors-single-video-cannot-crossfade-with-itself.md](the-projectors-single-video-cannot-crossfade-with-itself.md) (the frozen frame, now sized to the stage by `frameCaptureSize`), and [occluded-electron-window-has-no-rendering-lifecycle.md](occluded-electron-window-has-no-rendering-lifecycle.md). An occluded window never fires rVFC, which is why the hold is capped by a `setTimeout` (`VIDEO_READY_TIMEOUT_MS`) and why a measurement script that awaits rVFC hangs whenever the Electron window is not frontmost.
+
+**Last updated:** 2026-09-22

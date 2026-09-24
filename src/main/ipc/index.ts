@@ -9,6 +9,7 @@ import { programsHandlers } from "./handlers/programs";
 import { settingsHandlers } from "./handlers/settings";
 import { programDraftHandlers } from "./handlers/program-draft";
 import { utilityHandlers } from "./handlers/utility";
+import { systemHandlers } from "./handlers/system";
 
 /**
  * Assembling the object literal AS `Handlers` is what makes a missing or
@@ -27,6 +28,7 @@ export function registerAllIpcHandlers(): void {
     ...settingsHandlers,
     ...programDraftHandlers,
     ...utilityHandlers,
+    ...systemHandlers,
   };
   registerHandlers(handlers);
 }
