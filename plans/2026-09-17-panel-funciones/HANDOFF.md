@@ -1,6 +1,6 @@
 # HANDOFF — Funciones ▸ Utilidades (time scenes), COMPLETE (F1, F2, F3, F4, F5)
 
-**Date:** 2026-09-18
+**Date:** 2026-09-18 (numbers refreshed 2026-09-24)
 **Branch:** `feat/funciones-utilidades` (branched off `main` at `8481322`)
 **Plan:** [`utilidades.md`](utilidades.md) — read it before touching anything; it carries three
 rounds of closed product decisions and the three-model architecture this code implements.
@@ -43,9 +43,16 @@ now rows of the **order of service** like any other content.
   normalized, drawn by `TimerScene`, and previewable in the editor with the «Ver como termina»
   switch.
 
-F1–F3 were verified by **driving the real app**, not just the suite. F4 has `typecheck`, `lint`,
-197 tests and `build` green and the app booting clean — the CDP port was not reachable from the
-session that wrote it, so **its manual pass against the real projector is still owed**.
+F1–F3 were verified by **driving the real app**, not just the suite. F4 and F5 are only
+suite-verified: the CDP port was not reachable from the session that wrote them, so **their
+manual pass against the real projector is still owed**.
+
+**The branch carries more than Utilidades.** Between 2026-09-18 and 2026-09-22, five unrelated
+features were built on this same branch in separate sessions. They were committed on 2026-09-24,
+one commit per feature, and each commit passes `typecheck`, `lint` and `test` on its own:
+settings (volume, per-kind picker folders, removing the logo), PDF decks, slide-embedded video,
+Bible (verse style, format importer, version manager), and 4K video performance. None of them
+belongs to this plan. Each has its own entries in `docs/knowledge/` and `.claude/knowledge/`.
 
 Nothing of Utilidades is left. The next thing in `PLAN.md` is **Overlays**, which reuses
 `SceneStyle`, `ColorField` and the `FieldGroup`/`FieldRow` pair this feature built.
@@ -55,32 +62,35 @@ Nothing of Utilidades is left. The next thing in `PLAN.md` is **Overlays**, whic
 ## 2. Numbers / current state
 
 Run from the repo root. These are the numbers to check against; they were confirmed on
-2026-09-18, after the last commit:
+2026-09-24, after the last commit:
 
 ```bash
 npm run typecheck   # PASS (tsc over the node and web projects)
 npm run lint        # 0 errors, 5 warnings
-npm run test        # 14 files, 200 tests
+npm run test        # 20 files, 280 tests
 npm run build       # electron-vite build, clean
 git status          # clean
-git log --oneline main..HEAD   # 7 commits
+git log --oneline main..HEAD   # 13 commits
 ```
 
 | Check | Expected | Note |
 |---|---|---|
-| `npm run test` | **200** passing, 14 files | **108** in `main`, **89** in `renderer` (`npx vitest run --project main`) |
+| `npm run test` | **280** passing, 20 files | **169** in `main` (11 files), **111** in `renderer` (9 files) (`npx vitest run --project main`) |
 | `npm run lint` | 0 errors, **5** warnings | all 5 pre-existing (`react-refresh/only-export-components` in `icon.tsx` ×1 and `i18n-provider.tsx` ×4). **A 6th is yours.** |
-| `ls drizzle/*.sql \| wc -l` | **12**, last is `0011_program_item_utility.sql` | F2 and F3 added exactly one migration each |
-| `git log --oneline main..HEAD` | 7 commits | see below |
+| `ls drizzle/*.sql \| wc -l` | **14**, last is `0013_bible_version_sort_order.sql` | F2 and F3 added `0010`/`0011`; `0012` (slide video) and `0013` (Bible sort order) are the other features' |
+| `git log --oneline main..HEAD` | 13 commits | see below |
 
 Test count history: **113** before this feature → **147** after F1 → **176** after F2 → **181**
-after F3 → **197** after F4 (the transport moved onto the media rows) → **200** after F5 (the preview seek surviving EN VIVO, a paused count surviving it too, and the end state's normalizer fallback). The 29 cases F2 added are `tests/main/scene-validators.test.ts` (17), the
+after F3 → **197** after F4 (the transport moved onto the media rows) → **200** after F5 (the preview seek surviving EN VIVO, a paused count surviving it too, and the end state's normalizer fallback). Per commit
+as committed: **205** (F4+F5) → 205 (settings) → 213 (PDF) → 228 (slide video) → 270 (Bible) →
+**280** (4K performance). F4+F5's commit shows 205, not 200, because it also carries a few cases
+of the style validators that it pulled forward. The 29 cases F2 added are `tests/main/scene-validators.test.ts` (17), the
 `describe("Utility scenes")` block in `tests/main/data-layer.test.ts` (5), `describe("The
 editor's two text fields")` in `tests/main/timer.test.ts` (4) and `describe("editing the scene
 that is live")` in `tests/renderer/select-output.test.ts` (3). F3's 5 are the
 `describe("A time scene as an order-of-service item")` block in `data-layer.test.ts`, which is
 where the widened CHECK, the `restrict` FK, the forced delete and the draft filter are asserted.
-`CLAUDE.md`'s command table says 200.
+`CLAUDE.md`'s command table says 280.
 
 The commits:
 
@@ -92,7 +102,19 @@ The commits:
 | `6d7f1fb` | feat(functions): persist time scenes and add the «Escenas» editor — **F2** |
 | `d93caee` | docs: record the F2 rules and correct the CDP recipe's control-window match |
 | `a5e9f12` | docs(plans): rewrite the utilities handoff as an F2 runbook |
-| *(top of the branch)* | feat(functions): make a time scene a row of the order of service — **F3** |
+| `cedc067` | feat(functions): make a time scene a row of the order of service — **F3** |
+| `ce8d7e4` | feat(functions): drive a time scene from its media row and dress its end — **F4 + F5** |
+| `0700e33` | feat(settings): full default volume, a picker folder per kind and removing the logo |
+| `b91bb24` | feat(slides): project a PDF as a deck |
+| `5a76c42` | feat(slides): play a video embedded in a slide |
+| `2c8afeb` | feat(bible): style the projected verse, import any module and manage versions |
+| `e95a337` | perf(projection): keep a 4K video smooth and let the operator measure it |
+
+The last five are not Utilidades. See §1.
+
+`ce8d7e4` also contains `style-validators.ts`, `components/shared/style-fields.tsx`, `Slider` and
+`lib/transition.ts`. They were split out of the scene editor later, for the verse style, and
+land in that commit because the scene editor there already imports them.
 
 ---
 
@@ -314,8 +336,10 @@ restart.
 
 ## 6. Pending / next steps
 
-**Nothing is left in Utilidades.** F1, F2 and F3 are done, verified against the real projector
-and committed.
+**Nothing is left to build in Utilidades.** F1–F5 are done and committed. F1–F3 were verified
+against the real projector. **F4 and F5 still owe that manual pass:** the transport on the
+PREVIEW and LIVE rows, dragging the countdown bar, EN VIVO resuming where PREVIEW was left, and
+«Al terminar la cuenta» on the projector.
 
 `PLAN.md`'s order stands: **Overlays** next — it reuses `SceneStyle`, `ColorField` and the
 `FieldGroup`/`FieldRow` pair this feature built, and its genuinely new problem is composing a
@@ -331,8 +355,9 @@ Two things F3 deliberately did NOT do, both already decided rather than forgotte
 
 ### Open questions for the user
 
-1. **Merge this branch?** Utilidades is complete; seven commits, each of which builds, tree
-   clean. Overlays is a new area and would be cleaner off `main`.
+1. **Merge this branch?** Thirteen commits, each of which builds, tree clean. It now carries
+   five features beyond Utilidades (§1), so merging to `main` also ships them. Overlays is a new
+   area and would be cleaner off `main`.
 2. **`/HANDOFF.md` at the repo root is stale.** It belongs to the 2026-09-08 video↔PPT hang,
    whose work is merged and whose findings already graduated to `.claude/knowledge/`. Two
    handoffs invite the next session to read the wrong one. Delete it, or move it under its own

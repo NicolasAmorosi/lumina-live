@@ -287,7 +287,7 @@ npm install              # instala deps — better-sqlite3 trae binarios precomp
 npm run dev               # electron-vite dev (HMR en renderer, restart de main en watch)
 npm run typecheck          # tsc --noEmit sobre node (main+preload+shared) y web (renderer+shared)
 npm run lint                # eslint .
-npm run test                 # vitest run — 267 casos en dos proyectos: `main` (Node: migraciones, seed,
+npm run test                 # vitest run — 280 casos en dos proyectos: `main` (Node: migraciones, seed,
                               #   FTS5, repos, borrador, validadores de settings y de escena, respaldo WAL,
                               #   zip reader, audio vinculado, urls, prune del historial, funciones de tiempo,
                               #   arrastre de una cuenta regresiva, escenas de tiempo como ítem del orden de culto,
@@ -297,7 +297,8 @@ npm run test                 # vitest run — 267 casos en dos proyectos: `main`
                               #   y `renderer` (jsdom: selectOutput —incluido el video de diapositiva bajo
                               #   NEGRO—, el versículo vestido y su restilado en vivo,
                               #   freezeLivePositions, live-intent, transporte
-                              #   de escenas de tiempo, store de toasts, utils). Nada importa `electron`: ese es
+                              #   de escenas de tiempo, el veredicto de «Probar video», el tamaño del
+                              #   fotograma congelado, store de toasts, utils). Nada importa `electron`: ese es
                               #   el límite del suite
 npm run test:watch            # el mismo suite en watch, mientras se toca un módulo
 npm run db:generate            # drizzle-kit generate — nueva migración tras editar db/schema.ts
