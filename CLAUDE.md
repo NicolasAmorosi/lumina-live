@@ -83,7 +83,9 @@ src/
 ├── shared/                    # ÚNICA fuente de verdad de tipos main↔renderer
 │   ├── ipc/contract.ts        # IpcContract — un entry por canal, agrupado por dominio
 │   ├── ipc/result.ts          # Result<T> / IpcError
-│   ├── types/                 # DTOs: display, media, bible, projection, program, settings
+│   ├── style-validators.ts    # lo que comparten TODOS los estilos (color, SceneTextStyle, fondo)
+│   ├── scene-validators.ts    # lo propio de una escena de tiempo; bible-style-validators.ts, lo del versículo
+│   ├── types/                 # DTOs: display, media, bible, bible-style, projection, program, settings
 │   ├── constants.ts           # AssetKind, extensiones, timeouts de PPT
 │   └── urls.ts                # assetUrl()/slideUrl() — tokens de capacidad, no rutas
 ├── main/
@@ -94,7 +96,8 @@ src/
 │   │   ├── schema.ts             # tablas Drizzle
 │   │   ├── client.ts             # apertura + pragmas de SQLite
 │   │   ├── migrate.ts            # backup + migrate() al arrancar
-│   │   ├── seed/                 # parseo defensivo + seed de la Biblia (FTS5 rebuild)
+│   │   ├── seed/                 # seed de la Biblia (FTS5 rebuild) + bible-formats/ (JSON,
+│   │   │                         #   Zefania, USFX, OSIS, módulos SQLite; canon de 66 libros)
 │   │   └── repositories/         # un repo por agregado (settings, media, bible, programs, history, slides)
 │   ├── ipc/
 │   │   ├── register.ts           # registerHandlers<Handlers> — exhaustividad forzada por TS
@@ -116,19 +119,23 @@ src/
         ├── projection/ProjectionApp.tsx  # shell de la ventana de proyección (sin lógica de dominio)
         ├── components/
         │   ├── ui/          # primitivas del design system — barrel index.ts
-        │   ├── shared/      # cross-feature: modal, panel, output-view (renderiza un ProjectionOutput)
+        │   ├── shared/      # cross-feature: modal, panel, output-view (renderiza un ProjectionOutput),
+        │   │                #   timer-scene + bible-scene (las dos escenas generadas), style-fields
         │   └── pages/       # una carpeta por feature:
         │       ├── layout/     # AppShell (grilla estilo EasyWorship), TopBar
         │       ├── schedule/   # el orden del culto (columna izq. arriba)
         │       ├── resources/  # browser con pestañas: Biblia | Videos | Imágenes | Audios | PPT
         │       ├── slides/     # grilla central de diapositivas/versículos del ítem en preview
         │       ├── monitors/   # columna der.: LIVE arriba, PREVIEW abajo, transporte del deck
+        │       ├── settings/   # Ajustes; sections/bible/ = estilo del versículo + gestor de versiones
         │       └── programs/   # modal de programas guardados
         ├── stores/          # Zustand: program, toast, preview, projection, deck, bible,
         │                    #   library, settings, audio, display, ui
         ├── effects/         # projection-sync.ts + deck-autoplay.ts + end-of-playback.ts —
         │                    #   la lógica "con orden"
-        └── lib/             # api.ts, ipc.ts, i18n/, utils.ts, hooks/, actions/ (cruza stores)
+        └── lib/             # api.ts, ipc.ts, i18n/, utils.ts, hooks/, actions/ (cruza stores),
+                             #   utility-output.ts + bible-output.ts (los dos constructores compartidos
+                             #   entre selectOutput y el monitor de PREVIEW)
 ```
 
 ## Reutilización de componentes — no negociable
@@ -280,12 +287,18 @@ npm install              # instala deps — better-sqlite3 trae binarios precomp
 npm run dev               # electron-vite dev (HMR en renderer, restart de main en watch)
 npm run typecheck          # tsc --noEmit sobre node (main+preload+shared) y web (renderer+shared)
 npm run lint                # eslint .
-npm run test                 # vitest run — 181 casos en dos proyectos: `main` (Node: migraciones, seed,
+npm run test                 # vitest run — 267 casos en dos proyectos: `main` (Node: migraciones, seed,
                               #   FTS5, repos, borrador, validadores de settings y de escena, respaldo WAL,
                               #   zip reader, audio vinculado, urls, prune del historial, funciones de tiempo,
-                              #   escenas de tiempo como ítem del orden de culto)
-                              #   y `renderer` (jsdom: selectOutput, freezeLivePositions, live-intent, store
-                              #   de toasts, utils). Nada importa `electron`: ese es el límite del suite
+                              #   arrastre de una cuenta regresiva, escenas de tiempo como ítem del orden de culto,
+                              #   video embebido en una diapositiva: geometría, rels externos y nodo por `spid`,
+                              #   estilo del versículo, y los lectores de formatos de Biblia contra archivos
+                              #   reales escritos al vuelo: Zefania, USFX, OSIS, módulos SQLite, Latin-1 y .zip)
+                              #   y `renderer` (jsdom: selectOutput —incluido el video de diapositiva bajo
+                              #   NEGRO—, el versículo vestido y su restilado en vivo,
+                              #   freezeLivePositions, live-intent, transporte
+                              #   de escenas de tiempo, store de toasts, utils). Nada importa `electron`: ese es
+                              #   el límite del suite
 npm run test:watch            # el mismo suite en watch, mientras se toca un módulo
 npm run db:generate            # drizzle-kit generate — nueva migración tras editar db/schema.ts
 npm run slides:smoke -- x.pptx # conversión + parseo OOXML (timings/audio) SIN Electron
@@ -466,6 +479,29 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   `LiveVideo` en `output-view.tsx`) — solo se oculta y se pausa, y al destapar reanuda donde
   estaba. Son dos comportamientos deliberadamente distintos: el video se detiene, la música del
   deck no.
+- **El versículo viaja VESTIDO, y su estilo es una clave de `settings`, no una fila.** La variante
+  `bible` de `ProjectionOutput` lleva adentro su `BibleStyle` y su `backgroundUrl` resueltos, por
+  la misma razón que los lleva una escena de tiempo: el proyector no resuelve nada y
+  `projection-state.ts` reproduce ese valor tal cual. El estilo vive en `settings["bible.style"]`,
+  `App` lo espeja a `projection.store` (como ya hace con las dos claves de transición) y por eso
+  `selectOutput` puede seguir siendo función pura de ese store. Editarlo mientras hay un versículo
+  EN VIVO llega al proyector al instante y **sin transición**: nada de eso toca `sceneEpoch`. Lo
+  construye `bibleOutputFor`, compartido con el monitor de PREVIEW igual que `timerOutputFor`.
+- **El tamaño del versículo se MIDE contra el escenario; el testamento sale de la POSICIÓN; el
+  formato de un archivo sale de sus BYTES.** Las tres son la misma regla: no se deduce de un
+  nombre. El auto-ajuste mide el bloque entero (la referencia está adentro) y su `ResizeObserver`
+  observa el ESCENARIO, nunca el bloque —observarlo es un bucle por construcción—; el testamento
+  es `index <= 39` y no una lista de abreviaturas, que es como 23 libros del Antiguo Testamento
+  estuvieron guardados como `"NT"` desde el primer commit; y `detectBibleFormat` sniffea números
+  mágicos y el elemento raíz, porque un módulo renombrado es lo normal. Los dos hallazgos:
+  [`a-book-code-namespace-is-per-format-and-testament-was-never-derived-right.md`](.claude/knowledge/a-book-code-namespace-is-per-format-and-testament-was-never-derived-right.md)
+  y
+  [`a-bible-module-is-milestoned-xml-or-latin-1-or-sqlite-and-never-what-its-name-says.md`](.claude/knowledge/a-bible-module-is-milestoned-xml-or-latin-1-or-sqlite-and-never-what-its-name-says.md).
+- **Nunca un `cqh` debajo de `OutputView`.** Su raíz es un contenedor `inline-size`: sin eje de
+  bloque, un `cqh` no falla — resuelve en silencio contra el viewport chico, que en un monitor de
+  confianza de 240 px es la ventana de control entera. Ya mordió dos veces (el overlay de video de
+  una diapositiva, y el margen vertical de `TimerScene`). Si de verdad hace falta el eje vertical,
+  va adentro de un envoltorio propio con `container-type: size`.
 - **`selectOutput` (`src/renderer/src/stores/projection.store.ts`) es la única fuente de qué se
   proyecta.** Es un `switch` exhaustivo sobre `BaseContent` — agregar un tipo de contenido nuevo
   sin manejarlo ahí es un error de compilación, no un bug de runtime como el `restorePrevious()`

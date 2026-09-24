@@ -141,6 +141,13 @@ export const bibleVersions = sqliteTable("bible_versions", {
   isBuiltin: integer("is_builtin").notNull().default(0),
   verseCount: integer("verse_count").notNull().default(0),
   sourceHash: text("source_hash"),
+  /** Manual list order, same scheme as `programs.sort_order` and
+   *  `utility_scenes.sort_order`: lower comes first, a newly imported version
+   *  takes `MAX(sort_order) + 1` so it lands at the BOTTOM — unlike a new
+   *  program, an import is not what the operator is about to project, and
+   *  pushing RV1960 off the top of the picker mid-service is the failure mode
+   *  that matters here. `reorder()` renormalizes to `0..n-1`. */
+  sortOrder: integer("sort_order").notNull().default(0),
   installedAt: integer("installed_at").notNull(),
 });
 

@@ -1,5 +1,5 @@
 import { claimLiveIntent } from "@renderer/lib/actions/live-intent";
-import { useBibleStore } from "@renderer/stores/bible.store";
+import { bibleVersionLabel, useBibleStore } from "@renderer/stores/bible.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { useProgramStore } from "@renderer/stores/program.store";
 import { previewVerse } from "@renderer/lib/actions/preview";
@@ -10,16 +10,20 @@ import type { BibleSearchHit } from "@shared/types/bible";
  *  implementation behind `goLive()` on a verse target and the global ←/→
  *  shortcut (use-global-shortcuts.ts) while scripture is on the projector. */
 export function projectVerse(index: number): void {
-  const { verses, setCurrentVerseIndex } = useBibleStore.getState();
+  const { setCurrentVerseIndex, versionId, verses, versions } = useBibleStore.getState();
   const verse = verses[index];
   if (!verse) return;
   const reference = `${verse.bookName} ${verse.chapter}:${verse.verse}`;
+  // Resolved HERE and stored in `base`, not looked up at push time:
+  // `selectOutput` is a pure function of the projection store and cannot reach
+  // into this one. See `BaseContent`'s `bible` variant.
+  const versionLabel = bibleVersionLabel(versions, versionId);
   // Claimed here rather than in `goLive()` alone, because `advanceVerse` is a
   // second entry point: ←/→ moves what the congregation is reading, exactly
   // like `advanceSlide` does for a deck, and a deck finishing its conversion
   // must not land on top of it. See `live-intent.ts`.
   claimLiveIntent();
-  useProjectionStore.getState().setBase({ kind: "bible", text: verse.text, reference });
+  useProjectionStore.getState().setBase({ kind: "bible", text: verse.text, reference, versionLabel });
   setCurrentVerseIndex(index);
 }
 

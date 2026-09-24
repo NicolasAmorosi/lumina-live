@@ -21,6 +21,7 @@ import {
 } from "@renderer/stores/projection.store";
 import { LOGO_URL, assetUrl, slideUrl } from "@shared/urls";
 import type { DeckSlide, DeckSlideVideo } from "@shared/types/deck";
+import { DEFAULT_BIBLE_STYLE } from "@shared/types/bible-style";
 import { DEFAULT_SCENE_STYLE } from "@shared/types/scene-style";
 import { DEFAULT_TIMER_FORMAT } from "@shared/types/timer";
 import type { UtilityScene } from "@shared/types/utility";
@@ -117,13 +118,53 @@ describe("each kind of base content", () => {
     expect(output()).toMatchObject({ kind: "image", url: assetUrl(12) });
   });
 
-  test("a verse carries its text and reference, not an id", () => {
-    useProjectionStore.getState().setBase({ kind: "bible", text: "En el principio…", reference: "Génesis 1:1" });
+  test("a verse carries its text, reference and version label, not an id", () => {
+    useProjectionStore.getState().setBase({
+      kind: "bible",
+      text: "En el principio…",
+      reference: "Génesis 1:1",
+      versionLabel: "RV1960",
+    });
     expect(output()).toMatchObject({
       kind: "bible",
       text: "En el principio…",
       reference: "Génesis 1:1",
+      versionLabel: "RV1960",
     });
+  });
+
+  test("a verse is dressed by the mirrored style, background url resolved", () => {
+    const store = useProjectionStore.getState();
+    store.setBase({ kind: "bible", text: "Jesús lloró.", reference: "Juan 11:35", versionLabel: null });
+
+    // The default style has no image background, so nothing to resolve.
+    expect(output()).toMatchObject({ kind: "bible", style: DEFAULT_BIBLE_STYLE, backgroundUrl: null });
+
+    store.setBibleStyle({ ...DEFAULT_BIBLE_STYLE, background: { kind: "image", assetId: 7, fit: "cover" } });
+    expect(output()).toMatchObject({ kind: "bible", backgroundUrl: assetUrl(7) });
+  });
+
+  test("an image background with no file yet resolves to no url at all", () => {
+    const store = useProjectionStore.getState();
+    store.setBase({ kind: "bible", text: "Jesús lloró.", reference: "Juan 11:35", versionLabel: null });
+    // `assetId: 0` is the sentinel the editor writes before a picture is
+    // picked. A url for it would 404 and paint a broken-image glyph over the
+    // verse — the same rule `timerOutputFor` follows.
+    store.setBibleStyle({ ...DEFAULT_BIBLE_STYLE, background: { kind: "image", assetId: 0, fit: "cover" } });
+    expect(output()).toMatchObject({ kind: "bible", backgroundUrl: null });
+  });
+
+  test("restyling a live verse never begins a new scene", () => {
+    const store = useProjectionStore.getState();
+    store.setBase({ kind: "bible", text: "Jesús lloró.", reference: "Juan 11:35", versionLabel: null });
+    const epoch = output().transition.epoch;
+
+    // Editing the look of what is ALREADY live patches it in place, exactly
+    // like `setLiveScene` does for a time scene: a bumped epoch would fade the
+    // verse into a near-identical copy of itself in the middle of a service.
+    store.setBibleStyle({ ...DEFAULT_BIBLE_STYLE, textAlign: "left" });
+    expect(output()).toMatchObject({ kind: "bible", style: { textAlign: "left" } });
+    expect(output().transition.epoch).toBe(epoch);
   });
 
   test("a video, with its epoch", () => {

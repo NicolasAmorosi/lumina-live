@@ -11,6 +11,7 @@ import type {
   ProgramSummary,
   ProgramUpsert,
 } from "@shared/types/program";
+import type { BibleVersionUsage } from "@shared/types/bible";
 import type { MediaAssetUsage } from "@shared/types/media";
 import type { UtilitySceneUsage } from "@shared/types/utility";
 
@@ -300,6 +301,29 @@ export class ProgramsRepo {
       .from(programItems)
       .innerJoin(programs, eq(programItems.programId, programs.id))
       .where(eq(programItems.utilitySceneId, sceneId))
+      .groupBy(programs.id)
+      .all();
+  }
+
+  /**
+   * Which saved programs cite `versionId`, and how many items each one has.
+   *
+   * The same query shape as `findSceneUsages`, answering a milder question:
+   * this FK is `set null`, so the delete it precedes cannot fail and cannot
+   * remove a row. It exists so the confirmation can NAME what changes —
+   * "estos programas pierden la versión" — instead of the operator finding out
+   * next Sunday that a verse stopped printing «RV1960» underneath itself.
+   */
+  findBibleVersionUsages(versionId: number): BibleVersionUsage[] {
+    return this.db
+      .select({
+        programId: programs.id,
+        programName: programs.name,
+        itemCount: count(),
+      })
+      .from(programItems)
+      .innerJoin(programs, eq(programItems.programId, programs.id))
+      .where(eq(programItems.bibleVersionId, versionId))
       .groupBy(programs.id)
       .all();
   }

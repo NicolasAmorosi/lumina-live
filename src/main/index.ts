@@ -88,9 +88,12 @@ function initDatabase(): void {
     throw error;
   }
 
-  seedBuiltinBibles(db, sqlite, biblesDir);
   initRepos(db, sqlite);
   setBibleDb(db, sqlite);
+  // After `initRepos` now, and for the same reason the utility seed below is:
+  // it reads `bible.builtinSeeded`, which is what keeps a deleted RV1960
+  // deleted across launches. See `seedBuiltinBibles`.
+  seedBuiltinBibles(db, sqlite, biblesDir, getSettingsRepo());
   migrateLegacySettingsIfPresent(getSettingsRepo());
   // After `initRepos`, unlike the Bible seed above: this one needs two
   // repositories rather than a raw handle, and the flag it reads lives in

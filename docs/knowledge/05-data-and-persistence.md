@@ -161,13 +161,80 @@ arranque.
 
 `resources/bibles/rv1960.json` se empaqueta con `extraResources` (`build/electron-builder`) y se
 importa a las tablas en el **primer arranque**, no en build time — así una actualización de la
-app nunca pisa la DB del usuario. `bible:import` (el equivalente al viejo "Importar Biblia") hace
-exactamente lo mismo: parsea el JSON en memoria e inserta filas. **Nunca escribe un archivo
-dentro del directorio de la app** — el bug legacy de `import-bible` escribiendo en
-`data/bible/` (roto en una instalación empaquetada por permisos) no existe en este diseño.
+app nunca pisa la DB del usuario. `bible:import` hace exactamente lo mismo: parsea el archivo en
+memoria e inserta filas. **Nunca escribe un archivo dentro del directorio de la app** — el bug
+legacy de `import-bible` escribiendo en `data/bible/` (roto en una instalación empaquetada por
+permisos) no existe en este diseño.
 
-Idempotencia por `sourceHash` (sha256 del JSON) en `bible_versions` — reimportar el mismo archivo
-no vuelve a sembrar nada.
+Idempotencia por `sourceHash` (sha256 del archivo) en `bible_versions` — reimportar el mismo
+archivo no vuelve a sembrar nada. Un reseed **conserva el nombre que la fila ya tiene**: la
+versión se puede renombrar desde Ajustes (es lo que el proyector escribe debajo del versículo), y
+un `rv1960.json` corregido en un build posterior no puede deshacer ese renombre.
+
+### La bandera `bible.builtinSeeded` — y por qué se consulta solo si la fila NO está
+
+`seedBuiltinBibles()` corre en cada arranque, así que sin bandera la RV1960 volvía al siguiente
+inicio y «borrar» no significaba borrar. Pero la bandera **no** puede apagar la siembra sin más,
+porque la siembra es también el camino de actualización. Las tres reglas, en orden:
+
+| Estado | Qué hace |
+|---|---|
+| la fila existe | siembra igual — el corto-circuito por hash la vuelve un digest por arranque, y es así como un `rv1960.json` corregido llega a una instalación ya hecha |
+| no existe y la bandera está puesta | el operador la borró: se respeta |
+| no existe y la bandera no está | base nueva: siembra y pone la bandera |
+
+Por eso `seedBuiltinBibles` corre **después** de `initRepos()` (necesita `SettingsRepo`), igual
+que la siembra de escenas de tiempo y por la misma razón.
+
+## Formatos de Biblia — el formato lo deciden los BYTES
+
+`src/main/db/seed/bible-formats/` acepta cinco familias y `seed-bible.ts` no sabe cuál fue:
+
+| Formato | Cómo se lee | Identidad del libro |
+|---|---|---|
+| JSON (el del bundle y cualquier variante) | `json.ts`, tolerante a toda forma conocida | el `abbrev` del propio archivo |
+| Zefania XML (`.xml`, `.zip`) | modelo de objetos de `fast-xml-parser` | `bnumber` (1..66) |
+| USFX XML | recorrido **ordenado** (`xml-ordered.ts`) | `<book id="GEN">` |
+| OSIS XML | el mismo recorrido; dos formas legales de versículo | `osisID="Gen.1.1"` |
+| MyBible.zone / MySword | `better-sqlite3` en `readonly` | `book_number` (10..730) / `Book` (1..66) |
+
+`detectBibleFormat` sniffea números mágicos (`SQLite format 3\0`, `PK\x03\x04`) y después el
+elemento raíz — **nunca la extensión**, igual que `container-kind.ts` con una presentación. Un
+`.zip` se abre con `readZipEntries` (no `unzipSync`) y gana la entrada más grande; un módulo
+SQLite comprimido **no** se soporta, porque haría falta escribirlo a un temporal.
+
+Todo lo que no es el JSON pasa por `BookCollector`, que deduplica (el UNIQUE de `bible_verses`
+abortaría la transacción entera por un solo versículo repetido), descarta versículos vacíos y
+reordena los libros al orden canónico. El testamento sale de la **posición** canónica, nunca de
+una lista de nombres — ver
+[`.claude/knowledge/a-book-code-namespace-is-per-format-and-testament-was-never-derived-right.md`](../../.claude/knowledge/a-book-code-namespace-is-per-format-and-testament-was-never-derived-right.md),
+que además documenta las 23 filas que estuvieron mal desde el primer commit. Las trampas de cada
+formato (milestones, Latin-1, apparatus de los módulos) están en
+[`.claude/knowledge/a-bible-module-is-milestoned-xml-or-latin-1-or-sqlite-and-never-what-its-name-says.md`](../../.claude/knowledge/a-bible-module-is-milestoned-xml-or-latin-1-or-sqlite-and-never-what-its-name-says.md).
+
+## Gestión de versiones
+
+`bible:rename` / `bible:delete` / `bible:usages`. El nombre es el **único** campo editable: el
+`code` es la identidad contra la que el seed compara el hash y la clave a la que apuntan las filas
+de `bible_favorites`, así que editarlo huerfanaría favoritos y duplicaría la versión en el próximo
+arranque.
+
+Borrar cae en cascada sobre `bible_books`/`bible_verses` (y los índices FTS5 por trigger) y
+deliberadamente **no** toca dos cosas: las filas de `program_items`, cuyo FK es `set null` —el
+programa guardado conserva texto y referencia y pierde solo el vínculo—, y las de
+`bible_favorites`, que están keyed por CÓDIGO justamente para sobrevivir a un
+borrar-y-reimportar. `force` acá es consentimiento informado y nada más: a diferencia del de una
+escena de tiempo, este borrado no puede fallar por FK.
+
+## `SETTINGS_NORMALIZERS` — la primera clave de `settings` que es una ESTRUCTURA
+
+Hasta `bible.style` toda clave era un escalar o un `Record` de escalares: una mal escrita cae a su
+default y no se pierde nada más. Un `BibleStyle` no: un degradado al que le falta un color tiene
+que volver con el fondo por defecto y la tipografía que el operador eligió, no como un extraño.
+Así que `SettingsRepo.load()` aplica un normalizador por clave cuando lo hay
+(`shared/types/settings.ts`), que es la misma disciplina de `utility_scenes.style_json` —
+**validar al escribir, normalizar campo por campo al leer**— aplicada por primera vez a una fila
+de `settings`.
 
 ## Migraciones y backup
 
@@ -198,9 +265,9 @@ tres cupos con copias post-migración y **rotaban afuera la única copia que est
 guardar**. Se veía en la carpeta real del usuario: las 3 copias eran del mismo día y del mismo
 tamaño, todas posteriores a la última migración.
 
-## Parseo defensivo de la Biblia
+## Parseo defensivo de la Biblia (el camino JSON)
 
-`src/main/db/seed/bible-source.ts` tolera las mismas variantes que la versión legacy: contenedor
+`src/main/db/seed/bible-formats/json.ts` tolera las mismas variantes que la versión legacy: contenedor
 array-de-libros / `{books:[...]}` / objeto-por-nombre; libro con `name` o `nombre`; capítulos
 array u objeto `{"1":...}`; versículos string[]/`{text}`[]/`{verse}`[]/objeto. Verificado contra
 `rv1960.json` real: **sí tiene `name`** en los 66 libros — el bug "se muestra 'Libro' 66 veces"

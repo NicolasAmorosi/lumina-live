@@ -60,6 +60,11 @@ export const api = {
     search: (versionId: number, query: string, limit?: number) =>
       invoke("bible:search", { versionId, query, ...(limit !== undefined ? { limit } : {}) }),
     import: () => invoke("bible:import", undefined),
+    rename: (id: number, name: string) => invoke("bible:rename", { id, name }),
+    delete: (id: number, force?: boolean) =>
+      invoke("bible:delete", { id, ...(force !== undefined ? { force } : {}) }),
+    usages: (id: number) => invoke("bible:usages", { id }),
+    reorder: (ids: number[]) => invoke("bible:reorder", { ids }),
   },
   library: {
     list: (kind: AssetKind) => invoke("library:list", { kind }),

@@ -1,10 +1,11 @@
-import { useBibleStore } from "@renderer/stores/bible.store";
+import { bibleVersionLabel, useBibleStore } from "@renderer/stores/bible.store";
 import { useDeckStore } from "@renderer/stores/deck.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
 import { useProgramStore } from "@renderer/stores/program.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { useMediaAsset } from "@renderer/lib/hooks/use-media-asset";
 import { clockForScene, findScene, useUtilityStore } from "@renderer/stores/utility.store";
+import { bibleOutputFor } from "@renderer/lib/bible-output";
 import { timerOutputFor } from "@renderer/lib/utility-output";
 import { assetUrl } from "@shared/urls";
 import type { MediaAsset } from "@shared/types/media";
@@ -23,13 +24,15 @@ export type PreviewContent =
    *  behind the "instalá LibreOffice" gate (`deckRequiresSoffice`). */
   | { kind: "deck"; assetId: number; ext: string; title: string; missingSince: number | null }
   | { kind: "media"; asset: MediaAsset }
-  | { kind: "bible"; reference: string; text: string; verseIndex: number | null }
+  | { kind: "bible"; reference: string; text: string; versionLabel: string | null; verseIndex: number | null }
   | { kind: "utility"; scene: UtilityScene };
 
 export function usePreviewContent(): PreviewContent | null {
   const target = usePreviewStore((s) => s.target);
   const items = useProgramStore((s) => s.items);
   const verses = useBibleStore((s) => s.verses);
+  const versionId = useBibleStore((s) => s.versionId);
+  const versions = useBibleStore((s) => s.versions);
   const scenes = useUtilityStore((s) => s.scenes);
 
   const scheduleItem = target?.kind === "scheduleItem" ? items[target.index] : undefined;
@@ -49,6 +52,7 @@ export function usePreviewContent(): PreviewContent | null {
       kind: "bible",
       reference: `${verse.bookName} ${verse.chapter}:${verse.verse}`,
       text: verse.text,
+      versionLabel: bibleVersionLabel(versions, versionId),
       verseIndex: target.verseIndex,
     };
   }
@@ -92,6 +96,10 @@ export function usePreviewContent(): PreviewContent | null {
         kind: "bible",
         reference: scheduleItem.reference,
         text: scheduleItem.text,
+        // The row's own version rather than whatever the Bible tab happens to
+        // be browsing: a program written against RV1960 previews as RV1960
+        // even while the operator is looking at another one.
+        versionLabel: bibleVersionLabel(versions, scheduleItem.bibleVersionId),
         verseIndex: null,
       };
     case "utility": {
@@ -118,6 +126,10 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
   const playing = usePreviewStore((s) => s.playing);
   const run = useUtilityStore((s) => s.run);
   const liveBase = useProjectionStore((s) => s.base);
+  // Off `projection.store` and not `settings.store`: it is the very value the
+  // projector is being pushed, mirrored there by `App` — reading the setting
+  // directly would let the preview lead the projector by one render.
+  const bibleStyle = useProjectionStore((s) => s.bibleStyle);
   const deckEntry = useDeckStore((s) => (content?.kind === "deck" ? s.byAssetId[content.assetId] : undefined));
 
   if (!content) return null;
@@ -189,10 +201,10 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
       return null;
     }
     case "bible":
+      // The same builder and the same style the projector reads, so this
+      // monitor cannot dress a verse differently from the room.
       return {
-        kind: "bible",
-        text: content.text,
-        reference: content.reference,
+        ...bibleOutputFor(content, bibleStyle),
         videoUnderlay: null,
         slideVideo: null,
         transition: INSTANT_TRANSITION,

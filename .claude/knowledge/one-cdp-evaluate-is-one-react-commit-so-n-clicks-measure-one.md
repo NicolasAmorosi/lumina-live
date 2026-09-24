@@ -24,9 +24,11 @@ single `Runtime.evaluate`, and then reports that the behaviour under test "did n
 - Two companions worth knowing before writing one of these:
   [occluded-electron-window-has-no-rendering-lifecycle.md](occluded-electron-window-has-no-rendering-lifecycle.md)
   (measure only after forcing a frame with `Page.captureScreenshot`), and
-  [driving-a-native-open-panel-from-a-verification-script.md](driving-a-native-open-panel-from-a-verification-script.md).
+  [driving-a-native-open-panel-from-a-verification-script.md](driving-a-native-open-panel-from-a-verification-script.md),
+  and [element-click-over-cdp-fakes-focus-visible-and-invents-focus-only-bugs.md](element-click-over-cdp-fakes-focus-visible-and-invents-focus-only-bugs.md)
+  (`el.click()` is not a click for anything keyed off `:focus-visible`).
   Also: swapping a hook file that changes its **number of `useEffect` calls** while the dev server
   is up produces `Should have a queue. You are likely calling Hooks conditionally` from HMR — it is
   an artifact of the hot update, not a bug in the code being measured, and `Page.reload` clears it.
 
-**Last updated:** 2026-09-14
+**Last updated:** 2026-09-21

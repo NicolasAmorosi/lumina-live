@@ -22,7 +22,7 @@ import Database from "better-sqlite3";
 import { openDatabase } from "../../src/main/db/client";
 import { backupBeforeMigrate, runMigrations } from "../../src/main/db/migrate";
 import { seedBuiltinBibles } from "../../src/main/db/seed/seed-bible";
-import { mediaAssets } from "../../src/main/db/schema";
+import { bibleVersions, mediaAssets } from "../../src/main/db/schema";
 import { BibleRepo } from "../../src/main/db/repositories/bible.repo";
 import { SettingsRepo } from "../../src/main/db/repositories/settings.repo";
 import { ProgramsRepo } from "../../src/main/db/repositories/programs.repo";
@@ -36,6 +36,7 @@ import { readBinarySlideTimings } from "../../src/main/slides/ppt-binary-timings
 import { backfillDeckTimings } from "../../src/main/slides/backfill-timings";
 import { SNIPPET_MARK_END, SNIPPET_MARK_START, parseSnippet } from "../../src/shared/types/bible";
 import { SETTINGS_VALIDATORS, isSettingsKey } from "../../src/shared/types/settings";
+import { BUILTIN_BIBLE_CODE } from "../../src/shared/constants";
 import { DEFAULT_UTILITY_SCENES } from "../../src/shared/types/utility";
 import { removeUtilityScene } from "../../src/main/services/utility-scene-removal";
 import { IpcError } from "../../src/shared/ipc/result";
@@ -83,10 +84,11 @@ beforeAll(() => {
   sqlite = opened.sqlite;
   db = opened.db;
   runMigrations(db, drizzleDir);
-  seedBuiltinBibles(db, sqlite, biblesDir);
 
   bibleRepo = new BibleRepo(db, sqlite);
   settingsRepo = new SettingsRepo(db);
+  // After the repo exists: the seed reads (and sets) `bible.builtinSeeded`.
+  seedBuiltinBibles(db, sqlite, biblesDir, settingsRepo);
   programsRepo = new ProgramsRepo(db, sqlite);
   mediaRepo = new MediaRepo(db, sqlite);
   slidesRepo = new SlidesRepo(db, sqlite);
@@ -108,6 +110,16 @@ describe("Bible seed", () => {
     const books = bibleRepo.listBooks(versionId);
     assert(books.length === 66, `expected 66 books, got ${books.length}`);
     assert(books[0]!.name === "Génesis", `expected first book "Génesis", got "${books[0]!.name}"`);
+
+    // The testament split, over the bible that is actually in the box.
+    // It used to be derived from a hand-written set of 39 abbreviations that
+    // did not match this file's own spellings (`1s` vs `1sm`, `sal` vs `ps`,
+    // `abd` vs `ob`, …): 23 of the 39 Old Testament books were stored as
+    // "NT". Nothing read the column, so nothing ever showed it.
+    const ot = books.filter((b) => b.testament === "OT");
+    assert(ot.length === 39, `expected 39 OT books, got ${ot.length}`);
+    assert(books[38]!.testament === "OT", `expected Malaquías in the OT, got ${books[38]!.testament}`);
+    assert(books[39]!.testament === "NT", `expected Mateo in the NT, got ${books[39]!.testament}`);
     bookIds = books.map((book) => book.id);
   });
 
@@ -926,5 +938,83 @@ describe("A time scene as an order-of-service item", () => {
       `expected only the live scene to survive, got ${JSON.stringify(restored.items)}`,
     );
     draftRepo.clear();
+  });
+});
+
+/**
+ * The order the version picker offers is the operator's, and it survives a
+ * re-seed.
+ *
+ * Both halves matter and only one of them is visible in Ajustes: `sort_order`
+ * also drives `bible.store`'s `versions`, which is the list the Bible tab's
+ * picker is built from — so a reorder that did not persist would read as a
+ * settings screen that forgets, and a re-seed that reset it would send the
+ * bundled bible back to the bottom of that picker after an update.
+ */
+describe("Installed bibles keep the order the operator gave them", () => {
+  let extraIds: number[] = [];
+
+  beforeAll(() => {
+    const now = Date.now();
+    extraIds = ["test-a", "test-b"].map(
+      (code, index) =>
+        db
+          .insert(bibleVersions)
+          .values({
+            code,
+            name: code,
+            language: "es",
+            isBuiltin: 0,
+            verseCount: 0,
+            // What `BibleRepo.nextSortOrder` would have given them: the bundled
+            // bible was backfilled to 0 by the migration.
+            sortOrder: index + 1,
+            installedAt: now + index,
+          })
+          .run().lastInsertRowid as number,
+    );
+  });
+
+  afterAll(() => {
+    for (const id of extraIds) db.delete(bibleVersions).where(eq(bibleVersions.id, id)).run();
+    // Back to the single row every earlier case in this file assumes.
+    bibleRepo.reorderVersions(bibleRepo.listVersions().map((version) => version.id));
+  });
+
+  test("a new version is imported at the BOTTOM, never on top", () => {
+    const ids = bibleRepo.listVersions().map((version) => version.id);
+    assert(ids[0] === versionId, `the bundled bible must stay first, got ${JSON.stringify(ids)}`);
+    assert(bibleRepo.nextSortOrder() === 3, `expected the next slot to be 3, got ${bibleRepo.nextSortOrder()}`);
+  });
+
+  test("reorder persists the whole arrangement and renormalizes to 0..n-1", () => {
+    const [first, second, third] = bibleRepo.listVersions().map((version) => version.id);
+    const moved = bibleRepo.reorderVersions([third!, first!, second!]);
+    assert(
+      moved.map((version) => version.id).join(",") === [third, first, second].join(","),
+      `reorder must answer with the stored order, got ${moved.map((v) => v.id).join(",")}`,
+    );
+    assert(
+      bibleRepo.listVersions().map((version) => version.id).join(",") === [third, first, second].join(","),
+      "a fresh read must see the same order",
+    );
+    const rows = db.select().from(bibleVersions).all();
+    assert(
+      rows.every((row) => row.sortOrder >= 0 && row.sortOrder < rows.length),
+      `sort_order must be renormalized to 0..n-1, got ${rows.map((r) => r.sortOrder).join(",")}`,
+    );
+  });
+
+  test("a re-seed of the bundled bible keeps its place", () => {
+    const before = bibleRepo.listVersions().findIndex((version) => version.id === versionId);
+    assert(before > 0, "this case only proves anything with the bundled bible off the top");
+    // Clearing the hash is what a corrected `rv1960.json` shipping in a later
+    // build looks like from here: the seed stops short-circuiting and takes the
+    // delete-and-reinsert path (that is how the verses cascade), which without
+    // `existing?.sortOrder` brings the row back at the bottom.
+    db.update(bibleVersions).set({ sourceHash: null }).where(eq(bibleVersions.id, versionId)).run();
+    seedBuiltinBibles(db, sqlite, biblesDir, settingsRepo);
+    const after = bibleRepo.listVersions().findIndex((version) => version.code === BUILTIN_BIBLE_CODE);
+    assert(after === before, `expected the bundled bible to stay at ${before}, found it at ${after}`);
   });
 });

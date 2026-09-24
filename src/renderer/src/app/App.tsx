@@ -20,6 +20,7 @@ import { useProjectionStore } from "@renderer/stores/projection.store";
 import { LOGO_URL } from "@shared/urls";
 import { useSettingsStore } from "@renderer/stores/settings.store";
 import { useDeckStore } from "@renderer/stores/deck.store";
+import { useBibleStore } from "@renderer/stores/bible.store";
 import { useDisplayStore } from "@renderer/stores/display.store";
 import { useLibraryStore } from "@renderer/stores/library.store";
 import { useUiStore } from "@renderer/stores/ui.store";
@@ -79,6 +80,8 @@ export function App() {
   const setTransitionSettings = useProjectionStore(
     (s) => s.setTransitionSettings,
   );
+  const bibleStyle = useSettingsStore((s) => s.settings["bible.style"]);
+  const setBibleStyle = useProjectionStore((s) => s.setBibleStyle);
 
   useGlobalShortcuts(useAnyModalOpen());
 
@@ -98,6 +101,12 @@ export function App() {
       // unreliable. The operator's first tap on NEGRO, LOGO or EN VIVO opens
       // it on demand (see display.store's `openIfNeeded`).
       await useDisplayStore.getState().load();
+      // After the settings, never before: `loadVersions` settles on
+      // `bible.defaultVersionId`, and reading that key before it is loaded
+      // would silently open on whichever version happens to be first. This is
+      // why the Bible tab no longer loads them on its own mount — two
+      // unordered callers is exactly how that race was won by the wrong one.
+      void useBibleStore.getState().loadVersions();
       // The saved time scenes. Not awaited before the draft restore below and
       // not blocking it either: nothing in the schedule references a scene
       // yet (that is F3), and the Utilities panel is perfectly able to paint
@@ -150,6 +159,15 @@ export function App() {
   useEffect(() => {
     setTransitionSettings(transitionStyle, transitionDurationMs);
   }, [transitionStyle, transitionDurationMs, setTransitionSettings]);
+
+  // The verse's own look, mirrored for the same reason and by the same route.
+  // Editing it in Ajustes while scripture is on the projector therefore
+  // reaches the room immediately and WITHOUT a scene transition: nothing here
+  // touches `sceneEpoch`, so `OutputView` swaps the layer in place instead of
+  // fading a verse into a near-identical copy of itself.
+  useEffect(() => {
+    setBibleStyle(bibleStyle);
+  }, [bibleStyle, setBibleStyle]);
 
   return (
     <>

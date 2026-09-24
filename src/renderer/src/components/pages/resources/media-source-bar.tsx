@@ -38,7 +38,7 @@ export function MediaSourceBar({ activeView, folders, onAddFolder, onRemoveFolde
       {folders.map((folderPath) => (
         <div className="group/folder min-w-0 flex-1" key={folderPath}>
           <div className="relative">
-            <Tooltip className="block w-full min-w-0" content={folderPath} floating>
+            <Tooltip className="block w-full min-w-0" content={folderPath} fit="path" floating>
               <button
                 className={cn(baseButton, "flex w-full items-center gap-1 pr-5", activeView === folderPath ? activeButton : inactiveButton)}
                 onClick={() => onSelectView(folderPath)}

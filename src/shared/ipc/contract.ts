@@ -6,6 +6,7 @@ import type {
   BibleSearchHit,
   BibleVerseDTO,
   BibleVersionDTO,
+  BibleVersionUsage,
 } from "../types/bible";
 import type {
   AudioTrackPush,
@@ -138,6 +139,21 @@ export type IpcContract = {
     res: BibleSearchHit[];
   };
   "bible:import": { req: void; res: BibleVersionDTO | null };
+  /** The name is the only editable field, and it is what the projector prints
+   *  when the style asks for the version — see `BibleRepo.renameVersion` for
+   *  why `code` is not editable. */
+  "bible:rename": { req: { id: number; name: string }; res: BibleVersionDTO };
+  /** `force` means exactly "the operator has read which programs lose their
+   *  version link and said yes anyway" — never a flag the UI sets on its own.
+   *  Unlike a time scene's, this delete cannot fail on an FK (it is `set
+   *  null`), so `force` is purely about informed consent. */
+  "bible:delete": { req: { id: number; force?: boolean }; res: void };
+  "bible:usages": { req: { id: number }; res: BibleVersionUsage[] };
+  /** `ids` is the whole list in the order it should appear — the order the
+   *  version picker then offers, not just the order Ajustes shows. Answers
+   *  with the re-sorted list, so the caller replaces its state with what was
+   *  actually persisted instead of trusting its optimistic guess. */
+  "bible:reorder": { req: { ids: number[] }; res: BibleVersionDTO[] };
 
   "library:list": { req: { kind: AssetKind }; res: MediaAsset[] };
   "library:get": { req: { id: number }; res: MediaAsset | null };

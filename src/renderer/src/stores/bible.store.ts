@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { BibleBookDTO, BibleVerseDTO, BibleVersionDTO } from "@shared/types/bible";
 import { api } from "@renderer/lib/api";
+import { useSettingsStore } from "@renderer/stores/settings.store";
 
 type BibleStoreState = {
   versions: BibleVersionDTO[];
@@ -12,6 +13,7 @@ type BibleStoreState = {
   currentVerseIndex: number | null;
 
   loadVersions: () => Promise<void>;
+  reorderVersions: (ids: number[]) => Promise<void>;
   setVersion: (versionId: number) => Promise<void>;
   setBookAndChapter: (bookId: number, chapter: number) => Promise<void>;
   setCurrentVerseIndex: (index: number | null) => void;
@@ -26,10 +28,69 @@ export const useBibleStore = create<BibleStoreState>((set, get) => ({
   verses: [],
   currentVerseIndex: null,
 
+  /**
+   * Re-reads the installed versions and settles on which one is browsed.
+   *
+   * Three rules, in order, and each of them is there because the other two
+   * are wrong on their own:
+   *
+   * 1. **Keep what is already open.** This runs again after every import,
+   *    rename and delete; switching the operator to another version because a
+   *    list was refreshed would lose the chapter they were reading.
+   * 2. **Otherwise the default** (`bible.defaultVersionId`) — which is the
+   *    whole point of that setting.
+   * 3. **Otherwise the first one.** What the app always did, now only as a
+   *    last resort: it is an insertion order nobody chose.
+   *
+   * Reading settings at call time rather than subscribing is deliberate and
+   * safe here because `App` hydrates this AFTER `loadSettings()` — the one
+   * ordering that matters, and the reason the Bible tab does not load them on
+   * its own mount any more.
+   */
   loadVersions: async () => {
     const versions = await api.bible.versions();
     set({ versions });
-    if (versions[0]) await get().setVersion(versions[0].id);
+
+    const current = get().versionId;
+    if (current !== null && versions.some((version) => version.id === current)) return;
+
+    const defaultId = useSettingsStore.getState().settings["bible.defaultVersionId"];
+    const next = versions.find((version) => version.id === defaultId) ?? versions[0];
+    if (next) {
+      await get().setVersion(next.id);
+      return;
+    }
+    // Every version was deleted: the browser has to empty out rather than keep
+    // showing the chapter of a bible that is gone.
+    set({ versionId: null, books: [], bookId: null, chapter: null, verses: [], currentVerseIndex: null });
+  },
+
+  /**
+   * Applies the operator's manual arrangement of the installed versions.
+   *
+   * It lives here rather than in the Ajustes section that owns the drag
+   * because `versions` is also what the Bible tab's picker offers: a local
+   * copy in the settings panel would leave the picker showing yesterday's
+   * order until something else happened to reload the store.
+   *
+   * Optimistic, then replaced by what main actually stored — the same shape as
+   * `ProgramsModal`'s reorder, and for the same reason: the drop has to land
+   * under the cursor immediately, and the persisted order is the one that
+   * survives. A failure reloads rather than leaving the optimistic guess on
+   * screen pretending to be saved.
+   */
+  reorderVersions: async (ids) => {
+    const byId = new Map(get().versions.map((version) => [version.id, version]));
+    const optimistic = ids.map((id) => byId.get(id)).filter((version) => version !== undefined);
+    // Only a complete permutation is applied optimistically: anything else
+    // would DROP a version from the picker until main answered.
+    if (optimistic.length === byId.size) set({ versions: optimistic });
+    try {
+      set({ versions: await api.bible.reorder(ids) });
+    } catch (error) {
+      console.error("[bible] reorder failed", error);
+      await get().loadVersions();
+    }
   },
 
   setVersion: async (versionId) => {
@@ -44,3 +105,27 @@ export const useBibleStore = create<BibleStoreState>((set, get) => ({
 
   setCurrentVerseIndex: (currentVerseIndex) => set({ currentVerseIndex }),
 }));
+
+/**
+ * The label a verse coming from `versionId` projects under, or `null` when
+ * there is nothing to print.
+ *
+ * It is the version's NAME, which is also what the operator can rename — that
+ * is the lever. «Reina-Valera 1960» is too long to sit under a verse on a
+ * three-metre screen, and the short form every church actually uses («RV1960»)
+ * is a preference, not a fact the app can derive: a Spanish congregation
+ * writes RV60 and an Italian one writes NR94. So there is no second `abbrev`
+ * column and no formatting rule here — the name IS the label, and Ajustes ▸
+ * Biblia is where it gets shortened.
+ *
+ * `null` for an unknown id rather than a placeholder: a saved program whose
+ * version was deleted has a `set null` FK, and printing «(desconocida)» under
+ * a verse in front of the congregation would be worse than printing nothing.
+ */
+export function bibleVersionLabel(
+  versions: readonly BibleVersionDTO[],
+  versionId: number | null,
+): string | null {
+  if (versionId === null) return null;
+  return versions.find((version) => version.id === versionId)?.name ?? null;
+}

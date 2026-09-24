@@ -14,10 +14,17 @@ import type { ProjectionOutput } from "@shared/types/projection";
 
 export type TimerOutput = Extract<ProjectionOutput, { kind: "timer" }>;
 
+/** `cqw` and not `cqh`, which is what these two were until it was measured:
+ *  `OutputView`'s root is an `inline-size` container, so it has no block axis
+ *  to query and a `cqh` inside it silently resolves against the small VIEWPORT
+ *  instead — the whole control window, which on a 240px confidence monitor is
+ *  a gutter several times the height of the monitor itself. The same trap
+ *  `SlideVideo`'s overlay documents in `output-view.tsx`. 4.5 cqw is the 8% of
+ *  the height these meant to be, on a 16:9 stage. */
 const VERTICAL_ALIGN: Record<SceneVerticalAlign, string> = {
-  top: "justify-start pt-[8cqh]",
+  top: "justify-start pt-[4.5cqw]",
   middle: "justify-center",
-  bottom: "justify-end pb-[8cqh]",
+  bottom: "justify-end pb-[4.5cqw]",
 };
 
 /** In `cqw`, like every size here, so the shadow keeps its proportion from a

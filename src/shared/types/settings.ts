@@ -4,6 +4,8 @@ import {
   SLIDES_DEFAULT_CACHE_MB,
   SLIDES_DEFAULT_RENDER_WIDTH,
 } from "../constants";
+import { isBibleStyle, normalizeBibleStyle } from "../bible-style-validators";
+import { DEFAULT_BIBLE_STYLE, type BibleStyle } from "./bible-style";
 import { MEDIA_SORT_ORDERS, type MediaSortOrder } from "./media";
 import { TRANSITION_MAX_DURATION_MS, TRANSITION_STYLES, type TransitionStyle } from "./transition";
 
@@ -71,6 +73,28 @@ export type SettingsMap = {
    *  back on the next launch. Seeding once is what makes "borrar" mean
    *  borrar. */
   "utility.seeded": boolean;
+  /** How a scripture verse is drawn on the projector — see `BibleStyle`.
+   *  A JSON column in all but name, so it is the one settings key with a
+   *  normalizer as well as a validator (`SETTINGS_NORMALIZERS`). */
+  "bible.style": BibleStyle;
+  /** Which version the Bible tab opens on. `null` means "whichever comes
+   *  first", which is what the app did before this key existed — an insertion
+   *  order nobody chose. Reset to `null` when the version it names is
+   *  deleted, by the delete itself: a dangling id would silently fall back
+   *  and look like the setting was never saved. */
+  "bible.defaultVersionId": number | null;
+  /** Whether this database has ever been offered the bundled RV1960.
+   *
+   *  Exists for exactly the reason `utility.seeded` does, with one extra
+   *  wrinkle. `seedBuiltinBibles()` runs on every launch, so without a flag a
+   *  deleted RV1960 would reappear at the next one and «borrar» would not
+   *  mean borrar. But the flag must NOT disable seeding outright: the seed is
+   *  also the upgrade path — it re-imports when `resources/bibles/rv1960.json`
+   *  changes hash, which is how a corrected bundle reaches an existing
+   *  install. So the flag is only consulted when the version row is GONE (see
+   *  `seedBuiltinBibles`), which is the only case that means the operator
+   *  deleted it on purpose. */
+  "bible.builtinSeeded": boolean;
 };
 
 export const DEFAULT_SETTINGS: SettingsMap = {
@@ -97,6 +121,9 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   "library.activeView": { video: "recent", image: "recent", audio: "recent", ppt: "recent" },
   "library.sort": { video: "name-asc", image: "name-asc", audio: "name-asc", ppt: "name-asc" },
   "utility.seeded": false,
+  "bible.style": DEFAULT_BIBLE_STYLE,
+  "bible.defaultVersionId": null,
+  "bible.builtinSeeded": false,
 };
 
 /* -------------------------------------------------------------------------
@@ -173,8 +200,34 @@ export const SETTINGS_VALIDATORS: Record<keyof SettingsMap, (value: unknown) => 
   "library.activeView": isRecordOfKinds(isString),
   "library.sort": isRecordOfKinds(isOneOf(MEDIA_SORT_ORDERS)),
   "utility.seeded": isBoolean,
+  "bible.style": isBibleStyle,
+  "bible.defaultVersionId": (v) => v === null || (typeof v === "number" && Number.isInteger(v) && v > 0),
+  "bible.builtinSeeded": isBoolean,
 };
 
 export function isSettingsKey(key: string): key is keyof SettingsMap {
   return key in SETTINGS_VALIDATORS;
 }
+
+/**
+ * The keys whose stored value is a STRUCTURE rather than a scalar, and what to
+ * make of one that no longer matches this build's idea of it.
+ *
+ * The rule `CLAUDE.md` states for a JSON column — validate on write, normalize
+ * FIELD BY FIELD on read — has had no place to live in `settings` until now,
+ * because every key here was a scalar or a `Record` of them: a bad one falls
+ * back to its default and nothing is lost but that one value. `bible.style` is
+ * the first key where all-or-nothing would be wrong, for the same reason
+ * `utility_scenes.style_json` normalizes: a style whose gradient lost one
+ * colour must come back with the operator's own typography and a default
+ * background, not as a stranger — and a launch must never fail over it.
+ *
+ * `Partial` and not `Record`, deliberately: a scalar key needs nothing here,
+ * and requiring an entry per key would mean fifteen identity functions.
+ * `SettingsRepo.load` applies whatever it finds and leaves the rest alone.
+ */
+export const SETTINGS_NORMALIZERS: {
+  [K in keyof SettingsMap]?: (value: unknown) => SettingsMap[K];
+} = {
+  "bible.style": normalizeBibleStyle,
+};

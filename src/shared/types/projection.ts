@@ -4,6 +4,7 @@
  * `selectOutput` switch (renderer/stores/projection.store.ts) is a compile error,
  * not a runtime "stuck on logo" bug like the old `restorePrevious()`.
  */
+import type { BibleStyle } from "./bible-style";
 import type { SlideRect } from "./deck";
 import type { SceneStyle } from "./scene-style";
 import type { TimerClock, TimerFormat } from "./timer";
@@ -81,7 +82,37 @@ export type ProjectionOutputKind =
   | { kind: "logo"; url: string | null }
   | { kind: "image"; url: string }
   | { kind: "video"; url: string; epoch: number }
-  | { kind: "bible"; text: string; reference: string }
+  /**
+   * A scripture verse, dressed.
+   *
+   * `style` and `backgroundUrl` travel INSIDE the output for exactly the
+   * reason a time scene's do: the projection window resolves nothing and
+   * reads no store, and `main/services/projection-state.ts` replays this
+   * value verbatim into a window rebuilt on another screen. A style the
+   * projector had to look up somewhere would be a style the replayed snapshot
+   * does not have.
+   *
+   * It is not a copy per push either — the control window holds one
+   * `BibleStyle` object and hands the same reference to every output, so
+   * `selectOutputMemo`'s identity check still collapses a re-render into
+   * nothing.
+   *
+   * `versionLabel` is resolved in the control window because only it knows
+   * which version a verse came from: `BibleVerseDTO` carries a book and a
+   * chapter, and a saved program's version FK is `set null`, so the label can
+   * legitimately be gone. `null` means "there is nothing to print", never
+   * "look it up".
+   */
+  | {
+      kind: "bible";
+      text: string;
+      reference: string;
+      versionLabel: string | null;
+      style: BibleStyle;
+      /** Resolved from `style.background` when it is an image, exactly like a
+       *  time scene's. `null` for every other kind of background. */
+      backgroundUrl: string | null;
+    }
   | {
       kind: "slide";
       /** media_assets.id of the source deck — lets HistoryRepo coalesce a whole
@@ -260,7 +291,12 @@ export type BaseContent =
   | { kind: "deck"; assetId: number; slideIndex: number }
   | { kind: "video"; assetId: number; epoch: number; startAtSeconds: number }
   | { kind: "image"; assetId: number }
-  | { kind: "bible"; text: string; reference: string }
+  /** `versionLabel` rides along rather than being re-derived at push time:
+   *  the verse may have come from a program row whose version was deleted
+   *  since, and `selectOutput` is a pure function of this state — it cannot
+   *  reach into `bible.store` to ask. The same rule `utility`'s resolved
+   *  `scene` follows, for the same reason. */
+  | { kind: "bible"; text: string; reference: string; versionLabel: string | null }
   /**
    * A utility scene on the projector.
    *

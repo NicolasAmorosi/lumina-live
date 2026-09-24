@@ -22,6 +22,13 @@ export const PROGRAM_ROW_MIME = "application/x-worship-program-row";
  *  list is refreshed from main mid-drag, so an index would point at a
  *  different row by the time the drop lands. */
 export const UTILITY_SCENE_MIME = "application/x-worship-utility-scene";
+/** A row of the installed-bibles list in Ajustes, dropped on another row to
+ *  reorder the list — which is also the order the version picker offers, so
+ *  this is an arrangement and not a cosmetic one. Carries the version's **id**
+ *  for the same reason the programs one does: the list is reloaded from main
+ *  after every write, so an index could point at a different row by the time
+ *  the drop lands. */
+export const BIBLE_VERSION_MIME = "application/x-worship-bible-version";
 
 let transparentDragImage: HTMLImageElement | null = null;
 

@@ -17,6 +17,8 @@ import type { DeckSlide, DeckSlideVideo, DeckSoundtrack } from "@shared/types/de
 import type { TimerClock } from "@shared/types/timer";
 import type { UtilityScene } from "@shared/types/utility";
 import { assetUrl } from "@shared/urls";
+import { DEFAULT_BIBLE_STYLE, type BibleStyle } from "@shared/types/bible-style";
+import { bibleOutputFor } from "@renderer/lib/bible-output";
 import { timerOutputFor } from "@renderer/lib/utility-output";
 import { defaultMediaVolume } from "@renderer/stores/settings.store";
 
@@ -108,6 +110,24 @@ export type ProjectionStoreState = {
   sceneEpoch: number;
   transitionStyle: TransitionStyle;
   transitionDurationMs: number;
+  /**
+   * How a verse is drawn, mirrored here from `settings["bible.style"]`.
+   *
+   * It lives in this store and not in `settings.store` because `selectOutput`
+   * is a pure function of `ProjectionStoreState` and its memo compares that
+   * tuple by reference — reaching into another store from inside it would
+   * break both, exactly as the comment on `BaseContent`'s `utility` variant
+   * says. Mirrored by an effect in `App.tsx`, the same way the two transition
+   * settings already are.
+   *
+   * Changing it while a verse is live re-runs `selectOutput` WITHOUT touching
+   * `sceneEpoch`, so the projector picks up the new look as an instant,
+   * un-keyed swap (`OutputView`'s `sameEpoch` short-circuit) rather than
+   * fading the verse into a near-identical copy of itself mid-service. That
+   * is the same rule `setLiveScene` follows for a time scene, and here it
+   * falls out of the epoch discipline for free.
+   */
+  bibleStyle: BibleStyle;
 
   setBase: (base: BaseContent | null) => void;
   setOverlay: (overlay: OverlayState) => void;
@@ -178,6 +198,7 @@ export type ProjectionStoreState = {
    *  so the very first output already carries the new epoch. */
   beginScene: () => void;
   setTransitionSettings: (style: TransitionStyle, durationMs: number) => void;
+  setBibleStyle: (style: BibleStyle) => void;
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -226,6 +247,7 @@ export const useProjectionStore = create<ProjectionStoreState>()(
     sceneEpoch: 0,
     transitionStyle: "crossfade",
     transitionDurationMs: 300,
+    bibleStyle: DEFAULT_BIBLE_STYLE,
 
     setBase: (base) =>
       set((state) => ({
@@ -363,6 +385,7 @@ export const useProjectionStore = create<ProjectionStoreState>()(
       }),
     setTransitionSettings: (transitionStyle, transitionDurationMs) =>
       set({ transitionStyle, transitionDurationMs }),
+    setBibleStyle: (bibleStyle) => set({ bibleStyle }),
   })),
 );
 
@@ -453,7 +476,10 @@ function selectOutputWithoutUnderlay(state: ProjectionStoreState): ProjectionOut
     case "image":
       return { kind: "image", url: assetUrl(state.base.assetId) };
     case "bible":
-      return { kind: "bible", text: state.base.text, reference: state.base.reference };
+      // Shared with the PREVIEW monitor's own output, for the same reason a
+      // time scene's is: two translations of one verse are two chances for a
+      // monitor to disagree with the projector.
+      return bibleOutputFor(state.base, state.bibleStyle);
     case "utility":
       // Shared with the PREVIEW monitor's own output, so the two can never
       // translate the same scene differently.
@@ -517,6 +543,7 @@ type OutputInputs = readonly [
   ProjectionStoreState["sceneEpoch"],
   ProjectionStoreState["transitionStyle"],
   ProjectionStoreState["transitionDurationMs"],
+  ProjectionStoreState["bibleStyle"],
 ];
 
 function outputInputs(state: ProjectionStoreState): OutputInputs {
@@ -534,6 +561,7 @@ function outputInputs(state: ProjectionStoreState): OutputInputs {
     state.sceneEpoch,
     state.transitionStyle,
     state.transitionDurationMs,
+    state.bibleStyle,
   ];
 }
 

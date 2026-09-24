@@ -1,6 +1,6 @@
 import type { Db } from "../client";
 import { settings } from "../schema";
-import { DEFAULT_SETTINGS, type SettingsMap } from "@shared/types/settings";
+import { DEFAULT_SETTINGS, SETTINGS_NORMALIZERS, type SettingsMap } from "@shared/types/settings";
 
 /**
  * Settings are read from a hot path, so they are held in memory.
@@ -27,7 +27,14 @@ export class SettingsRepo {
     for (const row of rows) {
       if (row.key in result) {
         try {
-          (result as Record<string, unknown>)[row.key] = JSON.parse(row.value);
+          const parsed: unknown = JSON.parse(row.value);
+          // A structured key gets read field by field rather than trusted
+          // whole — see `SETTINGS_NORMALIZERS`. A scalar key has no entry and
+          // lands exactly as it always did.
+          const normalize = SETTINGS_NORMALIZERS[row.key as keyof SettingsMap];
+          (result as Record<string, unknown>)[row.key] = normalize
+            ? (normalize as (value: unknown) => unknown)(parsed)
+            : parsed;
         } catch {
           // A row that isn't valid JSON (a hand-edited DB) must not take the
           // whole settings map down with it — the default stands.

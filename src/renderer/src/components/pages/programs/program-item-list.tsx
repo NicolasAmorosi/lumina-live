@@ -31,7 +31,7 @@ function PreviewItemRow({ item }: { item: ProgramItemDTO }) {
       }
     >
       {truncated ? (
-        <Tooltip className="flex w-full min-w-0" content={label} floating>
+        <Tooltip className="flex w-full min-w-0" content={label} fit="path" floating>
           {labelSpan}
         </Tooltip>
       ) : (

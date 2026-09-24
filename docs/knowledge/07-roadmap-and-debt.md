@@ -31,16 +31,20 @@ canciones/letras con secciones proyectables.
   placeholder del layout, que el parser no resuelve) se descarta en vez de adivinarse, y un
   `.wmv`/`.avi` se extrae pero se marca `playable: false`. En los dos casos la diapositiva se sigue
   viendo bien: el fotograma de portada ya está rasterizado en su lugar.
-- **Ajustes de proyección configurables** (tamaño de fuente, alineación) para biblia/texto: hoy
-  siguen hardcodeados en `output-view.tsx`, igual que la legacy. La maquinaria para resolverlo ya
-  existe y se construyó pensando en esto: `SceneStyle` (`shared/types/scene-style.ts`) con sus
-  validadores y normalizadores, el `ColorField` y los `FieldGroup`/`FieldRow` del editor de escenas
-  de tiempo. Falta decidir dónde vive el estilo del versículo (¿una fila más, un `settings`?) y
-  enchufarlo — no diseñar nada nuevo.
-- **Pantalla de Configuración**: ya tiene categorías (Proyección, Sistema) con tema e idioma
-  expuestos; falta agregar `media.volume` y las claves `slides.*` (override de LibreOffice,
-  formato/tamaño de las diapositivas cacheadas) — encajan como un grupo más dentro de una
-  categoría existente o una nueva categoría "Avanzado".
+- ~~**Ajustes de proyección configurables** para biblia/texto~~: **implementado el 2026-09-20**.
+  El estilo del versículo vive en la clave `bible.style` de `SettingsMap` —un estilo global, no una
+  fila por preset— con `BibleStyle` (`shared/types/bible-style.ts`), sus validadores/normalizadores
+  y la primera entrada de `SETTINGS_NORMALIZERS`. Se edita en Ajustes ▸ Biblia ▸ Estilo, con la
+  vista previa dibujada por el mismo `OutputView` del proyector, y se guarda al instante: `App` lo
+  espeja a `projection.store`, que recalcula `selectOutput` **sin** tocar `sceneEpoch`, así que
+  editar lo que está EN VIVO es un parche en el lugar y no una transición.
+- **UI de favoritos bíblicos**: `bible_favorites` sigue sin pantalla. Ojo con una decisión ya
+  tomada: borrar una versión **no** borra sus favoritos (están keyed por código, no por FK)
+  justamente para que borrar-y-reimportar no sea destructivo.
+- **Pantalla de Configuración**: cuatro categorías (Proyección, Diapositivas, Biblia, Sistema) con
+  tema, idioma, `media.volume`, las carpetas por tipo (`files.defaultFolders`) y las claves
+  `slides.*` ya expuestas. Lo que sigue sin UI es el override de LibreOffice
+  (`slides.sofficePath`), que hoy solo se toca desde el diálogo de "Buscar soffice…".
 
 ## Multiplataforma — resuelto
 

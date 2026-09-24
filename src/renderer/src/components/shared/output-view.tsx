@@ -7,6 +7,7 @@ import {
   LEAVE_FALLBACK_MARGIN_MS,
   type LayerRole,
 } from "@renderer/lib/transition";
+import { BibleScene } from "./bible-scene";
 import { TimerScene } from "./timer-scene";
 import type {
   MediaStatus,
@@ -441,15 +442,12 @@ function OutputScene({ frozenFrame, mode, onImageError, output }: OutputScenePro
           nothing above here moves once per second. */}
       {output.kind === "timer" ? <TimerScene onImageError={onImageError} output={output} /> : null}
 
-      {output.kind === "bible" ? (
-        <div
-          className="flex flex-col items-center gap-[2cqw] px-[6cqw] text-center"
-          style={{ textShadow: "0 2px 8px rgba(0,0,0,0.8)" }}
-        >
-          <p className="text-[3.5cqw] leading-snug font-light">{output.text}</p>
-          <p className="text-[2cqw] font-semibold">{output.reference}</p>
-        </div>
-      ) : null}
+      {/* Its own component for the same reason the time scene is: a verse is a
+          paragraph whose size is MEASURED against the stage rather than
+          declared, so it owns a layout effect. Everything it draws comes out
+          of the `BibleStyle` inside the output — nothing about a verse is
+          hardcoded here any more. */}
+      {output.kind === "bible" ? <BibleScene onImageError={onImageError} output={output} /> : null}
     </>
   );
 }

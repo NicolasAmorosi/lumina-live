@@ -92,6 +92,13 @@
       "when": 1789916083352,
       "tag": "0012_deck_videos",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1790034700621,
+      "tag": "0013_bible_version_sort_order",
+      "breakpoints": true
     }
   ]
 }

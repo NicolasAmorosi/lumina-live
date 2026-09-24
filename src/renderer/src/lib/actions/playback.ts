@@ -3,7 +3,7 @@ import { buildCumulativeMs, useProjectionStore } from "@renderer/stores/projecti
 import { useDeckStore } from "@renderer/stores/deck.store";
 import { useDisplayStore } from "@renderer/stores/display.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
-import { useBibleStore } from "@renderer/stores/bible.store";
+import { bibleVersionLabel, useBibleStore } from "@renderer/stores/bible.store";
 import { useAudioStore, nextAssetTrack } from "@renderer/stores/audio.store";
 import { findScene, useUtilityStore } from "@renderer/stores/utility.store";
 import { notifyManualNavigation } from "@renderer/effects/deck-autoplay";
@@ -253,6 +253,10 @@ async function goLiveWithScheduleItem(
         kind: "bible",
         text: item.text,
         reference: item.reference,
+        // The row's own version, which may be gone — the FK is `set null`, so
+        // a program saved before a version was deleted keeps its text and its
+        // reference and loses only the label.
+        versionLabel: bibleVersionLabel(useBibleStore.getState().versions, item.bibleVersionId),
       });
       useProjectionStore.getState().setOverlay("none");
       return;

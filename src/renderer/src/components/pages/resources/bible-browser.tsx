@@ -69,7 +69,6 @@ export function BibleBrowser() {
   const versions = useBibleStore((s) => s.versions);
   const setBookAndChapter = useBibleStore((s) => s.setBookAndChapter);
   const setVersion = useBibleStore((s) => s.setVersion);
-  const loadVersions = useBibleStore((s) => s.loadVersions);
   const target = usePreviewStore((s) => s.target);
   const [pendingBook, setPendingBook] = useState("");
   const [pendingChapter, setPendingChapter] = useState("");
@@ -78,10 +77,6 @@ export function BibleBrowser() {
   const [searchResults, setSearchResults] = useState<BibleSearchHit[]>([]);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const itemRefs = useRef<(HTMLLIElement | null)[]>([]);
-
-  useEffect(() => {
-    void loadVersions();
-  }, [loadVersions]);
 
   const selectedBook = books.find((b) => b.id === Number(pendingBook));
   const previewIndex = target?.kind === "verse" ? target.verseIndex : null;
