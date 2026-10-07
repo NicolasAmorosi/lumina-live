@@ -1,41 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { Monitor } from "@renderer/components/ui";
 import { OutputView } from "@renderer/components/shared/output-view";
 import { selectOutputMemo, useProjectionStore } from "@renderer/stores/projection.store";
 import { useSettingsStore } from "@renderer/stores/settings.store";
 import { mediaTargetKey } from "@shared/types/projection";
-import { assetThumbUrl, assetThumbVersion, assetUrl } from "@shared/urls";
-import { api } from "@renderer/lib/api";
+import { assetUrl } from "@shared/urls";
+import { useLiveVideoPoster } from "@renderer/lib/hooks/use-live-video-poster";
 
 const VIDEO_TARGET_KEY = mediaTargetKey({ kind: "video" });
 const SLIDE_VIDEO_TARGET_KEY = mediaTargetKey({ kind: "slideVideo" });
-
-/**
- * The thumbnail of the live full-screen video, for the monitor with its moving
- * video turned off. Fetched rather than derived because its cache-buster needs
- * the file's size and mtime, which `base` does not carry. `null` until it
- * arrives, and whenever there is no live video or the setting is on.
- */
-function useLiveVideoPoster(assetId: number | null): string | null {
-  const [poster, setPoster] = useState<{ assetId: number; url: string } | null>(null);
-  useEffect(() => {
-    if (assetId === null) return;
-    let alive = true;
-    void api.library
-      .get(assetId)
-      .then((asset) => {
-        if (alive && asset) setPoster({ assetId, url: assetThumbUrl(asset.id, assetThumbVersion(asset)) });
-      })
-      .catch(() => {
-        // No poster is a black stage with its notice — still the truth.
-      });
-    return () => {
-      alive = false;
-    };
-  }, [assetId]);
-  return poster && poster.assetId === assetId ? poster.url : null;
-}
 
 /** What the congregation is seeing, rendered by the same component the
  *  projection window uses — so the monitor can't lie. Its status text (NEGRO,
@@ -84,7 +58,8 @@ export function LiveMonitor() {
   const settingsLoaded = useSettingsStore((s) => s.loaded);
   const logoMissing = settingsLoaded && output.kind === "logo" && output.url === null;
 
-  // The monitor's own copy of the live video, or a still of it. Local to this
+  // The monitor's own copy of the live video, or a still of it (`useLiveVideoPoster`,
+  // fetched only with the setting off). Local to this
   // monitor on purpose: `selectOutput` is what the projector reads.
   const videoMotion = useSettingsStore((s) => s.settings["monitors.liveVideoMotion"]);
   const liveVideoAssetId = useProjectionStore((s) => (s.base?.kind === "video" ? s.base.assetId : null));

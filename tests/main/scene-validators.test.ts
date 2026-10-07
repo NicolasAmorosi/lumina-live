@@ -21,7 +21,7 @@ import {
   SCENE_NAME_MAX_LENGTH,
   SCENE_STYLE_VALIDATORS,
 } from "../../src/shared/scene-validators";
-import { DEFAULT_SCENE_STYLE, type SceneStyle } from "../../src/shared/types/scene-style";
+import { DEFAULT_SCENE_STYLE, DEFAULT_SHADOW_STRENGTH, type SceneStyle } from "../../src/shared/types/scene-style";
 import { DEFAULT_TIMER_FORMAT, type TimerConfig } from "../../src/shared/types/timer";
 import { DEFAULT_UTILITY_SCENES } from "../../src/shared/types/utility";
 
@@ -88,17 +88,31 @@ describe("normalizeSceneStyle", () => {
     expect(normalizeSceneStyle([])).toEqual(DEFAULT_SCENE_STYLE);
   });
 
+  test("a row stored before the shadow strength existed keeps the shadow it always had", () => {
+    const normalized = normalizeSceneStyle({
+      ...DEFAULT_SCENE_STYLE,
+      value: { sizeCqw: 30, color: "#ff0000", weight: 900, shadow: true },
+      title: { ...DEFAULT_SCENE_STYLE.title, shadowStrength: 7 },
+    });
+    expect(normalized.value.shadowStrength).toBe(DEFAULT_SHADOW_STRENGTH);
+    expect(normalized.title.shadowStrength).toBe(DEFAULT_SHADOW_STRENGTH);
+    expect(isSceneStyle(normalized)).toBe(true);
+    expect(isSceneStyle({ ...DEFAULT_SCENE_STYLE, value: { ...DEFAULT_SCENE_STYLE.value, shadowStrength: 0 } })).toBe(
+      false,
+    );
+  });
+
   test("one broken field costs that field and nothing else", () => {
     const normalized = normalizeSceneStyle({
       ...DEFAULT_SCENE_STYLE,
       background: { kind: "gradient", from: "#04132b", to: "nope", direction: "to-bottom" },
       verticalAlign: "sideways",
-      value: { sizeCqw: 30, color: "#ff0000", weight: 900, shadow: false },
+      value: { sizeCqw: 30, color: "#ff0000", weight: 900, shadow: false, shadowStrength: 0.55 },
     });
     expect(normalized.background).toEqual(DEFAULT_SCENE_STYLE.background);
     expect(normalized.verticalAlign).toBe(DEFAULT_SCENE_STYLE.verticalAlign);
     // The half the operator did build is kept.
-    expect(normalized.value).toEqual({ sizeCqw: 30, color: "#ff0000", weight: 900, shadow: false });
+    expect(normalized.value).toEqual({ sizeCqw: 30, color: "#ff0000", weight: 900, shadow: false, shadowStrength: 0.55 });
   });
 
   test("a row from a future version is read with today's rules instead of throwing", () => {
@@ -114,9 +128,9 @@ describe("normalizeSceneStyle", () => {
     const { end: _end, ...withoutEnd } = DEFAULT_SCENE_STYLE;
     const normalized = normalizeSceneStyle({
       ...withoutEnd,
-      message: { sizeCqw: 9, color: "#ff0000", weight: 700, shadow: false },
+      message: { sizeCqw: 9, color: "#ff0000", weight: 700, shadow: false, shadowStrength: 0.55 },
     });
-    expect(normalized.end.message).toEqual({ sizeCqw: 9, color: "#ff0000", weight: 700, shadow: false });
+    expect(normalized.end.message).toEqual({ sizeCqw: 9, color: "#ff0000", weight: 700, shadow: false, shadowStrength: 0.55 });
     // And nothing disappears from a scene that never asked for it.
     expect(normalized.end.hideValue).toBe(false);
     expect(normalized.end.hideTitle).toBe(false);

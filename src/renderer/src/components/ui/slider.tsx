@@ -53,8 +53,10 @@ export function Slider({ className, format, label, onChange, readoutChars = 4, v
         value={value}
         {...rest}
       />
+      {/* Dimmed with the track: a bright number beside a faded track reads as
+          a setting that still applies. */}
       <span
-        className="shrink-0 text-right text-xs tabular-nums text-muted-foreground"
+        className={cn("shrink-0 text-right text-xs tabular-nums text-muted-foreground", rest.disabled && "opacity-50")}
         style={{ width: `${readoutChars}ch` }}
       >
         {format ? format(value) : value}

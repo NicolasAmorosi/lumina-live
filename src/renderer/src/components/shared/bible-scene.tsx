@@ -1,7 +1,8 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@renderer/lib/utils";
+import { sceneTextCss as textStyle } from "./scene-text";
 import { bibleReferenceLines, type BibleStyle } from "@shared/types/bible-style";
-import { cssFontFamily, cssSceneBackground, type SceneTextStyle, type SceneVerticalAlign } from "@shared/types/scene-style";
+import { cssFontFamily, cssSceneBackground, type SceneVerticalAlign } from "@shared/types/scene-style";
 import type { ProjectionOutput } from "@shared/types/projection";
 
 export type BibleOutput = Extract<ProjectionOutput, { kind: "bible" }>;
@@ -11,12 +12,6 @@ const VERTICAL_ALIGN: Record<SceneVerticalAlign, string> = {
   middle: "justify-center",
   bottom: "justify-end",
 };
-
-/** In `cqw`, like every size here, so the shadow keeps its proportion from a
- *  240px confidence monitor to a 4K projector instead of vanishing on one and
- *  swamping the other. Identical to `TimerScene`'s on purpose: it is the same
- *  shadow doing the same job over the same kinds of background. */
-const TEXT_SHADOW = "0 0.15cqw 0.6cqw rgba(0,0,0,0.55)";
 
 /**
  * The margin the text block keeps from the top and bottom of the stage, as a
@@ -39,15 +34,6 @@ const TEXT_SHADOW = "0 0.15cqw 0.6cqw rgba(0,0,0,0.55)";
  * which hit exactly this. 4.5 cqw is 8 % of the height of a 16:9 stage.
  */
 const EDGE_GUTTER_CQW = 4.5;
-
-function textStyle(style: SceneTextStyle): CSSProperties {
-  return {
-    color: style.color,
-    fontSize: `${style.sizeCqw}cqw`,
-    fontWeight: style.weight,
-    ...(style.shadow ? { textShadow: TEXT_SHADOW } : {}),
-  };
-}
 
 /** How many halvings the search below does. Seven puts the answer within
  *  1/128th of the range — far finer than a reader can tell apart, and seven

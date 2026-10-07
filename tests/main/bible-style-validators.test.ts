@@ -103,7 +103,7 @@ describe("normalizeBibleStyle", () => {
       reference: { sizeCqw: 4, color: "#ffffff", weight: 700, shadow: null },
     });
     expect(normalized.autoFit).toEqual({ enabled: false, minSizeCqw: DEFAULT_BIBLE_STYLE.autoFit.minSizeCqw });
-    expect(normalized.reference).toEqual({ sizeCqw: 4, color: "#ffffff", weight: 700, shadow: true });
+    expect(normalized.reference).toEqual({ sizeCqw: 4, color: "#ffffff", weight: 700, shadow: true, shadowStrength: 0.55 });
   });
 
   test("a row from a future version is read with today's rules, never thrown", () => {

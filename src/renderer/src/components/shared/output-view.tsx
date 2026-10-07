@@ -10,6 +10,7 @@ import {
 } from "@renderer/lib/transition";
 import { BibleScene } from "./bible-scene";
 import { TimerScene } from "./timer-scene";
+import { PlateLayer } from "./plate-layer";
 import type {
   MediaStatus,
   ProjectionMediaError,
@@ -56,7 +57,11 @@ function canResync(element: HTMLVideoElement): boolean {
  * itself, no matter which action produced it.
  */
 function sceneContentKey(output: ProjectionOutput): string {
-  return JSON.stringify(output, (key: string, value: unknown) => (key === "transition" ? undefined : value));
+  // `plates` is not the scene: putting a name on screen must not cross-fade
+  // the stage under it (`PlateLayer` animates each plate on its own).
+  return JSON.stringify(output, (key: string, value: unknown) =>
+    key === "transition" || key === "plates" ? undefined : value,
+  );
 }
 
 type LiveVideoProps = {
@@ -1048,6 +1053,7 @@ export function OutputView({
   const [failedSceneUrl, setFailedSceneUrl] = useState<string | null>(null);
   const [failedVideoUrl, setFailedVideoUrl] = useState<string | null>(null);
   const [failedSlideVideoUrl, setFailedSlideVideoUrl] = useState<string | null>(null);
+  const [failedPlateUrl, setFailedPlateUrl] = useState<string | null>(null);
 
   function handleImageError(url: string) {
     setFailedSceneUrl(url);
@@ -1080,6 +1086,11 @@ export function OutputView({
     onMediaError?.({ target: { kind: "video" }, url, code });
   }
 
+  function handlePlateImageError(url: string) {
+    setFailedPlateUrl(url);
+    onMediaError?.({ target: { kind: "plate" }, url, code: null });
+  }
+
   function handleSlideVideoError(code: number | null) {
     const url = output.slideVideo?.url;
     if (!url) return;
@@ -1096,6 +1107,7 @@ export function OutputView({
       failedSceneUrl === url ||
       failedVideoUrl === url ||
       failedSlideVideoUrl === url ||
+      failedPlateUrl === url ||
       (reportedErrorUrls?.includes(url) ?? false)
     );
   }
@@ -1119,7 +1131,10 @@ export function OutputView({
   const errorNotice =
     mode !== "live" &&
     errorLabel &&
-    (hasFailed(videoUnderlayUrl) || hasFailed(slideVideoUrl) || hasFailed(sceneUrl))
+    (hasFailed(videoUnderlayUrl) ||
+      hasFailed(slideVideoUrl) ||
+      hasFailed(sceneUrl) ||
+      output.plates.some((plate) => hasFailed(plate.imageUrl)))
       ? errorLabel
       : null;
   // Same `mode !== "live"` guard, for the same reason: whatever a future
@@ -1225,6 +1240,10 @@ export function OutputView({
           videoRef={slideVideoRef}
         />
       ) : null}
+
+      {/* Above every scene layer and both videos, outside all of them — see
+          `PlateLayer`. */}
+      <PlateLayer onImageError={handlePlateImageError} plates={output.plates} />
 
       {/* Last of all, above every layer and the video: the operator has to be
           able to read it whatever is (or isn't) painting underneath. */}

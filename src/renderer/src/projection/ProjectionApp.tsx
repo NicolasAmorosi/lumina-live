@@ -146,6 +146,7 @@ export function ProjectionApp() {
     kind: "black",
     videoUnderlay: null,
     slideVideo: null,
+    plates: [],
     transition: INSTANT_TRANSITION,
   });
   // Flips once, the first time real data (a push or the replayed snapshot)

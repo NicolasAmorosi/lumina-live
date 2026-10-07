@@ -2,6 +2,8 @@ import type { BadgeVariant, IconName } from "@renderer/components/ui";
 import type { ProgramItemDTO } from "@shared/types/program";
 import { findScene, useUtilityStore } from "@renderer/stores/utility.store";
 import { TOOL_ICON } from "@renderer/components/pages/functions/tool-display";
+import { findPlate, useOverlayStore } from "@renderer/stores/overlay.store";
+import { PLATE_KIND_ICON } from "@renderer/components/pages/functions/plate-display";
 import { useMediaAsset } from "./use-media-asset";
 
 const ICON_BY_KIND: Record<ProgramItemDTO["kind"], IconName> = {
@@ -9,6 +11,7 @@ const ICON_BY_KIND: Record<ProgramItemDTO["kind"], IconName> = {
   ppt: "ppt",
   bible: "bible",
   utility: "clock",
+  plate: "overlay",
 };
 
 const BADGE_BY_KIND: Record<ProgramItemDTO["kind"], BadgeVariant> = {
@@ -20,6 +23,8 @@ const BADGE_BY_KIND: Record<ProgramItemDTO["kind"], BadgeVariant> = {
   // `docs/knowledge/06-ui-and-theme.md`. The tool's own icon is what tells a
   // countdown from a clock.
   utility: "neutral",
+  // Same reasoning as `utility`; the kind's own icon tells them apart.
+  plate: "neutral",
 };
 
 /** The scene a `utility` item points at, or `null` for anything else. Its own
@@ -32,6 +37,12 @@ function useItemScene(item: ProgramItemDTO) {
   return item.kind === "utility" ? findScene(scenes, item.utilitySceneId) : null;
 }
 
+/** The plate a `plate` item points at — `useItemScene` for the Overlays list. */
+function useItemPlate(item: ProgramItemDTO) {
+  const plates = useOverlayStore((s) => s.plates);
+  return item.kind === "plate" ? findPlate(plates, item.overlayPlateId) : null;
+}
+
 /** Display label for a program item, resolving a media/ppt title through the
  *  asset cache — and a utility title through the scene list — when the item
  *  itself has none. Shared by the schedule (live, editable rows) and the
@@ -39,8 +50,10 @@ function useItemScene(item: ProgramItemDTO) {
 export function useItemLabel(item: ProgramItemDTO): string {
   const asset = useMediaAsset(item.kind === "media" || item.kind === "ppt" ? item.mediaAssetId : null);
   const scene = useItemScene(item);
+  const plate = useItemPlate(item);
   if (item.kind === "media" || item.kind === "ppt") return item.title ?? asset?.name ?? "…";
   if (item.kind === "utility") return item.title ?? scene?.name ?? "…";
+  if (item.kind === "plate") return item.title ?? plate?.name ?? "…";
   return item.reference;
 }
 
@@ -51,11 +64,13 @@ export function useItemLabel(item: ProgramItemDTO): string {
 export function useItemIconAndBadge(item: ProgramItemDTO): { badge: BadgeVariant; icon: IconName } {
   const asset = useMediaAsset(item.kind === "media" ? item.mediaAssetId : null);
   const scene = useItemScene(item);
+  const plate = useItemPlate(item);
   if (item.kind === "media" && asset) {
     const map: Record<string, IconName> = { video: "video", image: "image", audio: "audio" };
     const badgeMap: Record<string, BadgeVariant> = { video: "video", image: "image", audio: "audio" };
     return { icon: map[asset.kind] ?? "file", badge: badgeMap[asset.kind] ?? "neutral" };
   }
   if (item.kind === "utility" && scene) return { icon: TOOL_ICON[scene.tool], badge: "neutral" };
+  if (item.kind === "plate" && plate) return { icon: PLATE_KIND_ICON[plate.kind], badge: "neutral" };
   return { icon: ICON_BY_KIND[item.kind], badge: BADGE_BY_KIND[item.kind] };
 }

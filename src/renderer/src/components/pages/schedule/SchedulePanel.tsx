@@ -12,6 +12,7 @@ import {
   readBibleVerseDrag,
   readMediaAssetDrag,
   readOsFilesDrag,
+  readOverlayPlateDrag,
   readUtilitySceneDrag,
 } from "@renderer/lib/dnd";
 import { toast } from "@renderer/lib/toast";
@@ -115,6 +116,7 @@ export function SchedulePanel() {
     const draggedAsset = readMediaAssetDrag(e);
     const draggedVerse = readBibleVerseDrag(e);
     const draggedScene = readUtilitySceneDrag(e);
+    const draggedPlate = readOverlayPlateDrag(e);
     const osFiles = readOsFilesDrag(e);
     const targetIndex = dropTargetIndex(e);
     setDragOverIndex(null);
@@ -133,6 +135,10 @@ export function SchedulePanel() {
     }
     if (draggedScene !== null) {
       addItem({ kind: "utility", utilitySceneId: draggedScene, title: null }, targetIndex);
+      return;
+    }
+    if (draggedPlate !== null) {
+      addItem({ kind: "plate", overlayPlateId: draggedPlate, title: null }, targetIndex);
       return;
     }
     const byKind = new Map<AssetKind, string[]>();

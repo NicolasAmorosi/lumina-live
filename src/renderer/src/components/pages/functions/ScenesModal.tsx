@@ -1,10 +1,10 @@
 import { useEffect, useState, type DragEvent } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { ConfirmModal, Modal, ModalTitle } from "@renderer/components/shared/modal";
+import { ProgramUsages } from "@renderer/components/shared/program-usages";
 import {
   Badge,
   Button,
-  DialogFooter,
   DialogHeader,
   EmptyState,
   Icon,
@@ -22,6 +22,8 @@ import type { MediaAsset } from "@shared/types/media";
 import type { UtilityScene, UtilitySceneUsage } from "@shared/types/utility";
 import { emptySceneDraft, isDraftSavable, toDraft, toUpsert, type SceneDraft } from "./scene-draft";
 import { SceneForm } from "./scene-form";
+import { EditorActions } from "./editor-actions";
+import { EditorHeader } from "./editor-header";
 import { ScenePreview } from "./scene-preview";
 import { TOOL_ICON, TOOL_LABEL } from "./tool-display";
 
@@ -217,11 +219,25 @@ export function ScenesModal({ onOpenChange, open }: { onOpenChange: (open: boole
 
         <div className="flex min-h-0 flex-1">
           <div className="flex w-64 shrink-0 flex-col border-r border-border">
-            <div className="shrink-0 border-b border-border p-2">
+            <div className="flex shrink-0 flex-col gap-1.5 border-b border-border p-2">
               <Button className="w-full" onClick={createNew} size="xs" variant="outline">
                 <Icon name="add" />
                 {t("scenes.new")}
               </Button>
+              {editing !== null ? (
+                <EditorActions
+                  canSave={canSave}
+                  dirty={dirty}
+                  onDelete={() => {
+                    if (editing.sceneId !== null) void askToDelete(editing.sceneId);
+                  }}
+                  onDuplicate={() => void handleDuplicate()}
+                  onRevert={() => setEditing({ ...editing, draft: editing.baseline })}
+                  onSave={() => void handleSave()}
+                  persisted={editing.sceneId !== null}
+                  saving={saving}
+                />
+              ) : null}
             </div>
             <ul aria-label={t("scenes.listLabel")} className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-1.5">
               {scenes.map((scene) => (
@@ -288,23 +304,25 @@ export function ScenesModal({ onOpenChange, open }: { onOpenChange: (open: boole
               </div>
             ) : (
               <>
-                <div className="shrink-0 border-b border-border bg-background px-6 py-3">
-                  <div className="mx-auto flex w-full max-w-md flex-col gap-2">
-                    <ScenePreview atEnd={previewAtEnd} draft={editing.draft} />
-                    {/* Only where there is an end to look at. A clock and a
-                        stopwatch never run out, so the switch would toggle
-                        nothing. */}
-                    {isCountdownTool(editing.draft.tool) ? (
-                      <label
-                        className="flex items-center justify-end gap-2 text-xs text-muted-foreground"
-                        title={t("scenes.endPreviewHint")}
-                      >
-                        {t("scenes.endPreview")}
-                        <Switch checked={previewAtEnd} onChange={(e) => setPreviewAtEnd(e.target.checked)} />
-                      </label>
-                    ) : null}
-                  </div>
-                </div>
+                <EditorHeader
+                  preview={
+                    <div className="flex flex-col gap-2">
+                      <ScenePreview atEnd={previewAtEnd} draft={editing.draft} />
+                      {/* Only where there is an end to look at. A clock and a
+                          stopwatch never run out, so the switch would toggle
+                          nothing. */}
+                      {isCountdownTool(editing.draft.tool) ? (
+                        <label
+                          className="flex items-center justify-end gap-2 text-xs text-muted-foreground"
+                          title={t("scenes.endPreviewHint")}
+                        >
+                          {t("scenes.endPreview")}
+                          <Switch checked={previewAtEnd} onChange={(e) => setPreviewAtEnd(e.target.checked)} />
+                        </label>
+                      ) : null}
+                    </div>
+                  }
+                />
                 <div className="min-w-0 flex-1 overflow-y-auto p-6">
                   <SceneForm
                     addingImages={addingImages}
@@ -314,36 +332,6 @@ export function ScenesModal({ onOpenChange, open }: { onOpenChange: (open: boole
                     value={editing.draft}
                   />
                 </div>
-                <DialogFooter className="border-t border-border py-2.5">
-                  {editing.sceneId !== null ? (
-                    <>
-                      <Button
-                        className="mr-auto"
-                        onClick={() => void askToDelete(editing.sceneId!)}
-                        size="sm"
-                        variant="ghost"
-                      >
-                        <Icon name="remove" />
-                        {t("common.delete")}
-                      </Button>
-                      <Button onClick={() => void handleDuplicate()} size="sm" variant="outline">
-                        <Icon name="copy" />
-                        {t("scenes.duplicate")}
-                      </Button>
-                    </>
-                  ) : null}
-                  <Button
-                    disabled={!dirty}
-                    onClick={() => setEditing({ ...editing, draft: editing.baseline })}
-                    size="sm"
-                    variant="ghost"
-                  >
-                    {t("scenes.revert")}
-                  </Button>
-                  <Button disabled={!canSave} loading={saving} onClick={() => void handleSave()} size="sm">
-                    {t("common.save")}
-                  </Button>
-                </DialogFooter>
               </>
             )}
           </div>
@@ -363,7 +351,11 @@ export function ScenesModal({ onOpenChange, open }: { onOpenChange: (open: boole
           pending?.kind !== "delete" ? (
             t("scenes.discardBody")
           ) : pending.usages.length > 0 ? (
-            <DeleteUsages usages={pending.usages} />
+            <ProgramUsages
+              intro={t("scenes.deleteInUseIntro")}
+              usages={pending.usages}
+              warning={t("scenes.deleteInUseWarning")}
+            />
           ) : (
             t("scenes.deleteBody")
           )
@@ -382,28 +374,5 @@ export function ScenesModal({ onOpenChange, open }: { onOpenChange: (open: boole
         title={pending?.kind === "delete" ? t("scenes.deleteTitle") : t("scenes.discardTitle")}
       />
     </>
-  );
-}
-
-/** The saved programs a forced delete is about to edit. Same shape and same
- *  wording as the library's own `RemoveAssetConfirm`, because it is the same
- *  decision about a different table — naming them is the whole point: an FK
- *  rejection says "in use", which is not something the operator can act on. */
-function DeleteUsages({ usages }: { usages: readonly UtilitySceneUsage[] }) {
-  const t = useT();
-  return (
-    <div className="flex flex-col gap-3">
-      <p className="text-foreground">{t("scenes.deleteInUseIntro")}</p>
-      <ul className="flex flex-col gap-1 rounded-lg border border-border bg-muted p-1.5">
-        {usages.map((usage) => (
-          <li className="flex items-center gap-2 rounded-md px-2 py-1.5 text-foreground" key={usage.programId}>
-            <Icon className="shrink-0 text-subtle" name="fileText" />
-            <span className="min-w-0 flex-1 truncate">{usage.programName}</span>
-            <Badge>{t("scenes.deleteInUseCount", { count: usage.itemCount })}</Badge>
-          </li>
-        ))}
-      </ul>
-      <p>{t("scenes.deleteInUseWarning")}</p>
-    </div>
   );
 }

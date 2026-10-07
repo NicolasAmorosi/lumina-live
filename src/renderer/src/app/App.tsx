@@ -16,6 +16,7 @@ import { api } from "@renderer/lib/api";
 import { toast } from "@renderer/lib/toast";
 import { restoreDraft } from "@renderer/lib/actions/programs";
 import { loadScenes } from "@renderer/lib/actions/utility";
+import { loadPlates } from "@renderer/lib/actions/overlays";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { LOGO_URL } from "@shared/urls";
 import { useSettingsStore } from "@renderer/stores/settings.store";
@@ -112,6 +113,9 @@ export function App() {
       // yet (that is F3), and the Utilities panel is perfectly able to paint
       // its empty state for the few milliseconds this takes.
       void loadScenes();
+      // The saved overlay plates, for the same reasons and with the same
+      // non-blocking rule.
+      void loadPlates();
 
       // Last, and only once the library is reachable: the draft's items point
       // at media assets, and main has already dropped the ones that no longer

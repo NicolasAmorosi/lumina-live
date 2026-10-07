@@ -11,7 +11,7 @@ import {
   type SelectOption,
 } from "@renderer/components/ui";
 import { useLocalFonts } from "@renderer/lib/hooks/use-local-fonts";
-import { STYLE_TEXT_MAX_CQW, STYLE_TEXT_MIN_CQW } from "@shared/style-validators";
+import { STYLE_SHADOW_MAX, STYLE_SHADOW_MIN, STYLE_TEXT_MAX_CQW, STYLE_TEXT_MIN_CQW } from "@shared/style-validators";
 import {
   BACKGROUND_FITS,
   GRADIENT_DIRECTIONS,
@@ -112,6 +112,9 @@ type BackgroundFieldsProps = {
    *  more — owned by the caller, which is where the loading state lives. */
   addingImages: boolean;
   imageAssets: readonly MediaAsset[];
+  /** Which kinds the operator may pick. An overlay plate's band offers no
+   *  image — a bug's picture is its content, not its dressing. */
+  kinds?: readonly SceneBackground["kind"][];
   onAddImages: () => void;
   onChange: (next: SceneBackground) => void;
   value: SceneBackground;
@@ -121,6 +124,7 @@ type BackgroundFieldsProps = {
 export function BackgroundFields({
   addingImages,
   imageAssets,
+  kinds = ["solid", "gradient", "image"],
   onAddImages,
   onChange,
   value,
@@ -132,7 +136,7 @@ export function BackgroundFields({
         <Select
           className="w-52"
           onChange={(next) => onChange(backgroundOfKind(next as SceneBackground["kind"], value))}
-          options={(["solid", "gradient", "image"] as const).map((kind) => ({
+          options={kinds.map((kind) => ({
             label: t(BACKGROUND_LABEL[kind]),
             value: kind,
           }))}
@@ -323,7 +327,7 @@ function decimalsOf(step: number): number {
   return dot === -1 ? 0 : text.length - dot - 1;
 }
 
-/** The four knobs every text role has, as bare rows — so a caller can put
+/** The knobs every text role has, as bare rows — so a caller can put
  *  them in a group of their own or beside the text they belong to. */
 export function TextStyleFields({
   onChange,
@@ -375,6 +379,19 @@ export function TextStyleFields({
       </FieldRow>
       <FieldRow description={t("style.shadowHint")} label={t("style.shadow")}>
         <Switch checked={value.shadow} onChange={(e) => onChange({ ...value, shadow: e.target.checked })} />
+      </FieldRow>
+      <FieldRow label={t("style.shadowStrength")}>
+        <Slider
+          disabled={!value.shadow}
+          format={(strength) => `${Math.round(strength * 100)}%`}
+          label={t("style.shadowStrength")}
+          max={STYLE_SHADOW_MAX}
+          min={STYLE_SHADOW_MIN}
+          onChange={(strength) => onChange({ ...value, shadowStrength: Number(strength.toFixed(2)) })}
+          readoutChars={4}
+          step={0.05}
+          value={value.shadowStrength}
+        />
       </FieldRow>
     </>
   );

@@ -22,6 +22,10 @@ export const PROGRAM_ROW_MIME = "application/x-worship-program-row";
  *  list is refreshed from main mid-drag, so an index would point at a
  *  different row by the time the drop lands. */
 export const UTILITY_SCENE_MIME = "application/x-worship-utility-scene";
+/** A saved overlay plate — `UTILITY_SCENE_MIME`'s two jobs for the Overlays
+ *  tab: reordering inside the «Placas» dialog, and adding it to the order of
+ *  service from the tab's list. */
+export const OVERLAY_PLATE_MIME = "application/x-worship-overlay-plate";
 /** A row of the installed-bibles list in Ajustes, dropped on another row to
  *  reorder the list — which is also the order the version picker offers, so
  *  this is an arrangement and not a cosmetic one. Carries the version's **id**
@@ -95,6 +99,19 @@ export function setUtilitySceneDrag(e: DragEvent, sceneId: number): void {
  *  non-numeric payload reads as "not a scene" rather than as scene `NaN`. */
 export function readUtilitySceneDrag(e: DragEvent): number | null {
   const raw = e.dataTransfer.getData(UTILITY_SCENE_MIME);
+  if (!raw) return null;
+  const id = Number(raw);
+  return Number.isFinite(id) ? id : null;
+}
+
+export function setOverlayPlateDrag(e: DragEvent, plateId: number): void {
+  e.dataTransfer.effectAllowed = "copy";
+  e.dataTransfer.setData(OVERLAY_PLATE_MIME, String(plateId));
+}
+
+/** The dragged plate's id, or `null` — same contract as `readUtilitySceneDrag`. */
+export function readOverlayPlateDrag(e: DragEvent): number | null {
+  const raw = e.dataTransfer.getData(OVERLAY_PLATE_MIME);
   if (!raw) return null;
   const id = Number(raw);
   return Number.isFinite(id) ? id : null;

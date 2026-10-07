@@ -100,7 +100,7 @@ export const programItems = sqliteTable(
       .notNull()
       .references(() => programs.id, { onDelete: "cascade" }),
     position: integer("position").notNull(),
-    kind: text("kind", { enum: ["media", "ppt", "bible", "utility"] }).notNull(),
+    kind: text("kind", { enum: ["media", "ppt", "bible", "utility", "plate"] }).notNull(),
 
     mediaAssetId: integer("media_asset_id").references(() => mediaAssets.id, {
       onDelete: "restrict",
@@ -112,6 +112,12 @@ export const programItems = sqliteTable(
      *  confirm. Declared AFTER `utilityScenes` exists at module scope, which
      *  is why the reference is a thunk. */
     utilitySceneId: integer("utility_scene_id").references(() => utilityScenes.id, {
+      onDelete: "restrict",
+    }),
+
+    /** The saved overlay plate a `plate` row puts up. `restrict` for the same
+     *  reason as `utility_scene_id`. */
+    overlayPlateId: integer("overlay_plate_id").references(() => overlayPlates.id, {
       onDelete: "restrict",
     }),
 
@@ -427,4 +433,36 @@ export const utilityScenes = sqliteTable(
     updatedAt: integer("updated_at").notNull(),
   },
   (t) => [index("ix_utility_scenes_order").on(t.sortOrder)],
+);
+
+/**
+ * Saved overlay plates — see `shared/types/overlay.ts` and
+ * `plans/2026-09-17-panel-funciones/overlays.md`.
+ *
+ * Same shape discipline as `utility_scenes`: `kind` and `position` are columns
+ * (the list's discriminants), the style is JSON (`PlateStyle`) so a change of
+ * shape is a branch in `shared/overlay-validators.ts`, not a migration.
+ *
+ * `image_asset_id` is `set null`, not `restrict`: the program row references
+ * the PLATE, not its picture, so removing the image from the library has no
+ * program to protect — the bug simply loses its picture and keeps its text.
+ */
+export const overlayPlates = sqliteTable(
+  "overlay_plates",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    kind: text("kind", { enum: ["lower-third", "banner", "bug"] }).notNull(),
+    position: text("position").notNull(),
+    title: text("title"),
+    subtitle: text("subtitle"),
+    imageAssetId: integer("image_asset_id").references(() => mediaAssets.id, { onDelete: "set null" }),
+    /** JSON: `PlateStyle`. */
+    styleJson: text("style_json").notNull(),
+    /** Same scheme as `utility_scenes.sort_order`. */
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [index("ix_overlay_plates_order").on(t.sortOrder)],
 );

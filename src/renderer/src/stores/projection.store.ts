@@ -15,11 +15,14 @@ import type {
 import type { TransitionStyle } from "@shared/types/transition";
 import type { DeckSlide, DeckSlideVideo, DeckSoundtrack } from "@shared/types/deck";
 import type { TimerClock } from "@shared/types/timer";
+import { hasReachedZero, holdClock, resumeClock } from "@shared/timer";
 import type { UtilityScene } from "@shared/types/utility";
+import { PLATE_KINDS, platesCollide, type Plate } from "@shared/types/overlay";
 import { assetUrl } from "@shared/urls";
 import { DEFAULT_BIBLE_STYLE, type BibleStyle } from "@shared/types/bible-style";
 import { bibleOutputFor } from "@renderer/lib/bible-output";
 import { timerOutputFor } from "@renderer/lib/utility-output";
+import { plateOutputFor } from "@renderer/lib/plate-output";
 import { defaultMediaVolume } from "@renderer/stores/settings.store";
 
 /** The deck currently loaded for projection — slide urls are durable, DB-backed
@@ -128,6 +131,28 @@ export type ProjectionStoreState = {
    * falls out of the epoch discipline for free.
    */
   bibleStyle: BibleStyle;
+  /**
+   * The overlay plates the operator has put up — RESOLVED copies, none
+   * colliding with another (`platesCollide`), in `PLATE_KINDS` order so the projector's DOM order never
+   * depends on which one went up first.
+   *
+   * Independent of `base` and of `overlay`: a plate stays "up" under NEGRO and
+   * while nothing is live, and `selectOutput` is what keeps it off the stage
+   * then. None of the three actions below calls `beginScene()` — a plate is
+   * not a new scene (see `plans/2026-09-17-panel-funciones/overlays.md`).
+   */
+  livePlates: readonly Plate[];
+  /**
+   * The auto-hide count of every live plate that has one, keyed by plate id —
+   * a countdown `TimerClock`, the same absolute mark a time scene uses, so a
+   * pause and a resume are `holdClock`/`resumeClock` and nothing new.
+   *
+   * Control-window state only: the projector never sees it (it is not an
+   * input of `selectOutput`), and `tickPlateClocks` is what keeps it RUNNING
+   * exactly while the plates are visible. A plate is always put up HELD, and
+   * the effect in `effects/plate-auto-hide.ts` starts it on the same tick.
+   */
+  plateHideClocks: Readonly<Record<number, TimerClock>>;
 
   setBase: (base: BaseContent | null) => void;
   setOverlay: (overlay: OverlayState) => void;
@@ -199,7 +224,49 @@ export type ProjectionStoreState = {
   beginScene: () => void;
   setTransitionSettings: (style: TransitionStyle, durationMs: number) => void;
   setBibleStyle: (style: BibleStyle) => void;
+  /** Puts a plate up, taking down whichever plate it collides with (`platesCollide`). */
+  showPlate: (plate: Plate) => void;
+  hidePlate: (id: number) => void;
+  /** Re-dresses a plate that is up after the operator edited it — the
+   *  `setLiveScene` of a plate. A no-op unless this exact plate is up. */
+  setLivePlate: (plate: Plate) => void;
+  /** Takes down every plate whose count has run out, then runs the remaining
+   *  counts if the plates are visible and holds them if they are covered.
+   *  Idempotent, and a no-op (same state, no notification) when nothing is
+   *  due — `effects/plate-auto-hide.ts` calls it on every change it watches. */
+  tickPlateClocks: (now: number) => void;
 };
+
+function orderedPlates(plates: readonly Plate[]): readonly Plate[] {
+  return [...plates].sort((a, b) => PLATE_KINDS.indexOf(a.kind) - PLATE_KINDS.indexOf(b.kind));
+}
+
+/** A plate's count as it starts: held at its full length, until the effect
+ *  sees the plates are visible. `undefined` for a plate with no auto-hide. */
+function freshHideClock(plate: Plate): TimerClock | undefined {
+  const { enabled, afterMs } = plate.style.autoHide;
+  return enabled ? { mode: "countdown", state: "held", remainingMs: afterMs } : undefined;
+}
+
+/** Keeps only the clocks of `plates`, and sets `id`'s to `clock`. */
+function withHideClock(
+  clocks: Readonly<Record<number, TimerClock>>,
+  plates: readonly Plate[],
+  id: number,
+  clock: TimerClock | undefined,
+): Record<number, TimerClock> {
+  const next: Record<number, TimerClock> = {};
+  for (const plate of plates) {
+    const kept = plate.id === id ? clock : clocks[plate.id];
+    if (kept) next[plate.id] = kept;
+  }
+  return next;
+}
+
+/** The plates are on the stage — the negation of `selectPlates`' guard. */
+function platesVisible(state: Pick<ProjectionStoreState, "overlay" | "base">): boolean {
+  return state.overlay === "none" && state.base !== null;
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -248,6 +315,8 @@ export const useProjectionStore = create<ProjectionStoreState>()(
     transitionStyle: "crossfade",
     transitionDurationMs: 300,
     bibleStyle: DEFAULT_BIBLE_STYLE,
+    livePlates: [],
+    plateHideClocks: {},
 
     setBase: (base) =>
       set((state) => ({
@@ -386,6 +455,58 @@ export const useProjectionStore = create<ProjectionStoreState>()(
     setTransitionSettings: (transitionStyle, transitionDurationMs) =>
       set({ transitionStyle, transitionDurationMs }),
     setBibleStyle: (bibleStyle) => set({ bibleStyle }),
+    showPlate: (plate) =>
+      set((state) => {
+        const livePlates = orderedPlates([...state.livePlates.filter((p) => !platesCollide(p, plate)), plate]);
+        return {
+          livePlates,
+          plateHideClocks: withHideClock(state.plateHideClocks, livePlates, plate.id, freshHideClock(plate)),
+        };
+      }),
+    hidePlate: (id) =>
+      set((state) => {
+        if (!state.livePlates.some((p) => p.id === id)) return state;
+        const livePlates = state.livePlates.filter((p) => p.id !== id);
+        return { livePlates, plateHideClocks: withHideClock(state.plateHideClocks, livePlates, id, undefined) };
+      }),
+    setLivePlate: (plate) =>
+      set((state) => {
+        const current = state.livePlates.find((p) => p.id === plate.id);
+        if (!current || current === plate) return state;
+        // A kind or position change can land on another plate: re-run the rule.
+        const livePlates = orderedPlates([
+          ...state.livePlates.filter((p) => p.id !== plate.id && !platesCollide(p, plate)),
+          plate,
+        ]);
+        // An edit that leaves the auto-hide alone keeps the count where it
+        // is — re-dressing a plate is not putting it up again. Changing the
+        // auto-hide itself starts it over with what the operator just set.
+        const sameAutoHide =
+          current.style.autoHide.enabled === plate.style.autoHide.enabled &&
+          current.style.autoHide.afterMs === plate.style.autoHide.afterMs;
+        const clock = sameAutoHide ? state.plateHideClocks[plate.id] : freshHideClock(plate);
+        return { livePlates, plateHideClocks: withHideClock(state.plateHideClocks, livePlates, plate.id, clock) };
+      }),
+    tickPlateClocks: (now) =>
+      set((state) => {
+        const visible = platesVisible(state);
+        let changed = false;
+        const plateHideClocks: Record<number, TimerClock> = {};
+        const due = new Set<number>();
+        for (const [key, clock] of Object.entries(state.plateHideClocks)) {
+          const id = Number(key);
+          if (visible && hasReachedZero(clock, now)) {
+            due.add(id);
+            changed = true;
+            continue;
+          }
+          const next = visible ? resumeClock(clock, now) : holdClock(clock, now);
+          if (next !== clock) changed = true;
+          plateHideClocks[id] = next;
+        }
+        if (!changed) return state;
+        return { plateHideClocks, livePlates: state.livePlates.filter((p) => !due.has(p.id)) };
+      }),
   })),
 );
 
@@ -495,11 +616,21 @@ function selectTransition(state: ProjectionStoreState): SceneTransition {
   };
 }
 
+/** NEGRO is black and LOGO is the logo, with no exception the operator has to
+ *  remember mid-service — and "nothing live" is the same logo, so it covers
+ *  the plates too (decided 2026-09-24). The plates stay up in the store and
+ *  come back the moment something is live again. */
+function selectPlates(state: ProjectionStoreState): ProjectionOutput["plates"] {
+  if (!platesVisible(state)) return [];
+  return state.livePlates.map(plateOutputFor);
+}
+
 export function selectOutput(state: ProjectionStoreState): ProjectionOutput {
   return {
     ...selectOutputWithoutUnderlay(state),
     videoUnderlay: selectVideoUnderlay(state),
     slideVideo: selectSlideVideo(state),
+    plates: selectPlates(state),
     transition: selectTransition(state),
   };
 }
@@ -544,6 +675,7 @@ type OutputInputs = readonly [
   ProjectionStoreState["transitionStyle"],
   ProjectionStoreState["transitionDurationMs"],
   ProjectionStoreState["bibleStyle"],
+  ProjectionStoreState["livePlates"],
 ];
 
 function outputInputs(state: ProjectionStoreState): OutputInputs {
@@ -562,6 +694,7 @@ function outputInputs(state: ProjectionStoreState): OutputInputs {
     state.transitionStyle,
     state.transitionDurationMs,
     state.bibleStyle,
+    state.livePlates,
   ];
 }
 

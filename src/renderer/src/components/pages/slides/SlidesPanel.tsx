@@ -12,6 +12,7 @@ import {
 } from "@renderer/components/ui";
 import { MediaTrackRow } from "@renderer/components/shared/media-track-row";
 import { UtilityTrackRow } from "@renderer/components/shared/utility-track-row";
+import { PlateTrackRow } from "@renderer/components/shared/plate-track-row";
 import { PanelBody, PanelHeader } from "@renderer/components/shared/panel";
 import { PreviewMissingState } from "@renderer/components/shared/preview-missing-state";
 import { PreviewMonitor } from "@renderer/components/pages/monitors/preview-monitor";
@@ -139,6 +140,15 @@ export function SlidesPanel() {
         </MediaPanel>
       );
     }
+    // A plate goes up from its own row: it does not replace what is live, so
+    // the button beside the picture of it is where the operator looks.
+    if (content.kind === "plate") {
+      return (
+        <MediaPanel className="w-full">
+          <PlateTrackRow onDelete={clearPreview} plate={content.plate} withLiveButton />
+        </MediaPanel>
+      );
+    }
     return null;
   })();
 
@@ -151,7 +161,9 @@ export function SlidesPanel() {
           ? content.reference
           : content?.kind === "utility"
             ? content.scene.name
-            : null;
+            : content?.kind === "plate"
+              ? content.plate.name
+              : null;
 
   return (
     <>

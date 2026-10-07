@@ -6,6 +6,7 @@
  */
 import type { BibleStyle } from "./bible-style";
 import type { SlideRect } from "./deck";
+import type { PlateKind, PlatePosition, PlateStyle } from "./overlay";
 import type { SceneStyle } from "./scene-style";
 import type { TimerClock, TimerFormat } from "./timer";
 import type { TransitionSpec } from "./transition";
@@ -176,9 +177,31 @@ export type SceneTransition = TransitionSpec & { epoch: number };
  *  to do. */
 export const INSTANT_TRANSITION: SceneTransition = { epoch: 0, style: "none", durationMs: 0 };
 
+/**
+ * One overlay plate the projector has to hold above the scene, RESOLVED — the
+ * text and the image url, never an id to look up — for the reason
+ * `videoUnderlay` carries its url: the projection window consults nothing,
+ * and `projection-state.ts` replays this verbatim into a rebuilt window.
+ *
+ * Outside `sceneContentKey` on purpose (`output-view.tsx`): a plate going up
+ * or down is not a new scene, and must not cross-fade the stage under it.
+ */
+export type ProjectionPlate = {
+  id: number;
+  kind: PlateKind;
+  position: PlatePosition;
+  title: string | null;
+  subtitle: string | null;
+  imageUrl: string | null;
+  style: PlateStyle;
+};
+
 export type ProjectionOutput = ProjectionOutputKind & {
   videoUnderlay: VideoUnderlay;
   slideVideo: SlideVideo;
+  /** At most one per kind and one per edge (`platesCollide`), and always empty under NEGRO, LOGO and "nothing
+   *  live" — `selectOutput` decides, the projector only draws. */
+  plates: readonly ProjectionPlate[];
   transition: SceneTransition;
 };
 
@@ -208,13 +231,15 @@ export function mediaTargetKey(target: MediaTarget): string {
 /** Which element of the projection window failed. "scene" is the still image
  *  of an image/slide/logo output — the only one without a `MediaTarget`,
  *  because nothing ever commands it. */
-export type MediaErrorTarget = MediaTarget | { kind: "scene" };
+/** `plate` is a bug's image — the one file an overlay plate can fail to load.
+ *  One slot for every plate, like `scene`: at most one bug is up at a time. */
+export type MediaErrorTarget = MediaTarget | { kind: "scene" } | { kind: "plate" };
 
 /** The key `mediaErrors` is indexed by. Deliberately shares the namespace of
  *  `mediaTargetKey` — "video"/"audio:<id>" mean the same element in both
  *  records, so one prune pass can keep status and error in step. */
 export function mediaErrorKey(target: MediaErrorTarget): string {
-  return target.kind === "scene" ? "scene" : mediaTargetKey(target);
+  return target.kind === "scene" || target.kind === "plate" ? target.kind : mediaTargetKey(target);
 }
 
 /**

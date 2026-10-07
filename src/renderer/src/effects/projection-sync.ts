@@ -10,6 +10,7 @@ import { t } from "@renderer/lib/i18n/i18n-provider";
 import { toast } from "@renderer/lib/toast";
 import { startDeckAutoplay } from "./deck-autoplay";
 import { startEndOfPlaybackEffects } from "./end-of-playback";
+import { startPlateAutoHide } from "./plate-auto-hide";
 import { mediaErrorKey } from "@shared/types/projection";
 import type { AudioTrackPush, ProjectionMediaError, ProjectionOutput } from "@shared/types/projection";
 
@@ -44,6 +45,9 @@ function describeMediaError(error: ProjectionMediaError): string | null {
     const { trackId } = error.target;
     const track = useAudioStore.getState().tracks.find((candidate) => candidate.trackId === trackId);
     if (track) return track.label;
+  }
+  if (error.target.kind === "plate") {
+    return useProjectionStore.getState().livePlates.find((plate) => plate.kind === "bug")?.name ?? null;
   }
   const base = useProjectionStore.getState().base;
   const assetId =
@@ -193,6 +197,7 @@ export function startProjectionEffects(): () => void {
 
   const stopAutoplay = startDeckAutoplay();
   const stopEndOfPlayback = startEndOfPlaybackEffects();
+  const stopPlateAutoHide = startPlateAutoHide();
 
   return () => {
     unsubscribeOutput();
@@ -207,5 +212,6 @@ export function startProjectionEffects(): () => void {
     unsubscribeStatusesChanged();
     stopAutoplay();
     stopEndOfPlayback();
+    stopPlateAutoHide();
   };
 }

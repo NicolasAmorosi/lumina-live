@@ -1,7 +1,7 @@
 import { eq, inArray } from "drizzle-orm";
 import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
 import type { Db } from "../client";
-import { mediaAssets, programDraft, utilityScenes } from "../schema";
+import { mediaAssets, overlayPlates, programDraft, utilityScenes } from "../schema";
 import type { ProgramDraft, ProgramItemUpsert } from "@shared/types/program";
 import { PROGRAM_ITEM_KINDS } from "@shared/constants";
 
@@ -96,7 +96,7 @@ export class DraftRepo {
 
   /**
    * Drops the items whose target no longer exists — a media asset removed from
-   * the library, a time scene deleted in the «Escenas» editor.
+   * the library, a time scene or a plate deleted in its editor.
    *
    * Both kinds of reference are checked, and neither is optional: a saved
    * program is protected by an `ON DELETE restrict` FK, but a draft is a JSON
@@ -109,13 +109,16 @@ export class DraftRepo {
     const sceneIds = [
       ...new Set(items.flatMap((item) => (item.kind === "utility" ? [item.utilitySceneId] : []))),
     ];
-    if (assetIds.length === 0 && sceneIds.length === 0) return items;
+    const plateIds = [...new Set(items.flatMap((item) => (item.kind === "plate" ? [item.overlayPlateId] : [])))];
+    if (assetIds.length === 0 && sceneIds.length === 0 && plateIds.length === 0) return items;
 
     const liveAssets = this.aliveIds(mediaAssets.id, assetIds);
     const liveScenes = this.aliveIds(utilityScenes.id, sceneIds);
+    const livePlates = this.aliveIds(overlayPlates.id, plateIds);
     return items.filter((item) => {
       if (usesAsset(item)) return liveAssets.has(item.mediaAssetId);
       if (item.kind === "utility") return liveScenes.has(item.utilitySceneId);
+      if (item.kind === "plate") return livePlates.has(item.overlayPlateId);
       return true;
     });
   }

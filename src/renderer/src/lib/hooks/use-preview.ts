@@ -2,14 +2,18 @@ import { bibleVersionLabel, useBibleStore } from "@renderer/stores/bible.store";
 import { useDeckStore } from "@renderer/stores/deck.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
 import { useProgramStore } from "@renderer/stores/program.store";
-import { useProjectionStore } from "@renderer/stores/projection.store";
+import { selectOutputMemo, useProjectionStore } from "@renderer/stores/projection.store";
 import { useMediaAsset } from "@renderer/lib/hooks/use-media-asset";
 import { clockForScene, findScene, useUtilityStore } from "@renderer/stores/utility.store";
 import { bibleOutputFor } from "@renderer/lib/bible-output";
 import { timerOutputFor } from "@renderer/lib/utility-output";
+import { platePreviewOutput } from "@renderer/lib/plate-output";
+import { useLiveVideoPoster } from "@renderer/lib/hooks/use-live-video-poster";
+import { findPlate, useOverlayStore } from "@renderer/stores/overlay.store";
 import { assetUrl } from "@shared/urls";
 import type { MediaAsset } from "@shared/types/media";
 import type { UtilityScene } from "@shared/types/utility";
+import type { Plate } from "@shared/types/overlay";
 import { INSTANT_TRANSITION } from "@shared/types/projection";
 import type { ProjectionOutput } from "@shared/types/projection";
 
@@ -25,7 +29,8 @@ export type PreviewContent =
   | { kind: "deck"; assetId: number; ext: string; title: string; missingSince: number | null }
   | { kind: "media"; asset: MediaAsset }
   | { kind: "bible"; reference: string; text: string; versionLabel: string | null; verseIndex: number | null }
-  | { kind: "utility"; scene: UtilityScene };
+  | { kind: "utility"; scene: UtilityScene }
+  | { kind: "plate"; plate: Plate };
 
 export function usePreviewContent(): PreviewContent | null {
   const target = usePreviewStore((s) => s.target);
@@ -34,6 +39,7 @@ export function usePreviewContent(): PreviewContent | null {
   const versionId = useBibleStore((s) => s.versionId);
   const versions = useBibleStore((s) => s.versions);
   const scenes = useUtilityStore((s) => s.scenes);
+  const plates = useOverlayStore((s) => s.plates);
 
   const scheduleItem = target?.kind === "scheduleItem" ? items[target.index] : undefined;
   const scheduleAssetId =
@@ -62,6 +68,11 @@ export function usePreviewContent(): PreviewContent | null {
     // a scene is reflected in the preview the moment it is saved.
     const scene = findScene(scenes, target.sceneId);
     return scene ? { kind: "utility", scene } : null;
+  }
+
+  if (target.kind === "plate") {
+    const plate = findPlate(plates, target.plateId);
+    return plate ? { kind: "plate", plate } : null;
   }
 
   if (target.kind === "asset") {
@@ -112,6 +123,10 @@ export function usePreviewContent(): PreviewContent | null {
       const scene = findScene(scenes, scheduleItem.utilitySceneId);
       return scene ? { kind: "utility", scene } : null;
     }
+    case "plate": {
+      const plate = findPlate(plates, scheduleItem.overlayPlateId);
+      return plate ? { kind: "plate", plate } : null;
+    }
   }
 }
 
@@ -122,6 +137,19 @@ export function usePreviewContent(): PreviewContent | null {
  * asset, or a deck still converting).
  */
 export function usePreviewOutput(content: PreviewContent | null): ProjectionOutput | null {
+  const isPlate = content?.kind === "plate";
+  // Subscribed only while a plate is previewed: otherwise this monitor would
+  // re-render on every slide the projector advances. `selectOutputMemo` keeps
+  // the identity stable, so the default comparator is enough.
+  const live = useProjectionStore((s) => (isPlate ? selectOutputMemo(s) : null));
+  const liveVideoAssetId = useProjectionStore((s) => (isPlate && s.base?.kind === "video" ? s.base.assetId : null));
+  const videoStillUrl = useLiveVideoPoster(liveVideoAssetId);
+  const output = usePreviewOutputWithoutPlates(content);
+  if (content?.kind === "plate" && live) return platePreviewOutput(live, content.plate, videoStillUrl);
+  return output;
+}
+
+function usePreviewOutputWithoutPlates(content: PreviewContent | null): ProjectionOutput | null {
   const slideIndex = usePreviewStore((s) => s.slideIndex);
   const playing = usePreviewStore((s) => s.playing);
   const run = useUtilityStore((s) => s.run);
@@ -154,6 +182,7 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
         // because the operator arrowed past it is exactly the "selecting
         // projects" behaviour this flow exists to prevent.
         slideVideo: null,
+        plates: [],
         // The preview monitor never fades — it moves with every ↑/↓, and
         // `OutputView` also forces this by `mode`, but the value has to be
         // here too since it's part of `ProjectionOutput`.
@@ -171,6 +200,7 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
           url: assetUrl(content.asset.id),
           videoUnderlay: null,
           slideVideo: null,
+          plates: [],
           transition: INSTANT_TRANSITION,
         };
       }
@@ -195,6 +225,7 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
           epoch: underlay.epoch,
           videoUnderlay: underlay,
           slideVideo: null,
+          plates: [],
           transition: INSTANT_TRANSITION,
         };
       }
@@ -207,8 +238,12 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
         ...bibleOutputFor(content, bibleStyle),
         videoUnderlay: null,
         slideVideo: null,
+        plates: [],
         transition: INSTANT_TRANSITION,
       };
+    case "plate":
+      // Drawn over the live stage by `usePreviewOutput`, never from here.
+      return null;
     case "utility":
       // The SAME clock the row below shows, so an operator who started the
       // countdown sees it running here before deciding to send it — and the
@@ -219,6 +254,7 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
         ...timerOutputFor(content.scene, clockForScene(liveBase, run, content.scene, Date.now())),
         videoUnderlay: null,
         slideVideo: null,
+        plates: [],
         transition: INSTANT_TRANSITION,
       };
   }

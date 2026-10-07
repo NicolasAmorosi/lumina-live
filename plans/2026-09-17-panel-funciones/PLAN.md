@@ -76,14 +76,18 @@ Valen para las tres y no se renegocian por pestaña.
    (`.claude/knowledge/startatseconds-is-a-mount-time-seek-so-a-rebuilt-projector-restarts-everything.md`).
 4. **Los monitores usan el mismo `OutputView`.** Todo lo que se agregue al proyector se ve
    igual en LIVE y en PREVIEW, o los monitores le mienten al operador.
-5. **Seleccionar nunca proyecta** — con una excepción explícita, abajo.
+5. **Seleccionar nunca proyecta**, sin excepciones.
 
-### La excepción de Overlays, dicha en voz alta
+### Overlays: dos etapas, pero sin reemplazar
 
-Una placa **no es contenido base**: no reemplaza lo proyectado, lo modifica. Por eso no pasa
-por el flujo de dos etapas (preview → `goLive()`), sino que se muestra y se saca con su propio
-botón, igual que NEGRO y LOGO, que también actúan al instante. Utilidades y Entradas sí son
-contenido base y sí respetan las dos etapas.
+Una placa **no es contenido base**: no reemplaza lo proyectado, lo modifica. Hasta el
+2026-09-24 eso la sacaba del flujo de dos etapas (se mostraba con un botón propio del panel,
+como NEGRO). Desde entonces **sí pasa por preview → `goLive()`**, como todo lo demás: un click
+la previsualiza —el monitor PREVIEW la dibuja sobre lo que está EN VIVO— y EN VIVO, Enter, el
+doble click o el botón de su fila bajo el PREVIEW la suben. Lo que sigue siendo distinto está
+todo dentro de `goLiveWithPlate`: no toca `base`, no llama a `beginScene()`, no mueve el riel
+del programa, no levanta NEGRO/LOGO y no reclama el *live intent*. Ver la quinta tanda de
+[`overlays.md`](overlays.md).
 
 ### Dos trampas ya identificadas, antes de escribir código
 
@@ -119,11 +123,6 @@ verificación a mano contra el proyector real (no sólo los monitores).
 
 ## Lo que este plan deja explícitamente afuera
 
-- **Que una PLACA sea un ítem del orden de culto.** Una placa modifica lo proyectado en vez de
-  reemplazarlo, así que no tiene lugar en una lista de contenidos; el plan de Overlays no lo
-  asume. Para una **utilidad** sí: el usuario lo pidió el 2026-09-17 y es la fase F3 de
-  [`utilidades.md`](utilidades.md) — `program_items.kind = 'utility'` con su migración a mano,
-  su borrador y sus programas guardados.
 - **Composición libre** (texto sobre video con posición y tamaño arbitrarios). Overlays
   entrega plantillas, no un editor. Una escena de utilidad tiene tres roles de texto con
   tamaño, color y alineación vertical — tampoco es un canvas.

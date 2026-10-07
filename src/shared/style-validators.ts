@@ -43,6 +43,11 @@ import {
 export const STYLE_TEXT_MIN_CQW = 0.5;
 export const STYLE_TEXT_MAX_CQW = 60;
 
+/** `SceneTextStyle.shadowStrength`. Below the floor a shadow is not there;
+ *  at the ceiling it is fully black. */
+export const STYLE_SHADOW_MIN = 0.1;
+export const STYLE_SHADOW_MAX = 1;
+
 /** Exactly `#rrggbb`. One canonical form on purpose: the editor's colour
  *  control only ever emits this, and accepting `#rgb` too would mean two
  *  spellings of the same colour in the database and a comparison that fails
@@ -108,6 +113,7 @@ export const TEXT_STYLE_VALIDATORS: Record<keyof SceneTextStyle, (v: unknown) =>
   color: isColor,
   weight: isOneOf(SCENE_FONT_WEIGHTS),
   shadow: isBoolean,
+  shadowStrength: isNumberIn(STYLE_SHADOW_MIN, STYLE_SHADOW_MAX),
 };
 
 export const isTextStyle = (v: unknown): boolean => matchesAll(v, TEXT_STYLE_VALIDATORS);
@@ -119,6 +125,11 @@ export function normalizeTextStyle(value: unknown, fallback: SceneTextStyle): Sc
     color: keepOr(TEXT_STYLE_VALIDATORS.color(value.color), value.color, fallback.color),
     weight: keepOr(TEXT_STYLE_VALIDATORS.weight(value.weight), value.weight, fallback.weight),
     shadow: keepOr(TEXT_STYLE_VALIDATORS.shadow(value.shadow), value.shadow, fallback.shadow),
+    shadowStrength: keepOr(
+      TEXT_STYLE_VALIDATORS.shadowStrength(value.shadowStrength),
+      value.shadowStrength,
+      fallback.shadowStrength,
+    ),
   };
 }
 

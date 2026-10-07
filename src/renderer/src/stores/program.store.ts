@@ -38,6 +38,7 @@ type ProgramStoreState = {
   removeAt: (index: number) => void;
   removeByMediaAsset: (assetId: number) => void;
   removeByUtilityScene: (sceneId: number) => void;
+  removeByPlate: (plateId: number) => void;
   moveUp: (index: number) => void;
   moveDown: (index: number) => void;
   reorder: (from: number, to: number) => void;
@@ -240,6 +241,10 @@ export const useProgramStore = create<ProgramStoreState>((set, get) => ({
    *  items itself, exactly as it does for an asset. */
   removeByUtilityScene: (sceneId) =>
     set((state) => removeWhere(state, (item) => item.kind === "utility" && item.utilitySceneId === sceneId)),
+
+  /** And for a plate force-deleted from the «Placas» editor. */
+  removeByPlate: (plateId) =>
+    set((state) => removeWhere(state, (item) => item.kind === "plate" && item.overlayPlateId === plateId)),
 
   moveUp: (index) => {
     if (index <= 0) return;

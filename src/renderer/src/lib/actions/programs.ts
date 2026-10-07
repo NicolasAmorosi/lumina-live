@@ -43,6 +43,8 @@ export function toUpsertItems(items: ProgramItemDTO[]): ProgramItemUpsert[] {
         return { kind: item.kind, mediaAssetId: item.mediaAssetId, title: item.title };
       case "utility":
         return { kind: "utility", utilitySceneId: item.utilitySceneId, title: item.title };
+      case "plate":
+        return { kind: "plate", overlayPlateId: item.overlayPlateId, title: item.title };
       case "bible":
         return {
           kind: "bible",

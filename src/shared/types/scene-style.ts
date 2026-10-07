@@ -63,7 +63,16 @@ export type SceneTextStyle = {
   weight: SceneFontWeight;
   /** A drop shadow, so the text stays legible over a photo background. */
   shadow: boolean;
+  /** How dark and how wide that shadow is, `STYLE_SHADOW_MIN..MAX` — see
+   *  `sceneTextCss`. Kept while `shadow` is off, so switching it back on
+   *  brings the strength the operator had chosen. */
+  shadowStrength: number;
 };
+
+/** The one shadow every generated scene drew before its strength was a knob.
+ *  Every default uses it, and a row stored before the knob existed reads it
+ *  back — so no scene changes look the first time this build opens it. */
+export const DEFAULT_SHADOW_STRENGTH = 0.55;
 
 /** ProPresenter's "color triggers": the number changes colour as it approaches
  *  zero. `null` means it never changes. Only meaningful for a countdown. */
@@ -143,7 +152,13 @@ export type SceneStyle = {
 
 /** Shared by `message` and by the end message's own default — see
  *  `SceneEnd.message`. */
-const DEFAULT_MESSAGE_STYLE: SceneTextStyle = { sizeCqw: 4.5, color: "#f5f5f5", weight: 400, shadow: true };
+const DEFAULT_MESSAGE_STYLE: SceneTextStyle = {
+  sizeCqw: 4.5,
+  color: "#f5f5f5",
+  weight: 400,
+  shadow: true,
+  shadowStrength: DEFAULT_SHADOW_STRENGTH,
+};
 
 /** "none" on purpose, and it is the same decision `SceneEnd.message` made:
  *  every scene dressed before this field existed cut straight into its end
@@ -158,9 +173,9 @@ export const DEFAULT_SCENE_STYLE: SceneStyle = {
   background: { kind: "solid", color: "#04132b" },
   fontFamily: null,
   verticalAlign: "middle",
-  value: { sizeCqw: 20, color: "#ffffff", weight: 300, shadow: true },
+  value: { sizeCqw: 20, color: "#ffffff", weight: 300, shadow: true, shadowStrength: DEFAULT_SHADOW_STRENGTH },
   // Denim light, the palette's accent.
-  title: { sizeCqw: 4, color: "#84adfc", weight: 600, shadow: true },
+  title: { sizeCqw: 4, color: "#84adfc", weight: 600, shadow: true, shadowStrength: DEFAULT_SHADOW_STRENGTH },
   message: DEFAULT_MESSAGE_STYLE,
   // The end message starts out looking exactly like the message it replaces,
   // so turning the group on changes nothing until the operator asks it to.

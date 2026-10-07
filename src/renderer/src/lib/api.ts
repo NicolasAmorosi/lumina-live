@@ -15,6 +15,7 @@ import type {
 } from "@shared/types/program";
 import type { SettingsMap } from "@shared/types/settings";
 import type { UtilitySceneUpsert } from "@shared/types/utility";
+import type { PlateUpsert } from "@shared/types/overlay";
 import type { CloseDecision } from "@shared/types/window";
 
 /** Thin per-domain facade over `invoke` — pure readability sugar in the
@@ -113,6 +114,15 @@ export const api = {
     remove: (id: number, force = false) => invoke("utility:delete", { id, force }),
     usages: (id: number) => invoke("utility:usages", { id }),
     reorder: (ids: number[]) => invoke("utility:reorder", { ids }),
+  },
+  overlays: {
+    list: () => invoke("overlay:list", undefined),
+    create: (input: PlateUpsert) => invoke("overlay:create", input),
+    update: (input: PlateUpsert & { id: number }) => invoke("overlay:update", input),
+    duplicate: (id: number, name: string) => invoke("overlay:duplicate", { id, name }),
+    remove: (id: number, force = false) => invoke("overlay:delete", { id, force }),
+    usages: (id: number) => invoke("overlay:usages", { id }),
+    reorder: (ids: number[]) => invoke("overlay:reorder", { ids }),
   },
   settings: {
     get: () => invoke("settings:get", undefined),

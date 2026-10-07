@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { IconButton, Icon, MediaScrubber, VolumeControl, type IconName } from "@renderer/components/ui";
+import { Button, IconButton, Icon, MediaScrubber, VolumeControl, type IconName } from "@renderer/components/ui";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { cn, formatClock } from "@renderer/lib/utils";
 
-export type MediaTrackKind = "video" | "audio" | "image" | "bible" | "utility";
+export type MediaTrackKind = "video" | "audio" | "image" | "bible" | "utility" | "plate";
 
 type MediaTrackRowProps = {
   className?: string;
@@ -23,7 +23,15 @@ type MediaTrackRowProps = {
   /** Compact second line under the label — e.g. "no suena hasta EN VIVO".
    *  Part of the row itself (not a sibling paragraph) so every caller gets
    *  it inside the same bordered container for free. */
-  hint?: string;
+  hint?: string | undefined;
+  /** The row's own EN VIVO — for content that goes up WITHOUT replacing what
+   *  is projected (a plate), so the operator sends it from beside its picture
+   *  instead of reaching for the top bar. Calls `goLive()`, never a second
+   *  path to the projector. */
+  onGoLive?: (() => void) | undefined;
+  /** Shown INSTEAD of `onGoLive` once that content is up: takes it back down
+   *  without touching anything under it. */
+  onTakeDown?: (() => void) | undefined;
   /** Omit to render the row without a seek control at all (duration unknown yet). */
   onSeek?: ((seconds: number) => void) | undefined;
   /** Clears this media back to nothing live — a video, a live PPT deck, or a
@@ -82,6 +90,7 @@ const kindIcon: Record<MediaTrackKind, IconName> = {
   // Generic on purpose: the row is labelled with the scene's own name, and
   // the tool's specific icon is what the list in the Utilities tab shows.
   utility: "clock",
+  plate: "overlay",
 };
 // "bible" never carries a duration, so this is never actually read for it —
 // present only to keep the Record exhaustive.
@@ -91,6 +100,7 @@ const kindTone: Record<MediaTrackKind, "primary" | "audio"> = {
   image: "primary",
   bible: "primary",
   utility: "primary",
+  plate: "primary",
 };
 
 /**
@@ -148,8 +158,10 @@ export function MediaTrackRow({
   hint,
   onSeek,
   onDelete,
+  onGoLive,
   onRestart,
   onStop,
+  onTakeDown,
   onTogglePause,
   pauseLabel,
   playLabel,
@@ -199,6 +211,19 @@ export function MediaTrackRow({
 
         {readout && readoutNote ? (
           <span className="shrink-0 whitespace-nowrap text-xs text-danger-ink">{readoutNote}</span>
+        ) : null}
+
+        {onTakeDown ? (
+          <Button className="shrink-0" onClick={onTakeDown} size="xs" variant="outline">
+            {t("media.takeDown")}
+          </Button>
+        ) : onGoLive ? (
+          // The top bar's EN VIVO, same variant and wording: it does exactly
+          // what that button does with this row's content in preview.
+          <Button className="shrink-0" onClick={onGoLive} size="xs" variant="live">
+            <Icon name="play" />
+            {t("actions.goLive")}
+          </Button>
         ) : null}
 
         {onTogglePause ? (

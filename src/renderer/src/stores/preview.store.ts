@@ -15,7 +15,11 @@ export type PreviewTarget =
    *  — unlike the live `base`, a preview target is re-resolved on every render
    *  anyway, so holding a copy of the scene here would just be a copy that can
    *  go stale while the operator edits it. */
-  | { kind: "utility"; sceneId: number };
+  | { kind: "utility"; sceneId: number }
+  /** A saved overlay plate, re-resolved on every render for the same reason.
+   *  The preview monitor draws it over what is LIVE, not over black: what
+   *  the operator checks is how it will look in the room. */
+  | { kind: "plate"; plateId: number };
 
 type PreviewStoreState = {
   /** 1-based cursor inside the previewed deck, independent of the live one. */

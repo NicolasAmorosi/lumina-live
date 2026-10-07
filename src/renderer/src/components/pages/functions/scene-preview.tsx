@@ -47,6 +47,7 @@ export function ScenePreview({ atEnd, draft }: { atEnd: boolean; draft: SceneDra
       ...timerOutputFor(scene, clock),
       videoUnderlay: null,
       slideVideo: null,
+      plates: [],
       transition: INSTANT_TRANSITION,
     };
   }, [atEnd, draft]);

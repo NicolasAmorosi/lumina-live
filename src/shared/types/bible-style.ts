@@ -36,7 +36,12 @@
  * `output-view.tsx` hardcoded before this file existed, so an install that
  * never opens Ajustes projects exactly what it projected yesterday.
  */
-import type { SceneBackground, SceneTextStyle, SceneVerticalAlign } from "./scene-style";
+import {
+  DEFAULT_SHADOW_STRENGTH,
+  type SceneBackground,
+  type SceneTextStyle,
+  type SceneVerticalAlign,
+} from "./scene-style";
 
 export const TEXT_ALIGNS = ["left", "center", "right", "justify"] as const;
 export type TextAlign = (typeof TEXT_ALIGNS)[number];
@@ -160,8 +165,8 @@ export const DEFAULT_BIBLE_STYLE: BibleStyle = {
   background: { kind: "solid", color: "#000000" },
   fontFamily: null,
   verticalAlign: "middle",
-  text: { sizeCqw: 3.5, color: "#ffffff", weight: 300, shadow: true },
-  reference: { sizeCqw: 2, color: "#ffffff", weight: 600, shadow: true },
+  text: { sizeCqw: 3.5, color: "#ffffff", weight: 300, shadow: true, shadowStrength: DEFAULT_SHADOW_STRENGTH },
+  reference: { sizeCqw: 2, color: "#ffffff", weight: 600, shadow: true, shadowStrength: DEFAULT_SHADOW_STRENGTH },
   textAlign: "center",
   // Tailwind's `leading-snug`.
   lineHeight: 1.375,

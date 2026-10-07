@@ -3,6 +3,7 @@ import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { MediaPanel } from "@renderer/components/ui";
 import { MediaTrackRow } from "@renderer/components/shared/media-track-row";
 import { UtilityTrackRow } from "@renderer/components/shared/utility-track-row";
+import { PlateTrackRow } from "@renderer/components/shared/plate-track-row";
 import { selectOutputMemo, useProjectionStore } from "@renderer/stores/projection.store";
 import { useAudioStore } from "@renderer/stores/audio.store";
 import { useLiveHeading } from "@renderer/lib/hooks/use-live";
@@ -16,6 +17,7 @@ import {
   toggleVideoPause,
 } from "@renderer/lib/actions/media";
 import { clearBaseContent } from "@renderer/lib/actions/playback";
+import { hidePlate } from "@renderer/lib/actions/overlays";
 import { mediaErrorKey, mediaTargetKey } from "@shared/types/projection";
 import { assetUrl } from "@shared/urls";
 
@@ -33,7 +35,8 @@ const SLIDE_VIDEO_ERROR_KEY = mediaErrorKey({ kind: "slideVideo" });
  * A live image gets a row too, even though it has nothing to play — just its
  * name and a way to clear it back to empty. A live time scene gets the full
  * transport of its clock, which is the one live thing whose value moves
- * without anybody touching it.
+ * without anybody touching it. Every plate that is up gets one too — its
+ * auto-hide count and the X that takes it down.
  *
  * Renders nothing at all when silent, so a service with no audio in play
  * looks exactly like it did before this panel existed.
@@ -57,6 +60,7 @@ export function LiveMediaPanel() {
   const mediaStatus = useProjectionStore((s) => s.mediaStatus);
   const mediaErrors = useProjectionStore((s) => s.mediaErrors);
   const audioTracks = useAudioStore((s) => s.tracks);
+  const livePlates = useProjectionStore((s) => s.livePlates);
   const heading = useLiveHeading();
 
   /** Only surface an error that still describes the url this row is about —
@@ -137,6 +141,12 @@ export function LiveMediaPanel() {
         volume={slideVideo.volume}
       />,
     );
+  }
+
+  // Every plate that is up, with what it has left and a way down. Covered or
+  // not: a plate under NEGRO is still up, and still has to be takeable down.
+  for (const plate of livePlates) {
+    rows.push(<PlateTrackRow key={`plate-${plate.id}`} onDelete={() => hidePlate(plate.id)} plate={plate} />);
   }
 
   for (const track of audioTracks) {

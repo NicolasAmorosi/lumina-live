@@ -38,14 +38,14 @@ bloquea un borrado. `DraftRepo.load()` filtra al leer los ítems cuyo destino ya
 borrado de la biblioteca, una escena de tiempo borrada del editor—, del lado de main, que es el
 único que puede responder eso sin un round-trip IPC por ítem.
 
-### Los cuatro tipos de ítem, y por qué cada migración de `program_items` se escribe a mano
+### Los cinco tipos de ítem, y por qué cada migración de `program_items` se escribe a mano
 
-`kind` es `media | ppt | bible | utility`, y el `CHECK` de la tabla exige que cada uno traiga
-exactamente su propia referencia y ninguna otra (`media_asset_id`, `bible_text`,
-`utility_scene_id`). Ese `CHECK` **no existe para Drizzle**: vive sólo en el SQL y el snapshot lo
+`kind` es `media | ppt | bible | utility | plate`, y el `CHECK` de la tabla exige que cada uno
+traiga exactamente su propia referencia y ninguna otra (`media_asset_id`, `bible_text`,
+`utility_scene_id`, `overlay_plate_id`). Ese `CHECK` **no existe para Drizzle**: vive sólo en el SQL y el snapshot lo
 reporta vacío. Consecuencia práctica, ya cobrada tres veces: renombrar exige `ALTER TABLE`
 (`0004`), borrar una columna que el `CHECK` nombra exige una reconstrucción a mano (`0009`), y
-**agregar una columna también** (`0011`) — ahí `drizzle-kit` emite un `ADD COLUMN` que SQLite
+**agregar una columna también** (`0011`, y otra vez `0015` para `overlay_plate_id`) — ahí `drizzle-kit` emite un `ADD COLUMN` que SQLite
 acepta, perdiendo en silencio el `ON DELETE restrict` de la FK y dejando el `CHECK` sin enterarse
 del tipo nuevo. El diagnóstico completo está en
 [`sqlite-table-rename-must-alter-not-recreate.md`](../../.claude/knowledge/sqlite-table-rename-must-alter-not-recreate.md).
@@ -53,7 +53,7 @@ del tipo nuevo. El diagnóstico completo está en
 `utility_scene_id` es `ON DELETE restrict` por lo mismo que `media_asset_id`: borrar una escena que
 un programa guardado usa es una decisión del operador (`utility:usages` nombra los programas y
 «Eliminar igualmente» borra los ítems y la escena en una transacción), nunca una fila que
-desaparece sola.
+desaparece sola. `overlay_plate_id` repite el mismo trato con `overlay:usages`.
 
 ## `utility_scenes` — `tool` en columna, el resto en JSON, y una siembra que ocurre UNA vez
 

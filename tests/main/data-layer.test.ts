@@ -31,7 +31,7 @@ import { SlidesRepo } from "../../src/main/db/repositories/slides.repo";
 import { DraftRepo } from "../../src/main/db/repositories/draft.repo";
 import { UtilityRepo } from "../../src/main/db/repositories/utility.repo";
 import { seedUtilityScenes } from "../../src/main/db/seed/seed-utility-scenes";
-import { initRepos } from "../../src/main/services/repos";
+import { getOverlaysRepo, initRepos } from "../../src/main/services/repos";
 import { readBinarySlideTimings } from "../../src/main/slides/ppt-binary-timings";
 import { backfillDeckTimings } from "../../src/main/slides/backfill-timings";
 import { SNIPPET_MARK_END, SNIPPET_MARK_START, parseSnippet } from "../../src/shared/types/bible";
@@ -39,6 +39,8 @@ import { DEFAULT_SETTINGS, SETTINGS_VALIDATORS, isSettingsKey } from "../../src/
 import { BUILTIN_BIBLE_CODE } from "../../src/shared/constants";
 import { DEFAULT_UTILITY_SCENES } from "../../src/shared/types/utility";
 import { removeUtilityScene } from "../../src/main/services/utility-scene-removal";
+import { removeOverlayPlate } from "../../src/main/services/overlay-plate-removal";
+import { DEFAULT_PLATE_STYLE, type Plate } from "../../src/shared/types/overlay";
 import { IpcError } from "../../src/shared/ipc/result";
 import type { UtilityScene } from "../../src/shared/types/utility";
 import { buildLegacyPpt } from "../fixtures/legacy-ppt";
@@ -779,11 +781,11 @@ describe("Utility scenes", () => {
         background: { kind: "gradient", from: "#04132b", to: "#2f557f", direction: "to-bottom" },
         fontFamily: "Futura",
         verticalAlign: "bottom",
-        value: { sizeCqw: 24, color: "#ffffff", weight: 300, shadow: true },
-        title: { sizeCqw: 4, color: "#84adfc", weight: 600, shadow: false },
-        message: { sizeCqw: 4.5, color: "#f5f5f5", weight: 400, shadow: true },
+        value: { sizeCqw: 24, color: "#ffffff", weight: 300, shadow: true, shadowStrength: 0.55 },
+        title: { sizeCqw: 4, color: "#84adfc", weight: 600, shadow: false, shadowStrength: 0.55 },
+        message: { sizeCqw: 4.5, color: "#f5f5f5", weight: 400, shadow: true, shadowStrength: 0.55 },
         end: {
-          message: { sizeCqw: 8, color: "#ffffff", weight: 700, shadow: true },
+          message: { sizeCqw: 8, color: "#ffffff", weight: 700, shadow: true, shadowStrength: 0.55 },
           hideValue: true,
           hideTitle: false,
           transition: { style: "crossfade", durationMs: 600 },
@@ -939,6 +941,71 @@ describe("A time scene as an order-of-service item", () => {
       restored.items.length === 1 && restored.items[0]?.kind === "utility",
       `expected only the live scene to survive, got ${JSON.stringify(restored.items)}`,
     );
+    draftRepo.clear();
+  });
+});
+
+describe("An overlay plate as an order-of-service item", () => {
+  let plate: Plate;
+  let program: ProgramSummary;
+
+  test("a program saves and reloads an item that points at a plate", () => {
+    initRepos(db, sqlite);
+    plate = getOverlaysRepo().create({
+      name: "Pastor Juan Pérez",
+      kind: "lower-third",
+      position: "bottom-left",
+      title: "Juan Pérez",
+      subtitle: "Pastor",
+      imageAssetId: null,
+      style: DEFAULT_PLATE_STYLE,
+    });
+    program = programsRepo.save({
+      name: "Culto con zócalo",
+      items: [{ kind: "plate", overlayPlateId: plate.id, title: null }],
+    });
+    const [first] = programsRepo.load(program.id).items;
+    assert(
+      first?.kind === "plate" && first.overlayPlateId === plate.id,
+      `expected a plate item pointing at ${plate.id}, got ${JSON.stringify(first)}`,
+    );
+  });
+
+  test("the CHECK constraint refuses a plate row with no plate, or with a scene too", () => {
+    const insert = (sql: string) => () => sqlite.prepare(sql).run(program.id, Date.now());
+    expect(
+      insert(`INSERT INTO program_items (program_id, position, kind, created_at) VALUES (?, 99, 'plate', ?)`),
+    ).toThrow();
+    const scene = utilityRepo.list()[0]!;
+    expect(
+      insert(
+        `INSERT INTO program_items (program_id, position, kind, overlay_plate_id, utility_scene_id, created_at)
+         VALUES (?, 99, 'plate', ${plate.id}, ${scene.id}, ?)`,
+      ),
+    ).toThrow();
+  });
+
+  test("deleting a plate a saved program uses is refused, and names the program", () => {
+    const usages = programsRepo.findPlateUsages(plate.id);
+    assert(usages.length === 1 && usages[0]!.programName === program.name, JSON.stringify(usages));
+    expect(() => removeOverlayPlate(plate.id, false)).toThrow(IpcError);
+    assert(getOverlaysRepo().get(plate.id) !== null, "a refused delete must leave the plate where it was");
+  });
+
+  test("a forced delete removes the referencing items and the plate together, and the draft drops it", () => {
+    removeOverlayPlate(plate.id, true);
+    assert(getOverlaysRepo().get(plate.id) === null, "a forced delete must remove the plate");
+    assert(programsRepo.load(program.id).items.length === 0, "its program rows must go with it");
+
+    const draftRepo = new DraftRepo(db);
+    draftRepo.save({
+      programId: null,
+      name: "Culto sin guardar",
+      notes: null,
+      items: [{ kind: "plate", overlayPlateId: plate.id, title: null }],
+      updatedAt: Date.now(),
+    });
+    assert(draftRepo.load()?.items.length === 0, "a draft row pointing at a deleted plate must be dropped");
     draftRepo.clear();
   });
 });

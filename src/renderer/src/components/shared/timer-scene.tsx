@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "@renderer/lib/utils";
+import { sceneTextCss as textStyle } from "./scene-text";
 import { useTimerNow } from "@renderer/lib/hooks/use-timer-now";
 import { isAnimatable, transitionStyle, LEAVE_FALLBACK_MARGIN_MS, type LayerRole } from "@renderer/lib/transition";
 import { formatTimerClock, hasReachedZero, pickValueColor } from "@shared/timer";
@@ -26,20 +27,6 @@ const VERTICAL_ALIGN: Record<SceneVerticalAlign, string> = {
   middle: "justify-center",
   bottom: "justify-end pb-[4.5cqw]",
 };
-
-/** In `cqw`, like every size here, so the shadow keeps its proportion from a
- *  240px confidence monitor to a 4K projector instead of vanishing on one and
- *  swamping the other. */
-const TEXT_SHADOW = "0 0.15cqw 0.6cqw rgba(0,0,0,0.55)";
-
-function textStyle(style: SceneTextStyle, color?: string): CSSProperties {
-  return {
-    color: color ?? style.color,
-    fontSize: `${style.sizeCqw}cqw`,
-    fontWeight: style.weight,
-    ...(style.shadow ? { textShadow: TEXT_SHADOW } : {}),
-  };
-}
 
 /**
  * One reading of the scene: the three lines exactly as they should be drawn

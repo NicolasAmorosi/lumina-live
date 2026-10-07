@@ -43,6 +43,14 @@ export function previewUtilityScene(sceneId: number): void {
   usePreviewStore.getState().setTarget({ kind: "utility", sceneId });
 }
 
+/** A saved overlay plate. Putting it up is `goLive()`'s job, like everything
+ *  else — see `goLiveWithPlate`. */
+export function previewPlate(plateId: number): void {
+  useProgramStore.getState().select(null);
+  useLibraryStore.getState().select(null);
+  usePreviewStore.getState().setTarget({ kind: "plate", plateId });
+}
+
 export function setPreviewSlide(index: number): void {
   usePreviewStore.getState().setSlideIndex(index);
 }

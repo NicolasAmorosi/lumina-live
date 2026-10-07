@@ -44,8 +44,10 @@ export function deckRequiresSoffice(ext: string): boolean {
 // this church's workflow, and a half-wired kind is worse than no kind.
 // `utility` (a saved time scene) joined them in F3 of the Funciones plan: it
 // is full-screen base content like any other, so it is a row of the order of
-// service like any other — the one thing Overlays deliberately will NOT be.
-export const PROGRAM_ITEM_KINDS = ["media", "ppt", "bible", "utility"] as const;
+// service like any other. `plate` (a saved overlay plate) followed on
+// 2026-09-24: not base content, but the operator plans «el nombre del pastor
+// antes del sermón» into the order of service like everything else.
+export const PROGRAM_ITEM_KINDS = ["media", "ppt", "bible", "utility", "plate"] as const;
 export type ProgramItemKind = (typeof PROGRAM_ITEM_KINDS)[number];
 
 /** Bump to invalidate every cached deck at once when the conversion pipeline

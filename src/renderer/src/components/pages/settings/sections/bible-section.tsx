@@ -1,7 +1,6 @@
 import { useState, type DragEvent, type KeyboardEvent } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import {
-  Badge,
   Button,
   EmptyState,
   FieldGroup,
@@ -12,6 +11,7 @@ import {
   Tooltip,
 } from "@renderer/components/ui";
 import { ConfirmModal } from "@renderer/components/shared/modal";
+import { ProgramUsages } from "@renderer/components/shared/program-usages";
 import { api } from "@renderer/lib/api";
 import { cn } from "@renderer/lib/utils";
 import { BIBLE_VERSION_MIME, hideDragGhost } from "@renderer/lib/dnd";
@@ -325,7 +325,11 @@ export function BibleSection() {
         danger
         description={
           pending && pending.usages.length > 0 ? (
-            <DeleteUsages usages={pending.usages} />
+            <ProgramUsages
+              intro={t("settings.bible.deleteInUseIntro")}
+              usages={pending.usages}
+              warning={t("settings.bible.deleteInUseWarning")}
+            />
           ) : (
             t("settings.bible.deleteBody")
           )
@@ -487,26 +491,3 @@ function describeError(error: unknown, fallback: string): string {
   return message.length > 0 ? message : fallback;
 }
 
-/** The saved programs a forced delete is about to change. Same shape and same
- *  wording as `ScenesModal`'s, because it is the same decision about a
- *  different table — naming them is the whole point. What it says afterwards
- *  is deliberately milder: this FK is `set null`, so nothing is removed from
- *  anybody's program. */
-function DeleteUsages({ usages }: { usages: readonly BibleVersionUsage[] }) {
-  const t = useT();
-  return (
-    <div className="flex flex-col gap-3">
-      <p className="text-foreground">{t("settings.bible.deleteInUseIntro")}</p>
-      <ul className="flex flex-col gap-1 rounded-lg border border-border bg-muted p-1.5">
-        {usages.map((usage) => (
-          <li className="flex items-center gap-2 rounded-md px-2 py-1.5 text-foreground" key={usage.programId}>
-            <Icon className="shrink-0 text-subtle" name="fileText" />
-            <span className="min-w-0 flex-1 truncate">{usage.programName}</span>
-            <Badge>{t("settings.bible.deleteInUseCount", { count: usage.itemCount })}</Badge>
-          </li>
-        ))}
-      </ul>
-      <p>{t("settings.bible.deleteInUseWarning")}</p>
-    </div>
-  );
-}

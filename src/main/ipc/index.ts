@@ -9,6 +9,7 @@ import { programsHandlers } from "./handlers/programs";
 import { settingsHandlers } from "./handlers/settings";
 import { programDraftHandlers } from "./handlers/program-draft";
 import { utilityHandlers } from "./handlers/utility";
+import { overlaysHandlers } from "./handlers/overlays";
 import { systemHandlers } from "./handlers/system";
 
 /**
@@ -28,6 +29,7 @@ export function registerAllIpcHandlers(): void {
     ...settingsHandlers,
     ...programDraftHandlers,
     ...utilityHandlers,
+    ...overlaysHandlers,
     ...systemHandlers,
   };
   registerHandlers(handlers);

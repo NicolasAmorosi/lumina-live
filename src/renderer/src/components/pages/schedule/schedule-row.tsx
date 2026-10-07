@@ -2,6 +2,7 @@ import type { DragEvent } from "react";
 import { Badge, Icon, ListRow } from "@renderer/components/ui";
 import { useItemIconAndBadge, useItemLabel } from "@renderer/lib/hooks/use-program-item-display";
 import { useAudioStore } from "@renderer/stores/audio.store";
+import { PlateAirStatus } from "@renderer/components/shared/plate-air-status";
 import type { ProgramItemDTO } from "@shared/types/program";
 
 type ScheduleRowProps = {
@@ -55,7 +56,15 @@ export function ScheduleRow({
       onDoubleClick={onDoubleClick}
       onDragStart={onDragStart}
       selected={selected}
-      trailing={sounding ? <Icon className="size-3.5 animate-pulse text-badge-audio-ink" name="audio" /> : undefined}
+      trailing={
+        sounding ? (
+          <Icon className="size-3.5 animate-pulse text-badge-audio-ink" name="audio" />
+        ) : item.kind === "plate" ? (
+          // A plate never claims the on-air rail either — the content row
+          // under it keeps that — so being up is said here instead.
+          <PlateAirStatus plateId={item.overlayPlateId} />
+        ) : undefined
+      }
     >
       {label}
     </ListRow>

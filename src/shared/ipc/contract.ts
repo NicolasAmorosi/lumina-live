@@ -34,6 +34,7 @@ import type {
 import type { SettingsMap } from "../types/settings";
 import type { GpuStatus, InternalsPage, VideoDecoderReport } from "../types/system";
 import type { UtilityScene, UtilitySceneUpsert, UtilitySceneUsage } from "../types/utility";
+import type { Plate, PlateUpsert, PlateUsage } from "../types/overlay";
 import type { CloseDecision } from "../types/window";
 
 /**
@@ -253,6 +254,18 @@ export type IpcContract = {
    *  re-sorted list, so the caller replaces its state with what was actually
    *  persisted instead of trusting its optimistic guess. */
   "utility:reorder": { req: { ids: number[] }; res: UtilityScene[] };
+
+  /** The saved overlay plates, in manual order — the same shape as
+   *  `utility:*`, validated whole on every write (`isPlateUpsert`). A plate
+   *  can be a row of a saved program, so deleting one is refused with
+   *  `OVERLAY_PLATE_IN_USE` unless `force`, exactly like a scene. */
+  "overlay:list": { req: void; res: Plate[] };
+  "overlay:create": { req: PlateUpsert; res: Plate };
+  "overlay:update": { req: PlateUpsert & { id: number }; res: Plate };
+  "overlay:duplicate": { req: { id: number; name: string }; res: Plate };
+  "overlay:delete": { req: { id: number; force?: boolean }; res: void };
+  "overlay:usages": { req: { id: number }; res: PlateUsage[] };
+  "overlay:reorder": { req: { ids: number[] }; res: Plate[] };
 
   "settings:get": { req: void; res: SettingsMap };
   "settings:set": { req: Partial<SettingsMap>; res: void };

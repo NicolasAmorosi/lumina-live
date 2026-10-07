@@ -14,6 +14,7 @@ import type {
 import type { BibleVersionUsage } from "@shared/types/bible";
 import type { MediaAssetUsage } from "@shared/types/media";
 import type { UtilitySceneUsage } from "@shared/types/utility";
+import type { PlateUsage } from "@shared/types/overlay";
 
 function toItemDTO(row: typeof programItems.$inferSelect): ProgramItemDTO {
   const base = { id: row.id, position: row.position, title: row.title };
@@ -24,6 +25,8 @@ function toItemDTO(row: typeof programItems.$inferSelect): ProgramItemDTO {
       return { ...base, kind: "ppt", mediaAssetId: row.mediaAssetId! };
     case "utility":
       return { ...base, kind: "utility", utilitySceneId: row.utilitySceneId! };
+    case "plate":
+      return { ...base, kind: "plate", overlayPlateId: row.overlayPlateId! };
     case "bible":
     default:
       return {
@@ -305,6 +308,22 @@ export class ProgramsRepo {
       .all();
   }
 
+  /** Which saved programs still reference the plate `plateId` — `findSceneUsages`
+   *  for `overlay_plate_id`. */
+  findPlateUsages(plateId: number): PlateUsage[] {
+    return this.db
+      .select({
+        programId: programs.id,
+        programName: programs.name,
+        itemCount: count(),
+      })
+      .from(programItems)
+      .innerJoin(programs, eq(programItems.programId, programs.id))
+      .where(eq(programItems.overlayPlateId, plateId))
+      .groupBy(programs.id)
+      .all();
+  }
+
   /**
    * Which saved programs cite `versionId`, and how many items each one has.
    *
@@ -337,6 +356,11 @@ export class ProgramsRepo {
     this.db.delete(programItems).where(eq(programItems.utilitySceneId, sceneId)).run();
   }
 
+  /** `deleteItemsByUtilityScene` for `overlay_plate_id`. */
+  deleteItemsByPlate(plateId: number): void {
+    this.db.delete(programItems).where(eq(programItems.overlayPlateId, plateId)).run();
+  }
+
   /** Removes every item pointing at `assetId` across all programs — the only
    *  way to free the `onDelete: "restrict"` FK on `program_items.media_asset_id`,
    *  since the table's CHECK constraint forbids a `media`/`ppt` item with a
@@ -355,6 +379,8 @@ function toRow(programId: number, position: number, item: ProgramItemUpsert, now
       return { ...common, kind: item.kind, mediaAssetId: item.mediaAssetId, title: item.title };
     case "utility":
       return { ...common, kind: "utility" as const, utilitySceneId: item.utilitySceneId, title: item.title };
+    case "plate":
+      return { ...common, kind: "plate" as const, overlayPlateId: item.overlayPlateId, title: item.title };
     case "bible":
     default:
       return {

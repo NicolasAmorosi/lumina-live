@@ -2,7 +2,8 @@ import { useProgramStore } from "@renderer/stores/program.store";
 import { buildCumulativeMs, useProjectionStore } from "@renderer/stores/projection.store";
 import { useDeckStore } from "@renderer/stores/deck.store";
 import { useDisplayStore } from "@renderer/stores/display.store";
-import { usePreviewStore } from "@renderer/stores/preview.store";
+import { usePreviewStore, type PreviewTarget } from "@renderer/stores/preview.store";
+import { findPlate, useOverlayStore } from "@renderer/stores/overlay.store";
 import { bibleVersionLabel, useBibleStore } from "@renderer/stores/bible.store";
 import { useAudioStore, nextAssetTrack } from "@renderer/stores/audio.store";
 import { findScene, useUtilityStore } from "@renderer/stores/utility.store";
@@ -218,6 +219,40 @@ function goLiveWithUtilityScene(sceneId: number, scheduleIndex: number | null): 
   return true;
 }
 
+/**
+ * A plate does not replace `base`: it goes UP over whatever is projected, and
+ * replaces only the plate of its own kind (`showPlate`). Everything that makes
+ * EN VIVO "send new content" is deliberately skipped — no `beginScene()`
+ * (the stage would fade into itself), no rail on the schedule (the content
+ * row below keeps it), and NEGRO/LOGO stay up: a plate is covered with
+ * everything else, and pressing EN VIVO on a name must never uncover the
+ * stage behind the operator's back.
+ *
+ * Nor does it claim the live intent. A deck still converting from an earlier
+ * EN VIVO must still land: putting a name over it is not the operator
+ * changing their mind about the content (see `liveIntent`).
+ *
+ * Already up → a no-op, like an audio track that is already sounding: EN VIVO
+ * twice must not replay its entrance or restart its count.
+ */
+async function goLiveWithPlate(plateId: number): Promise<void> {
+  const plate = findPlate(useOverlayStore.getState().plates, plateId);
+  if (!plate) return;
+  await useDisplayStore.getState().openIfNeeded();
+  const store = useProjectionStore.getState();
+  if (store.livePlates.some((live) => live.id === plate.id)) return;
+  store.showPlate(plate);
+}
+
+/** The plate a preview target puts up, if it is one — straight from the
+ *  Overlays list or from a `plate` row of the schedule. */
+function previewedPlateId(target: PreviewTarget): number | null {
+  if (target.kind === "plate") return target.plateId;
+  if (target.kind !== "scheduleItem") return null;
+  const item = useProgramStore.getState().items[target.index];
+  return item?.kind === "plate" ? item.overlayPlateId : null;
+}
+
 async function goLiveWithScheduleItem(
   index: number,
   startSlideIndex: number,
@@ -270,6 +305,9 @@ async function goLiveWithScheduleItem(
       goLiveWithUtilityScene(item.utilitySceneId, index);
       return;
     }
+    case "plate":
+      // Handled before the live intent is claimed — see `goLive()`.
+      return;
   }
 }
 
@@ -298,6 +336,12 @@ async function goLiveWithAsset(
 export async function goLive(): Promise<void> {
   const { slideIndex, positionSeconds, target } = usePreviewStore.getState();
   if (!target) return;
+
+  const plateId = previewedPlateId(target);
+  if (plateId !== null) {
+    await goLiveWithPlate(plateId);
+    return;
+  }
 
   // Claimed before the first `await` below, so this press supersedes anything
   // still in flight — typically an earlier EN VIVO on a deck that is still
@@ -341,6 +385,10 @@ export async function goLive(): Promise<void> {
       return;
     case "utility":
       goLiveWithUtilityScene(target.sceneId, null);
+      return;
+    case "plate":
+      // Handled above, before the live intent is claimed.
+      return;
   }
 }
 

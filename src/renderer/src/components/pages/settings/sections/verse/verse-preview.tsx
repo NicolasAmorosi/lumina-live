@@ -50,6 +50,7 @@ export function VersePreview({ long, style }: { long: boolean; style: BibleStyle
       ),
       videoUnderlay: null,
       slideVideo: null,
+      plates: [],
       transition: INSTANT_TRANSITION,
     };
   }, [defaultVersionId, long, style, t, versions]);
