@@ -1,9 +1,9 @@
 import type { ButtonHTMLAttributes, KeyboardEvent as ReactKeyboardEvent } from "react";
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { cn, normalizeForSearch } from "@renderer/lib/utils";
-import { computeMenuPosition, type MenuPosition } from "./floating-menu";
+import { computeMenuPosition, useFollowTrigger, type MenuPosition } from "./floating-menu";
 import { Icon } from "./icon";
 
 export type SelectOption = { disabled?: boolean; label: string; value: string };
@@ -79,21 +79,12 @@ export function Select({
     return options.filter((option) => normalizeForSearch(option.label).includes(needle));
   }, [options, query, searchable]);
 
-  useLayoutEffect(() => {
-    if (!open) return;
-    const reposition = () => {
-      if (triggerRef.current) setPosition(computeMenuPosition(triggerRef.current));
-    };
-    reposition();
-    window.addEventListener("resize", reposition);
-    // capture: true — a scroll inside a nested panel or modal (the common
-    // case here) never bubbles to window, only the capture phase sees it.
-    window.addEventListener("scroll", reposition, true);
-    return () => {
-      window.removeEventListener("resize", reposition);
-      window.removeEventListener("scroll", reposition, true);
-    };
-  }, [open]);
+  useFollowTrigger(
+    open,
+    triggerRef,
+    (trigger) => setPosition(computeMenuPosition(trigger)),
+    () => closeMenu(searchable),
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -158,7 +149,9 @@ export function Select({
 
   function closeMenu(refocusTrigger: boolean) {
     setOpen(false);
-    if (refocusTrigger) triggerRef.current?.focus();
+    // preventScroll: a trigger closed by scrolling out of sight must not be
+    // scrolled back into view by the focus that follows.
+    if (refocusTrigger) triggerRef.current?.focus({ preventScroll: true });
   }
 
   function selectOption(index: number) {

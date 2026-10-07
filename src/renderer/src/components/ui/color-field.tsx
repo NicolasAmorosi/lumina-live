@@ -1,7 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@renderer/lib/utils";
-import { computeMenuPosition, type MenuPosition } from "./floating-menu";
+import { computeMenuPosition, useFollowTrigger, type MenuPosition } from "./floating-menu";
 
 /**
  * The colours a scene can be painted with, straight out of the church's own
@@ -83,19 +83,12 @@ export function ColorField({ className, label, onChange, size = "sm", value }: C
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
-  useLayoutEffect(() => {
-    if (!open) return;
-    const reposition = () => {
-      if (triggerRef.current) setPosition(computeMenuPosition(triggerRef.current, PICKER_WIDTH_PX, "end"));
-    };
-    reposition();
-    window.addEventListener("resize", reposition);
-    window.addEventListener("scroll", reposition, true);
-    return () => {
-      window.removeEventListener("resize", reposition);
-      window.removeEventListener("scroll", reposition, true);
-    };
-  }, [open]);
+  useFollowTrigger(
+    open,
+    triggerRef,
+    (trigger) => setPosition(computeMenuPosition(trigger, PICKER_WIDTH_PX, "end")),
+    () => close(true),
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -111,7 +104,7 @@ export function ColorField({ className, label, onChange, size = "sm", value }: C
   function close(refocus: boolean) {
     setOpen(false);
     setDraft(null);
-    if (refocus) triggerRef.current?.focus();
+    if (refocus) triggerRef.current?.focus({ preventScroll: true });
   }
 
   function commitDraft(next: string) {
