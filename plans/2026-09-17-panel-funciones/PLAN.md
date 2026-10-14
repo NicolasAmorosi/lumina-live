@@ -23,7 +23,7 @@ desarrollo»; este documento es el plan para llenarlas.
 | Pestaña | Qué es | Plan |
 |---|---|---|
 | Utilidades | Cuenta regresiva, reloj y cronómetro proyectables | [`utilidades.md`](utilidades.md) |
-| Entradas | Cámara, capturadora y fuentes de video externas en vivo | [`../2026-09-17-fuentes-video-externas/ANALISIS-Y-PLAN.md`](../2026-09-17-fuentes-video-externas/ANALISIS-Y-PLAN.md) |
+| Entradas | Cámara, capturadora y fuentes de video externas en vivo — spike del capture agent en curso (2026-10-07) | [`../2026-09-17-fuentes-video-externas/ANALISIS-Y-PLAN.md`](../2026-09-17-fuentes-video-externas/ANALISIS-Y-PLAN.md) |
 | Overlays | Placas guardadas que se superponen a lo proyectado | [`overlays.md`](overlays.md) |
 
 ---
