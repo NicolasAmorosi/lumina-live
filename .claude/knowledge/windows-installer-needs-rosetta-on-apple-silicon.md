@@ -24,3 +24,9 @@
   Windows installer cross-compiles from macOS: the *native module* half of that claim is confirmed here
   (the win32-x64 prebuild ships with zero rebuild), but the *installer* half does not reproduce on this
   machine today.
+
+- **Update 2026-10-18: Rosetta is installed on this M3 now** (`arch -x86_64 /usr/bin/true` succeeds), and
+  `npm run package:win` builds `WorshipApp Setup 2.2.0-beta.1.exe` end to end, NSIS included. The
+  diagnosis above still holds for any other Apple Silicon machine without Rosetta. A Windows installer
+  that builds is not one that is complete, though: see
+  [electron-builder-platform-macro-is-the-build-host-not-the-target.md](electron-builder-platform-macro-is-the-build-host-not-the-target.md).

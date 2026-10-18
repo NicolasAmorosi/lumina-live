@@ -137,13 +137,41 @@ se sincroniza con triggers `AFTER INSERT/UPDATE/DELETE`. El seed usa
 de dejar que los triggers corran 31.102 veces — la carga completa mide ~550ms en esta máquina
 (`npm run test`, proyecto `main`).
 
+## `media_conversions` — hechos y resultados, nunca la decisión
+
+Una fila por video o audio ya revisado con ffprobe (migración `0016_media_conversions`, `cascade` con
+su asset). Guarda dos cosas: lo que dijo ffprobe (`probe_json`, un `MediaProbe` versionado por
+`MEDIA_PROBE_VERSION`) y el archivo convertido (`output_file`). El nombre es **relativo** a
+`userData/converted-media/`, por la misma razón que hizo daño el `cache_dir` absoluto de los decks: un
+perfil copiado o movido apuntaría al perfil viejo. Las dos son válidas mientras `source_size` y
+`source_mtime_ms` sigan siendo los del asset.
+
+**No se guarda si hace falta convertir.** Eso se recalcula en cada arranque (`planPlayback`), porque
+una de sus entradas pertenece a la MÁQUINA: si la GPU decodifica HEVC. Una biblioteca que se lleva a otra
+PC no conserva la respuesta de la anterior, y una copia que en la máquina nueva ya no hace falta se
+borra. **Tampoco se guarda un fallo**: se reintenta en el próximo arranque o con «Reintentar».
+
+`worship://asset/<id>` sirve la copia cuando existe y coincide el sello (`ConversionsRepo.outputFor`).
+Un `.part` interrumpido y las copias que ninguna fila referencia se barren al arrancar. Los clips
+embebidos en un `.pptx` no usan esta tabla: se convierten adentro de la caché del deck y actualizan
+su propia fila de `deck_videos`/`deck_audio` (`media/deck-clips.ts`).
+
 ## Archivos faltantes — nunca se borran filas
 
-`media_assets.missing_since` se marca en un barrido (`MediaRepo.sweep()`, corre en cada
-`library:list`) que revisa `fs.existsSync` sobre las filas `in_library=1`. Un archivo ausente
-**nunca borra la fila** — puede ser un pendrive desconectado. La UI muestra un badge y ofrece
-`library:relocate`, que reescribe `path`/`pathKey` sin tocar el id — cualquier `program_item`
-que lo referencie por `mediaAssetId` sigue funcionando solo.
+`media_assets.missing_since` se marca en un barrido (`MediaRepo.sweep()`, lo programa
+`library-sweeper.ts`) sobre las filas `in_library=1` **y las de carpetas vinculadas que usa un programa
+guardado**; sin estas últimas, un ítem de una carpeta vinculada nunca mostraba «Relocalizar…». Un
+archivo ausente **nunca borra la fila** — puede ser un pendrive desconectado. La UI muestra un badge y
+ofrece `library:relocate`, que reescribe `path`/`pathKey` sin tocar el id — cualquier `program_item`
+que lo referencie por `mediaAssetId` sigue funcionando solo. Si el archivo elegido YA es una fila (lo
+normal cuando un pendrive volvió con otra letra y su carpeta se volvió a vincular), las dos filas se
+FUSIONAN en la que el programa referencia: programas, placas, decks e historial pasan a ese id y el
+duplicado se borra, todo en una transacción.
+
+Una carpeta vinculada que no está (`library:listFolder`) responde `FOLDER_MISSING`, no una lista vacía:
+eran indistinguibles. Y ninguna importación acepta un `._x.pps` (el AppleDouble que macOS deja en un
+pendrive FAT/exFAT), un `~$x.pptx` (el lock de PowerPoint) ni un archivo cuya extensión no sea de su
+`kind` (`importable` en `library-import.ts`).
 
 `pathKey` normaliza (`NFC` + lowercase en Windows) para que `C:\a.mp4` y `c:\A.MP4` no entren dos
 veces — Windows es case-insensitive y el legacy no lo contemplaba.

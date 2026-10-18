@@ -75,6 +75,8 @@ respuesta, y preguntá por lo que sí depende. No se entrega nada a medias en si
 | Estado | Zustand (slices por dominio) |
 | DB | `better-sqlite3` (Node-API, sin rebuild nativo) + Drizzle ORM + FTS5 para la Biblia |
 | Empaquetado | `electron-builder` (nsis / dmg / AppImage) |
+| Conversión de medios | FFmpeg 9.0.2 (`ffmpeg` + `ffprobe`) **empaquetado**, fijado por sha256 y bajado por `scripts/fetch-ffmpeg.ts` (GPLv3, ver `resources/ffmpeg-NOTICE.txt`) |
+| E2E | Playwright 1.63 (`_electron`) contra la app compilada o la instalada — `tests/e2e/` |
 
 ## Estructura de carpetas
 
@@ -106,6 +108,11 @@ src/
 │   ├── protocol/worship-protocol.ts   # worship:// — sirve archivos por id, nunca por ruta
 │   ├── slides/                    # libreoffice.ts (discovery+soffice), pptx-metadata.ts (OOXML),
 │   │                              # rasterizer.ts (ventana oculta+pdfjs), deck-service.ts (cola+cache)
+│   ├── media/                     # media-compat.ts (qué reproduce Chromium: PURO, testeado), ffmpeg.ts
+│   │                              #   (procesos), conversion-service.ts (cola + caché de copias reproducibles),
+│   │                              #   deck-clips.ts (video/audio embebido en un .pptx), thumbnail-service.ts
+│   ├── windows/projector-screen.ts # el proyector atado a su pantalla: anti-suspensión y reconexión
+│   ├── logging.ts                 # main.log y crash.log, rotados
 │   └── services/                  # repos.ts (registro), projection-state.ts, broadcast.ts
 ├── preload/
 │   ├── index.ts                  # puente GENÉRICO invoke/on — nunca se edita al agregar canales
@@ -283,11 +290,13 @@ allowlist.
 npm install              # instala deps — better-sqlite3 trae binarios precompilados, no compila nada.
                           #   El `postinstall` baja además el binario de Electron: desde la v42 el
                           #   paquete ya NO lo hace solo, y sin él `npm run dev` muere con
-                          #   `Error: Electron uninstall` mientras build/typecheck/lint pasan igual
+                          #   `Error: Electron uninstall` mientras build/typecheck/lint pasan igual.
+                          #   También baja el FFmpeg de esta plataforma (`resources/ffmpeg/`, ~130 MB
+                          #   en macOS, ~210 MB en Windows), verificado por sha256
 npm run dev               # electron-vite dev (HMR en renderer, restart de main en watch)
 npm run typecheck          # tsc --noEmit sobre node (main+preload+shared) y web (renderer+shared)
 npm run lint                # eslint .
-npm run test                 # vitest run — 320 casos en dos proyectos: `main` (Node: migraciones, seed,
+npm run test                 # vitest run — 395 casos en dos proyectos: `main` (Node: migraciones, seed,
                               #   FTS5, repos, borrador, validadores de settings y de escena, respaldo WAL,
                               #   zip reader, audio vinculado, urls, prune del historial, funciones de tiempo,
                               #   arrastre de una cuenta regresiva, escenas de tiempo como ítem del orden de culto,
@@ -301,6 +310,12 @@ npm run test                 # vitest run — 320 casos en dos proyectos: `main`
                               #   fotograma congelado, store de toasts, utils). Nada importa `electron`: ese es
                               #   el límite del suite
 npm run test:watch            # el mismo suite en watch, mientras se toca un módulo
+npm run test:e2e              # build + Playwright: 27 recorridos de la app real con un perfil descartable y
+                              #   medios generados al vuelo con el FFmpeg empaquetado (videos, AVI, WMA, PDF,
+                              #   y .pptx con auto-avance y con un WMV embebido si hay LibreOffice). Con
+                              #   WORSHIP_E2E_EXECUTABLE=<ruta al ejecutable instalado> corre contra la app
+                              #   EMPAQUETADA — la única forma de probar lo que resuelve desde `resources/`
+npm run fetch:ffmpeg          # FFmpeg para esta máquina (también lo hace el postinstall y cada package:*)
 npm run db:generate            # drizzle-kit generate — nueva migración tras editar db/schema.ts
 npm run slides:smoke -- x.pptx # conversión + parseo OOXML (timings/audio) SIN Electron
 npm run build                 # electron-vite build
@@ -513,6 +528,33 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   proyecta.** Es un `switch` exhaustivo sobre `BaseContent` — agregar un tipo de contenido nuevo
   sin manejarlo ahí es un error de compilación, no un bug de runtime como el `restorePrevious()`
   legacy.
+- **Si Chromium no puede reproducir un video o un audio, se convierte; jamás se decide por la
+  extensión ni esperando el `error`.** Medido: ProRes, MPEG-4 parte 2 o MJPEG dentro de un `.mp4`/`.mov`
+  suenan sobre NEGRO sin ningún `error`, y AC3/DTS/ALAC dan imagen SIN SONIDO. `media-compat.ts` decide
+  con los streams de ffprobe (y HEVC según la GPU, que reporta el control), y `conversion-service.ts`
+  convierte en segundo plano, al importar o al ver una carpeta vinculada, a H.264/AAC con tope 1080p, sin
+  tocar el original. `worship://asset/<id>?v=<copia>` sirve la copia y la URL sin `v` sirve SIEMPRE
+  el original. **La URL de video/audio sale de `playableAssetUrl`**, por dos razones: Chromium
+  reutiliza los datos de una URL entre elementos (cuando cambian los bytes tiene que cambiar el string),
+  y un elemento que arrancó con el original no puede recibir los bytes de la copia a mitad de una
+  canción. Por eso la URL del video viaja resuelta en `BaseContent`. Los clips de un `.pptx` llevan su
+  archivo (`?f=`) por lo mismo.
+  EN VIVO sobre algo que todavía se está convirtiendo se rechaza con un aviso. Diagnósticos en
+  [`.claude/knowledge/chromium-plays-sound-over-black-for-a-codec-it-cannot-decode.md`](.claude/knowledge/chromium-plays-sound-over-black-for-a-codec-it-cannot-decode.md)
+  y
+  [`.claude/knowledge/chromium-reuses-a-media-urls-data-across-elements-so-changed-bytes-need-a-changed-url.md`](.claude/knowledge/chromium-reuses-a-media-urls-data-across-elements-so-changed-bytes-need-a-changed-url.md).
+- **Un recurso que cambia por plataforma va en el bloque de esa plataforma de `build`** (`win`, `mac`,
+  `linux`), nunca arriba con `${platform}`: esa macro es la de la máquina que compila, y el instalador
+  de Windows hecho en la Mac salió sin FFmpeg sin ningún error. Ver
+  [`.claude/knowledge/electron-builder-platform-macro-is-the-build-host-not-the-target.md`](.claude/knowledge/electron-builder-platform-macro-is-the-build-host-not-the-target.md).
+- **Si desaparece la pantalla del proyector, su ventana se OCULTA — no se cierra — y vuelve sola**
+  cuando hay de nuevo una segunda pantalla. Lo mismo pasa si el proyector se enciende después de abrir
+  la app: la ventana pasa de la notebook a esa pantalla. Lo hace main (`windows/projector-screen.ts`,
+  regla pura en `projector-display-choice.ts`), sin reconstruir la ventana. Cerrarla callaba la sala:
+  todos los `<audio>` del culto viven en esa ventana. El control solo vuelve a listar las pantallas
+  (`display.store.refresh`) y muestra el aviso; nunca mueve la ventana, y nada la manda a la pantalla
+  principal por su cuenta. Mientras existe, un `powerSaveBlocker` impide que se apaguen las pantallas
+  en pleno sermón.
 - **Las diapositivas son imágenes pre-rasterizadas, no un slideshow controlado.** Un `.pptx` se
   convierte una sola vez (LibreOffice → PDF → WebP por slide) y se cachea en
   `userData/slides-cache` + SQLite, direccionado por **hash de contenido**. La ventana de
@@ -543,10 +585,13 @@ no reimplementando desde cero.
 
 ## Notas operativas
 
-- Se desarrolla y se verifica en macOS: ya no hay features exclusivas de Windows.
+- Se desarrolla y se verifica en macOS: ya no hay features exclusivas de Windows. Desde el
+  2026-10-18 esta Mac tiene Rosetta y `npm run package:win` genera el instalador NSIS completo;
+  verificá siempre `release/win-unpacked/resources/ffmpeg/` después.
 - Requiere **LibreOffice instalado** para convertir presentaciones (`brew install --cask libreoffice`).
   No se empaqueta; la app lo detecta y guía la instalación si falta.
 - `git` está activo; commitea/pushea solo si el usuario lo pide.
 - No hay CI configurado — es una decisión del usuario, no un pendiente.
   `npm run typecheck && npm run lint && npm run test` es la barra mínima antes de dar por buena
-  una tarea, y corre a mano.
+  una tarea, y corre a mano. Antes de un release, además `npm run test:e2e` y la misma suite contra
+  el paquete (`WORSHIP_E2E_EXECUTABLE`).

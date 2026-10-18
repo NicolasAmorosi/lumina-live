@@ -24,4 +24,11 @@
   caller free to reintroduce the exact same race. The `readMetadata` catch now also logs the real
   error instead of swallowing it silently.
 
-**Last updated:** 2026-09-08
+- **The chain has to wait for the PROCESS, not for the promise (2026-10-18).** A cancel or a timeout
+  settled the caller's promise right after sending the kill, and that settlement was what released the
+  chain. The dying `soffice` still held the profile, and on Windows `taskkill` itself runs
+  asynchronously, so the next conversion lost the same race: an EN VIVO preempting a «Preparar
+  carpeta» batch, failing with exit code 1. `runSoffice` now keeps the chain on the child's `close`,
+  for at most 10 s and with a SIGKILL at the end. The caller is still told at once.
+
+**Last updated:** 2026-10-18

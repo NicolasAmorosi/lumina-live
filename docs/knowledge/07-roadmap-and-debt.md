@@ -46,6 +46,34 @@ canciones/letras con secciones proyectables.
   `slides.*` ya expuestas. Lo que sigue sin UI es el override de LibreOffice
   (`slides.sofficePath`), que hoy solo se toca desde el diálogo de "Buscar soffice…".
 
+## Revisión pre-lanzamiento del 2026-10-18 — lo que quedó abierto a propósito
+
+La revisión completa de esa fecha (main, slides, renderer, UI y Windows) cerró todos sus hallazgos
+críticos, altos y medios. Quedó abierto esto, cada cosa con su motivo:
+
+- **Una música vinculada en WMA/AIFF no se convierte**, se rechaza (`LINKABLE_AUDIO_EXTENSIONS` en
+  `ipc/handlers/library.ts`). `worship://linked-audio/<id>` sirve el archivo tal cual, y los 1229 audios
+  vinculados del himnario real son MP3. Si hiciera falta, pasa por `conversion-service.ts`.
+- **Las filas clickeables de `ListRow` no se alcanzan con el teclado** (Escenas, Placas, Utilidades,
+  Overlays). Hacerlas focusables choca con Enter = EN VIVO: es una decisión de interacción, no un arreglo.
+- **Violaciones de estilo en `pages/`** (la tabla de la revisión de UI): los botones a mano de
+  `media-source-bar.tsx` y del selector de tema, unas 25 clases de tipografía escritas a mano en
+  `pages/`, la nota de advertencia duplicada entre `remove-asset-confirm` y `program-side-panel`, y dos
+  copias de la caja de `FieldGroup`. Son cosméticas y cada una necesita una pasada visual.
+- **Las unidades `s`, `px` y `%` siguen escritas en el código.** Son tipografía, no palabras; los
+  nombres de colores neutros sí pasaron por i18n.
+- **El paquete de Windows lleva los prebuilds de better-sqlite3 de otras plataformas** y sus fuentes
+  de SQLite (~24 MB). Excluirlos por plataforma es posible, pero se tocaría la carga del módulo nativo
+  justo antes del lanzamiento.
+- **Volver a sembrar RV1960 con un JSON distinto borraría la versión de los versículos guardados**
+  (`seed-bible.ts`). No ocurre: el archivo no cambió desde el primer commit.
+- **Sin firma de código** (SmartScreen avisa «Windows protegió su PC») — `I1`, cuesta dinero.
+- **A comprobar a mano en la PC de la iglesia**: Win+P en «Extender»; escalas distintas por monitor;
+  apagar y prender el proyector en pleno culto (la ventana se oculta, el sonido sigue, y vuelve sola a
+  pantalla completa); prender el proyector con la app ya abierta; plan de energía; LibreOffice 64 bits
+  en un primer arranque en frío; «Probar video» con HEVC de iPhone; la salida de audio por HDMI; y la
+  suite E2E contra el `.exe` instalado (`WORSHIP_E2E_EXECUTABLE`).
+
 ## Multiplataforma — resuelto
 
 Ya no hay nada Windows-only. El COM/PowerShell se eliminó por completo y las presentaciones se

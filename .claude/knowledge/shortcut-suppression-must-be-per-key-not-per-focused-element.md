@@ -85,4 +85,20 @@ something on the projector.
   may well have focused, and picking a Bible version must not also send the preview live.
   Verified: Enter in the open version Select left `sceneEpoch` unchanged.
 
-**Last updated:** 2026-10-14
+### Space and the arrows after a click, too (2026-10-18)
+
+- The Enter rule left the same trap open for the other keys a button consumes. After clicking
+  EN VIVO with the mouse, → and ← did nothing: the focused button swallowed them, so a verse or a
+  slide that had just gone live could not be stepped until the operator clicked empty space. Worse,
+  Space natively pressed EN VIVO again, which is a new scene: the video and the deck's music go back
+  to 0. Found by the review and reproduced by the E2E suite
+  (`tests/e2e/bible.spec.ts`, «after clicking EN VIVO, the arrows and Space still belong to the
+  operator»). The test fails without the fix.
+- Now a mouse-focused button consumes none of `KEYS_A_CONTROL_CONSUMES`, and Space is
+  `preventDefault`ed whenever it reaches the switch, so it can never press the clicked button.
+  **Two things keep their arrows regardless:** a button with a widget role (a `tab`, which the
+  role check still covers before the pointer exemption) and any widget that handles the arrow
+  itself and `preventDefault`s it (`VirtualGrid`'s tiles), which the `defaultPrevented` early
+  return already protects.
+
+**Last updated:** 2026-10-18
