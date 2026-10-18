@@ -5,19 +5,59 @@ export type AssetKind = (typeof ASSET_KINDS)[number];
 
 /** `pptm`/`ppsx`/`ppsm` are the same OOXML zip as `pptx`; `pps` is the legacy
  *  binary format like `ppt` (the v1 vanilla app accepted both and the TS
- *  migration dropped them). `odp` works now that LibreOffice is the engine. */
+ *  migration dropped them). `odp` works now that LibreOffice is the engine.
+ *
+ *  `pdf` is deliberately a `ppt`, not an `AssetKind` of its own: everywhere in
+ *  the renderer `kind === "ppt"` already means "this is a deck" (the tile's
+ *  deck badge, the deck store, pre-warming, the `ppt` `ProgramItemKind` and
+ *  its CHECK constraint), and a PDF is a deck whose pages happen to be
+ *  rendered already. Listing the extension here is what gives it the file
+ *  dialog's filter, drag & drop, folder import, the content-addressed cache
+ *  and "Preparar carpeta" without a single branch. */
 export const ASSET_EXTENSIONS: Record<AssetKind, readonly string[]> = {
-  video: ["mp4", "mov", "mkv", "avi", "webm"],
+  // Everything past the first six is converted to a playable copy on its way
+  // in (`main/media/conversion-service.ts`) — and so can the first six be,
+  // when what is inside them is a codec Chromium cannot decode.
+  video: [
+    ...["mp4", "m4v", "mov", "mkv", "webm", "3gp"],
+    ...["avi", "wmv", "asf", "flv", "f4v", "mpg", "mpeg", "m2v", "vob", "ts", "mts", "m2ts"],
+    ...["ogv", "divx", "mxf", "dv", "3g2"],
+  ],
   image: ["jpg", "jpeg", "png", "gif", "webp", "bmp"],
-  audio: ["mp3", "wav", "ogg", "m4a", "flac"],
-  ppt: ["ppt", "pptx", "pptm", "pps", "ppsx", "ppsm", "odp"],
+  audio: [
+    ...["mp3", "wav", "ogg", "m4a", "flac", "aac", "opus", "oga", "weba"],
+    ...["wma", "aiff", "aif", "ac3", "mka", "mp2", "amr"],
+  ],
+  ppt: ["ppt", "pptx", "pptm", "pps", "ppsx", "ppsm", "odp", "pdf"],
 };
+
+/**
+ * Whether converting this deck needs LibreOffice at all.
+ *
+ * The pipeline is `source → PDF → one image per page`, so a PDF enters it
+ * halfway: it is handed straight to the rasterizer. That is not just faster —
+ * running one through `soffice` imports it into **Draw** and re-renders it
+ * (measured on a real file: 157 KB in, 1,76 MB out), which costs typographic
+ * fidelity for nothing.
+ *
+ * The consequence the UI has to honour: a PDF is projectable on a machine with
+ * no LibreOffice installed, so the "instalá LibreOffice" gate must not stand in
+ * front of one.
+ */
+export function deckRequiresSoffice(ext: string): boolean {
+  return ext.replace(/^\./, "").toLowerCase() !== "pdf";
+}
 
 // A `text` kind used to live here too: schema column, DTO, repo mapping,
 // preview, projector output — everything except a way to create one. It was
 // removed in 0009 rather than finished; an announcement is a PPT slide in
 // this church's workflow, and a half-wired kind is worse than no kind.
-export const PROGRAM_ITEM_KINDS = ["media", "ppt", "bible"] as const;
+// `utility` (a saved time scene) joined them in F3 of the Funciones plan: it
+// is full-screen base content like any other, so it is a row of the order of
+// service like any other. `plate` (a saved overlay plate) followed on
+// 2026-09-24: not base content, but the operator plans «el nombre del pastor
+// antes del sermón» into the order of service like everything else.
+export const PROGRAM_ITEM_KINDS = ["media", "ppt", "bible", "utility", "plate"] as const;
 export type ProgramItemKind = (typeof PROGRAM_ITEM_KINDS)[number];
 
 /** Bump to invalidate every cached deck at once when the conversion pipeline
@@ -25,8 +65,12 @@ export type ProgramItemKind = (typeof PROGRAM_ITEM_KINDS)[number];
  *  Bumped to 2: decks converted before the `soffice` shared-profile race fix
  *  (see .claude/knowledge/soffice-shared-profile-race.md) can be cached with
  *  `timings_source: "none"` and every `advance_ms` null even though the
- *  source file has real timings — only a reconversion recovers them. */
-export const SLIDES_CONVERTER_VERSION = 2;
+ *  source file has real timings — only a reconversion recovers them.
+ *  Bumped to 3: a deck converted before slide-embedded video was extracted has
+ *  no `deck_videos` rows, and nothing else about it would ever look stale —
+ *  the images and timings are still perfectly good, so only the version can
+ *  say "this cache entry predates a source of content it does not know about". */
+export const SLIDES_CONVERTER_VERSION = 3;
 
 /** Bump to force every non-manual `media_assets` row to re-run
  *  `resolveLinkedAudio` once, next time its deck is opened, even though a

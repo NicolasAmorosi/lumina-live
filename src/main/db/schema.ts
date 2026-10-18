@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text, uniqueIndex, index } from "drizzle-orm/sqlite-core";
+import { integer, real, sqliteTable, text, uniqueIndex, index } from "drizzle-orm/sqlite-core";
 
 /** Key/value settings. Replaces the legacy settings.json. */
 export const settings = sqliteTable("settings", {
@@ -67,6 +67,37 @@ export const mediaAssets = sqliteTable(
   ],
 );
 
+/**
+ * What ffprobe said about a video or audio asset, and the playable copy made
+ * of it when Chromium cannot decode the original
+ * (`main/media/conversion-service.ts`).
+ *
+ * Only facts and results are stored. Whether a file NEEDS converting is
+ * re-derived from `probe_json` on every launch, because one input to that
+ * decision — can this GPU decode HEVC? — belongs to the machine and not to the
+ * file. A library copied to another PC must not keep the old PC's answer.
+ * A failed conversion is not stored either: it is retried next launch.
+ *
+ * Valid only while `source_size`/`source_mtime_ms` still match the asset's,
+ * the same stamp rule `content_hash` follows. `output_file` is a bare file
+ * name inside `convertedMediaDir`, never an absolute path: an absolute one
+ * would point at the old profile after a copy or a move
+ * (`.claude/knowledge/a-deck-cache-hit-checks-existence-but-the-protocol-checks-containment.md`).
+ */
+export const mediaConversions = sqliteTable("media_conversions", {
+  mediaAssetId: integer("media_asset_id")
+    .primaryKey()
+    .references(() => mediaAssets.id, { onDelete: "cascade" }),
+  sourceSize: integer("source_size").notNull(),
+  sourceMtimeMs: integer("source_mtime_ms").notNull(),
+  /** `MEDIA_PROBE_VERSION` at the time of the probe; an older one re-probes. */
+  probeVersion: integer("probe_version").notNull(),
+  /** A `MediaProbe`, or null when ffprobe could not read the file at all. */
+  probeJson: text("probe_json"),
+  outputFile: text("output_file"),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 export const programs = sqliteTable(
   "programs",
   {
@@ -100,9 +131,24 @@ export const programItems = sqliteTable(
       .notNull()
       .references(() => programs.id, { onDelete: "cascade" }),
     position: integer("position").notNull(),
-    kind: text("kind", { enum: ["media", "ppt", "bible"] }).notNull(),
+    kind: text("kind", { enum: ["media", "ppt", "bible", "utility", "plate"] }).notNull(),
 
     mediaAssetId: integer("media_asset_id").references(() => mediaAssets.id, {
+      onDelete: "restrict",
+    }),
+
+    /** The saved time scene a `utility` row projects. `restrict` for the same
+     *  reason `media_asset_id` has it: a program that silently loses a row
+     *  when a list is tidied is worse than a delete the operator has to
+     *  confirm. Declared AFTER `utilityScenes` exists at module scope, which
+     *  is why the reference is a thunk. */
+    utilitySceneId: integer("utility_scene_id").references(() => utilityScenes.id, {
+      onDelete: "restrict",
+    }),
+
+    /** The saved overlay plate a `plate` row puts up. `restrict` for the same
+     *  reason as `utility_scene_id`. */
+    overlayPlateId: integer("overlay_plate_id").references(() => overlayPlates.id, {
       onDelete: "restrict",
     }),
 
@@ -132,6 +178,13 @@ export const bibleVersions = sqliteTable("bible_versions", {
   isBuiltin: integer("is_builtin").notNull().default(0),
   verseCount: integer("verse_count").notNull().default(0),
   sourceHash: text("source_hash"),
+  /** Manual list order, same scheme as `programs.sort_order` and
+   *  `utility_scenes.sort_order`: lower comes first, a newly imported version
+   *  takes `MAX(sort_order) + 1` so it lands at the BOTTOM — unlike a new
+   *  program, an import is not what the operator is about to project, and
+   *  pushing RV1960 off the top of the picker mid-service is the failure mode
+   *  that matters here. `reorder()` renormalizes to `0..n-1`. */
+  sortOrder: integer("sort_order").notNull().default(0),
   installedAt: integer("installed_at").notNull(),
 });
 
@@ -297,6 +350,47 @@ export const deckAudio = sqliteTable(
   (t) => [index("ix_deck_audio").on(t.deckId, t.startSlideIndex)],
 );
 
+/**
+ * A video embedded in one slide of a `.pptx`, extracted into the same
+ * content-addressed deck cache as `deck_audio`.
+ *
+ * Its own table rather than a nullable set of columns on `deck_slides`: a
+ * video has a geometry, a level and a loop flag that mean nothing for a slide
+ * without one, and a slide can carry more than one in the source file even
+ * though the projector sustains a single one.
+ *
+ * `slide_index` is in PAGE order (hidden slides already dropped) — the same
+ * index space as `deck_slides.slide_index`, mapped from the OOXML's own
+ * numbering in `deck-service.ts`. Storing the OOXML index here would make
+ * every reader re-do that mapping, and each one a chance to get it wrong.
+ *
+ * The rect is four `REAL`s in slide fractions (0..1). Not EMU: the value is
+ * meaningless without the slide size it was measured against, and that number
+ * does not live on this row.
+ */
+export const deckVideos = sqliteTable(
+  "deck_videos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    deckId: integer("deck_id")
+      .notNull()
+      .references(() => slideDecks.id, { onDelete: "cascade" }),
+    slideIndex: integer("slide_index").notNull(),
+    videoFile: text("video_file").notNull(),
+    ext: text("ext").notNull(),
+    bytes: integer("bytes").notNull(),
+    rectX: real("rect_x").notNull(),
+    rectY: real("rect_y").notNull(),
+    rectWidth: real("rect_width").notNull(),
+    rectHeight: real("rect_height").notNull(),
+    loop: integer("loop").notNull().default(0),
+    /** 0..100, like `deck_audio.volume` — percent, not a fraction. */
+    volume: integer("volume"),
+    playable: integer("playable").notNull().default(1),
+  },
+  (t) => [index("ix_deck_videos").on(t.deckId, t.slideIndex)],
+);
+
 // bible_verses_fts (FTS5 virtual table + sync triggers) is NOT declared here — drizzle-kit's
 // schema builder has no FTS5 primitive. It is added by hand in drizzle/0000_init.sql, right
 // after this schema's generated CREATE TABLE statements. See db/migrate.ts for the seed step
@@ -330,3 +424,76 @@ export const programDraft = sqliteTable("program_draft", {
   items: text("items").notNull(),
   updatedAt: integer("updated_at").notNull(),
 });
+
+/**
+ * A saved, reusable time scene: a countdown, a clock or a stopwatch with its
+ * own background, typography, texts and colour triggers.
+ *
+ * `tool` is a COLUMN rather than a field of `config_json` because it is the
+ * discriminant: the list shows an icon and a label per scene, and it must not
+ * have to parse a JSON blob per row to do it. Everything else splits the way
+ * `plans/2026-09-17-panel-funciones/utilidades.md` argues it should —
+ * `config_json` is what the operator configured (`TimerConfig`) and
+ * `style_json` is how it looks (`SceneStyle`, deliberately shaped to be reused
+ * by Overlays and by the Bible/text projection settings later). Both are JSON
+ * and not thirty columns so a change of shape is a branch in
+ * `shared/scene-validators.ts`, not a migration.
+ *
+ * The enum is spelled out rather than imported from `@shared/types/timer`:
+ * drizzle-kit reads this file on its own, outside the app's path aliases, the
+ * same way `media_assets.kind` inlines `ASSET_KINDS`.
+ */
+export const utilityScenes = sqliteTable(
+  "utility_scenes",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    tool: text("tool", { enum: ["countdown", "countdown-to-time", "clock", "stopwatch"] }).notNull(),
+    /** JSON: `TimerConfig`. */
+    configJson: text("config_json").notNull(),
+    /** JSON: `SceneStyle`. */
+    styleJson: text("style_json").notNull(),
+    /** The line above the number, and the one below it. `null` hides either. */
+    title: text("title"),
+    message: text("message"),
+    /** Manual list order, same scheme as `programs.sort_order`: lower comes
+     *  first, a new scene takes `MIN(sort_order) - 1` so it lands on top, and
+     *  `reorder()` renormalizes to `0..n-1`. */
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [index("ix_utility_scenes_order").on(t.sortOrder)],
+);
+
+/**
+ * Saved overlay plates — see `shared/types/overlay.ts` and
+ * `plans/2026-09-17-panel-funciones/overlays.md`.
+ *
+ * Same shape discipline as `utility_scenes`: `kind` and `position` are columns
+ * (the list's discriminants), the style is JSON (`PlateStyle`) so a change of
+ * shape is a branch in `shared/overlay-validators.ts`, not a migration.
+ *
+ * `image_asset_id` is `set null`, not `restrict`: the program row references
+ * the PLATE, not its picture, so removing the image from the library has no
+ * program to protect — the bug simply loses its picture and keeps its text.
+ */
+export const overlayPlates = sqliteTable(
+  "overlay_plates",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    name: text("name").notNull(),
+    kind: text("kind", { enum: ["lower-third", "banner", "bug"] }).notNull(),
+    position: text("position").notNull(),
+    title: text("title"),
+    subtitle: text("subtitle"),
+    imageAssetId: integer("image_asset_id").references(() => mediaAssets.id, { onDelete: "set null" }),
+    /** JSON: `PlateStyle`. */
+    styleJson: text("style_json").notNull(),
+    /** Same scheme as `utility_scenes.sort_order`. */
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: integer("created_at").notNull(),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [index("ix_overlay_plates_order").on(t.sortOrder)],
+);

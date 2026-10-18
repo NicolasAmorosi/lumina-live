@@ -10,6 +10,7 @@ import { t } from "@renderer/lib/i18n/i18n-provider";
 import { toast } from "@renderer/lib/toast";
 import { startDeckAutoplay } from "./deck-autoplay";
 import { startEndOfPlaybackEffects } from "./end-of-playback";
+import { startPlateAutoHide } from "./plate-auto-hide";
 import { mediaErrorKey } from "@shared/types/projection";
 import type { AudioTrackPush, ProjectionMediaError, ProjectionOutput } from "@shared/types/projection";
 
@@ -44,6 +45,9 @@ function describeMediaError(error: ProjectionMediaError): string | null {
     const { trackId } = error.target;
     const track = useAudioStore.getState().tracks.find((candidate) => candidate.trackId === trackId);
     if (track) return track.label;
+  }
+  if (error.target.kind === "plate") {
+    return useProjectionStore.getState().livePlates.find((plate) => plate.kind === "bug")?.name ?? null;
   }
   const base = useProjectionStore.getState().base;
   const assetId =
@@ -86,15 +90,25 @@ export function startProjectionEffects(): () => void {
     });
   });
 
+  // Coalesced the same way as the output above, and for the same reason: going
+  // live from NEGRO from deck A to deck B is `setOverlay("none")` and then
+  // `setDeckTrack(B)` in one synchronous action, and pushing each set on its
+  // own sent A's soundtrack UNcovered for a moment before B replaced it.
+  let audioFlushScheduled = false;
   const pushAudioTracks = () => {
-    const covered = useProjectionStore.getState().overlay !== "none";
-    const tracks = useAudioStore.getState().tracks;
-    // The one place that knows the complete live track list, so it is also
-    // where the status slots of tracks that no longer exist get collected —
-    // every path that can retire a track (`removeTrack`, `restartTrack`'s new
-    // epoch, `setDeckTrack`, `clear`) ends up here.
-    useProjectionStore.getState().pruneMediaStatus(tracks.map((track) => track.trackId));
-    void api.projection.setAudioTracks(tracks.map((track) => toAudioTrackPush(track, covered)));
+    if (audioFlushScheduled) return;
+    audioFlushScheduled = true;
+    queueMicrotask(() => {
+      audioFlushScheduled = false;
+      const covered = useProjectionStore.getState().overlay !== "none";
+      const tracks = useAudioStore.getState().tracks;
+      // The one place that knows the complete live track list, so it is also
+      // where the status slots of tracks that no longer exist get collected —
+      // every path that can retire a track (`removeTrack`, `restartTrack`'s new
+      // epoch, `setDeckTrack`, `clear`) ends up here.
+      useProjectionStore.getState().pruneMediaStatus(tracks.map((track) => track.trackId));
+      void api.projection.setAudioTracks(tracks.map((track) => toAudioTrackPush(track, covered)));
+    });
   };
 
   const unsubscribeAudioTracks = useAudioStore.subscribe((state) => state.tracks, pushAudioTracks);
@@ -191,8 +205,29 @@ export function startProjectionEffects(): () => void {
     useDeckStore.getState().markStatusesChanged();
   });
 
+  const unsubscribeDeckUpdated = onIpc("deck-updated", ({ deckId }) => {
+    useDeckStore.getState().refreshDeck(deckId);
+  });
+
+  const unsubscribeDisplaysChanged = onIpc("displays-changed", () => {
+    void useDisplayStore.getState().refresh();
+  });
+
+  // The projector's screen went away: main hid the window — still playing,
+  // sound included — and puts it back when a screen returns
+  // (`windows/projector-screen.ts`). The operator only has to be told, and the
+  // notice stays until it is true again.
+  let screenLostToastId: string | null = null;
+  const unsubscribeProjectorScreen = onIpc("projector-screen", ({ connected }) => {
+    if (screenLostToastId !== null) toast.dismiss(screenLostToastId);
+    screenLostToastId = null;
+    if (connected) toast.success(t("projector.screenBack"));
+    else screenLostToastId = toast.warning(t("projector.screenLost"), { durationMs: null });
+  });
+
   const stopAutoplay = startDeckAutoplay();
   const stopEndOfPlayback = startEndOfPlaybackEffects();
+  const stopPlateAutoHide = startPlateAutoHide();
 
   return () => {
     unsubscribeOutput();
@@ -205,7 +240,11 @@ export function startProjectionEffects(): () => void {
     unsubscribeProgress();
     unsubscribePrewarmProgress();
     unsubscribeStatusesChanged();
+    unsubscribeDeckUpdated();
+    unsubscribeDisplaysChanged();
+    unsubscribeProjectorScreen();
     stopAutoplay();
     stopEndOfPlayback();
+    stopPlateAutoHide();
   };
 }

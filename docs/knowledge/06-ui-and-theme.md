@@ -96,6 +96,89 @@ señalética, por eso no se usa acá). Se sirve desde `@fontsource-variable/noto
 `main.tsx`/`projection.tsx` — no hay `@import` de Google Fonts: la app queda usable sin internet
 desde el primer render, incluyendo en una iglesia sin conexión.
 
+## Formularios: `FieldGroup`/`FieldRow`, y `ColorField`
+
+`FieldGroup` + `FieldRow` (`components/ui/field.tsx`) son la forma de CUALQUIER pantalla de
+opciones: un título, un recuadro con líneas divisorias y una fila por opción — etiqueta (con
+descripción opcional) a la izquierda, su control a la derecha, sin envolver nunca. Nacieron dentro
+de Ajustes como `SettingsGroup`/`SettingsRow` y subieron a `ui/` cuando el editor de escenas de
+Utilidades fue el segundo consumidor: es literalmente la regla de reutilización de `CLAUDE.md`
+disparándose. Se agrega una opción a un grupo existente, o se abre un grupo nuevo; nunca una lista
+plana de filas.
+
+`ColorField` es el control de color. Elige de la paleta oficial (las muestras son valores de la
+tabla de ALPS de más arriba) o acepta un hex propio, y **solo emite `#rrggbb`** — una sola forma
+canónica, porque dos escrituras del mismo color en la base es una comparación que falla sobre un
+valor que el operador nunca ve. Abre su popover por portal con `computeMenuPosition`, igual que
+`Select` y `Menu`, porque todo panel y todo diálogo de esta app recorta su overflow.
+
+Los hex que aparecen en `color-field.tsx`, en `DEFAULT_SCENE_STYLE` y en `DEFAULT_BIBLE_STYLE`
+**no violan** la regla de "nada de colores hardcodeados en un componente": son valores de
+CONTENIDO, guardados en una fila y editables por el operador —la misma categoría que el nombre de
+un programa—, y terminan en un `style` inline sobre el escenario del proyector, que no tiene tema.
+Un color de la INTERFAZ sigue saliendo siempre de un token semántico.
+
+`Slider` (`components/ui/slider.tsx`) es el rango con su valor al lado. El ancho del número va en
+**`ch`** y no en píxeles (`readoutChars`): con `tabular-nums` un `ch` es exactamente un dígito, así
+que una caja del largo de la cadena más larga que ese slider puede producir no lleva espacio
+muerto — y el espacio muerto adentro del item se suma al `gap` de la fila, que es el bug medido en
+[`.claude/knowledge/fixed-width-readout-inflates-flex-gap.md`](../../.claude/knowledge/fixed-width-readout-inflates-flex-gap.md).
+
+### `components/shared/style-fields.tsx` — las perillas de todo lo que se VISTE
+
+`SceneStyle` se diseñó para vestir tres cosas (escenas de tiempo, las placas de Overlays y el
+versículo bíblico). Los controles de lo que esas tres comparten —fondo sólido/degradado/imagen,
+tipografía, alineación vertical, y las cuatro perillas de un rol de texto— viven acá, no dentro
+del editor de escenas donde nacieron. Cada uno es un `FieldRow` pelado: el `FieldGroup` lo pone
+quien los usa, así que un editor puede darle al fondo un grupo propio y otro puede intercalarlo
+entre sus filas.
+
+Las etiquetas se mudaron con ellos, de `scenes.*` a **`style.*`**. Dos features deletreando «Tipo
+de fondo» desde dos entradas del diccionario es exactamente como las dos escrituras empiezan a
+diferir.
+
+## El versículo bíblico — `BibleScene` y el ajuste automático
+
+`components/shared/bible-scene.tsx` dibuja la variante `bible` de `ProjectionOutput`, que ahora
+viaja **vestida**: lleva su `BibleStyle` y su `backgroundUrl` resueltos adentro, por la misma razón
+que los lleva una escena de tiempo — la ventana de proyección no resuelve nada y
+`projection-state.ts` reproduce ese valor tal cual en una ventana reconstruida en otra pantalla.
+
+Es hermano de `TimerScene` y deliberadamente **no** una generalización suya: una cuenta regresiva
+es una tirada corta de glifos que nunca corta línea y un versículo es un PÁRRAFO. De ahí los
+cuatro campos que `SceneStyle` no tiene —`textAlign`, `lineHeight`, `maxWidthCqw` y `autoFit`— y
+dos roles de texto nombrados por lo que son (`text`, `reference`) en vez de doblados sobre
+`value`/`title`/`message`.
+
+**El ajuste automático se MIDE, no se calcula.** Juan 11:35 son dos palabras y Ester 8:9 son
+ochenta: a tamaño fijo, uno se pierde en el medio del cuadro y el otro se va por abajo — y el
+monitor de confianza, que renderiza el mismo componente con la misma proporción, lo recorta
+igual, así que en la cabina tampoco se ve. `useFittedTextSize` hace una búsqueda binaria de siete
+pasos escribiendo el `font-size` directo sobre el elemento (una medición necesita que el navegador
+ya haya maquetado; siete `setState` serían siete frames de texto achicándose) y recién commitea la
+RESPUESTA al estado. Dos detalles que no son opcionales:
+
+- se mide el **bloque**, no el párrafo: la referencia está en la misma caja acotada y el versículo
+  no puede empujarla fuera del escenario;
+- se mide contra el **espacio**, no contra el desborde del propio bloque. El bloque está acotado
+  por `max-h-full`, así que hasta llegar a ese techo su altura ES la de su contenido, y ahí
+  `scrollHeight > clientHeight` ya no pregunta «no entra en el escenario» sino «hay tinta fuera de
+  sus line boxes» — que un `line-height` por debajo del content area de la fuente (1,362 em en
+  Noto Sans; el slider llega a 0,8) vuelve cierto a CUALQUIER tamaño. Con eso la búsqueda binaria
+  no encontraba nunca un tamaño que entrara y devolvía siempre `minSizeCqw`: el versículo se
+  achicaba solo y los cuatro sliders de «Versículos» parecían muertos. Se compara contra el
+  content box del escenario, con 1 px de tolerancia porque `clientHeight`/`scrollHeight` son
+  enteros redondeados de un layout fraccionario. `overflow-hidden` sigue, pero ya sólo como la
+  guarda que impide pintar por fuera del cuadro. Diagnóstico y mediciones en
+  [`.claude/knowledge/a-content-sized-box-never-fits-itself-so-scrollheight-is-not-a-fit-test.md`](../../.claude/knowledge/a-content-sized-box-never-fits-itself-so-scrollheight-is-not-a-fit-test.md);
+- el `ResizeObserver` observa el **escenario**, no el bloque. Observar el bloque es un bucle por
+  construcción: el callback cambia el tamaño de letra, que cambia el bloque, que dispara el
+  callback.
+
+El bloque guarda además un margen vertical fijo (`EDGE_GUTTER_CQW`, el equivalente vertical de
+`maxWidthCqw`): sin él un versículo achicado entra EXACTO en el cuadro, y en un proyector con
+overscan eso es la primera y la última línea cortadas al medio.
+
 ## Layout de la ventana de control — EasyWorship 2009
 
 `components/pages/layout/AppShell.tsx` es el workspace completo, calcado de EasyWorship 2009:
@@ -141,13 +224,27 @@ Esa modal es un panel de categorías estilo Ajustes de macOS, no una lista plana
 size="2xl" height="tall"` (alto fijo grande — cambiar de categoría nunca redimensiona el diálogo)
 con `Tabs variant="sidebar"` a la izquierda (`components/ui/tabs.tsx`, la misma primitiva de
 `resources/`, con una tercera variante vertical) y, a la derecha, un panel scrolleable con una
-`sections/<nombre>-section.tsx` por categoría. Dentro de cada sección, `SettingsGroup` +
-`SettingsRow` (locales a `pages/settings/`, no valen la pena en `shared/` por una sola pantalla
-que los usa) agrupan filas relacionadas en una tarjeta con divisores; cada fila sigue la regla de
-siempre: etiqueta (+ descripción opcional) a la izquierda, control(es) a la derecha, sin wrap.
+`sections/<nombre>-section.tsx` por categoría. Dentro de cada sección, `FieldGroup` + `FieldRow`
+(en `components/ui/`, promovidos ahí cuando el editor de escenas se volvió el segundo usuario)
+agrupan filas relacionadas en una tarjeta con divisores; cada fila sigue la regla de siempre:
+etiqueta (+ descripción opcional) a la izquierda, control(es) a la derecha, sin wrap.
 Categorías de hoy: **Proyección** (pantalla, abrir/cerrar la ventana, logo, limpiar contenido en
-vivo) y **Sistema** (tema, idioma). Una configuración nueva entra en un grupo existente o crea uno
-dentro de su sección — no se agrega una tercera categoría sin necesidad.
+vivo, transición, volumen inicial), **Diapositivas** (caché y calidad de conversión),
+**Versículos** (cómo se VISTE un versículo, con su vista previa 16:9 arriba), **Biblia** (qué
+versiones hay instaladas: importar, renombrar, por defecto, borrar) y **Sistema** (tema, idioma,
+carpetas). Una configuración nueva entra en un grupo existente o crea uno dentro de su sección —
+no se agrega una categoría sin necesidad.
+
+«Versículos» y «Biblia» son dos categorías y no una con pestañas, que es como estuvieron primero:
+el estilo es una sola clave de `settings` con una vista previa que quiere el panel entero, y las
+versiones son una tabla. La lista de versiones se dibuja con los MISMOS `FieldRow` que el resto
+de Ajustes (envueltos en `<li>` dentro de un `<ul class="divide-y">`), no con el `ListRow` denso
+de los paneles de recursos: una fila de 32 px entre filas de 60 px es lo que hacía que esa
+pantalla se leyera como otra aplicación. Por eso `FieldRow` acepta un `label` que es un nodo (el
+`<Input>` del renombrado ocupa el lugar del nombre, sin cambiar la altura de la fila) y un
+`leading` para el ícono. Las insignias («Incluida», «Por defecto») van al lado del nombre, nunca
+en la columna de acciones: son de ancho variable y desde ahí corrían los tres botones a una `x`
+distinta en cada fila.
 
 `go-live-bar.tsx` no existe más: el `EN VIVO` que antes vivía entre los monitores LIVE y PREVIEW
 ahora es el botón de la columna 2 del TopBar, y por eso las flechas de paginado de preview que

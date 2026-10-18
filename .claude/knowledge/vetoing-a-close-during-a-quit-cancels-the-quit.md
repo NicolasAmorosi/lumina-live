@@ -38,4 +38,25 @@
   Both halves are synchronous-only, for the reason in
   [nothing-asynchronous-survives-before-quit.md](nothing-asynchronous-survives-before-quit.md).
 
-**Last updated:** 2026-09-14
+### Vetoing the control window's `close` was also too LATE (added 2026-10-14)
+
+- **Believed:** vetoing the control window's `close` holds the quit until the operator answers.
+  **True for the control window only.** By the time Electron delivers that `close`, it has already
+  closed the projection window, which has no guard. Measured in the 2026-10-14 two-screen rehearsal:
+  ⌘Q with an unsaved change, the dialog appeared, «Cancelar» was clicked, and the app stayed alive
+  with the toast «Se cerró la ventana de proyección». The congregation's screen had gone dark behind
+  a question whose answer was "don't". `shutdownSlides()` in `before-quit` had also already run,
+  aborting the conversion in flight and the prewarm batch.
+- **Fix:** `holdQuitUntilAnswered(event)` (`windows/close-guard.ts`), called first in `before-quit`.
+  It `preventDefault()`s the quit itself while the control window is not cleared, then calls
+  `win.close()` to start the existing guard. No window closes and no shutdown chore runs until the
+  answer. "close" resumes with `app.quit()`; the second `before-quit` finds the window cleared and
+  proceeds.
+- **The renderer asks for two reasons now:** unsaved work, or something on air (an open projector
+  with content, plates, NEGRO or LOGO).
+- **Known gap, left open on purpose:** once the renderer answers `hold`, the grace timer is gone.
+  If the renderer dies while its dialog is up, main waits forever and only a force quit ends it.
+  The 2026-10-14 driver produced it by `pkill`ing the renderer helpers. A real crash at that exact
+  moment is rare.
+
+**Last updated:** 2026-10-14

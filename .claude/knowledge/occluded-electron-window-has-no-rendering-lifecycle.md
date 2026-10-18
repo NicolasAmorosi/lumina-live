@@ -85,4 +85,52 @@
   `window.worship.invoke` works there and IPC-based setup silently succeeds against the wrong
   target while every DOM query comes back empty).
 
-**Last updated:** 2026-09-13
+- **`startsWith` is not "exactly" — use equality (added 2026-09-18).** The bullet above prescribes
+  `url.startsWith("http://localhost:5173/")`, and that is still wrong once anything is live: the
+  projector is `http://localhost:5173/projection.html`, which passes that check. A driver that
+  picked the first match then read the PROJECTOR's DOM while sending clicks meant for the control
+  window — every query came back empty and the panel looked unmounted, twice, before the url was
+  printed. Match the control window by `url === "http://localhost:<port>/"` and nothing looser.
+  And do not hardcode the port: a stale dev server holding 5173 makes Vite take **5174** silently,
+  so read it out of the dev log (`grep -o "localhost:517[0-9]"`) instead of assuming.
+
+### Two screens, a real quit, and three false alarms (added 2026-10-14, the two-screen rehearsal)
+
+- **Prefer making the window visible over forcing frames.** Launch with
+  `npx electron-vite dev -- --remote-debugging-port=9222 --user-data-dir=<profile>
+  --disable-backgrounding-occluded-windows --disable-renderer-backgrounding --disable-background-timer-throttling`.
+  The control window then reports `visibilityState: "visible"` and runs ~100 rAF frames per 500 ms even behind
+  the terminal. That matches the field, where the operator is looking at it. Without these flags the occlusion
+  does more than freeze rendering: **CDP input is delivered late**. A countdown armed with a mouse click and
+  paused after `sleep(3000)` read **8 s** elapsed. With the flags it read 3.02 s for 3024 ms.
+- **The projector on a second display is visible on its own**, so it needs none of this. With two screens,
+  `display.store` resolves a stale `projection.displayId` to the first non-primary display. That is correct:
+  the persisted id `7` from an older session resolved to the built-in panel.
+- **A real quit is `osascript -e 'tell application "Electron" to quit'`.** That is the dev bundle's name. It
+  goes through `before-quit` and the close guard exactly like ⌘Q, which CDP cannot send because menu
+  accelerators never see `Input.dispatchKeyEvent`.
+- **Never `pkill -f node_modules/electron/dist` while the close dialog is on screen.** The pattern also
+  matches the `Electron Helper (Renderer)` processes, so the renderer dies, the main process waits forever on
+  a decision that will not come (`hold` cleared the grace timer), and only `kill -9` ends it. Answer the
+  dialog over CDP first, then quit.
+- **False alarm 1: a 0-byte `worship.db-wal` plus `-shm` after an exit.** Apple's `/usr/bin/sqlite3`
+  persists the WAL file by default and leaves that pair behind on its own. It is not the "`will-quit` never
+  ran" tell from
+  [vetoing-a-close-during-a-quit-cancels-the-quit.md](vetoing-a-close-during-a-quit-cancels-the-quit.md)
+  unless the app was the last process to open the database.
+- **False alarm 2: a fullscreen projector 33 px short on the built-in display** (`screenY 1113` on a display
+  at `y 1080`, `923` tall instead of `956`). That is the MacBook notch: macOS lays fullscreen windows out below
+  it and paints the strip black. Confirm with `screencapture -x -D 2 <file>` instead of trusting window
+  geometry. An external projector has no notch.
+- **After an HMR update, `await import("/src/…")` from CDP returns the ORIGINAL module.** The
+  browser's module map is keyed by URL, and Vite re-imports updated modules under `?t=<stamp>`. So
+  a driver that calls an action through a dynamic import keeps running the code from before the
+  edit, while the components (which HMR re-imported) run the new one. On 2026-10-14 this made a
+  fixed `saveCurrentProgram` look broken twice; `fetch("/src/…").text()` showed the new source the
+  whole time. Reload the control window (`location.reload()`, fire-and-forget) or restart the app
+  before verifying a change to a non-component module.
+- **False alarm 3: a copied profile shows broken slides.** See
+  [a-deck-cache-hit-checks-existence-but-the-protocol-checks-containment.md](a-deck-cache-hit-checks-existence-but-the-protocol-checks-containment.md).
+  Repoint `cache_dir` before launching a clone.
+
+**Last updated:** 2026-10-14

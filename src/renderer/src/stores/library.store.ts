@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { ASSET_KINDS, type AssetKind } from "@shared/constants";
 import type { ImportProgress, MediaAsset } from "@shared/types/media";
 import { api } from "@renderer/lib/api";
+import { IpcError } from "@shared/ipc/result";
+import { t } from "@renderer/lib/i18n/i18n-provider";
 
 /** A resource tab's source view: either the added-to-library list, or one of
  *  its linked folders (see `settings["library.linkedFolders"]`), addressed
@@ -163,8 +165,10 @@ export const useLibraryStore = create<LibraryStoreState>((set, get) => ({
       }));
     } catch (error) {
       if (!isCurrent(key, seq)) return;
+      const message =
+        error instanceof IpcError && error.code === "FOLDER_MISSING" ? t("library.folderMissing") : messageOf(error);
       set((state) => ({
-        viewStatus: { ...state.viewStatus, [key]: { error: messageOf(error), loading: false } },
+        viewStatus: { ...state.viewStatus, [key]: { error: message, loading: false } },
       }));
     }
   },

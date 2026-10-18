@@ -11,9 +11,25 @@ export class HistoryRepo {
   /** Last deck recorded, so a 60-slide auto-advancing deck writes one row
    *  instead of 60 and doesn't burn through MAX_ROWS in a few programs. */
   private lastDeckAssetId: number | null = null;
+  /** The last recorded output, minus its plates — see `record`. */
+  private lastRecordedKey: string | null = null;
 
   record(output: ProjectionOutput, programId: number | null): void {
-    if (output.kind === "black") return; // not worth remembering
+    // Not worth remembering. A timer is excluded for a second reason beyond
+    // "it is not content of the service": every pause, resume and reset is
+    // another `projection:show`, so a countdown left on screen before a
+    // service would write a row per touch, each carrying a whole serialized
+    // scene, straight into the 5000-row budget.
+    if (output.kind === "black" || output.kind === "timer") return;
+
+    // An overlay plate going up or down re-pushes the very same content: that
+    // is not something new being projected, and it must not cost a row. Nor is
+    // uncovering NEGRO: the push that follows differs only in its transition
+    // epoch and in the video being resumed. What IS content — the url, a
+    // video's own epoch, a verse — still records as before.
+    const key = JSON.stringify({ ...output, plates: undefined, transition: undefined, videoUnderlay: undefined });
+    if (key === this.lastRecordedKey) return;
+    this.lastRecordedKey = key;
 
     if (output.kind === "slide") {
       if (this.lastDeckAssetId === output.deckAssetId) return;

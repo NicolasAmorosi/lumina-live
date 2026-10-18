@@ -92,8 +92,12 @@ export function Modal({
 
   useEffect(() => {
     if (!open) return;
+    // An Escape a widget inside already used (closing an open `Select` or
+    // `Menu`, which `preventDefault` it) is not the modal's: it closed the
+    // whole dialog — or, with unsaved edits, opened the discard prompt —
+    // when the operator only meant to close a dropdown.
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && getTopModalId() === id) onOpenChange(false);
+      if (e.key === "Escape" && !e.defaultPrevented && getTopModalId() === id) onOpenChange(false);
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);

@@ -5,6 +5,10 @@ type IconButtonVariant = "primary" | "outline" | "ghost" | "success" | "warning"
 type IconButtonSize = "xs" | "sm" | "md";
 
 type IconButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  /** Required: an icon is all a sighted user gets, and nothing at all for a
+   *  screen reader. A `Tooltip` around the button does not name it. Ajustes'
+   *  own button shipped without a name for exactly that reason. */
+  "aria-label": string;
   ref?: Ref<HTMLButtonElement>;
   size?: IconButtonSize;
   toggled?: boolean;

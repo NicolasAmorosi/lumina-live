@@ -18,7 +18,7 @@ export function DialogHeader({ className, ...props }: HTMLAttributes<HTMLDivElem
   return <div className={cn("flex items-center justify-between px-4 pt-4 pb-3", className)} {...props} />;
 }
 
-/** The scrollable middle of a dialog. Mirrors the `SettingsGroup` pattern:
+/** The scrollable middle of a dialog. Mirrors the `FieldGroup` pattern:
  *  content sits inside a `bg-surface` box, visually distinct from the
  *  dialog's own `bg-card` chrome, instead of being separated by a border. */
 export function DialogContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {

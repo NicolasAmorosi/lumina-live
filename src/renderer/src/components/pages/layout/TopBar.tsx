@@ -53,7 +53,7 @@ export function TopBar({ onOpenPrograms, onOpenSettings }: TopBarProps) {
   function handleNewProgram() {
     if (hasUnsavedChanges()) {
       toast.warning(t("programs.discardWarning"), {
-        action: { label: t("programs.discardConfirm"), onClick: newProgram },
+        action: { label: t("programs.discardAndNew"), onClick: newProgram },
       });
       return;
     }
@@ -65,7 +65,7 @@ export function TopBar({ onOpenPrograms, onOpenSettings }: TopBarProps) {
       <div className="flex min-w-0 items-center justify-between gap-2">
         <div className="flex shrink-0 items-center gap-1.5">
           <Tooltip content={t("settings.title")} floating>
-            <IconButton onClick={onOpenSettings} variant="ghost">
+            <IconButton aria-label={t("settings.title")} onClick={onOpenSettings} variant="ghost">
               <Icon name="settings" />
             </IconButton>
           </Tooltip>

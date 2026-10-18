@@ -59,4 +59,36 @@
   is a database at exactly the previous schema, which is what reproduced the error above after the
   real migration had already run.
 
-**Last updated:** 2026-09-15
+### Adding a column: the third case, and the one that looks safest (2026-09-18)
+
+- A rename is safe, a drop is impossible — so `ADD COLUMN` reads like the easy one. It is not,
+  for this table. Adding `utility_scene_id` (F3 of the Funciones plan) had drizzle-kit emit
+  exactly one line:
+
+  ```sql
+  ALTER TABLE `program_items` ADD `utility_scene_id` integer REFERENCES utility_scenes(id);
+  ```
+
+  which SQLite **accepts**. That is the trap: nothing fails, and two things are silently wrong.
+
+  1. **The `ON DELETE restrict` is gone.** The schema declares it; the generated SQL has a bare
+     `REFERENCES`, which is `NO ACTION`. Deleting a scene a saved program used would have
+     succeeded and left a row pointing at nothing — the exact failure the FK existed to prevent,
+     with no error at any point.
+  2. **The CHECK still does not know the new kind.** It is invisible to the snapshot, as ever, so
+     it keeps its two branches and rejects every `kind = 'utility'` row — at runtime, in front of
+     the operator, naming a constraint that appears nowhere in the TypeScript.
+
+- So the rule generalizes: **any migration touching `program_items` is a hand-written rebuild**,
+  whatever the operation and whatever `drizzle-kit generate` emits. `drizzle/0011_program_item_utility.sql`
+  is the copy of 0009 with the CHECK widened to three branches and the new FK spelled out.
+- Verified the same way 0004 was, and it is worth the twenty lines: a temp database migrated to
+  0010 with the journal trimmed, filled with a `media` and a `bible` row, then 0011 applied on
+  top. Both rows survived with their ids and titles, `integrity_check` returned `ok`,
+  `foreign_key_check` was empty, `ix_items_program` was back, a `utility` row was accepted, a
+  sceneless one was refused (`SQLITE_CONSTRAINT_CHECK`) and deleting a referenced scene was
+  refused as `SQLITE_CONSTRAINT_TRIGGER` — the code
+  [fk-restrict-delete-is-silently-swallowed.md](fk-restrict-delete-is-silently-swallowed.md)
+  warns about.
+
+**Last updated:** 2026-09-18

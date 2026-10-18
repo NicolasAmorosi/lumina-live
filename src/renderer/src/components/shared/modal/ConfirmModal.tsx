@@ -3,6 +3,7 @@ import { Button, DialogContent, DialogFooter, DialogHeader } from "@renderer/com
 import { ModalTitle } from "./ModalTitle";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { Modal } from "./Modal";
+import { toast } from "@renderer/lib/toast";
 
 type ConfirmModalProps = {
   confirmLabel?: string;
@@ -31,8 +32,13 @@ export function ConfirmModal({
     try {
       await onConfirm();
       onOpenChange(false);
-    } catch {
-      // Leave the modal open so the caller's own error UI (toast, etc.) is visible.
+    } catch (error) {
+      // The modal stays open. A caller with its own error UI handles the
+      // failure and does not rethrow, so reaching this means nobody said
+      // anything: five confirmations (a forced delete, unlinking a folder,
+      // emptying the slide cache…) used to stop their spinner and sit there.
+      console.error("[confirm] action failed", error);
+      toast.danger(t("app.unexpectedError"));
     } finally {
       setLoading(false);
     }

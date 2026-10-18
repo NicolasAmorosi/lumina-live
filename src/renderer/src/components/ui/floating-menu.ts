@@ -1,3 +1,5 @@
+import { useLayoutEffect, useRef, type RefObject } from "react";
+
 /**
  * Where a portalled list goes, for the two primitives that open one: `Select`
  * (a list as wide as its own trigger) and `Menu` (a list at its own width,
@@ -44,4 +46,49 @@ export function computeMenuPosition(
   return openUp
     ? { bottom: window.innerHeight - rect.top + TRIGGER_GAP, left, maxHeight, width: menuWidth }
     : { left, maxHeight, top: rect.bottom + TRIGGER_GAP, width: menuWidth };
+}
+
+/**
+ * Keeps an open portalled list attached to its trigger: re-placed on every
+ * resize and every scroll, and CLOSED once the trigger has scrolled out of
+ * sight. Re-placing alone is what left a list floating over a dialog's header
+ * after its trigger had gone under it — `computeMenuPosition` clamps to the
+ * screen, not to the panel that clips the trigger. A little scroll keeps the
+ * list open and following; only a trigger that is fully hidden closes it.
+ *
+ * `IntersectionObserver` with no root is the right test because it clips by
+ * every scrolling ancestor, not only by the viewport. The callbacks are read
+ * through a ref so a caller can pass inline functions without re-subscribing
+ * on every render.
+ */
+export function useFollowTrigger(
+  open: boolean,
+  triggerRef: RefObject<HTMLElement | null>,
+  place: (trigger: HTMLElement) => void,
+  onHidden: () => void,
+): void {
+  const latest = useRef({ onHidden, place });
+  useLayoutEffect(() => {
+    latest.current = { onHidden, place };
+  });
+
+  useLayoutEffect(() => {
+    const trigger = triggerRef.current;
+    if (!open || !trigger) return;
+    const reposition = () => latest.current.place(trigger);
+    reposition();
+    window.addEventListener("resize", reposition);
+    // capture: true — a scroll inside a nested panel or modal (the common
+    // case here) never bubbles to window, only the capture phase sees it.
+    window.addEventListener("scroll", reposition, true);
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry && !entry.isIntersecting) latest.current.onHidden();
+    });
+    observer.observe(trigger);
+    return () => {
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("scroll", reposition, true);
+      observer.disconnect();
+    };
+  }, [open, triggerRef]);
 }

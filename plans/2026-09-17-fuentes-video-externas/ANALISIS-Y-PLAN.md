@@ -1,7 +1,7 @@
 # Fuentes de video externas como contenido EN VIVO
 
 **Fecha:** 2026-09-17  
-**Estado:** análisis y propuesta; no implementado  
+**Estado:** spike de Fase 1 en curso (2026-10-07), ver «Segunda tanda de decisiones»  
 **Decisiones confirmadas (2026-09-17):** proyección de pantalla completa, con audio integrado; soporte objetivo macOS, Windows y Linux; las resoluciones se negocian según la fuente; la arquitectura debe aceptar entradas locales y de red.  
 **Contrato operativo confirmado:** NEGRO/LOGO mutean el audio, como los videos actuales; NDI es el primer adaptador de red posterior a UVC; Linux inicialmente significa Ubuntu LTS x64; la latencia end-to-end aceptable es hasta 1 segundo; la reproducción de audio usa la salida predeterminada del sistema.  
 **Decisión técnica recomendada:** construir un subsistema de captura nativo único (“capture agent”) con adaptadores de entrada y entregarlo a Electron por WebRTC local. UVC directo en Chromium queda sólo como spike de referencia, no como arquitectura final.
@@ -238,6 +238,20 @@ Cada adaptador agrega su propio contrato de configuración, tests de integració
 | Latencia | Hasta 1 segundo end-to-end. |
 | Plataformas | macOS, Windows y Ubuntu LTS x64 como Linux inicial. |
 | Prioridad de adaptadores | UVC/capturadora con audio → NDI receiver → RTSP → SRT/RIST → DeckLink/SDI. |
+
+## Segunda tanda de decisiones (2026-10-07)
+
+| Tema | Decisión |
+| --- | --- |
+| Arquitectura | **Capture agent nativo desde el spike**, como recomienda este plan. Se descartó arrancar con `getUserMedia` en el renderer. |
+| Lenguaje del agent | **Rust + gstreamer-rs** (`native/capture-agent/`). |
+| GStreamer en desarrollo | **Framework oficial `.pkg`** (runtime + devel) en `/Library/Frameworks`: es relocatable, que es lo que se empaqueta. No Homebrew. |
+| Señalización | Main lanza el agent como proceso hijo y la señalización (offer/answer/ICE) viaja por **stdio, JSON por línea**. No hay socket que escuche ni token: las huellas DTLS sólo pasan por ese canal privado, y eso autentica el SRTP por loopback. |
+| Monitores | **Imagen real, muteada.** PREVIEW y LIVE son peers WebRTC adicionales de la misma sesión del agent; sólo la ventana de proyección reproduce audio. |
+| Modelo | **Fila guardada + ítem del orden de culto**, como Escenas y Placas: tabla propia, CRUD por IPC, `program_items.kind = 'input'` (migración a mano como 0011/0015), modal de gestión. |
+| Hardware objetivo | Sin hardware definido: «todo lo que se pueda». Se mantiene la prioridad de adaptadores de arriba; el spike usa una Logitech C270 (UVC + micrófono). |
+| Plataformas del gate | **macOS primero.** El gate de Windows y Ubuntu queda abierto y explícito hasta tener máquinas físicas con cámara. |
+| Alcance del spike | **Cableado a la app desde ya**, no un harness aislado: el agent entra en main y la pestaña Entradas durante el spike. |
 
 ## Fuentes consultadas
 

@@ -142,7 +142,10 @@ type PagePayload = {
 };
 
 type DonePayload = { jobId: string; total: number };
-type ErrorPayload = { jobId: string; message: string };
+/** `kind` is the rasterizer window's own coarse classification of the failure
+ *  — it does not know `SlideErrorCode`, and nothing here trusts it beyond
+ *  picking between two fixed messages. */
+type ErrorPayload = { jobId: string; kind?: "password" | "unknown"; message: string };
 
 type JobHandlers = {
   onPage: (payload: PagePayload) => void;
@@ -239,16 +242,26 @@ export async function rasterizePdf(request: RasterRequest): Promise<RasterPage[]
       fn();
     };
 
-    const armPageTimer = () => {
-      if (pageTimer) clearTimeout(pageTimer);
-      pageTimer = setTimeout(() => {
-        finish(() =>
-          reject(new SlideError("RASTER_FAILED", "El rasterizado de una página se colgó.")),
-        );
-      }, SLIDES_RASTER_PAGE_TIMEOUT_MS);
+    /** Abandoning a job in main does not stop the page: the hidden window
+     *  kept rendering every remaining slide, alongside the next job, so a
+     *  «Cancelar» or a preemption never freed the CPU it was meant to free —
+     *  and a page that truly hung kept its window, reused by the next deck.
+     *  So the window goes too, unless another job still needs it; the next
+     *  conversion starts a fresh one. */
+    const abandon = (error: SlideError) => {
+      finish(() => reject(error));
+      if (jobs.size === 0) shutdownRasterizer();
     };
 
-    const onAbort = () => finish(() => reject(new SlideError("CANCELED", "Conversión cancelada.")));
+    const armPageTimer = () => {
+      if (pageTimer) clearTimeout(pageTimer);
+      pageTimer = setTimeout(
+        () => abandon(new SlideError("RASTER_FAILED", "El rasterizado de una página se colgó.")),
+        SLIDES_RASTER_PAGE_TIMEOUT_MS,
+      );
+    };
+
+    const onAbort = () => abandon(new SlideError("CANCELED", "Conversión cancelada."));
 
     jobs.set(jobId, {
       onPage: (payload) => {
@@ -281,7 +294,16 @@ export async function rasterizePdf(request: RasterRequest): Promise<RasterPage[]
       },
       onDone: () => finish(() => resolve(pages.sort((a, b) => a.index - b.index))),
       onError: (payload) =>
-        finish(() => reject(new SlideError("RASTER_FAILED", payload.message))),
+        finish(() =>
+          reject(
+            payload.kind === "password"
+              ? new SlideError(
+                  "PDF_PASSWORD",
+                  "El PDF está protegido con contraseña y no se puede convertir.",
+                )
+              : new SlideError("RASTER_FAILED", payload.message),
+          ),
+        ),
     });
 
     request.signal?.addEventListener("abort", onAbort, { once: true });

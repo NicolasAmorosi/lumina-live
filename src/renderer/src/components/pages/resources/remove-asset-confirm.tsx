@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { ConfirmModal } from "@renderer/components/shared/modal";
-import { Badge, Icon } from "@renderer/components/ui";
+import { ProgramUsages } from "@renderer/components/shared/program-usages";
+import { Icon } from "@renderer/components/ui";
 import { api } from "@renderer/lib/api";
 import { forceRemoveAsset } from "@renderer/lib/actions/remove-asset";
 import type { MediaAssetUsage } from "@shared/types/media";
@@ -60,20 +61,11 @@ export function RemoveAssetConfirm({ assetId, onOpenChange }: RemoveAssetConfirm
       danger
       description={
         <div className="flex flex-col gap-3">
-          <p className="text-foreground">{t("library.removeConfirmIntro")}</p>
-          <ul className="flex flex-col gap-1 rounded-lg border border-border bg-muted p-1.5">
-            {usages.map((usage) => (
-              <li
-                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-foreground"
-                key={usage.programId}
-              >
-                <Icon className="shrink-0 text-subtle" name="fileText" />
-                <span className="min-w-0 flex-1 truncate">{usage.programName}</span>
-                <Badge>{t("library.removeUsedInCount", { count: usage.itemCount })}</Badge>
-              </li>
-            ))}
-          </ul>
-          <p>{t("library.removeConfirmWarning")}</p>
+          <ProgramUsages
+            intro={t("library.removeConfirmIntro")}
+            usages={usages}
+            warning={t("library.removeConfirmWarning")}
+          />
           {assetMissing ? (
             <p className="flex items-start gap-1.5 text-warning-ink">
               <Icon className="mt-0.5 shrink-0" name="alert" />

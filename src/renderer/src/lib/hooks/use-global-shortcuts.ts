@@ -47,6 +47,24 @@ const ARROW_CONSUMING_ROLES = new Set([
 ]);
 
 /**
+ * The element that took focus from a pointer press, if the focused one did.
+ *
+ * Enter, Space and the arrows on a button mean two different things depending
+ * on how the operator got there. Reached with Tab, they are that button's own
+ * keys. Clicked, they are not: Chromium focuses a button on click, so after
+ * touching «Pausar» or a resource tile, Enter pressed that button again instead
+ * of going EN VIVO, which is the one key an operator presses blind — and after
+ * clicking EN VIVO itself, → no longer moved the verse or the slide that had
+ * just gone live, and Space pressed EN VIVO again (a new scene: the video and
+ * the deck's music back to 0). `:focus-visible` cannot tell the two apart here.
+ * Chromium flips it to true on the very keydown being handled, already in the
+ * capture phase (measured 2026-10-14). So the modality is recorded when focus
+ * moves instead.
+ */
+let pointerFocused: EventTarget | null = null;
+let pointerDown = false;
+
+/**
  * Per KEY, not per element.
  *
  * Suppressing every shortcut whenever a `<button>` had focus looked harmless
@@ -64,7 +82,12 @@ function suppressesKey(target: EventTarget | null, key: string): boolean {
     return SLIDER_INPUT_KEYS.has(key);
   }
   if (target.isContentEditable || TEXT_ENTRY_TAGS.has(target.tagName)) return true;
-  if (ACTIVATION_TAGS.has(target.tagName) && KEYS_A_CONTROL_CONSUMES.has(key)) return true;
+  if (ACTIVATION_TAGS.has(target.tagName) && KEYS_A_CONTROL_CONSUMES.has(key)) {
+    // A tab is a button that owns its arrows however it got focus.
+    const role = target.getAttribute("role");
+    if (role !== null && ARROW_CONSUMING_ROLES.has(role) && ARROW_KEYS.has(key)) return true;
+    return target !== pointerFocused;
+  }
   const role = target.getAttribute("role");
   return role !== null && ARROW_CONSUMING_ROLES.has(role) && ARROW_KEYS.has(key);
 }
@@ -77,7 +100,8 @@ function suppressesKey(target: EventTarget | null, key: string): boolean {
  *   Derived from `base`, not from which panel has focus, so the arrows always
  *   mean the same thing.
  * - ↑/↓: navigate the PREVIEW cursor. Nothing reaches the projector.
- * - Enter: send the preview to the projector (the EN VIVO button).
+ * - Enter: send the preview to the projector (the EN VIVO button), also right
+ *   after clicking a button with the mouse — see `pointerFocused`.
  * - Space: pause/resume a self-advancing deck. The one shortcut a PPT that
  *   plays by itself really needs: the operator has to be able to freeze it.
  * - B/L: toggle NEGRO/LOGO overlay.
@@ -86,14 +110,43 @@ function suppressesKey(target: EventTarget | null, key: string): boolean {
  * Suppressed entirely while `suspended` (any modal open — see
  * `useAnyModalOpen`) or while a text field has focus. On a focused button,
  * link, or element carrying a widget role, only the keys that control actually
- * consumes are suppressed — see `suppressesKey`.
+ * consumes are suppressed — see `suppressesKey` — and on a button the mouse
+ * focused, not even those: all of the above keep working right after a click.
  */
 export function useGlobalShortcuts(suspended: boolean): void {
+  // Always on, modal or not: what matters is how the focused element got its
+  // focus, whenever that was.
+  useEffect(() => {
+    const onPointerDown = () => {
+      pointerDown = true;
+    };
+    const onPointerUp = () => {
+      pointerDown = false;
+    };
+    const onFocusIn = (e: FocusEvent) => {
+      pointerFocused = pointerDown ? e.target : null;
+    };
+    window.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("pointerup", onPointerUp, true);
+    window.addEventListener("pointercancel", onPointerUp, true);
+    window.addEventListener("focusin", onFocusIn, true);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("pointerup", onPointerUp, true);
+      window.removeEventListener("pointercancel", onPointerUp, true);
+      window.removeEventListener("focusin", onFocusIn, true);
+    };
+  }, []);
+
   useEffect(() => {
     if (suspended) return;
 
     function onKeyDown(e: KeyboardEvent): void {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      // A key a widget already handled is not a shortcut. `Select` answers
+      // Enter on its own trigger, which is a button the mouse may have focused,
+      // and choosing a Bible version must not also send the preview live.
+      if (e.defaultPrevented) return;
       if (suppressesKey(e.target, e.key)) return;
 
       switch (e.key) {
@@ -121,10 +174,12 @@ export function useGlobalShortcuts(suspended: boolean): void {
           advancePreview(e.key === "ArrowDown" ? 1 : -1);
           return;
         case " ": {
-          const { base, liveDeck } = useProjectionStore.getState();
-          if (base?.kind !== "deck" || !liveDeck?.autoAdvance) return;
+          // Prevented even when it does nothing here: reaching this switch
+          // from a clicked button, Space would otherwise press that button
+          // again (see `pointerFocused`).
           e.preventDefault();
-          toggleAutoplay();
+          const { base, liveDeck } = useProjectionStore.getState();
+          if (base?.kind === "deck" && liveDeck?.autoAdvance) toggleAutoplay();
           return;
         }
         case "b":

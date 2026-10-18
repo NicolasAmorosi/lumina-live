@@ -1,3 +1,4 @@
+import { deckRequiresSoffice } from "@shared/constants";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import {
   Badge,
@@ -74,7 +75,7 @@ function DeckAudioStrip({ assetId, deck }: { assetId: number; deck: DeckDTO }) {
             <Icon name="help" />
           </IconButton>
         </Tooltip>
-        <IconButton aria-label={t("common.delete")} onClick={clearPreview} size="xs" variant="ghost">
+        <IconButton aria-label={t("common.remove")} onClick={clearPreview} size="xs" variant="ghost">
           <Icon name="close" />
         </IconButton>
       </div>
@@ -82,13 +83,25 @@ function DeckAudioStrip({ assetId, deck }: { assetId: number; deck: DeckDTO }) {
   );
 }
 
-export function DeckSlides({ assetId, missingSince }: { assetId: number; missingSince: number | null }) {
+export function DeckSlides({
+  assetId,
+  ext,
+  missingSince,
+}: {
+  assetId: number;
+  ext: string;
+  missingSince: number | null;
+}) {
   const t = useT();
+  // A PDF is handed straight to the rasterizer, so it converts and projects on
+  // a machine that has no LibreOffice at all.
+  const requiresSoffice = deckRequiresSoffice(ext);
   // A missing source file has nothing to convert — skip `useDeck`'s
   // ensure/conversion trigger entirely instead of surfacing its
   // "conversion failed" error for a file that was never going to exist.
   const { entry, environment, locateSoffice, markStale, reconvert } = useDeck(
     missingSince !== null ? null : assetId,
+    requiresSoffice,
   );
   const base = useProjectionStore((s) => s.base);
   const previewIndex = usePreviewStore((s) => s.slideIndex);
@@ -100,7 +113,7 @@ export function DeckSlides({ assetId, missingSince }: { assetId: number; missing
     return <PreviewMissingState assetId={assetId} />;
   }
 
-  if (environment && !environment.available) {
+  if (requiresSoffice && environment && !environment.available) {
     return (
       <Callout tone="warning">
         <p className="font-medium">{t("deck.noLibreOffice.title")}</p>

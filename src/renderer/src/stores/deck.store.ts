@@ -41,6 +41,9 @@ type DeckStoreState = {
    *  decks were already cached, only main's ability to say so changed. */
   markStatusesChanged: () => void;
   markStale: (assetId: number) => void;
+  /** Re-reads every entry built from `deckId`: main made one of its embedded
+   *  clips playable (`deck-updated`), so its DTO now lists something new. */
+  refreshDeck: (deckId: number) => void;
   /** Cancels a deck that's converting or waiting in main's background queue
    *  right now — main's own `deck-progress` push (a `stale` status) is what
    *  actually updates `byAssetId`; this just relays the request. */
@@ -101,6 +104,12 @@ export const useDeckStore = create<DeckStoreState>((set, get) => ({
 
   locateSoffice: async () => {
     set({ environment: await api.deck.locateSoffice() });
+  },
+
+  refreshDeck: (deckId) => {
+    for (const [assetId, entry] of Object.entries(get().byAssetId)) {
+      if (entry.deck?.deckId === deckId) void get().peek(Number(assetId)).catch(() => undefined);
+    }
   },
 
   peek: async (assetId) => {

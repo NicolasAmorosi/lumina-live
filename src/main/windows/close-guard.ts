@@ -1,4 +1,4 @@
-import { app, BrowserWindow, type WebContents } from "electron";
+import { app, BrowserWindow, type Event, type WebContents } from "electron";
 import { broadcast } from "../services/broadcast";
 import type { CloseDecision } from "@shared/types/window";
 
@@ -40,14 +40,39 @@ type PendingClose = { timer: NodeJS.Timeout | null; wasQuit: boolean };
 const cleared = new WeakSet<WebContents>();
 const pending = new WeakMap<WebContents, PendingClose>();
 
-/** Set by `before-quit`, consumed by the next vetoed close. */
+/** Set by `holdQuitUntilAnswered`, consumed by the next vetoed close. */
 let quitRequested = false;
 
-export function markQuitRequested(): void {
+/** The control window, the only one whose close asks the operator. */
+let guarded: BrowserWindow | null = null;
+
+/**
+ * Called from `before-quit`. It holds the WHOLE quit until the control window
+ * answers, instead of letting Electron start closing windows and vetoing only
+ * the control window's `close`.
+ *
+ * That veto came too late. By the time the control window got its `close`,
+ * Electron had already closed the projection window, which has no guard. So an
+ * operator who hit ⌘Q by accident and answered «Cancelar» kept the app and lost
+ * the projector, in front of the congregation (measured in the 2026-10-14
+ * rehearsal). Preventing `before-quit` itself means no window closes and none of
+ * the quit's shutdown chores run until the answer is "close", and that answer
+ * resumes the quit with `app.quit()`.
+ *
+ * Returns true when the quit is being held. The caller must then skip its
+ * shutdown work.
+ */
+export function holdQuitUntilAnswered(event: Event): boolean {
+  const win = guarded;
+  if (!win || win.isDestroyed() || cleared.has(win.webContents)) return false;
+  event.preventDefault();
   quitRequested = true;
+  win.close();
+  return true;
 }
 
 export function installCloseGuard(win: BrowserWindow): void {
+  guarded = win;
   win.on("close", (event) => {
     if (cleared.has(win.webContents)) return;
     event.preventDefault();

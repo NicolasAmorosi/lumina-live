@@ -38,6 +38,15 @@
      opening tag — not the offending attribute, and not the `return` above it. A directive placed
      above `onClick={…}` inside a `<li>` silences nothing and then reports itself as an
      `Unused eslint-disable directive`.
+- **A prop of your own called `role` is read as an ARIA role, and whether it fires depends on the
+  CALL rather than on the component.** `aria-role` rejected `<SceneText role="leaving" />`
+  (2026-09-18, the time scene's end fade) even though `SceneText` is not a DOM element and the
+  value is consumed as a `LayerRole`, never spread onto one. Its older sibling
+  `<SceneLayer role={…} />` in `output-view.tsx` carries the same prop and has never fired, only
+  because its value is an expression the rule cannot evaluate — so the same prop lints or not
+  depending on whether the caller wrote a literal. Renaming the prop (`layerRole`) beats
+  suppressing here: unlike the four delegated-keyboard cases above, nothing about the pattern
+  needs the name `role`, and a suppression would sit on the call site rather than on the design.
 - The cost the `H9` finding warned about ("type-aware rules are notably slower") did not
   materialize: full `eslint .` with `recommendedTypeChecked` + `projectService` runs in **~4 s**,
   and the project's ~40 `void api.*` calls produced **zero** false positives — `void` is exactly
@@ -45,4 +54,4 @@
   `no-base-to-string` on `normalizeVerses` in `src/main/db/seed/bible-source.ts`, where a verse of
   an unexpected shape was seeded as the literal `"[object Object]"`.
 
-**Last updated:** 2026-09-15
+**Last updated:** 2026-09-18

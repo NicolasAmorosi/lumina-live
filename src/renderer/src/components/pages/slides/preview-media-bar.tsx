@@ -5,7 +5,7 @@ import { usePreviewStore } from "@renderer/stores/preview.store";
 import { useMediaDuration } from "@renderer/lib/hooks/use-media-duration";
 import { clearPreview } from "@renderer/lib/actions/preview";
 import { seekPreview, togglePreviewPlayback } from "@renderer/lib/actions/preview-playback";
-import { assetUrl } from "@shared/urls";
+import { useConversion, usePlayableAssetUrl } from "@renderer/stores/conversion.store";
 import type { MediaAsset } from "@shared/types/media";
 
 type PreviewMediaBarProps = { asset: MediaAsset };
@@ -33,7 +33,11 @@ export function PreviewMediaBar({ asset }: PreviewMediaBarProps) {
   const isVideo = asset.kind === "video";
   // Audio still has no live element in the control window, so its duration
   // keeps coming from the silent, detached probe.
-  const probedDuration = useMediaDuration(isVideo ? null : assetUrl(asset.id), "audio");
+  // Not while it is being converted: the url would read the original, which
+  // cannot even be opened, and nothing would ask again once the copy exists.
+  const converting = useConversion(asset.id) !== undefined;
+  const url = usePlayableAssetUrl(asset.id);
+  const probedDuration = useMediaDuration(isVideo || converting ? null : url, "audio");
   const duration = isVideo ? previewDuration : (probedDuration ?? 0);
 
   return (
@@ -45,6 +49,13 @@ export function PreviewMediaBar({ asset }: PreviewMediaBarProps) {
         kind={isVideo ? "video" : "audio"}
         label={asset.name}
         onDelete={clearPreview}
+        // Same button as the live panel's, doing the same thing one stage
+        // earlier: for a video it rewinds the preview element without
+        // starting or stopping it, for audio (which never sounds here) it
+        // drops the chosen start point back to the beginning. Hidden while
+        // the duration is unknown, exactly like the scrubber beside it —
+        // there is no timeline to be at the start of yet.
+        onRestart={duration ? () => seekPreview(0) : undefined}
         onSeek={duration ? seekPreview : undefined}
         onTogglePause={isVideo ? togglePreviewPlayback : undefined}
         paused={isVideo && !playing}

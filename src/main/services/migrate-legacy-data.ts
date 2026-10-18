@@ -3,7 +3,7 @@ import { legacySettingsPath, legacyMediaLibraryPath } from "../paths";
 import type { SettingsRepo } from "../db/repositories/settings.repo";
 import { importPaths } from "./library-import";
 
-type LegacySettings = { logoPath?: string | null; lastFolder?: string | null };
+type LegacySettings = { logoPath?: string | null };
 type LegacyMediaLibrary = {
   videos?: { path: string }[];
   images?: { path: string }[];
@@ -12,7 +12,7 @@ type LegacyMediaLibrary = {
 
 /**
  * One-shot import of the pre-migration `settings.json` (docs/knowledge/
- * 05-data-and-persistence.md in the legacy app) into SQLite. Two keys out of
+ * 05-data-and-persistence.md in the legacy app) into SQLite. One key out of
  * a tiny file, so it stays on the startup path — the settings have to be
  * right before the first window reads them.
  *
@@ -23,10 +23,10 @@ export function migrateLegacySettingsIfPresent(settingsRepo: SettingsRepo): void
   if (!fs.existsSync(legacySettingsPath)) return;
   try {
     const legacy = JSON.parse(fs.readFileSync(legacySettingsPath, "utf-8")) as LegacySettings;
-    settingsRepo.setMany({
-      "logo.path": legacy.logoPath ?? null,
-      "files.lastFolder": legacy.lastFolder ?? null,
-    });
+    // Only the logo: the legacy file's `lastFolder` has nowhere to land any
+    // more, now that the picker opens a folder chosen per kind instead of
+    // wherever the previous pick ended (`ipc/handlers/files.ts`).
+    settingsRepo.setMany({ "logo.path": legacy.logoPath ?? null });
     fs.renameSync(legacySettingsPath, `${legacySettingsPath}.migrated`);
   } catch {
     // A corrupt legacy file shouldn't block startup; the app just starts with defaults.

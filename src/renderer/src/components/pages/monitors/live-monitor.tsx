@@ -3,9 +3,12 @@ import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { Monitor } from "@renderer/components/ui";
 import { OutputView } from "@renderer/components/shared/output-view";
 import { selectOutputMemo, useProjectionStore } from "@renderer/stores/projection.store";
+import { useSettingsStore } from "@renderer/stores/settings.store";
 import { mediaTargetKey } from "@shared/types/projection";
+import { useLiveVideoPoster } from "@renderer/lib/hooks/use-live-video-poster";
 
 const VIDEO_TARGET_KEY = mediaTargetKey({ kind: "video" });
+const SLIDE_VIDEO_TARGET_KEY = mediaTargetKey({ kind: "slideVideo" });
 
 /** What the congregation is seeing, rendered by the same component the
  *  projection window uses — so the monitor can't lie. Its status text (NEGRO,
@@ -18,7 +21,10 @@ const VIDEO_TARGET_KEY = mediaTargetKey({ kind: "video" });
  * second, independently decoding `<video>` (this window's own process can't
  * share the projector's decoder), kept in sync via `liveVideoStatus`, the
  * same `mediaStatus` report the media transport bar already reads. See
- * `OutputView`'s `LiveVideo` for the drift correction itself. */
+ * `OutputView`'s `LiveVideo` for the drift correction itself.
+ *
+ * Unless `monitors.liveVideoMotion` is off: then no copy is decoded here at
+ * all, and the stage shows the video's thumbnail under a notice saying why. */
 export function LiveMonitor() {
   const t = useT();
   // selectOutputMemo keeps object identity stable across unrelated store
@@ -28,6 +34,9 @@ export function LiveMonitor() {
   const output = useProjectionStore(selectOutputMemo);
   const presentationOpen = useProjectionStore((s) => s.presentationOpen);
   const liveVideoStatus = useProjectionStore((s) => s.mediaStatus[VIDEO_TARGET_KEY] ?? null);
+  // The same job for a video embedded in the live slide, which decodes here as
+  // its own second copy exactly like the full-screen one does.
+  const slideVideoStatus = useProjectionStore((s) => s.mediaStatus[SLIDE_VIDEO_TARGET_KEY] ?? null);
   // The record, not a derived array: a selector returning a fresh array on
   // every call makes `useSyncExternalStore` see a new snapshot each render and
   // loop. `mediaErrors` only changes when the projector actually reports
@@ -37,19 +46,55 @@ export function LiveMonitor() {
     () => Object.values(mediaErrors).map((error) => error.url),
     [mediaErrors],
   );
+  // LOGO with nothing to show. The projector is black and correct — the logo
+  // is simply not configured yet — so this is a notice and not an error, and
+  // it names the way out instead of the symptom.
+  //
+  // Gated on `loaded` because `logoUrl` is mirrored from the settings
+  // (`App.tsx`) and starts null: without it, every launch would flash "no hay
+  // logo" for as long as the first `settings:get` takes, on a machine that
+  // has one.
+  const settingsLoaded = useSettingsStore((s) => s.loaded);
+  const logoMissing = settingsLoaded && output.kind === "logo" && output.url === null;
+
+  // The monitor's own copy of the live video, or a still of it (`useLiveVideoPoster`,
+  // fetched only with the setting off). Local to this
+  // monitor on purpose: `selectOutput` is what the projector reads.
+  const videoMotion = useSettingsStore((s) => s.settings["monitors.liveVideoMotion"]);
+  const liveVideoAssetId = useProjectionStore((s) => (s.base?.kind === "video" ? s.base.assetId : null));
+  const liveVideoUrl = useProjectionStore((s) => (s.base?.kind === "video" ? s.base.url : null));
+  const posterUrl = useLiveVideoPoster(videoMotion ? null : liveVideoAssetId);
+  const videoStill = videoMotion
+    ? undefined
+    : {
+        posterUrl,
+        videoUrl: liveVideoUrl,
+      };
+  // Only while the stage is actually showing the still: under NEGRO/LOGO the
+  // stage is what it says it is.
+  const stillNotice =
+    videoStill !== undefined && (output.kind === "video" || output.slideVideo !== null);
 
   return (
     <Monitor empty={presentationOpen ? t("live.noSignal") : t("live.disconnected")}>
       {/* `black` and a logo-less LOGO both render as an empty stage, which is
-          exactly right — that IS what the projector is showing. A failure is
-          the one case where an empty stage would NOT be the truth, which is
-          what `errorLabel`/`reportedErrorUrls` exist to say out loud. */}
+          exactly right — that IS what the projector is showing. The two cases
+          where an empty stage would not be the whole truth get a band over it
+          instead: a file that failed to load (`errorLabel`/
+          `reportedErrorUrls`) and a LOGO with no logo to show
+          (`noticeLabel`). */}
       <OutputView
         errorLabel={t("media.loadError")}
         liveVideoStatus={liveVideoStatus}
         mode="monitor"
+        noticeDetail={
+          logoMissing ? t("live.logoMissingHint") : stillNotice ? t("live.videoMotionOffHint") : undefined
+        }
+        noticeLabel={logoMissing ? t("live.logoMissing") : stillNotice ? t("live.videoMotionOff") : undefined}
         output={output}
         reportedErrorUrls={reportedErrorUrls}
+        slideVideoStatus={slideVideoStatus}
+        videoStill={videoStill}
       />
     </Monitor>
   );

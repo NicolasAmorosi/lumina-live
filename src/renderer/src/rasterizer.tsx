@@ -65,9 +65,25 @@ async function run(message: StartMessage): Promise<void> {
 
   const loadingTask = pdfjs.getDocument({
     data,
-    // LibreOffice embeds/subsets every font into the PDF, so pdf.js should
-    // never reach for a system font here.
-    useSystemFonts: false,
+    // Was `false`, on the reasoning that LibreOffice embeds/subsets every font
+    // so pdf.js never needs one. That held for as long as every PDF reaching
+    // here was one we had just produced. A PDF the operator imported directly
+    // is not, and a non-embedded standard font (Helvetica, Times, Courier —
+    // the base 14) then renders NOTHING: pdf.js reports
+    // `UnknownErrorException: Ensure that the standardFontDataUrl API
+    // parameter is provided` and drops the glyphs. Measured against a
+    // hand-built PDF with non-embedded Helvetica: `false` warns and loses the
+    // text, `true` resolves it from the OS with no warning at all. Chromium is
+    // the one part of the stack guaranteed to have those faces, so letting it
+    // answer is both the smaller change and the one with no build step.
+    //
+    // It changes nothing for a deck we converted ourselves — an embedded font
+    // is always used from its embedded data, whatever this says. If a PDF ever
+    // turns up whose missing font is NOT one of the base 14, the deterministic
+    // fix is shipping `pdfjs-dist/standard_fonts/` (816 KB) and pointing
+    // `standardFontDataUrl` at it; that also needs `connect-src` in
+    // rasterizer.html widened, which is why it is not the default here.
+    useSystemFonts: true,
   });
   const doc = await loadingTask.promise;
 
@@ -78,7 +94,19 @@ async function run(message: StartMessage): Promise<void> {
       const page = await doc.getPage(index);
       try {
         const baseViewport = page.getViewport({ scale: 1 });
-        const scale = clamp(targetWidth / baseViewport.width, MIN_SCALE, MAX_SCALE);
+        // Fit into a `targetWidth` SQUARE, not just a target width. Every
+        // PowerPoint/Impress slide is landscape (4:3, 16:9), so `width` alone
+        // always bound them and this changes nothing for any existing deck —
+        // no cache to invalidate. A PDF page can be portrait, though (a real
+        // one here: 72 pages at 841×594 with `/Rotate 90`), and scaling a
+        // portrait page by width alone renders it 1920×2485 to be shown
+        // letterboxed at roughly 834 px wide on a 16:9 projector — 2,3× the
+        // pixels anyone can see, paid for in cache on every page.
+        const scale = clamp(
+          Math.min(targetWidth / baseViewport.width, targetWidth / baseViewport.height),
+          MIN_SCALE,
+          MAX_SCALE,
+        );
         const viewport = page.getViewport({ scale });
 
         const canvas = document.createElement("canvas");
@@ -120,6 +148,11 @@ window.worship.on("raster:start", (payload) => {
   void run(message).catch(async (error: unknown) => {
     await window.worship.invoke("raster:error", {
       jobId: message.jobId,
+      // An encrypted PDF is the one failure here that the operator can act on,
+      // and the only way to tell it apart is pdf.js's exception name — its
+      // message is prose. Reported as a plain tag rather than a `SlideErrorCode`
+      // so this window stays ignorant of main's error vocabulary; main maps it.
+      kind: error instanceof Error && error.name === "PasswordException" ? "password" : "unknown",
       message: error instanceof Error ? error.message : String(error),
     });
   });

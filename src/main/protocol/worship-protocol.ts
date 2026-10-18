@@ -7,6 +7,7 @@ import { getSettingsRepo, getSlidesRepo } from "../services/repos";
 import { slidesCacheDir, slidesTempDir } from "../paths";
 import { resolveRasterPdf } from "../slides/rasterizer";
 import { ensureThumbnail } from "../media/thumbnail-service";
+import { convertedPathFor } from "../media/conversion-service";
 
 /** Must run before app.whenReady(). `standard: true` gives worship:// URLs a
  *  hostname + pathname like http, which is what the parsing below relies on. */
@@ -36,9 +37,14 @@ const MIME_TYPES: Record<string, string> = {
   mkv: "video/x-matroska",
   avi: "video/x-msvideo",
   webm: "video/webm",
+  "3gp": "video/3gpp",
+  ogv: "video/ogg",
   mp3: "audio/mpeg",
   wav: "audio/wav",
   ogg: "audio/ogg",
+  oga: "audio/ogg",
+  opus: "audio/ogg",
+  weba: "audio/webm",
   m4a: "audio/mp4",
   aac: "audio/aac",
   flac: "audio/flac",
@@ -55,7 +61,8 @@ const MIME_TYPES: Record<string, string> = {
 /** Undefined for an unrecognized extension, in which case the header is left
  *  off entirely and Chromium sniffs — asserting `application/octet-stream`
  *  would make it refuse to play an otherwise fine media file. Every extension
- *  the library accepts (`ASSET_EXTENSIONS`) is covered above. */
+ *  Chromium can open is covered above; the rest of `ASSET_EXTENSIONS` (WMV,
+ *  MPG, WMA…) only ever reaches a player as its converted `.mp4`/`.m4a`. */
 function contentTypeFor(filePath: string): string | undefined {
   const ext = path.extname(filePath).slice(1).toLowerCase();
   return MIME_TYPES[ext];
@@ -111,14 +118,23 @@ function isExpectedCancellation(error: unknown): boolean {
   );
 }
 
+/** Node's default is 64 KiB. A 4K video at 50–100 Mbps is 6–12 MB a second
+ *  per element, and the projector and the LIVE monitor each read their own
+ *  copy — at 64 KiB that is hundreds of chunks a second crossing from this
+ *  process into the renderer's media pipeline, each one a turn of main's
+ *  event loop. `Readable.toWeb` sizes its own queue from this value, so it is
+ *  the one knob for both. Small files are unaffected as long as the read is
+ *  bounded — `fs` never allocates past a range's `end` (see `serveFile`). */
+const READ_CHUNK_BYTES = 1024 * 1024;
+
 function streamFile(
   filePath: string,
   signal: AbortSignal | undefined,
   range?: { start: number; end: number },
 ): ReadableStream {
   const stream = range
-    ? fs.createReadStream(filePath, { start: range.start, end: range.end })
-    : fs.createReadStream(filePath);
+    ? fs.createReadStream(filePath, { start: range.start, end: range.end, highWaterMark: READ_CHUNK_BYTES })
+    : fs.createReadStream(filePath, { highWaterMark: READ_CHUNK_BYTES });
 
   // `Readable.toWeb` forwards the error to the web stream, which is what makes
   // the element fire `onerror` — but it writes nothing anywhere, and the log is
@@ -209,10 +225,26 @@ async function serveFile(
   }
 
   headers.set("Content-Length", String(size));
-  return new Response(wantsBody ? streamFile(filePath, request.signal) : null, {
+  // Bounded even when the whole file was asked for: an open-ended read
+  // allocates a full `READ_CHUNK_BYTES` buffer per turn, which for a 40 KB
+  // slide thumbnail is 1 MB of garbage per request.
+  const whole = size > 0 ? { start: 0, end: size - 1 } : undefined;
+  return new Response(wantsBody ? streamFile(filePath, request.signal, whole) : null, {
     status: 200,
     headers,
   });
+}
+
+/** The file a deck clip url names (`?f=`, see `deckVideoUrl`), next to the row's
+ *  current one: the original the url was built for, even after
+ *  `media/deck-clips.ts` pointed the row at a converted copy. A name that is not
+ *  bare, or not there, falls back to the row's — and `withinCache` still has
+ *  the last word on what leaves the process. */
+function clipFile(current: string | null, url: URL): string | null {
+  const named = url.searchParams.get("f");
+  if (!current || !named || path.basename(named) !== named) return current;
+  const candidate = path.join(path.dirname(current), named);
+  return fs.existsSync(candidate) ? candidate : current;
 }
 
 /** Defence in depth: these paths are already capability-derived (a DB row, not
@@ -270,7 +302,12 @@ export function registerWorshipProtocolHandler(mediaRepo: MediaRepo): void {
             });
           }
 
-          return serveFile(request, mediaRepo.getPathById(id));
+          // The playable copy when Chromium cannot decode the original
+          // (`conversion-service.ts`).
+          // `?v=` is the copy's version: without one the original is served,
+          // so an element that started on it is never switched mid-play.
+          const converted = convertedPathFor(id, url.searchParams.get("v"));
+          return serveFile(request, converted ?? mediaRepo.getPathById(id));
         }
         case "logo": {
           return serveFile(request, getSettingsRepo().get("logo.path"));
@@ -298,7 +335,17 @@ export function registerWorshipProtocolHandler(mediaRepo: MediaRepo): void {
           const audioId = Number(segments[0]);
           if (!Number.isFinite(audioId)) return new Response("Not found", { status: 404 });
           // No immutable header: a soundtrack is seeked through, not swapped.
-          return serveFile(request, withinCache(getSlidesRepo().getAudioPath(audioId)));
+          return serveFile(request, withinCache(clipFile(getSlidesRepo().getAudioPath(audioId), url)));
+        }
+        case "deck-video": {
+          // worship://deck-video/<id> — a clip pulled out of a .pptx, living
+          // in the same cache as the deck's own audio. `serveFile` honours
+          // Range, which is not optional for a `<video>`: without it the
+          // element gets an empty `seekable` range and playback dies with
+          // `PIPELINE_ERROR_DECODE`.
+          const videoId = Number(segments[0]);
+          if (!Number.isFinite(videoId)) return new Response("Not found", { status: 404 });
+          return serveFile(request, withinCache(clipFile(getSlidesRepo().getVideoPath(videoId), url)));
         }
         case "linked-audio": {
           // worship://linked-audio/<mediaAssetId> — an external file the
@@ -318,9 +365,16 @@ export function registerWorshipProtocolHandler(mediaRepo: MediaRepo): void {
           const pdfPath = jobId ? resolveRasterPdf(jobId) : null;
           if (!pdfPath) return new Response("Not found", { status: 404 });
           const resolved = path.resolve(pdfPath);
-          if (!resolved.startsWith(slidesTempDir + path.sep)) {
-            return new Response("Forbidden", { status: 403 });
-          }
+          // Two legitimate origins, and the second one is easy to forget: a
+          // PDF we just produced lives under `slidesTempDir`, but a deck whose
+          // SOURCE is already a PDF is rasterized straight from wherever the
+          // operator keeps it (see `deckRequiresSoffice`) — the temp-dir prefix
+          // alone answered 403 for every one of those. A library row is the
+          // positive assertion that replaces it: the same "the operator added
+          // this file" property `worship://asset/<id>` rests on.
+          const allowed =
+            resolved.startsWith(slidesTempDir + path.sep) || mediaRepo.hasPath(resolved);
+          if (!allowed) return new Response("Forbidden", { status: 403 });
           return serveFile(request, resolved);
         }
         default:

@@ -24,7 +24,15 @@ export type DeckState = {
  * Extracted from the old DeckPreview so the slide grid and the preview monitor
  * share one loader instead of racing two.
  */
-export function useDeck(assetId: number | null): DeckState {
+/**
+ * `requiresSoffice` is the caller's answer to "does converting THIS deck need
+ * LibreOffice" (`deckRequiresSoffice`), not a global one. A PDF is rasterized
+ * straight from its source, so a machine with no LibreOffice still converts and
+ * projects it — gating every deck on one environment flag would refuse it for a
+ * dependency it never had. Defaults to `true`, so a caller that doesn't know
+ * gets the conservative behaviour this hook always had.
+ */
+export function useDeck(assetId: number | null, requiresSoffice = true): DeckState {
   const entry = useDeckStore((s) => (assetId === null ? undefined : s.byAssetId[assetId]));
   const environment = useDeckStore((s) => s.environment);
   const ensure = useDeckStore((s) => s.ensure);
@@ -39,13 +47,13 @@ export function useDeck(assetId: number | null): DeckState {
     void (async () => {
       const cached = await peek(assetId);
       if (cancelled || cached) return;
-      if (environment && !environment.available) return;
+      if (requiresSoffice && environment && !environment.available) return;
       await ensure(assetId);
     })();
     return () => {
       cancelled = true;
     };
-  }, [assetId, ensure, peek, environment]);
+  }, [assetId, ensure, peek, environment, requiresSoffice]);
 
   return {
     entry,

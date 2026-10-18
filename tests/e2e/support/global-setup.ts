@@ -1,0 +1,143 @@
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
+import { FIXTURES_DIR, FIXTURE_VERSION, ffmpegBinary, findSoffice } from "./paths";
+import { buildPdf } from "./pdf";
+
+/**
+ * Generates every file the suite projects, once, with the FFmpeg the app
+ * itself ships — so the suite needs nothing checked in and runs the same on
+ * the church's Windows PC as on a Mac. Regenerated only when
+ * `FIXTURE_VERSION` changes.
+ *
+ * The hymn `.pptx` needs LibreOffice: it is exported from a flat ODF with a
+ * visible transition, because LibreOffice only writes `advTm` when a slide has
+ * one (`.claude/knowledge/libreoffice-pptx-export-drops-advtm-without-a-transition-effect.md`).
+ * Without LibreOffice the deck tests that need it skip; the PDF ones still run.
+ */
+export default function globalSetup(): void {
+  const stamp = path.join(FIXTURES_DIR, ".version");
+  if (fs.existsSync(stamp) && fs.readFileSync(stamp, "utf8") === String(FIXTURE_VERSION)) return;
+
+  fs.rmSync(FIXTURES_DIR, { recursive: true, force: true });
+  fs.mkdirSync(FIXTURES_DIR, { recursive: true });
+  const ffmpeg = ffmpegBinary();
+  if (!fs.existsSync(ffmpeg)) throw new Error(`No bundled FFmpeg at ${ffmpeg} — run \`npm run fetch:ffmpeg\``);
+
+  const out = (name: string) => path.join(FIXTURES_DIR, name);
+  const run = (...args: string[]) => execFileSync(ffmpeg, ["-hide_banner", "-loglevel", "error", "-y", ...args]);
+  const picture = (size: string, seconds: number) => ["-f", "lavfi", "-i", `testsrc2=size=${size}:rate=25:duration=${seconds}`];
+  const tone = (seconds: number) => ["-f", "lavfi", "-i", `sine=frequency=440:duration=${seconds}`];
+
+  // Plays as it is.
+  run(...picture("640x360", 8), ...tone(8), "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", out("clip.mp4"));
+  // Converted, quickly.
+  run(...picture("640x360", 6), ...tone(6), "-shortest", "-c:v", "mpeg4", "-vtag", "xvid", "-c:a", "libmp3lame", out("clip-xvid.avi"));
+  // Converted, slowly enough to be watched converting: a full re-encode of
+  // 1080p, at the low priority and half the cores a real conversion gets,
+  // takes several seconds even on a fast machine.
+  run(...picture("1920x1080", 30), ...tone(30), "-shortest", "-c:v", "mpeg4", "-q:v", "6", "-c:a", "libmp3lame", out("long-xvid.avi"));
+  // The silent case: opens in Chromium and plays sound over a black picture.
+  run(...picture("640x360", 6), ...tone(6), "-shortest", "-c:v", "mpeg4", "-c:a", "aac", out("sound-over-black.mp4"));
+  run(...tone(8), "-c:a", "libmp3lame", out("song.mp3"));
+  run(...tone(8), "-c:a", "wmav2", out("song.wma"));
+  run("-f", "lavfi", "-i", "testsrc2=size=1280x720", "-frames:v", "1", out("photo.png"));
+
+  fs.writeFileSync(out("deck.pdf"), buildPdf(["#1f4e9c", "#c0392b", "#27ae60"]));
+
+  const soffice = findSoffice();
+  if (soffice) {
+    const toPptx = (name: string, fodpXml: string) => {
+      const fodp = out(`${name}.fodp`);
+      fs.writeFileSync(fodp, fodpXml);
+      const profile = fs.mkdtempSync(path.join(os.tmpdir(), "worship-e2e-soffice-"));
+      try {
+        execFileSync(soffice, [
+          `-env:UserInstallation=${pathToFileURL(profile).href}`,
+          ...["--headless", "--convert-to", "pptx", "--outdir", FIXTURES_DIR, fodp],
+        ]);
+      } finally {
+        fs.rmSync(profile, { recursive: true, force: true });
+        fs.rmSync(fodp, { force: true });
+      }
+    };
+    toPptx("hymn", hymnFodp(3, 2));
+
+    // A WMV embedded in a slide — what PowerPoint 2007 decks carry and Chromium
+    // cannot play (`media/deck-clips.ts` converts it in place). LibreOffice only
+    // EXPORTS a video as an external link, so the clip is embedded afterwards
+    // the way PowerPoint stores one: a part under `ppt/media/`, an internal
+    // relationship, and its content type.
+    const wmv = out("slide-clip.wmv");
+    run(...picture("640x360", 4), "-c:v", "wmv2", wmv);
+    toPptx("clipdeck", clipDeckFodp(wmv));
+    embedExternalVideo(out("clipdeck.pptx"), wmv);
+    fs.rmSync(wmv, { force: true });
+  }
+
+  fs.writeFileSync(stamp, String(FIXTURE_VERSION));
+}
+
+/** Rewrites every external link to `videoPath` in a `.pptx` into an embedded
+ *  `ppt/media/` part. */
+function embedExternalVideo(pptxPath: string, videoPath: string): void {
+  const files = unzipSync(fs.readFileSync(pptxPath));
+  const external = pathToFileURL(videoPath).href;
+  files["ppt/media/media1.wmv"] = fs.readFileSync(videoPath);
+  for (const name of Object.keys(files)) {
+    if (!name.startsWith("ppt/slides/_rels/")) continue;
+    const xml = strFromU8(files[name]!)
+      .replaceAll(`Target="${external}" TargetMode="External"`, 'Target="../media/media1.wmv"');
+    files[name] = strToU8(xml);
+  }
+  const types = strFromU8(files["[Content_Types].xml"]!);
+  if (!types.includes('Extension="wmv"')) {
+    files["[Content_Types].xml"] = strToU8(
+      types.replace("<Default ", '<Default Extension="wmv" ContentType="video/x-ms-wmv"/><Default '),
+    );
+  }
+  fs.writeFileSync(pptxPath, zipSync(files));
+}
+
+/** One slide holding a video frame that points at `videoPath`. */
+function clipDeckFodp(videoPath: string): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:presentation="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:xlink="http://www.w3.org/1999/xlink" office:version="1.3" office:mimetype="application/vnd.oasis.opendocument.presentation">
+ <office:automatic-styles>
+  <style:page-layout style:name="PM1"><style:page-layout-properties fo:page-width="28cm" fo:page-height="15.75cm" style:print-orientation="landscape"/></style:page-layout>
+ </office:automatic-styles>
+ <office:master-styles><style:master-page style:name="Default" style:page-layout-name="PM1"/></office:master-styles>
+ <office:body><office:presentation>
+   <draw:page draw:name="page1" draw:master-page-name="Default">
+    <draw:frame svg:x="4cm" svg:y="2cm" svg:width="20cm" svg:height="11.25cm"><draw:plugin xlink:href="${pathToFileURL(videoPath).href}" xlink:type="simple" xlink:show="embed" xlink:actuate="onLoad" draw:mime-type="application/vnd.sun.star.media"/></draw:frame>
+   </draw:page>
+ </office:presentation></office:body>
+</office:document>`;
+}
+
+/** `slides` pages that each advance after `seconds`, with a fade so the
+ *  `.pptx` export keeps the timing. */
+function hymnFodp(slides: number, seconds: number): string {
+  const pages = Array.from(
+    { length: slides },
+    (_, i) => `
+   <draw:page draw:name="page${i + 1}" draw:style-name="dp1" draw:master-page-name="Default">
+    <draw:frame svg:x="2cm" svg:y="5cm" svg:width="24cm" svg:height="6cm"><draw:text-box><text:p text:style-name="P1">Estrofa ${i + 1}</text:p></draw:text-box></draw:frame>
+   </draw:page>`,
+  ).join("");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<office:document xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:style="urn:oasis:names:tc:opendocument:xmlns:style:1.0" xmlns:draw="urn:oasis:names:tc:opendocument:xmlns:drawing:1.0" xmlns:presentation="urn:oasis:names:tc:opendocument:xmlns:presentation:1.0" xmlns:svg="urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0" xmlns:fo="urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0" xmlns:smil="urn:oasis:names:tc:opendocument:xmlns:smil-compatible:1.0" office:version="1.3" office:mimetype="application/vnd.oasis.opendocument.presentation">
+ <office:styles/>
+ <office:automatic-styles>
+  <style:page-layout style:name="PM1"><style:page-layout-properties fo:page-width="28cm" fo:page-height="15.75cm" style:print-orientation="landscape"/></style:page-layout>
+  <style:style style:name="dp1" style:family="drawing-page"><style:drawing-page-properties presentation:transition-type="automatic" presentation:duration="PT00H00M0${seconds}S" presentation:transition-speed="fast" smil:type="fade" smil:subtype="crossfade"/></style:style>
+  <style:style style:name="P1" style:family="paragraph"><style:text-properties fo:font-size="44pt"/></style:style>
+ </office:automatic-styles>
+ <office:master-styles><style:master-page style:name="Default" style:page-layout-name="PM1"/></office:master-styles>
+ <office:body><office:presentation>${pages}
+ </office:presentation></office:body>
+</office:document>`;
+}

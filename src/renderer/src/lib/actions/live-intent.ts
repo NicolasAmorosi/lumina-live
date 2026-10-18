@@ -49,6 +49,14 @@ export function claimLiveIntent(): number {
   return liveIntent;
 }
 
+/** The newest claim, WITHOUT making one — for an action that must yield to
+ *  the operator's next one but never supersede the last: an audio track sent
+ *  live changes nothing on screen, so a deck still converting toward the
+ *  projector must still land, while LIMPIAR still silences the track. */
+export function currentLiveIntent(): number {
+  return liveIntent;
+}
+
 /** Whether `intent` is still the newest claim — i.e. nothing has changed the
  *  projector since it was made. */
 export function isCurrentLiveIntent(intent: number): boolean {

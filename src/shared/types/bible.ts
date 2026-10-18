@@ -7,6 +7,38 @@ export type BibleVersionDTO = {
   verseCount: number;
 };
 
+/** Which saved programs cite a version, for the "delete anyway" confirmation.
+ *  Same shape and same purpose as `UtilitySceneUsage` and `MediaAssetUsage` —
+ *  and, like them, read BEFORE the dialog opens so the question cannot change
+ *  under the operator while they are reading it.
+ *
+ *  What it means here is milder than for a scene, and deliberately so: the FK
+ *  on `program_items.bible_version_id` is `set null`, and the verse's text and
+ *  reference are denormalized into the row. So a forced delete costs those
+ *  programs their version LINK (and therefore the projected version label),
+ *  never the verse itself. Nothing is deleted from a program. */
+export type BibleVersionUsage = {
+  programId: number;
+  programName: string;
+  itemCount: number;
+};
+
+/** A version's name is what the projector prints when the style asks for it
+ *  (see `bibleVersionLabel`), so it is bounded like any other projected line
+ *  rather than by the column's own generosity. */
+export const BIBLE_VERSION_NAME_MAX_LENGTH = 60;
+
+/** A name the list can actually show and the projector can actually print:
+ *  not blank, not a paragraph. Trimmed before the length check, because " "
+ *  is a name nobody can read. */
+export function isBibleVersionName(value: unknown): boolean {
+  return (
+    typeof value === "string" &&
+    value.trim().length > 0 &&
+    value.trim().length <= BIBLE_VERSION_NAME_MAX_LENGTH
+  );
+}
+
 export type BibleBookDTO = {
   id: number;
   versionId: number;

@@ -13,6 +13,26 @@ export const SCHEDULE_INDEX_MIME = "application/x-worship-schedule-index";
  *  refreshed mid-drag — and is kept distinct from `SCHEDULE_INDEX_MIME` so a
  *  program row can never be read as a playlist reorder. */
 export const PROGRAM_ROW_MIME = "application/x-worship-program-row";
+/** A saved time scene: dropped on another row inside the «Escenas» editor to
+ *  reorder the list, or onto the order of service to add it there — the same
+ *  two jobs `MEDIA_ASSET_MIME` does, and the reason one MIME covers both is
+ *  that the editor is a modal: while it is open the schedule cannot be a drop
+ *  target, and while it is closed its list does not exist.
+ *  Carries the scene's **id** for the same reason the programs one does: the
+ *  list is refreshed from main mid-drag, so an index would point at a
+ *  different row by the time the drop lands. */
+export const UTILITY_SCENE_MIME = "application/x-worship-utility-scene";
+/** A saved overlay plate — `UTILITY_SCENE_MIME`'s two jobs for the Overlays
+ *  tab: reordering inside the «Placas» dialog, and adding it to the order of
+ *  service from the tab's list. */
+export const OVERLAY_PLATE_MIME = "application/x-worship-overlay-plate";
+/** A row of the installed-bibles list in Ajustes, dropped on another row to
+ *  reorder the list — which is also the order the version picker offers, so
+ *  this is an arrangement and not a cosmetic one. Carries the version's **id**
+ *  for the same reason the programs one does: the list is reloaded from main
+ *  after every write, so an index could point at a different row by the time
+ *  the drop lands. */
+export const BIBLE_VERSION_MIME = "application/x-worship-bible-version";
 
 let transparentDragImage: HTMLImageElement | null = null;
 
@@ -68,6 +88,33 @@ export function readBibleVerseDrag(e: DragEvent): DraggedVerse | null {
   } catch {
     return null;
   }
+}
+
+export function setUtilitySceneDrag(e: DragEvent, sceneId: number): void {
+  e.dataTransfer.effectAllowed = "copy";
+  e.dataTransfer.setData(UTILITY_SCENE_MIME, String(sceneId));
+}
+
+/** The dragged scene's id, or `null` when this drag is something else. A
+ *  non-numeric payload reads as "not a scene" rather than as scene `NaN`. */
+export function readUtilitySceneDrag(e: DragEvent): number | null {
+  const raw = e.dataTransfer.getData(UTILITY_SCENE_MIME);
+  if (!raw) return null;
+  const id = Number(raw);
+  return Number.isFinite(id) ? id : null;
+}
+
+export function setOverlayPlateDrag(e: DragEvent, plateId: number): void {
+  e.dataTransfer.effectAllowed = "copy";
+  e.dataTransfer.setData(OVERLAY_PLATE_MIME, String(plateId));
+}
+
+/** The dragged plate's id, or `null` — same contract as `readUtilitySceneDrag`. */
+export function readOverlayPlateDrag(e: DragEvent): number | null {
+  const raw = e.dataTransfer.getData(OVERLAY_PLATE_MIME);
+  if (!raw) return null;
+  const id = Number(raw);
+  return Number.isFinite(id) ? id : null;
 }
 
 export function classifyExt(ext: string): AssetKind | null {

@@ -1,0 +1,286 @@
+import { useT } from "@renderer/lib/i18n/i18n-provider";
+import { Button, FieldGroup, FieldRow, Icon, Input, Select, Slider, Switch } from "@renderer/components/ui";
+import { BackgroundFields, FontFamilyFields, TextStyleFields, type TextSizeRange } from "@renderer/components/shared/style-fields";
+import { transitionDurationOptions } from "@renderer/lib/transition";
+import {
+  PLATE_AUTO_HIDE_MAX_MS,
+  PLATE_AUTO_HIDE_MIN_MS,
+  PLATE_IMAGE_MAX_CQW,
+  PLATE_IMAGE_MIN_CQW,
+  PLATE_MARGIN_MAX_CQW,
+  PLATE_NAME_MAX_LENGTH,
+  PLATE_TEXT_MAX_LENGTH,
+  PLATE_TICKER_MAX_CQW,
+  PLATE_TICKER_MIN_CQW,
+} from "@shared/overlay-validators";
+import {
+  PLATE_ANIMATION_STYLES,
+  PLATE_KIND_POSITIONS,
+  PLATE_KINDS,
+  type PlateAnimationStyle,
+  type PlateKind,
+  type PlatePosition,
+  type PlateStyle,
+} from "@shared/types/overlay";
+import type { MediaAsset } from "@shared/types/media";
+import { withKind, type PlateDraft } from "./plate-draft";
+import { PLATE_ANIMATION_LABEL, PLATE_KIND_LABEL, PLATE_POSITION_LABEL } from "./plate-display";
+
+/** A plate's lines are an order of magnitude smaller than a countdown's
+ *  number, so the size slider spans what a plate can actually use. */
+const PLATE_TEXT_SIZES: TextSizeRange = { min: 0.5, max: 10, step: 0.1 };
+
+/** `null` in the row, a sentinel in the `<Select>`. */
+const NO_IMAGE = "__none__";
+
+const percent = (value: number) => `${Math.round(value * 100)}%`;
+const seconds = (value: number) => `${value} s`;
+
+type PlateFormProps = {
+  addingImages: boolean;
+  imageAssets: readonly MediaAsset[];
+  onAddImages: () => void;
+  onChange: (next: PlateDraft) => void;
+  value: PlateDraft;
+};
+
+/** Everything about one plate, in the same grouped rows as the scene editor,
+ *  reusing its style rows (`style-fields.tsx`). Fully controlled. */
+export function PlateForm({ addingImages, imageAssets, onAddImages, onChange, value }: PlateFormProps) {
+  const t = useT();
+  const patch = (next: Partial<PlateDraft>) => onChange({ ...value, ...next });
+  const patchStyle = (next: Partial<PlateStyle>) => patch({ style: { ...value.style, ...next } });
+  const { style } = value;
+
+  return (
+    <div className="flex flex-col gap-5">
+      <FieldGroup title={t("plates.groups.plate")}>
+        <FieldRow label={t("plates.name")}>
+          <Input
+            className="w-64"
+            maxLength={PLATE_NAME_MAX_LENGTH}
+            onChange={(e) => patch({ name: e.target.value })}
+            size="md"
+            value={value.name}
+          />
+        </FieldRow>
+        <FieldRow description={t("plates.kindHint")} label={t("plates.kind")}>
+          <Select
+            className="w-52"
+            onChange={(kind) => onChange(withKind(value, kind as PlateKind))}
+            options={PLATE_KINDS.map((kind) => ({ label: t(PLATE_KIND_LABEL[kind]), value: kind }))}
+            size="md"
+            value={value.kind}
+          />
+        </FieldRow>
+      </FieldGroup>
+
+      <FieldGroup title={t("plates.groups.texts")}>
+        <FieldRow description={t("plates.titleHint")} label={t("plates.titleText")}>
+          <Input
+            className="w-64"
+            maxLength={PLATE_TEXT_MAX_LENGTH}
+            onChange={(e) => patch({ title: e.target.value === "" ? null : e.target.value })}
+            size="md"
+            value={value.title ?? ""}
+          />
+        </FieldRow>
+        <FieldRow description={t("plates.subtitleHint")} label={t("plates.subtitleText")}>
+          <Input
+            className="w-64"
+            maxLength={PLATE_TEXT_MAX_LENGTH}
+            onChange={(e) => patch({ subtitle: e.target.value === "" ? null : e.target.value })}
+            size="md"
+            value={value.subtitle ?? ""}
+          />
+        </FieldRow>
+      </FieldGroup>
+
+      {value.kind === "bug" ? (
+        <FieldGroup title={t("plates.groups.image")}>
+          <FieldRow description={t("style.imageHint")} label={t("plates.image")}>
+            <Select
+              className="w-52"
+              onChange={(id) => patch({ imageAssetId: id === NO_IMAGE ? null : Number(id) })}
+              options={[
+                { label: t("plates.imageNone"), value: NO_IMAGE },
+                ...imageAssets.map((asset) => ({ label: asset.name, value: String(asset.id) })),
+              ]}
+              size="md"
+              value={value.imageAssetId === null ? NO_IMAGE : String(value.imageAssetId)}
+            />
+            <Button disabled={addingImages} onClick={onAddImages} size="md" variant="outline">
+              <Icon name="add" />
+              {t("style.addImage")}
+            </Button>
+          </FieldRow>
+          <FieldRow description={t("plates.imageSizeHint")} label={t("plates.imageSize")}>
+            <Slider
+              label={t("plates.imageSize")}
+              max={PLATE_IMAGE_MAX_CQW}
+              min={PLATE_IMAGE_MIN_CQW}
+              onChange={(sizeCqw) => patchStyle({ image: { ...style.image, sizeCqw } })}
+              step={0.5}
+              value={style.image.sizeCqw}
+            />
+          </FieldRow>
+          <FieldRow label={t("plates.imageOpacity")}>
+            <Slider
+              format={percent}
+              label={t("plates.imageOpacity")}
+              max={1}
+              min={0.05}
+              onChange={(opacity) => patchStyle({ image: { ...style.image, opacity: Number(opacity.toFixed(2)) } })}
+              readoutChars={4}
+              step={0.05}
+              value={style.image.opacity}
+            />
+          </FieldRow>
+        </FieldGroup>
+      ) : null}
+
+      <FieldGroup title={t("plates.groups.band")}>
+        <BackgroundFields
+          addingImages={false}
+          imageAssets={[]}
+          kinds={["solid", "gradient"]}
+          onAddImages={() => undefined}
+          onChange={(background) => background.kind !== "image" && patchStyle({ background })}
+          value={style.background}
+        />
+        <FieldRow description={t("plates.bandOpacityHint")} label={t("plates.bandOpacity")}>
+          <Slider
+            format={percent}
+            label={t("plates.bandOpacity")}
+            max={1}
+            min={0}
+            onChange={(backgroundOpacity) => patchStyle({ backgroundOpacity: Number(backgroundOpacity.toFixed(2)) })}
+            readoutChars={4}
+            step={0.05}
+            value={style.backgroundOpacity}
+          />
+        </FieldRow>
+      </FieldGroup>
+
+      <FieldGroup title={t("style.groups.typography")}>
+        <FontFamilyFields onChange={(fontFamily) => patchStyle({ fontFamily })} value={style.fontFamily} />
+      </FieldGroup>
+
+      <FieldGroup title={t("plates.groups.titleLine")}>
+        <TextStyleFields
+          onChange={(title) => patchStyle({ title })}
+          sizeRange={PLATE_TEXT_SIZES}
+          t={t}
+          value={style.title}
+        />
+      </FieldGroup>
+      <FieldGroup title={t("plates.groups.subtitleLine")}>
+        <TextStyleFields
+          onChange={(subtitle) => patchStyle({ subtitle })}
+          sizeRange={PLATE_TEXT_SIZES}
+          t={t}
+          value={style.subtitle}
+        />
+      </FieldGroup>
+
+      <FieldGroup title={t("plates.groups.layout")}>
+        <FieldRow
+          {...(value.kind === "banner" ? { description: t("plates.bannerPositionHint") } : {})}
+          label={t("plates.position")}
+        >
+          <Select
+            className="w-52"
+            onChange={(position) => patch({ position: position as PlatePosition })}
+            options={PLATE_KIND_POSITIONS[value.kind].map((position) => ({
+              label: t(PLATE_POSITION_LABEL[position]),
+              value: position,
+            }))}
+            size="md"
+            value={value.position}
+          />
+        </FieldRow>
+        <FieldRow description={t("plates.marginHint")} label={t("plates.margin")}>
+          <Slider
+            label={t("plates.margin")}
+            max={PLATE_MARGIN_MAX_CQW}
+            min={0}
+            onChange={(marginCqw) => patchStyle({ marginCqw })}
+            step={0.5}
+            value={style.marginCqw}
+          />
+        </FieldRow>
+      </FieldGroup>
+
+      {value.kind === "banner" ? (
+        <FieldGroup title={t("plates.groups.ticker")}>
+          <FieldRow description={t("plates.tickerEnabledHint")} label={t("plates.tickerEnabled")}>
+            <Switch
+              checked={style.ticker.enabled}
+              onChange={(e) => patchStyle({ ticker: { ...style.ticker, enabled: e.target.checked } })}
+            />
+          </FieldRow>
+          <FieldRow description={t("plates.tickerSpeedHint")} label={t("plates.tickerSpeed")}>
+            <Slider
+              disabled={!style.ticker.enabled}
+              label={t("plates.tickerSpeed")}
+              max={PLATE_TICKER_MAX_CQW}
+              min={PLATE_TICKER_MIN_CQW}
+              onChange={(speedCqw) => patchStyle({ ticker: { ...style.ticker, speedCqw } })}
+              step={1}
+              value={style.ticker.speedCqw}
+            />
+          </FieldRow>
+        </FieldGroup>
+      ) : null}
+
+      <FieldGroup title={t("plates.groups.animation")}>
+        <FieldRow label={t("plates.animation")}>
+          <Select
+            className="w-52"
+            onChange={(next) =>
+              patchStyle({ animation: { ...style.animation, style: next as PlateAnimationStyle } })
+            }
+            options={PLATE_ANIMATION_STYLES.map((animation) => ({
+              label: t(PLATE_ANIMATION_LABEL[animation]),
+              value: animation,
+            }))}
+            size="md"
+            value={style.animation.style}
+          />
+        </FieldRow>
+        <FieldRow description={t("plates.animationDurationHint")} label={t("plates.animationDuration")}>
+          <Select
+            className="w-40"
+            disabled={style.animation.style === "none"}
+            onChange={(durationMs) => patchStyle({ animation: { ...style.animation, durationMs: Number(durationMs) } })}
+            options={transitionDurationOptions(t)}
+            size="md"
+            value={String(style.animation.durationMs)}
+          />
+        </FieldRow>
+      </FieldGroup>
+
+      <FieldGroup title={t("plates.groups.autoHide")}>
+        <FieldRow description={t("plates.autoHideEnabledHint")} label={t("plates.autoHideEnabled")}>
+          <Switch
+            checked={style.autoHide.enabled}
+            onChange={(e) => patchStyle({ autoHide: { ...style.autoHide, enabled: e.target.checked } })}
+          />
+        </FieldRow>
+        <FieldRow label={t("plates.autoHideAfter")}>
+          <Slider
+            disabled={!style.autoHide.enabled}
+            format={seconds}
+            label={t("plates.autoHideAfter")}
+            max={PLATE_AUTO_HIDE_MAX_MS / 1000}
+            min={PLATE_AUTO_HIDE_MIN_MS / 1000}
+            onChange={(value) => patchStyle({ autoHide: { ...style.autoHide, afterMs: value * 1000 } })}
+            readoutChars={5}
+            step={1}
+            value={style.autoHide.afterMs / 1000}
+          />
+        </FieldRow>
+      </FieldGroup>
+    </div>
+  );
+}

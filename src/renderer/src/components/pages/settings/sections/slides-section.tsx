@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
-import { Button, Callout, ProgressBar, Select } from "@renderer/components/ui";
+import { Button, Callout, FieldGroup, FieldRow, ProgressBar, Select } from "@renderer/components/ui";
 import { ConfirmModal } from "@renderer/components/shared/modal";
 import { useSettingsStore } from "@renderer/stores/settings.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
@@ -9,7 +9,6 @@ import { toast } from "@renderer/lib/toast";
 import { formatBytes } from "@renderer/lib/utils";
 import { SLIDE_IMAGE_FORMATS, type SlideImageFormat } from "@shared/types/settings";
 import type { DeckCacheStats } from "@shared/types/deck";
-import { SettingsGroup, SettingsRow } from "../settings-row";
 
 /** Offered as a list rather than a free number field: every value here is
  *  valid, and the validator's range (1 MB … 1 TB) contains plenty that are
@@ -75,8 +74,8 @@ export function SlidesSection({ active }: { active: boolean }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <SettingsGroup title={t("settings.groups.slidesCache")}>
-        <SettingsRow
+      <FieldGroup title={t("settings.groups.slidesCache")}>
+        <FieldRow
           description={
             stats
               ? t("settings.slidesCacheUsageDesc", { decks: stats.deckCount })
@@ -105,9 +104,9 @@ export function SlidesSection({ active }: { active: boolean }) {
           <Button disabled={!stats || stats.deckCount === 0} onClick={() => setConfirmClear(true)} variant="outline">
             {t("settings.slidesCacheClear")}
           </Button>
-        </SettingsRow>
+        </FieldRow>
 
-        <SettingsRow description={t("settings.slidesCacheMaxDesc")} label={t("settings.slidesCacheMax")}>
+        <FieldRow description={t("settings.slidesCacheMaxDesc")} label={t("settings.slidesCacheMax")}>
           <Select
             className="min-w-40"
             onChange={(value) => void change({ "slides.cacheMaxMb": Number(value) })}
@@ -118,11 +117,11 @@ export function SlidesSection({ active }: { active: boolean }) {
             size="md"
             value={String(cacheMaxMb)}
           />
-        </SettingsRow>
-      </SettingsGroup>
+        </FieldRow>
+      </FieldGroup>
 
-      <SettingsGroup title={t("settings.groups.slidesQuality")}>
-        <SettingsRow description={t("settings.slidesRenderWidthDesc")} label={t("settings.slidesRenderWidth")}>
+      <FieldGroup title={t("settings.groups.slidesQuality")}>
+        <FieldRow description={t("settings.slidesRenderWidthDesc")} label={t("settings.slidesRenderWidth")}>
           <Select
             className="min-w-40"
             onChange={(value) => void change({ "slides.maxRenderWidth": Number(value) })}
@@ -130,9 +129,9 @@ export function SlidesSection({ active }: { active: boolean }) {
             size="md"
             value={String(renderWidth)}
           />
-        </SettingsRow>
+        </FieldRow>
 
-        <SettingsRow description={t("settings.slidesImageFormatDesc")} label={t("settings.slidesImageFormat")}>
+        <FieldRow description={t("settings.slidesImageFormatDesc")} label={t("settings.slidesImageFormat")}>
           <Select
             className="min-w-40"
             onChange={(value) => void change({ "slides.imageFormat": value as SlideImageFormat })}
@@ -143,8 +142,8 @@ export function SlidesSection({ active }: { active: boolean }) {
             size="md"
             value={imageFormat}
           />
-        </SettingsRow>
-      </SettingsGroup>
+        </FieldRow>
+      </FieldGroup>
 
       <Callout tone="warning">
         <p className="font-medium">{t("settings.slidesQualityWarnTitle")}</p>

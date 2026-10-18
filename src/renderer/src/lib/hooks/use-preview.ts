@@ -1,10 +1,20 @@
-import { useBibleStore } from "@renderer/stores/bible.store";
+import { bibleVersionLabel, useBibleStore } from "@renderer/stores/bible.store";
 import { useDeckStore } from "@renderer/stores/deck.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
 import { useProgramStore } from "@renderer/stores/program.store";
+import { selectOutputMemo, useProjectionStore } from "@renderer/stores/projection.store";
+import { usePlayableAssetUrl } from "@renderer/stores/conversion.store";
 import { useMediaAsset } from "@renderer/lib/hooks/use-media-asset";
+import { clockForScene, findScene, useUtilityStore } from "@renderer/stores/utility.store";
+import { bibleOutputFor } from "@renderer/lib/bible-output";
+import { timerOutputFor } from "@renderer/lib/utility-output";
+import { platePreviewOutput } from "@renderer/lib/plate-output";
+import { useLiveVideoPoster } from "@renderer/lib/hooks/use-live-video-poster";
+import { findPlate, useOverlayStore } from "@renderer/stores/overlay.store";
 import { assetUrl } from "@shared/urls";
 import type { MediaAsset } from "@shared/types/media";
+import type { UtilityScene } from "@shared/types/utility";
+import type { Plate } from "@shared/types/overlay";
 import { INSTANT_TRANSITION } from "@shared/types/projection";
 import type { ProjectionOutput } from "@shared/types/projection";
 
@@ -14,16 +24,26 @@ import type { ProjectionOutput } from "@shared/types/projection";
  * "what am I looking at" from three stores.
  */
 export type PreviewContent =
-  | { kind: "deck"; assetId: number; title: string; missingSince: number | null }
+  /** `ext` rides along so the panel can tell a deck that needs LibreOffice
+   *  from a PDF, which is rasterized straight from its source and must not sit
+   *  behind the "instalá LibreOffice" gate (`deckRequiresSoffice`). */
+  | { kind: "deck"; assetId: number; ext: string; title: string; missingSince: number | null }
   | { kind: "media"; asset: MediaAsset }
-  | { kind: "bible"; reference: string; text: string; verseIndex: number | null };
+  | { kind: "bible"; reference: string; text: string; versionLabel: string | null; verseIndex: number | null }
+  | { kind: "utility"; scene: UtilityScene }
+  | { kind: "plate"; plate: Plate };
 
 export function usePreviewContent(): PreviewContent | null {
   const target = usePreviewStore((s) => s.target);
   const items = useProgramStore((s) => s.items);
   const verses = useBibleStore((s) => s.verses);
+  const versionId = useBibleStore((s) => s.versionId);
+  const versions = useBibleStore((s) => s.versions);
+  const scenes = useUtilityStore((s) => s.scenes);
+  const plates = useOverlayStore((s) => s.plates);
 
-  const scheduleItem = target?.kind === "scheduleItem" ? items[target.index] : undefined;
+  const selectedIndex = useProgramStore((s) => s.selectedIndex);
+  const scheduleItem = target?.kind === "scheduleItem" && selectedIndex !== null ? items[selectedIndex] : undefined;
   const scheduleAssetId =
     scheduleItem?.kind === "media" || scheduleItem?.kind === "ppt" ? scheduleItem.mediaAssetId : null;
   // Both lookups are unconditional: hooks can't be called behind a branch, and
@@ -40,14 +60,33 @@ export function usePreviewContent(): PreviewContent | null {
       kind: "bible",
       reference: `${verse.bookName} ${verse.chapter}:${verse.verse}`,
       text: verse.text,
+      versionLabel: bibleVersionLabel(versions, versionId),
       verseIndex: target.verseIndex,
     };
+  }
+
+  if (target.kind === "utility") {
+    // Resolved on every render rather than copied into the target, so editing
+    // a scene is reflected in the preview the moment it is saved.
+    const scene = findScene(scenes, target.sceneId);
+    return scene ? { kind: "utility", scene } : null;
+  }
+
+  if (target.kind === "plate") {
+    const plate = findPlate(plates, target.plateId);
+    return plate ? { kind: "plate", plate } : null;
   }
 
   if (target.kind === "asset") {
     if (!directAsset) return null;
     return target.assetKind === "ppt"
-      ? { kind: "deck", assetId: directAsset.id, title: directAsset.name, missingSince: directAsset.missingSince }
+      ? {
+          kind: "deck",
+          assetId: directAsset.id,
+          ext: directAsset.ext,
+          title: directAsset.name,
+          missingSince: directAsset.missingSince,
+        }
       : { kind: "media", asset: directAsset };
   }
 
@@ -58,6 +97,7 @@ export function usePreviewContent(): PreviewContent | null {
         ? {
             kind: "deck",
             assetId: scheduleAsset.id,
+            ext: scheduleAsset.ext,
             title: scheduleItem.title ?? scheduleAsset.name,
             missingSince: scheduleAsset.missingSince,
           }
@@ -69,8 +109,26 @@ export function usePreviewContent(): PreviewContent | null {
         kind: "bible",
         reference: scheduleItem.reference,
         text: scheduleItem.text,
+        // The row's own version rather than whatever the Bible tab happens to
+        // be browsing: a program written against RV1960 previews as RV1960
+        // even while the operator is looking at another one.
+        versionLabel: bibleVersionLabel(versions, scheduleItem.bibleVersionId),
         verseIndex: null,
       };
+    case "utility": {
+      // Resolved against the list for the same reason a `utility` preview
+      // target is: the row holds an id, so a scene edited since the program
+      // was saved previews the way it will project. A scene that is gone
+      // previews as nothing rather than as a broken tile — the draft's own
+      // filter (`DraftRepo.load`) and the delete guard between them make that
+      // a very narrow window, never an impossible one.
+      const scene = findScene(scenes, scheduleItem.utilitySceneId);
+      return scene ? { kind: "utility", scene } : null;
+    }
+    case "plate": {
+      const plate = findPlate(plates, scheduleItem.overlayPlateId);
+      return plate ? { kind: "plate", plate } : null;
+    }
   }
 }
 
@@ -81,9 +139,29 @@ export function usePreviewContent(): PreviewContent | null {
  * asset, or a deck still converting).
  */
 export function usePreviewOutput(content: PreviewContent | null): ProjectionOutput | null {
+  const isPlate = content?.kind === "plate";
+  // Subscribed only while a plate is previewed: otherwise this monitor would
+  // re-render on every slide the projector advances. `selectOutputMemo` keeps
+  // the identity stable, so the default comparator is enough.
+  const live = useProjectionStore((s) => (isPlate ? selectOutputMemo(s) : null));
+  const liveVideoAssetId = useProjectionStore((s) => (isPlate && s.base?.kind === "video" ? s.base.assetId : null));
+  const videoStillUrl = useLiveVideoPoster(liveVideoAssetId);
+  const output = usePreviewOutputWithoutPlates(content);
+  if (content?.kind === "plate" && live) return platePreviewOutput(live, content.plate, videoStillUrl);
+  return output;
+}
+
+function usePreviewOutputWithoutPlates(content: PreviewContent | null): ProjectionOutput | null {
   const slideIndex = usePreviewStore((s) => s.slideIndex);
   const playing = usePreviewStore((s) => s.playing);
+  const run = useUtilityStore((s) => s.run);
+  const liveBase = useProjectionStore((s) => s.base);
+  // Off `projection.store` and not `settings.store`: it is the very value the
+  // projector is being pushed, mirrored there by `App` — reading the setting
+  // directly would let the preview lead the projector by one render.
+  const bibleStyle = useProjectionStore((s) => s.bibleStyle);
   const deckEntry = useDeckStore((s) => (content?.kind === "deck" ? s.byAssetId[content.assetId] : undefined));
+  const playableUrl = usePlayableAssetUrl(content?.kind === "media" ? content.asset.id : null);
 
   if (!content) return null;
 
@@ -101,6 +179,13 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
         // The projector warms neighbours; a monitor has no reason to.
         preload: [],
         videoUnderlay: null,
+        // Never plays here, even on a slide that carries one. Stage one of the
+        // two-stage flow shows what the slide LOOKS like, and the rasterized
+        // image already carries the video's poster frame — starting a clip
+        // because the operator arrowed past it is exactly the "selecting
+        // projects" behaviour this flow exists to prevent.
+        slideVideo: null,
+        plates: [],
         // The preview monitor never fades — it moves with every ↑/↓, and
         // `OutputView` also forces this by `mode`, but the value has to be
         // here too since it's part of `ProjectionOutput`.
@@ -117,6 +202,8 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
           kind: "image",
           url: assetUrl(content.asset.id),
           videoUnderlay: null,
+          slideVideo: null,
+          plates: [],
           transition: INSTANT_TRANSITION,
         };
       }
@@ -134,23 +221,44 @@ export function usePreviewOutput(content: PreviewContent | null): ProjectionOutp
         // monitor, which `OutputView` mutes by construction (every mode but
         // "live"). The field is here because the shape requires it, not
         // because anything reads it.
-        const underlay = { url: assetUrl(content.asset.id), epoch: 0, paused: !playing, startAtSeconds: 0, volume: 0 };
+        const url = playableUrl ?? assetUrl(content.asset.id);
+        const underlay = { url, epoch: 0, paused: !playing, startAtSeconds: 0, volume: 0 };
         return {
           kind: "video",
           url: underlay.url,
           epoch: underlay.epoch,
           videoUnderlay: underlay,
+          slideVideo: null,
+          plates: [],
           transition: INSTANT_TRANSITION,
         };
       }
       return null;
     }
     case "bible":
+      // The same builder and the same style the projector reads, so this
+      // monitor cannot dress a verse differently from the room.
       return {
-        kind: "bible",
-        text: content.text,
-        reference: content.reference,
+        ...bibleOutputFor(content, bibleStyle),
         videoUnderlay: null,
+        slideVideo: null,
+        plates: [],
+        transition: INSTANT_TRANSITION,
+      };
+    case "plate":
+      // Drawn over the live stage by `usePreviewOutput`, never from here.
+      return null;
+    case "utility":
+      // The SAME clock the row below shows, so an operator who started the
+      // countdown sees it running here before deciding to send it — and the
+      // same builder the projector's own output uses. Previewing the scene
+      // that is already live reads the projector's copy, so this monitor can
+      // never disagree with the one beside it.
+      return {
+        ...timerOutputFor(content.scene, clockForScene(liveBase, run, content.scene, Date.now())),
+        videoUnderlay: null,
+        slideVideo: null,
+        plates: [],
         transition: INSTANT_TRANSITION,
       };
   }

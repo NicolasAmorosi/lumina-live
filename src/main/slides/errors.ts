@@ -13,6 +13,7 @@ export type SlideErrorCode =
   | "SOFFICE_FAILED"
   | "SOFFICE_TIMEOUT"
   | "PDF_MISSING"
+  | "PDF_PASSWORD"
   | "RASTER_FAILED"
   | "SOURCE_MISSING"
   | "NOT_A_PRESENTATION"

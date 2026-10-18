@@ -1,12 +1,22 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type Ref } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type Ref } from "react";
 import { Icon } from "@renderer/components/ui";
 import { cn } from "@renderer/lib/utils";
+import { frameCaptureSize } from "@renderer/lib/frame-capture";
+import {
+  isAnimatable,
+  transitionStyle,
+  LEAVE_FALLBACK_MARGIN_MS,
+  type LayerRole,
+} from "@renderer/lib/transition";
+import { BibleScene } from "./bible-scene";
+import { TimerScene } from "./timer-scene";
+import { PlateLayer } from "./plate-layer";
 import type {
   MediaStatus,
   ProjectionMediaError,
   ProjectionOutput,
   SceneTransition,
-  TransitionStyle,
+  SlideVideo,
 } from "@shared/types/projection";
 
 /** Above this drift (seconds) the LIVE monitor's own video is resynced to the
@@ -14,31 +24,25 @@ import type {
  *  `LiveVideo`'s drift-correction effect. */
 const MONITOR_DRIFT_THRESHOLD_SECONDS = 0.35;
 
-/** Grace added to a transition's own duration before the outgoing layer is
- *  dropped without having reported `animationend`. Generous on purpose: it is
- *  a safety net for an animation that never ran at all, not a second clock
- *  racing the one that did. */
-const LEAVE_FALLBACK_MARGIN_MS = 400;
+/** The longest a transition into a new video waits for that video's first
+ *  frame before fading anyway — see the video hold in `OutputView`. A cap and
+ *  not a promise: a file that takes longer than this to show anything is
+ *  better faded in late than left holding the previous scene indefinitely. */
+const VIDEO_READY_TIMEOUT_MS = 1000;
 
 export type OutputViewMode = "live" | "preview" | "monitor";
 
-/** A scene layer's (or the persistent video's) part in an in-flight
- *  transition. "steady" means no transition is currently in flight for this
- *  element — nothing else is competing with it for the same pixels, so its
- *  z-order doesn't matter and its opacity is whatever it rests at. */
-type LayerRole = "steady" | "entering" | "leaving";
-
-const LAYER_Z: Record<LayerRole, number> = { leaving: 0, steady: 1, entering: 2 };
-
-const FADE_KEYFRAMES: Record<Exclude<TransitionStyle, "none">, Record<"entering" | "leaving", string>> = {
-  crossfade: { entering: "wa-scene-fade-in", leaving: "wa-scene-fade-out" },
-  "fade-through-black": { entering: "wa-scene-black-then-in", leaving: "wa-scene-out-then-black" },
-};
-
-function isAnimatable(
-  transition: SceneTransition,
-): transition is SceneTransition & { style: Exclude<TransitionStyle, "none"> } {
-  return transition.style !== "none" && transition.durationMs > 0;
+/**
+ * Whether a monitor's own copy of a video is in a state where a resync seek
+ * helps rather than hurts. A copy that has no frame yet or is already seeking
+ * is BEHIND by construction, and seeking it again restarts the very decode it
+ * is waiting on — at ~4 status reports a second, a slow 4K start used to become
+ * a seek storm that kept the monitor's decoder busy through the whole
+ * transition. HAVE_CURRENT_DATA and not a higher bar: a paused copy can rest
+ * there, and a seek from the media panel still has to reach it.
+ */
+function canResync(element: HTMLVideoElement): boolean {
+  return element.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && !element.seeking;
 }
 
 /**
@@ -53,38 +57,19 @@ function isAnimatable(
  * itself, no matter which action produced it.
  */
 function sceneContentKey(output: ProjectionOutput): string {
-  return JSON.stringify(output, (key: string, value: unknown) => (key === "transition" ? undefined : value));
-}
-
-/**
- * Inline style for one side of a transition — a scene layer or the
- * persistent video. `role === "steady"` (or a non-animatable transition)
- * means nothing is in flight: opacity is `restOpacity` directly, no
- * keyframe, no z-index competition. Otherwise it drives the CSS `animation`
- * shorthand (not `transition`): a `transition` property doesn't run when the
- * very same commit that mounts an element also gives it its target value, so
- * an `animation` — which always plays from its own keyframes regardless of
- * when it starts — is what actually fades the very first frame.
- */
-function transitionStyle(role: LayerRole, transition: SceneTransition, restOpacity: number): CSSProperties {
-  if (role === "steady" || !isAnimatable(transition)) {
-    return { zIndex: LAYER_Z[role], opacity: restOpacity };
-  }
-  return {
-    zIndex: LAYER_Z[role],
-    animationName: FADE_KEYFRAMES[transition.style][role === "entering" ? "entering" : "leaving"],
-    animationDuration: `${transition.durationMs}ms`,
-    animationTimingFunction: "ease-in-out",
-    // Holds the keyframe's start value until the animation actually starts
-    // and its end value once it finishes, instead of snapping back to the
-    // plain `opacity` this element would otherwise have.
-    animationFillMode: "both",
-  };
+  // `plates` is not the scene: putting a name on screen must not cross-fade
+  // the stage under it (`PlateLayer` animates each plate on its own).
+  return JSON.stringify(output, (key: string, value: unknown) =>
+    key === "transition" || key === "plates" ? undefined : value,
+  );
 }
 
 type LiveVideoProps = {
   /** NEGRO/LOGO is over the video right now. */
   covered: boolean;
+  /** The transition this video is entering on is held at its first keyframe
+   *  until `onFirstFrame` — see the video hold in `OutputView`. */
+  held: boolean;
   /** This video's identity for its whole mount — see the drift-correction
    *  effect below, which must ignore a `liveVideoStatus` still describing the
    *  previous epoch's video during the instant it takes the projector to
@@ -99,6 +84,9 @@ type LiveVideoProps = {
    *  `HTMLMediaElement.error.code`, which is the only reason the browser
    *  gives — not a message. */
   onError: (code: number | null) => void;
+  /** Called once, with this element's `epoch`, when it first has a frame on
+   *  screen. */
+  onFirstFrame?: ((epoch: number) => void) | undefined;
   /** Called with this element as it is torn down, while it still holds
    *  decoded pixels, so the scene it leaves behind has something real to fade
    *  out. See `freezeFrame` in `OutputView`. */
@@ -156,9 +144,11 @@ type LiveVideoProps = {
 function LiveVideo({
   covered,
   epoch,
+  held,
   liveVideoStatus,
   mode,
   onError,
+  onFirstFrame,
   onFreezeFrame,
   paused,
   role,
@@ -174,7 +164,28 @@ function LiveVideo({
   const lastElementRef = useRef<HTMLVideoElement | null>(null);
   const freezeRef = useRef(onFreezeFrame);
   freezeRef.current = onFreezeFrame;
+  const firstFrameRef = useRef(onFirstFrame);
+  firstFrameRef.current = onFirstFrame;
   const shouldPlay = !covered && !paused;
+
+  // `requestVideoFrameCallback` and not `loadeddata`/`canplay`: those say the
+  // pipeline HAS a frame, this says one was handed to the compositor — which
+  // is the moment fading it in stops being a fade of an empty box. It also
+  // fires for an element that is paused on its first frame. `loadeddata` is
+  // only the fallback for an engine without it (jsdom).
+  useEffect(() => {
+    const element = elementRef.current;
+    if (!element) return;
+    const fire = () => firstFrameRef.current?.(epoch);
+    if (typeof element.requestVideoFrameCallback === "function") {
+      const handle = element.requestVideoFrameCallback(fire);
+      return () => element.cancelVideoFrameCallback(handle);
+    }
+    element.addEventListener("loadeddata", fire, { once: true });
+    return () => element.removeEventListener("loadeddata", fire);
+    // Keyed by epoch at the call site: one element, one first frame.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // A LAYOUT effect, and empty deps: its cleanup has to run in the very commit
   // that removes this element — a passive effect's would run after the browser
@@ -230,7 +241,7 @@ function LiveVideo({
   useEffect(() => {
     if (mode !== "monitor" || !liveVideoStatus || liveVideoStatus.epoch !== epoch) return;
     const element = elementRef.current;
-    if (!element) return;
+    if (!element || !canResync(element)) return;
     const drift = Math.abs(element.currentTime - liveVideoStatus.currentTimeSeconds);
     if (drift > MONITOR_DRIFT_THRESHOLD_SECONDS) {
       element.currentTime = liveVideoStatus.currentTimeSeconds;
@@ -260,11 +271,169 @@ function LiveVideo({
       // by default and only the real projector ever gets sound.
       muted={mode !== "live"}
       onError={(event) => onError(event.currentTarget.error?.code ?? null)}
-      preload="metadata"
+      // "auto" wherever this element exists to be played right now: "metadata"
+      // stops buffering after the first seek, so the decoder started cold in
+      // the middle of the fade. The preview keeps "metadata" — it moves with
+      // every click through the library and only plays on the operator's own
+      // button.
+      preload={mode === "preview" ? "metadata" : "auto"}
       ref={attach}
       src={url}
-      style={transitionStyle(role, transition, covered ? 0 : 1)}
+      style={transitionStyle(role, transition, covered ? 0 : 1, held)}
     />
+  );
+}
+
+type SlideVideoLayerProps = {
+  /** NEGRO/LOGO is over the slide right now, or something else entirely went
+   *  live. Hides and pauses; never unmounts. */
+  covered: boolean;
+  held: boolean;
+  mode: OutputViewMode;
+  onError: (code: number | null) => void;
+  role: LayerRole;
+  slideVideo: NonNullable<SlideVideo>;
+  /** The projector's own report for this element — only passed in
+   *  `mode === "monitor"`, exactly like `LiveVideo`'s. */
+  status?: MediaStatus | null | undefined;
+  transition: SceneTransition;
+  videoRef?: Ref<HTMLVideoElement> | undefined;
+};
+
+/**
+ * A video embedded inside the live slide, laid over the slide image in the
+ * rect the source file declared for it.
+ *
+ * ## Why it reconstructs the image's box instead of filling the stage
+ *
+ * The slide is painted by an `<img class="size-full object-contain">`, so on a
+ * stage whose shape differs from the deck's it is letterboxed: the pixels the
+ * rect is relative to occupy only part of this element. Positioning against
+ * the stage would put the video off the slide by exactly the size of the black
+ * bars. So the box `object-contain` produced is rebuilt here — `min(100cqw,
+ * ratio * 100cqh)` is literally the contain formula — and the rect is applied
+ * inside it in percentages.
+ *
+ * That needs BOTH container-query axes, and `cqh` only exists under
+ * `container-type: size`; the view's own root is an `inline-size` container
+ * (which is all the `cqw` type sizes everywhere else need). Hence the private
+ * sized container here, which shadows nothing: no descendant of this element
+ * reads a container unit from the root.
+ *
+ * ## What it deliberately does NOT do
+ *
+ * It never unmounts on an overlay. Covering is opacity + pause, the same
+ * bargain `LiveVideo` makes and for the same reason — a `<video>` torn down
+ * and rebuilt on every NEGRO is the documented road to
+ * `PIPELINE_ERROR_DECODE`. And it captures no frozen frame on the way out:
+ * the still slide underneath already shows this video's poster frame, drawn
+ * there by LibreOffice, so there is nothing to preserve.
+ */
+function SlideVideoLayer({
+  covered,
+  held,
+  mode,
+  onError,
+  role,
+  slideVideo,
+  status,
+  transition,
+  videoRef,
+}: SlideVideoLayerProps) {
+  const elementRef = useRef<HTMLVideoElement | null>(null);
+  const shouldPlay = !covered && !slideVideo.paused;
+  const { rect } = slideVideo;
+
+  function attach(element: HTMLVideoElement | null) {
+    elementRef.current = element;
+    // Same belt-and-suspenders as `LiveVideo`: only the projector is audible,
+    // whatever a future mode forgets to check.
+    if (element && mode !== "live") element.volume = 0;
+    if (typeof videoRef === "function") videoRef(element);
+    else if (videoRef) (videoRef as { current: HTMLVideoElement | null }).current = element;
+  }
+
+  // `autoPlay` only applies to a freshly loaded element, so every later
+  // transition — an overlay, an operator pause — is driven imperatively.
+  //
+  // Except one: lifting NEGRO/LOGO off a clip that had already ended. Unlike
+  // `LiveVideo`, whose ended video leaves the air on its own
+  // (`end-of-playback.ts`), this one stays on its slide, and `play()` on an
+  // ended element restarts it from 0 by spec — the whole clip again, sound
+  // included, just because the operator uncovered the slide. An explicit
+  // resume from the media panel still replays it.
+  const wasCovered = useRef(covered);
+  useEffect(() => {
+    const element = elementRef.current;
+    const uncovered = wasCovered.current && !covered;
+    wasCovered.current = covered;
+    if (!element) return;
+    if (shouldPlay && !(uncovered && element.ended)) element.play().catch(() => undefined);
+    else element.pause();
+  }, [shouldPlay, covered]);
+
+  useEffect(() => {
+    const element = elementRef.current;
+    if (element && mode === "live") element.volume = slideVideo.volume;
+  }, [mode, slideVideo.volume]);
+
+  // Resyncs a confidence monitor's own independently decoding copy to the
+  // projector's real position — and, as a side effect, is how a seek from the
+  // media panel reaches this element at all. See `LiveVideo`'s twin.
+  const epoch = slideVideo.epoch;
+  useEffect(() => {
+    if (mode !== "monitor" || !status || status.epoch !== epoch) return;
+    const element = elementRef.current;
+    if (!element || !canResync(element)) return;
+    if (Math.abs(element.currentTime - status.currentTimeSeconds) > MONITOR_DRIFT_THRESHOLD_SECONDS) {
+      element.currentTime = status.currentTimeSeconds;
+    }
+  }, [mode, status, epoch]);
+
+  // Keyed by epoch at the call site, so this instance has exactly one
+  // `startAtSeconds` for its whole life — applied once, on mount.
+  useEffect(() => {
+    const element = elementRef.current;
+    if (!element || slideVideo.startAtSeconds <= 0) return;
+    const apply = () => {
+      element.currentTime = slideVideo.startAtSeconds;
+    };
+    if (element.readyState >= 1) apply();
+    else element.addEventListener("loadedmetadata", apply, { once: true });
+    return () => element.removeEventListener("loadedmetadata", apply);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div
+      className="absolute inset-0 flex items-center justify-center"
+      style={{ ...transitionStyle(role, transition, covered ? 0 : 1, held), containerType: "size" }}
+    >
+      <div
+        className="relative"
+        style={{
+          aspectRatio: `${slideVideo.aspectRatio}`,
+          width: `min(100cqw, ${slideVideo.aspectRatio} * 100cqh)`,
+        }}
+      >
+        <video
+          autoPlay={shouldPlay}
+          className="absolute object-contain"
+          loop={slideVideo.loop}
+          muted={mode !== "live"}
+          onError={(event) => onError(event.currentTarget.error?.code ?? null)}
+          preload="metadata"
+          ref={attach}
+          src={slideVideo.url}
+          style={{
+            left: `${rect.x * 100}%`,
+            top: `${rect.y * 100}%`,
+            width: `${rect.width * 100}%`,
+            height: `${rect.height * 100}%`,
+          }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -300,6 +469,9 @@ type OutputSceneProps = {
    *  out describes content nobody is looking at any more. */
   onImageError?: ((url: string) => void) | undefined;
   output: ProjectionOutput;
+  /** A still standing in for a video that is deliberately not mounted — see
+   *  `OutputView`'s `videoStill`. */
+  posterUrl: string | null;
 };
 
 /**
@@ -310,10 +482,17 @@ type OutputSceneProps = {
  * background — see `SceneLayer` — and video is the persistent element
  * `OutputView` renders outside every layer).
  */
-function OutputScene({ frozenFrame, mode, onImageError, output }: OutputSceneProps) {
+function OutputScene({ frozenFrame, mode, onImageError, output, posterUrl }: OutputSceneProps) {
   return (
     <>
       {output.kind === "video" && frozenFrame ? <FrozenFrame canvas={frozenFrame} /> : null}
+
+      {/* Not wired to `onImageError`: a video without a thumbnail is not a
+          broken video, and the notice on this stage already says why it is
+          still. */}
+      {output.kind === "video" && !frozenFrame && posterUrl ? (
+        <img alt="" className="size-full object-contain" src={posterUrl} />
+      ) : null}
 
       {(output.kind === "logo" && output.url) || output.kind === "image" ? (
         <img
@@ -339,24 +518,28 @@ function OutputScene({ frozenFrame, mode, onImageError, output }: OutputScenePro
         />
       ) : null}
 
-      {output.kind === "bible" ? (
-        <div
-          className="flex flex-col items-center gap-[2cqw] px-[6cqw] text-center"
-          style={{ textShadow: "0 2px 8px rgba(0,0,0,0.8)" }}
-        >
-          <p className="text-[3.5cqw] leading-snug font-light">{output.text}</p>
-          <p className="text-[2cqw] font-semibold">{output.reference}</p>
-        </div>
-      ) : null}
+      {/* Its own component, and the only part of a scene that re-renders on
+          its own: the countdown ticks inside it, from an absolute mark, so
+          nothing above here moves once per second. */}
+      {output.kind === "timer" ? <TimerScene onImageError={onImageError} output={output} /> : null}
+
+      {/* Its own component for the same reason the time scene is: a verse is a
+          paragraph whose size is MEASURED against the stage rather than
+          declared, so it owns a layout effect. Everything it draws comes out
+          of the `BibleStyle` inside the output — nothing about a verse is
+          hardcoded here any more. */}
+      {output.kind === "bible" ? <BibleScene onImageError={onImageError} output={output} /> : null}
     </>
   );
 }
 
 type SceneLayerProps = {
   frozenFrame?: HTMLCanvasElement | null | undefined;
+  held: boolean;
   mode: OutputViewMode;
   onImageError?: ((url: string) => void) | undefined;
   onLeaveComplete?: (() => void) | undefined;
+  posterUrl: string | null;
   output: ProjectionOutput;
   role: LayerRole;
   transition: SceneTransition;
@@ -371,10 +554,12 @@ type SceneLayerProps = {
  *  element shows through instead of being hidden behind an opaque box. */
 function SceneLayer({
   frozenFrame,
+  held,
   mode,
   onImageError,
   onLeaveComplete,
   output,
+  posterUrl,
   role,
   transition,
 }: SceneLayerProps) {
@@ -382,25 +567,51 @@ function SceneLayer({
   // persistent <video> shows through. One holding a frozen frame is the
   // opposite case: it IS the picture now, and it needs black behind it for the
   // letterboxing `object-contain` leaves.
-  const opaque = output.kind !== "video" || frozenFrame != null;
+  // A poster (`videoStill`) is the same case: the layer is the picture.
+  const opaque = output.kind !== "video" || frozenFrame != null || posterUrl !== null;
   return (
     <div
       className={cn("absolute inset-0 flex items-center justify-center", opaque && "bg-black")}
       onAnimationEnd={(e) => {
         if (e.target === e.currentTarget && role === "leaving") onLeaveComplete?.();
       }}
-      style={transitionStyle(role, transition, 1)}
+      style={transitionStyle(role, transition, 1, held)}
     >
-      <OutputScene frozenFrame={frozenFrame} mode={mode} onImageError={onImageError} output={output} />
+      <OutputScene
+        frozenFrame={frozenFrame}
+        mode={mode}
+        onImageError={onImageError}
+        output={output}
+        posterUrl={posterUrl}
+      />
     </div>
   );
 }
 
-type OutputErrorNoticeProps = { label: string };
+type OutputNoticeTone = "danger" | "warning";
+type OutputNoticeProps = {
+  /** Second line, smaller and lighter: what to DO about the first one. Its own
+   *  string rather than a line break inside `label`, so the wording and the
+   *  layout stay in the places that own them — the dictionary and this
+   *  component. */
+  detail?: string | undefined;
+  label: string;
+  tone: OutputNoticeTone;
+};
+
+/** `danger` is "what you are looking at is broken"; `warning` is "the stage is
+ *  empty on purpose, and here is what to do about it". Two colours rather than
+ *  one because a black projector the operator CHOSE and a file that failed to
+ *  decode must not look the same from across a dark booth. */
+const noticeToneClass: Record<OutputNoticeTone, string> = {
+  danger: "bg-danger/90",
+  warning: "bg-warning/90",
+};
 
 /**
- * The band the LIVE and PREVIEW monitors paint over the stage when what they
- * are showing failed to load. Never painted on the projector itself
+ * The band the LIVE and PREVIEW monitors paint over the stage — when what they
+ * are showing failed to load, or when it is deliberately empty and needs the
+ * operator's attention. Never painted on the projector itself
  * (`mode === "live"` in `OutputView`) — the congregation must not see the
  * warning, only the operator.
  *
@@ -409,14 +620,26 @@ type OutputErrorNoticeProps = { label: string };
  * the middle of the frame — the operator still sees whatever *did* manage to
  * render underneath it.
  */
-function OutputErrorNotice({ label }: OutputErrorNoticeProps) {
+function OutputNotice({ detail, label, tone }: OutputNoticeProps) {
   return (
     <div
-      className="absolute inset-x-0 bottom-0 z-[var(--z-raised)] flex items-center justify-center gap-[1.5cqw] bg-danger/90 px-[3cqw] py-[1.6cqw] text-center text-[3cqw] leading-tight font-semibold text-white"
+      className={cn(
+        // The icon is pinned to the far left of the band while the text stays
+        // centred on the STAGE, not on what's left of the band beside the
+        // icon. That is why it is positioned rather than a flex sibling, and
+        // why the horizontal padding is symmetric and wide enough to clear
+        // it: a long notice on a narrow monitor then shrinks away from the
+        // icon instead of running under it.
+        "absolute inset-x-0 bottom-0 z-[var(--z-raised)] flex items-center justify-center px-[7cqw] py-[1.6cqw] text-center text-[3cqw] leading-tight font-semibold text-white",
+        noticeToneClass[tone],
+      )}
       role="status"
     >
-      <Icon className="size-[3.5cqw] shrink-0" name="alert" />
-      <span className="min-w-0">{label}</span>
+      <Icon className="absolute top-1/2 left-[2.5cqw] size-[3.5cqw] -translate-y-1/2" name="alert" />
+      <span className="flex min-w-0 flex-col gap-[0.4cqw]">
+        <span>{label}</span>
+        {detail ? <span className="text-[2.2cqw] font-normal opacity-90">{detail}</span> : null}
+      </span>
     </div>
   );
 }
@@ -440,6 +663,16 @@ type OutputViewProps = {
    *  passed) for `mode === "monitor"`; drives `LiveVideo`'s drift correction. */
   liveVideoStatus?: MediaStatus | null;
   mode: OutputViewMode;
+  /** Translated one-line notice for a stage that is empty ON PURPOSE and
+   *  shouldn't be — today, LOGO with no logo chosen. Passed in the same way
+   *  and for the same reason as `errorLabel`, and outranked by it: a file that
+   *  failed to load is the more urgent fact. The caller decides when it
+   *  applies; this component only paints it. */
+  /** Second line under `noticeLabel` — the way out of the state it names.
+   *  Ignored without one, and never shown for an error: a failure gets the
+   *  one line it has. */
+  noticeDetail?: string | undefined;
+  noticeLabel?: string | undefined;
   /** One of this view's own elements failed. The projection window forwards
    *  it to main (`projection:reportMediaError`); the monitors don't need to —
    *  a local failure already shows up in this view's own notice. */
@@ -450,7 +683,28 @@ type OutputViewProps = {
    *  decoding copy of the same file — the monitor may well be able to play
    *  something the projector can't, and vice versa. */
   reportedErrorUrls?: readonly string[];
+  /** The projector's report for the live slide's own video — the `SlideVideo`
+   *  counterpart of `liveVideoStatus`, and passed under the same rule: only in
+   *  `mode === "monitor"`. */
+  slideVideoStatus?: MediaStatus | null;
+  /** The live slide's video element, so the projection window can route a
+   *  `MediaCommand` to it. Separate from `videoRef` because the two are
+   *  different elements with different lifetimes, even though only one of them
+   *  is ever mounted at a time. */
+  slideVideoRef?: Ref<HTMLVideoElement>;
   videoRef?: Ref<HTMLVideoElement>;
+  /**
+   * The LIVE monitor with its moving video turned off (Ajustes → Sistema →
+   * Rendimiento): no `<video>` is mounted at all — neither the full-screen one
+   * nor a slide's — so the control window decodes nothing. A full-screen video
+   * is shown as `posterUrl` instead; a slide's video needs nothing, its slide
+   * image already carries its cover frame. `videoUrl` names the video the
+   * poster belongs to, so a layer still showing a different video (the
+   * outgoing half of a video → video change) never borrows it.
+   *
+   * Honored only in `mode === "monitor"`: the projector never reads it.
+   */
+  videoStill?: { posterUrl: string | null; videoUrl: string | null } | undefined;
 };
 
 /** One stacked scene, keyed by a local sequence number — NOT by
@@ -479,9 +733,20 @@ type Layer = {
  */
 function captureFrame(video: HTMLVideoElement): HTMLCanvasElement | null {
   if (video.readyState < 2 || video.videoWidth === 0 || video.videoHeight === 0) return null;
+  // Sized to the stage it is shown on, not to the source: a 4K frame copied
+  // for a 240px monitor is 33 MB drawn synchronously in the very commit that
+  // starts the transition. The still takes the video's place in this same
+  // stage, so the video's parent is the box that matters.
+  const box = video.parentElement;
+  const size = frameCaptureSize(
+    video.videoWidth,
+    video.videoHeight,
+    (box?.clientWidth ?? 0) * window.devicePixelRatio,
+    (box?.clientHeight ?? 0) * window.devicePixelRatio,
+  );
   const canvas = document.createElement("canvas");
-  canvas.width = video.videoWidth;
-  canvas.height = video.videoHeight;
+  canvas.width = size.width;
+  canvas.height = size.height;
   const context = canvas.getContext("2d");
   if (!context) return null;
   try {
@@ -563,10 +828,15 @@ export function OutputView({
   errorLabel,
   liveVideoStatus,
   mode,
+  noticeDetail,
+  noticeLabel,
   onMediaError,
   output,
   reportedErrorUrls,
+  slideVideoRef,
+  slideVideoStatus,
   videoRef,
+  videoStill,
 }: OutputViewProps) {
   // Warm the neighbouring slides so a change never waits on a decode. Plain
   // Image objects rather than hidden DOM nodes: no layout, no paint, and
@@ -617,6 +887,8 @@ export function OutputView({
   }, []);
 
   const shouldAnimate = mode !== "preview";
+  const still = mode === "monitor" ? videoStill : undefined;
+  const videoMounted = still === undefined;
 
   const seqRef = useRef(0);
   /** The frame `LiveVideo` handed over as it unmounted, waiting for the effect
@@ -630,6 +902,56 @@ export function OutputView({
   const [layers, setLayers] = useState<Layer[]>(() => [topRef.current]);
   const [transition, setTransition] = useState<SceneTransition>(output.transition);
 
+  /**
+   * The video hold. A transition INTO a video that has just been mounted waits,
+   * at its first keyframe, for that video's first frame: otherwise the fade
+   * runs while the element is still opening the file, parsing it and starting
+   * its decoder — for 4K, most of the fade — so what fades in is an empty box
+   * and the decoder spins up fighting the compositor for the same 300 ms. The
+   * previous scene simply stays on screen a little longer, which is the one
+   * thing nobody notices.
+   *
+   * `held` is only the paint side; `holdRef` is what the release needs (whose
+   * fallback to arm, for how long) and `readyVideoEpochRef` covers a first
+   * frame that arrived before the push that would have held for it.
+   */
+  const [held, setHeld] = useState(false);
+  const holdRef = useRef<{ epoch: number; seq: number; durationMs: number } | null>(null);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const readyVideoEpochRef = useRef<number | null>(null);
+
+  function armLeaveFallback(seq: number, durationMs: number) {
+    if (leaveTimerRef.current !== null) clearTimeout(leaveTimerRef.current);
+    leaveTimerRef.current = setTimeout(() => {
+      leaveTimerRef.current = null;
+      setLayers((prev) => withoutOutgoing(prev, seq));
+    }, durationMs + LEAVE_FALLBACK_MARGIN_MS);
+  }
+
+  /** Drops a hold without starting its animation — the scene it was holding
+   *  for has been replaced. */
+  function cancelHold() {
+    if (holdTimerRef.current !== null) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    holdRef.current = null;
+    setHeld(false);
+  }
+
+  function releaseHold() {
+    const hold = holdRef.current;
+    if (!hold) return;
+    cancelHold();
+    // From the release, not from the push: the animation only starts now.
+    armLeaveFallback(hold.seq, hold.durationMs);
+  }
+
+  function handleVideoFirstFrame(epoch: number) {
+    readyVideoEpochRef.current = epoch;
+    if (holdRef.current?.epoch === epoch) releaseHold();
+  }
+
   useEffect(() => {
     const sameEpoch = lastEpochRef.current === output.transition.epoch;
     lastEpochRef.current = output.transition.epoch;
@@ -640,6 +962,9 @@ export function OutputView({
     // that will.
     const frozenFrame = pendingFrozenFrameRef.current;
     pendingFrozenFrameRef.current = null;
+
+    // Whatever this push is, it replaces the scene an earlier hold was for.
+    cancelHold();
 
     if (!shouldAnimate || sameEpoch || sameContent || !isAnimatable(output.transition)) {
       // Content-only refresh: same layer, same key, no animation. This is
@@ -687,11 +1012,28 @@ export function OutputView({
     // keyframe's *start* — opacity 0 — with the outgoing one still painting at
     // full opacity underneath: the projector simply stops changing, which is
     // the worst symptom this component can produce.
-    if (leaveTimerRef.current !== null) clearTimeout(leaveTimerRef.current);
-    leaveTimerRef.current = setTimeout(() => {
-      leaveTimerRef.current = null;
-      setLayers((prev) => withoutOutgoing(prev, outgoing.seq));
-    }, output.transition.durationMs + LEAVE_FALLBACK_MARGIN_MS);
+    //
+    // A hold defers it: the fallback is armed by `releaseHold`, and the hold's
+    // own cap is a `setTimeout` for the same occluded-window reason.
+    const incomingVideoEpoch = output.kind === "video" ? output.videoUnderlay?.epoch : undefined;
+    const holdsForVideo =
+      videoMounted &&
+      incomingVideoEpoch !== undefined &&
+      incomingVideoEpoch !== outgoing.output.videoUnderlay?.epoch &&
+      readyVideoEpochRef.current !== incomingVideoEpoch;
+    if (holdsForVideo) {
+      if (leaveTimerRef.current !== null) {
+        clearTimeout(leaveTimerRef.current);
+        leaveTimerRef.current = null;
+      }
+      holdRef.current = { epoch: incomingVideoEpoch, seq: outgoing.seq, durationMs: output.transition.durationMs };
+      holdTimerRef.current = setTimeout(releaseHold, VIDEO_READY_TIMEOUT_MS);
+      setHeld(true);
+    } else {
+      armLeaveFallback(outgoing.seq, output.transition.durationMs);
+    }
+    // The helpers above only touch refs and state setters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [output, shouldAnimate]);
 
   // Unmount only — deliberately not the effect above's cleanup, which runs on
@@ -700,6 +1042,7 @@ export function OutputView({
   useEffect(
     () => () => {
       if (leaveTimerRef.current !== null) clearTimeout(leaveTimerRef.current);
+      if (holdTimerRef.current !== null) clearTimeout(holdTimerRef.current);
     },
     [],
   );
@@ -716,9 +1059,22 @@ export function OutputView({
   // A single scene and a single video are on screen at a time, and the notice
   // below only fires when the slot still matches what is showing, so a slot
   // overwritten by a later failure is exactly a slot that stopped mattering.
-  // This is also why nothing ever has to clear them.
   const [failedSceneUrl, setFailedSceneUrl] = useState<string | null>(null);
   const [failedVideoUrl, setFailedVideoUrl] = useState<string | null>(null);
+  const [failedSlideVideoUrl, setFailedSlideVideoUrl] = useState<string | null>(null);
+  const [failedPlateUrl, setFailedPlateUrl] = useState<string | null>(null);
+  // ...except when the SAME url comes back working. A USB drive unplugged and
+  // plugged in again, or a file relocated, keeps its `worship://asset/<id>`:
+  // the projector played it the second time and the LIVE monitor kept the red
+  // band of the first, lying to the operator about the room. A new scene is a
+  // new attempt, so it starts clean; a failure in it fills the slot again.
+  const sceneEpoch = output.transition.epoch;
+  useEffect(() => {
+    setFailedSceneUrl(null);
+    setFailedVideoUrl(null);
+    setFailedSlideVideoUrl(null);
+    setFailedPlateUrl(null);
+  }, [sceneEpoch]);
 
   function handleImageError(url: string) {
     setFailedSceneUrl(url);
@@ -742,10 +1098,25 @@ export function OutputView({
   }
 
   function handleVideoError(code: number | null) {
+    // A video that will never show a frame must not keep the transition
+    // waiting for one.
+    releaseHold();
     const url = output.videoUnderlay?.url;
     if (!url) return;
     setFailedVideoUrl(url);
     onMediaError?.({ target: { kind: "video" }, url, code });
+  }
+
+  function handlePlateImageError(url: string) {
+    setFailedPlateUrl(url);
+    onMediaError?.({ target: { kind: "plate" }, url, code: null });
+  }
+
+  function handleSlideVideoError(code: number | null) {
+    const url = output.slideVideo?.url;
+    if (!url) return;
+    setFailedSlideVideoUrl(url);
+    onMediaError?.({ target: { kind: "slideVideo" }, url, code });
   }
 
   /** A failure is only worth showing while the thing that failed is still the
@@ -753,21 +1124,46 @@ export function OutputView({
    *  content without any explicit clearing (see `ProjectionMediaError.url`). */
   function hasFailed(url: string | null | undefined): url is string {
     if (!url) return false;
-    return failedSceneUrl === url || failedVideoUrl === url || (reportedErrorUrls?.includes(url) ?? false);
+    return (
+      failedSceneUrl === url ||
+      failedVideoUrl === url ||
+      failedSlideVideoUrl === url ||
+      failedPlateUrl === url ||
+      (reportedErrorUrls?.includes(url) ?? false)
+    );
   }
 
   // The video wins when both could apply: with NEGRO/LOGO over a broken
   // video, "the video won't play" is the fact the operator needs — the
   // overlay itself is fine and is about to come off.
   const videoUnderlayUrl = output.videoUnderlay?.url ?? null;
+  const slideVideoUrl = output.slideVideo?.url ?? null;
+  // A timer scene's own url is its background image, when it has one — the
+  // only file a generated scene can fail to load.
   const sceneUrl =
-    output.kind === "image" || output.kind === "slide" || output.kind === "logo" ? output.url : null;
+    output.kind === "image" || output.kind === "slide" || output.kind === "logo"
+      ? output.url
+      : output.kind === "timer"
+        ? output.backgroundUrl
+        : null;
   // `mode !== "live"` is belt-and-suspenders on top of the projector simply
   // not passing a label: whatever a future caller does, the congregation
   // never sees this.
   const errorNotice =
-    mode !== "live" && errorLabel && (hasFailed(videoUnderlayUrl) || hasFailed(sceneUrl))
+    mode !== "live" &&
+    errorLabel &&
+    (hasFailed(videoUnderlayUrl) ||
+      hasFailed(slideVideoUrl) ||
+      hasFailed(sceneUrl) ||
+      output.plates.some((plate) => hasFailed(plate.imageUrl)))
       ? errorLabel
+      : null;
+  // Same `mode !== "live"` guard, for the same reason: whatever a future
+  // caller passes, the congregation never reads a message off the stage.
+  const notice: { detail?: string | undefined; label: string; tone: OutputNoticeTone } | null = errorNotice
+    ? { label: errorNotice, tone: "danger" }
+    : mode !== "live" && noticeLabel
+      ? { detail: noticeDetail, label: noticeLabel, tone: "warning" }
       : null;
 
   /**
@@ -789,6 +1185,12 @@ export function OutputView({
   const videoRole: LayerRole =
     layers.length < 2 ? "steady" : layers[1]?.output.kind === "video" ? "entering" : "leaving";
 
+  /** The same question for the slide's own video, answered against the `slide`
+   *  kind instead: during a transition it belongs to whichever side is a
+   *  slide, and it is the incoming one whenever a slide is arriving. */
+  const slideVideoRole: LayerRole =
+    layers.length < 2 ? "steady" : layers[1]?.output.kind === "slide" ? "entering" : "leaving";
+
   return (
     <div
       className={cn(
@@ -807,6 +1209,12 @@ export function OutputView({
           onLeaveComplete={i === 0 ? () => handleLeaveComplete(layer.seq) : undefined}
           output={layer.output}
           frozenFrame={layer.frozenFrame}
+          held={held}
+          posterUrl={
+            still && layer.output.kind === "video" && layer.output.url === still.videoUrl
+              ? still.posterUrl
+              : null
+          }
           role={layers.length < 2 ? "steady" : i === 0 ? "leaving" : "entering"}
           transition={transition}
         />
@@ -815,14 +1223,16 @@ export function OutputView({
       {/* Always the last sibling: painted after every scene layer, and its
           own z-index (via `videoRole`) settles who's on top whenever it's
           actually competing with a layer for the same pixels. */}
-      {output.videoUnderlay ? (
+      {output.videoUnderlay && videoMounted ? (
         <LiveVideo
           covered={output.kind !== "video"}
           epoch={output.videoUnderlay.epoch}
+          held={held}
           key={output.videoUnderlay.epoch}
           liveVideoStatus={liveVideoStatus}
           mode={mode}
           onError={handleVideoError}
+          onFirstFrame={handleVideoFirstFrame}
           onFreezeFrame={shouldAnimate ? freezeFrame : undefined}
           paused={output.videoUnderlay.paused}
           role={videoRole}
@@ -834,9 +1244,31 @@ export function OutputView({
         />
       ) : null}
 
+      {/* Over the slide image, under the notice. Mounted for as long as the
+          live slide has a video — an overlay only covers it, exactly like the
+          full-screen video above. */}
+      {output.slideVideo && videoMounted ? (
+        <SlideVideoLayer
+          covered={output.kind !== "slide"}
+          held={held}
+          key={output.slideVideo.epoch}
+          mode={mode}
+          onError={handleSlideVideoError}
+          role={slideVideoRole}
+          slideVideo={output.slideVideo}
+          status={slideVideoStatus}
+          transition={transition}
+          videoRef={slideVideoRef}
+        />
+      ) : null}
+
+      {/* Above every scene layer and both videos, outside all of them — see
+          `PlateLayer`. */}
+      <PlateLayer onImageError={handlePlateImageError} plates={output.plates} />
+
       {/* Last of all, above every layer and the video: the operator has to be
           able to read it whatever is (or isn't) painting underneath. */}
-      {errorNotice ? <OutputErrorNotice label={errorNotice} /> : null}
+      {notice ? <OutputNotice detail={notice.detail} label={notice.label} tone={notice.tone} /> : null}
     </div>
   );
 }

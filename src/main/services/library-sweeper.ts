@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from "electron";
 import { getMediaRepo } from "./repos";
 import { broadcast } from "./broadcast";
+import { notifyMediaChanged } from "../media/conversion-service";
 
 /** How often a focused window is allowed to re-trigger a sweep — covers "I
  *  unplugged the drive and plugged it back in" without re-`stat`ing the whole
@@ -27,6 +28,8 @@ async function runSweep(): Promise<void> {
   try {
     const changedKinds = await getMediaRepo().sweep();
     for (const kind of changedKinds) broadcast("library-changed", { kind });
+    // A file that came back (a drive plugged in again) is a candidate again.
+    if (changedKinds.has("video") || changedKinds.has("audio")) notifyMediaChanged();
   } catch (error) {
     console.warn("[library] sweep failed", error);
   } finally {

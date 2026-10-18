@@ -26,7 +26,19 @@ export type ProgramItemDTO =
       verseTo: number | null;
       reference: string;
       text: string;
-    };
+    }
+  /** A saved time scene, held by REFERENCE and never by value: the row names
+   *  a `utility_scenes` id and nothing else, so a program saved in March
+   *  projects the scene as it looks today. That reference is a real FK with
+   *  `ON DELETE restrict`, which is what makes deleting a scene a decision
+   *  the operator has to take (`utility:usages`) instead of a silently
+   *  broken row. */
+  | { id: number; position: number; kind: "utility"; utilitySceneId: number; title: string | null }
+  /** A saved overlay plate, held by reference exactly like a time scene
+   *  (`overlay_plate_id`, `ON DELETE restrict`). Going live on it puts the
+   *  plate UP over whatever is projected — it never replaces `base`, so it
+   *  never claims the schedule's on-air rail either. */
+  | { id: number; position: number; kind: "plate"; overlayPlateId: number; title: string | null };
 
 export type ProgramDTO = ProgramSummary & {
   items: ProgramItemDTO[];
@@ -48,7 +60,9 @@ export type ProgramItemUpsert =
       verseTo: number | null;
       reference: string;
       text: string;
-    };
+    }
+  | { id?: number; kind: "utility"; utilitySceneId: number; title: string | null }
+  | { id?: number; kind: "plate"; overlayPlateId: number; title: string | null };
 
 export type ProgramUpsert = {
   id?: number;

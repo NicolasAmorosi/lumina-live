@@ -15,16 +15,20 @@ import { installGlobalErrorHandlers } from "@renderer/lib/global-error-handlers"
 import { api } from "@renderer/lib/api";
 import { toast } from "@renderer/lib/toast";
 import { restoreDraft } from "@renderer/lib/actions/programs";
+import { loadScenes } from "@renderer/lib/actions/utility";
+import { loadPlates } from "@renderer/lib/actions/overlays";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { LOGO_URL } from "@shared/urls";
 import { useSettingsStore } from "@renderer/stores/settings.store";
 import { useDeckStore } from "@renderer/stores/deck.store";
+import { useBibleStore } from "@renderer/stores/bible.store";
 import { useDisplayStore } from "@renderer/stores/display.store";
 import { useLibraryStore } from "@renderer/stores/library.store";
 import { useUiStore } from "@renderer/stores/ui.store";
 import { startProjectionEffects } from "@renderer/effects/projection-sync";
 import { startLibrarySyncEffects } from "@renderer/effects/library-sync";
 import { startDraftAutosave } from "@renderer/effects/draft-autosave";
+import { startConversionSync } from "@renderer/effects/conversion-sync";
 import { useGlobalShortcuts } from "@renderer/lib/hooks/use-global-shortcuts";
 
 /**
@@ -59,8 +63,8 @@ export function App() {
   // visited, since those panels stay mounted after their first visit.
   const removeAssetConfirmId = useUiStore((s) => s.removeAssetConfirmId);
   const setRemoveAssetConfirmId = useUiStore((s) => s.setRemoveAssetConfirmId);
-  const closeGuardOpen = useUiStore((s) => s.closeGuardOpen);
-  const setCloseGuardOpen = useUiStore((s) => s.setCloseGuardOpen);
+  const closeGuard = useUiStore((s) => s.closeGuard);
+  const setCloseGuard = useUiStore((s) => s.setCloseGuard);
   /** `ConfirmModal` reports the close the same way whether the operator
    *  confirmed or backed out, and the two mean opposite things to main: one
    *  resumes the quit, the other has to release it so the NEXT close asks
@@ -78,6 +82,8 @@ export function App() {
   const setTransitionSettings = useProjectionStore(
     (s) => s.setTransitionSettings,
   );
+  const bibleStyle = useSettingsStore((s) => s.settings["bible.style"]);
+  const setBibleStyle = useProjectionStore((s) => s.setBibleStyle);
 
   useGlobalShortcuts(useAnyModalOpen());
 
@@ -97,6 +103,20 @@ export function App() {
       // unreliable. The operator's first tap on NEGRO, LOGO or EN VIVO opens
       // it on demand (see display.store's `openIfNeeded`).
       await useDisplayStore.getState().load();
+      // After the settings, never before: `loadVersions` settles on
+      // `bible.defaultVersionId`, and reading that key before it is loaded
+      // would silently open on whichever version happens to be first. This is
+      // why the Bible tab no longer loads them on its own mount — two
+      // unordered callers is exactly how that race was won by the wrong one.
+      void useBibleStore.getState().loadVersions();
+      // The saved time scenes. Not awaited before the draft restore below and
+      // not blocking it either: nothing in the schedule references a scene
+      // yet (that is F3), and the Utilities panel is perfectly able to paint
+      // its empty state for the few milliseconds this takes.
+      void loadScenes();
+      // The saved overlay plates, for the same reasons and with the same
+      // non-blocking rule.
+      void loadPlates();
 
       // Last, and only once the library is reachable: the draft's items point
       // at media assets, and main has already dropped the ones that no longer
@@ -118,12 +138,15 @@ export function App() {
     void useDeckStore.getState().loadEnvironment();
     const stopProjectionEffects = startProjectionEffects();
     const stopLibrarySync = startLibrarySyncEffects();
+    // Also what lets main start converting at all — see `conversion-sync.ts`.
+    const stopConversionSync = startConversionSync();
     // Started BEFORE the restore above can finish: its first write is
     // debounced, and the restore itself only ever rewrites the same draft.
     const stopDraftAutosave = startDraftAutosave();
     return () => {
       stopProjectionEffects();
       stopLibrarySync();
+      stopConversionSync();
       stopDraftAutosave();
     };
   }, [loadSettings]);
@@ -144,6 +167,15 @@ export function App() {
   useEffect(() => {
     setTransitionSettings(transitionStyle, transitionDurationMs);
   }, [transitionStyle, transitionDurationMs, setTransitionSettings]);
+
+  // The verse's own look, mirrored for the same reason and by the same route.
+  // Editing it in Ajustes while scripture is on the projector therefore
+  // reaches the room immediately and WITHOUT a scene transition: nothing here
+  // touches `sceneEpoch`, so `OutputView` swaps the layer in place instead of
+  // fading a verse into a near-identical copy of itself.
+  useEffect(() => {
+    setBibleStyle(bibleStyle);
+  }, [bibleStyle, setBibleStyle]);
 
   return (
     <>
@@ -236,29 +268,34 @@ export function App() {
       <ModalBoundary
         onCrash={() => {
           closeConfirmedRef.current = false;
-          setCloseGuardOpen(false);
+          setCloseGuard(null);
           void api.window.closeDecision("cancel");
           toast.danger(t("app.modalCrashed"));
         }}
-        open={closeGuardOpen}
+        open={closeGuard !== null}
       >
         <ConfirmModal
           confirmLabel={t("schedule.closeAnyway")}
           danger
-          description={t("schedule.closeConfirmBody")}
+          description={[
+            closeGuard?.unsaved ? t("schedule.closeConfirmBody") : null,
+            closeGuard?.onAir ? t("schedule.closeOnAirBody") : null,
+          ]
+            .filter(Boolean)
+            .join(" ")}
           onConfirm={async () => {
             closeConfirmedRef.current = true;
             await api.window.closeDecision("close");
           }}
           onOpenChange={(open) => {
-            setCloseGuardOpen(open);
             if (open) return;
+            setCloseGuard(null);
             const confirmed = closeConfirmedRef.current;
             closeConfirmedRef.current = false;
             if (!confirmed) void api.window.closeDecision("cancel");
           }}
-          open={closeGuardOpen}
-          title={t("schedule.closeConfirmTitle")}
+          open={closeGuard !== null}
+          title={closeGuard?.unsaved === false ? t("schedule.closeOnAirTitle") : t("schedule.closeConfirmTitle")}
         />
       </ModalBoundary>
       <ToastHost />

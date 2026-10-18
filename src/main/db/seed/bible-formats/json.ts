@@ -1,33 +1,24 @@
 import type { BibleSourceBook } from "@shared/types/bible";
-
-export type ParsedVerse = { chapter: number; verse: number; text: string };
-export type ParsedBook = {
-  abbrev: string;
-  name: string;
-  testament: "OT" | "NT";
-  chapterCount: number;
-  verses: ParsedVerse[];
-};
-
-/** The 39 Old Testament book abbreviations of the RV1960 bundle, in canonical order. */
-const OT_ABBREVS = new Set([
-  "gn", "ex", "lv", "nm", "dt", "js", "jud", "rt", "1s", "2s",
-  "1r", "2r", "1cr", "2cr", "esd", "neh", "est", "job", "sal", "pr",
-  "ec", "cnt", "is", "jer", "lm", "ez", "dn", "os", "jl", "am",
-  "abd", "jon", "miq", "nah", "hab", "sof", "hag", "zac", "mal",
-]);
+import { canonByAbbrev, testamentOf } from "./canon";
+import { BibleFormatError, type ParsedBible, type ParsedBook, type ParsedVerse } from "./types";
 
 /**
- * Defensive parser tolerant of the shapes documented in the legacy
- * `docs/knowledge/05-data-and-persistence.md`: container as array-of-books,
- * `{books:[...]}`, or `{bookName:{...}}`; book name under `name`/`nombre`;
- * chapters as array or `{"1":...}` object; verses as string[], `{text}`[],
- * `{verse}`[], or `{"1": "text"}` object. Anything imported by the user must
- * fall into one of these to project correctly.
+ * The shape the bundled `rv1960.json` uses, and the several near-misses a
+ * hand-assembled file arrives in.
+ *
+ * Unchanged in substance from the `bible-source.ts` this replaces — it is
+ * proven against the 31 102 verses actually in the box — with one fix, at
+ * `bookTestament` below.
+ *
+ * Deliberately NOT routed through the canon the way every other format is: a
+ * JSON file here is whatever somebody had, in whatever order, with whatever
+ * book names, and the tolerance below is the whole point of the format. The
+ * canon is consulted only to answer "which testament", and only when the
+ * file's own abbreviation is one it recognises.
  */
-export function parseBibleSource(raw: unknown): ParsedBook[] {
+export function parseBibleJson(raw: unknown): ParsedBible {
   const books = extractBooks(raw);
-  return books.map((book, index) => parseBook(book, index));
+  return { name: null, language: null, books: books.map((book, index) => parseBook(book, index)) };
 }
 
 function extractBooks(raw: unknown): BibleSourceBook[] {
@@ -40,13 +31,32 @@ function extractBooks(raw: unknown): BibleSourceBook[] {
       ...(value as object),
     })) as BibleSourceBook[];
   }
-  throw new Error("Unrecognized Bible JSON container shape");
+  throw new BibleFormatError("Unrecognized Bible JSON container shape");
+}
+
+/**
+ * Which testament a book belongs to.
+ *
+ * This used to be a set of 39 abbreviations kept in this file, and the set did
+ * not match the bible in the box: it spelled Samuel `1s` where `rv1960.json`
+ * spells it `1sm`, Psalms `sal` where the file says `ps`, and so on for 23 of
+ * the 39 Old Testament books — every one of which has been stored as `"NT"`
+ * since the seed was written. Nothing reads the column yet, which is the only
+ * reason nobody saw it.
+ *
+ * So the question is asked of the canon instead (which is keyed by the
+ * spellings the bundled file actually uses, because it was built from them),
+ * and falls back to the book's POSITION for a file whose abbreviations this
+ * app has never seen — which is right for any bible listed in canonical
+ * order, and is the only signal such a file gives at all.
+ */
+function bookTestament(abbrev: string, position: number): "OT" | "NT" {
+  return testamentOf(canonByAbbrev(abbrev)?.index ?? position);
 }
 
 function parseBook(book: BibleSourceBook, index: number): ParsedBook {
   const abbrev = book.abbrev ?? `book-${index + 1}`;
   const name = book.name ?? book.nombre ?? "Libro";
-  const testament: "OT" | "NT" = OT_ABBREVS.has(abbrev.toLowerCase()) ? "OT" : "NT";
 
   const chapters = normalizeChapters(book.chapters);
   const verses: ParsedVerse[] = [];
@@ -56,7 +66,13 @@ function parseBook(book: BibleSourceBook, index: number): ParsedBook {
     });
   });
 
-  return { abbrev, name, testament, chapterCount: chapters.length, verses };
+  return {
+    abbrev,
+    name,
+    testament: bookTestament(abbrev, index + 1),
+    chapterCount: chapters.length,
+    verses,
+  };
 }
 
 function normalizeChapters(raw: unknown): string[][] {
@@ -67,7 +83,7 @@ function normalizeChapters(raw: unknown): string[][] {
       .sort((a, b) => a - b)
       .map((n) => normalizeVerses((raw as Record<string, unknown>)[String(n)]));
   }
-  throw new Error("Unrecognized chapters shape");
+  throw new BibleFormatError("Unrecognized chapters shape");
 }
 
 /** A verse is text or it is nothing. `String()` on a shape we did not expect

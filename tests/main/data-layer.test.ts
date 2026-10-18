@@ -22,18 +22,27 @@ import Database from "better-sqlite3";
 import { openDatabase } from "../../src/main/db/client";
 import { backupBeforeMigrate, runMigrations } from "../../src/main/db/migrate";
 import { seedBuiltinBibles } from "../../src/main/db/seed/seed-bible";
-import { mediaAssets } from "../../src/main/db/schema";
+import { bibleVersions, mediaAssets } from "../../src/main/db/schema";
 import { BibleRepo } from "../../src/main/db/repositories/bible.repo";
 import { SettingsRepo } from "../../src/main/db/repositories/settings.repo";
 import { ProgramsRepo } from "../../src/main/db/repositories/programs.repo";
 import { MediaRepo } from "../../src/main/db/repositories/media.repo";
 import { SlidesRepo } from "../../src/main/db/repositories/slides.repo";
 import { DraftRepo } from "../../src/main/db/repositories/draft.repo";
-import { initRepos } from "../../src/main/services/repos";
+import { UtilityRepo } from "../../src/main/db/repositories/utility.repo";
+import { seedUtilityScenes } from "../../src/main/db/seed/seed-utility-scenes";
+import { getOverlaysRepo, initRepos } from "../../src/main/services/repos";
 import { readBinarySlideTimings } from "../../src/main/slides/ppt-binary-timings";
 import { backfillDeckTimings } from "../../src/main/slides/backfill-timings";
 import { SNIPPET_MARK_END, SNIPPET_MARK_START, parseSnippet } from "../../src/shared/types/bible";
-import { SETTINGS_VALIDATORS, isSettingsKey } from "../../src/shared/types/settings";
+import { DEFAULT_SETTINGS, SETTINGS_VALIDATORS, isSettingsKey } from "../../src/shared/types/settings";
+import { BUILTIN_BIBLE_CODE } from "../../src/shared/constants";
+import { DEFAULT_UTILITY_SCENES } from "../../src/shared/types/utility";
+import { removeUtilityScene } from "../../src/main/services/utility-scene-removal";
+import { removeOverlayPlate } from "../../src/main/services/overlay-plate-removal";
+import { DEFAULT_PLATE_STYLE, type Plate } from "../../src/shared/types/overlay";
+import { IpcError } from "../../src/shared/ipc/result";
+import type { UtilityScene } from "../../src/shared/types/utility";
 import { buildLegacyPpt } from "../fixtures/legacy-ppt";
 import type { ProgramSummary } from "../../src/shared/types/program";
 import type { MediaAsset } from "../../src/shared/types/media";
@@ -57,6 +66,7 @@ let settingsRepo: SettingsRepo;
 let programsRepo: ProgramsRepo;
 let mediaRepo: MediaRepo;
 let slidesRepo: SlidesRepo;
+let utilityRepo: UtilityRepo;
 
 let versionId: number;
 let bookIds: number[];
@@ -76,13 +86,15 @@ beforeAll(() => {
   sqlite = opened.sqlite;
   db = opened.db;
   runMigrations(db, drizzleDir);
-  seedBuiltinBibles(db, sqlite, biblesDir);
 
   bibleRepo = new BibleRepo(db, sqlite);
   settingsRepo = new SettingsRepo(db);
+  // After the repo exists: the seed reads (and sets) `bible.builtinSeeded`.
+  seedBuiltinBibles(db, sqlite, biblesDir, settingsRepo);
   programsRepo = new ProgramsRepo(db, sqlite);
   mediaRepo = new MediaRepo(db, sqlite);
   slidesRepo = new SlidesRepo(db, sqlite);
+  utilityRepo = new UtilityRepo(db, sqlite);
 });
 
 afterAll(() => {
@@ -100,6 +112,16 @@ describe("Bible seed", () => {
     const books = bibleRepo.listBooks(versionId);
     assert(books.length === 66, `expected 66 books, got ${books.length}`);
     assert(books[0]!.name === "Génesis", `expected first book "Génesis", got "${books[0]!.name}"`);
+
+    // The testament split, over the bible that is actually in the box.
+    // It used to be derived from a hand-written set of 39 abbreviations that
+    // did not match this file's own spellings (`1s` vs `1sm`, `sal` vs `ps`,
+    // `abd` vs `ob`, …): 23 of the 39 Old Testament books were stored as
+    // "NT". Nothing read the column, so nothing ever showed it.
+    const ot = books.filter((b) => b.testament === "OT");
+    assert(ot.length === 39, `expected 39 OT books, got ${ot.length}`);
+    assert(books[38]!.testament === "OT", `expected Malaquías in the OT, got ${books[38]!.testament}`);
+    assert(books[39]!.testament === "NT", `expected Mateo in the NT, got ${books[39]!.testament}`);
     bookIds = books.map((book) => book.id);
   });
 
@@ -310,6 +332,22 @@ describe("Media library", () => {
     assert(changedOnReappear.has("ppt"), "sweep must report 'ppt' changed when a missing file reappears");
     const afterReappear = mediaRepo.getById(firstAsset.id);
     assert(afterReappear?.missingSince === null, "sweep must clear missingSince once the file is back");
+  });
+
+  test("hasPath answers the worship://raster guard, and only for real rows", () => {
+    // This is a security guard, not a convenience lookup: it is what lets the
+    // rasterizer read a PDF that IS the source (kept wherever the operator
+    // keeps it) instead of one we produced under `slidesTempDir`, so a false
+    // positive would turn a capability token into an arbitrary file read.
+    assert(mediaRepo.hasPath(filePaths[0]!), "a file that was imported must be recognized");
+    assert(
+      !mediaRepo.hasPath(path.join(mediaDir, "never-imported.pdf")),
+      "a path with no row must never be served, however plausible it looks",
+    );
+    assert(
+      !mediaRepo.hasPath(mediaDir),
+      "the containing folder is not an asset — the match is exact, not a prefix",
+    );
   });
 });
 
@@ -636,6 +674,8 @@ describe("settings:set validators reject what the types cannot", () => {
     assert(SETTINGS_VALIDATORS["projection.displayId"](null), "a null display id is the default and must pass");
     assert(!SETTINGS_VALIDATORS["media.volume"](1.5), "a volume outside 0..1 must be rejected");
     assert(!SETTINGS_VALIDATORS["media.volume"](Number.NaN), "NaN must be rejected — it survives JSON as null");
+    assert(DEFAULT_SETTINGS["monitors.liveVideoMotion"] === true, "the LIVE monitor keeps its moving video by default");
+    assert(!SETTINGS_VALIDATORS["monitors.liveVideoMotion"]("false"), 'the STRING "false" must not pass as a boolean');
     assert(
       !SETTINGS_VALIDATORS["library.linkedFolders"]({ video: [], image: [], audio: [] }),
       "a per-kind record missing a kind must be rejected",
@@ -643,6 +683,16 @@ describe("settings:set validators reject what the types cannot", () => {
     assert(
       SETTINGS_VALIDATORS["library.linkedFolders"]({ video: [], image: [], audio: [], ppt: ["/x"] }),
       "a complete per-kind record must pass",
+    );
+    // `null` is the meaningful value here — "use the OS folder for this kind"
+    // — so it has to pass the validator, unlike the empty array above.
+    assert(
+      SETTINGS_VALIDATORS["files.defaultFolders"]({ video: null, image: null, audio: null, ppt: "/decks" }),
+      "a default-folder record must accept null for the kinds with no override",
+    );
+    assert(
+      !SETTINGS_VALIDATORS["files.defaultFolders"]({ video: 0, image: null, audio: null, ppt: null }),
+      "a default folder that is not a path must be rejected",
     );
   });
 });
@@ -685,5 +735,355 @@ describe("The pre-migration backup is WAL-aware", () => {
       naiveRows < snapshotRows,
       "the fixture no longer reproduces the bug: a plain copy saw every row, so the WAL was checkpointed",
     );
+  });
+});
+
+describe("Utility scenes", () => {
+  test("the four built-in scenes are seeded exactly once", () => {
+    seedUtilityScenes(utilityRepo, settingsRepo);
+    const seeded = utilityRepo.list();
+    assert(
+      seeded.length === DEFAULT_UTILITY_SCENES.length,
+      `expected ${DEFAULT_UTILITY_SCENES.length} seeded scenes, got ${seeded.length}`,
+    );
+    assert(settingsRepo.get("utility.seeded"), "seeding must record that it happened");
+    // The list order is the constant's order, without any reorder() having run.
+    assert(
+      seeded.map((scene) => scene.tool).join() === DEFAULT_UTILITY_SCENES.map((scene) => scene.tool).join(),
+      "the seeded scenes must keep the order they are declared in",
+    );
+
+    seedUtilityScenes(utilityRepo, settingsRepo);
+    assert(utilityRepo.list().length === seeded.length, "seeding twice must not duplicate anything");
+  });
+
+  test("deleting every scene does NOT bring them back on the next launch", () => {
+    // The whole reason the flag exists rather than a row count: an operator
+    // who deletes a scene must be rid of it.
+    for (const scene of utilityRepo.list()) utilityRepo.delete(scene.id);
+    assert(utilityRepo.isEmpty(), "the fixture must start this case with an empty table");
+    seedUtilityScenes(utilityRepo, settingsRepo);
+    assert(utilityRepo.isEmpty(), "an already-seeded database must never be re-seeded");
+  });
+
+  test("a scene round-trips through create, update and duplicate", () => {
+    const created = utilityRepo.create({
+      name: "  Cuenta 5  ",
+      tool: "countdown",
+      config: {
+        durationMs: 5 * 60_000,
+        targetMinuteOfDay: 9 * 60 + 30,
+        endMessage: "¡Empezamos!",
+        format: { hour12: false, showSeconds: true, hideZeroHours: true, overrun: true },
+      },
+      style: {
+        version: 1,
+        background: { kind: "gradient", from: "#04132b", to: "#2f557f", direction: "to-bottom" },
+        fontFamily: "Futura",
+        verticalAlign: "bottom",
+        value: { sizeCqw: 24, color: "#ffffff", weight: 300, shadow: true, shadowStrength: 0.55 },
+        title: { sizeCqw: 4, color: "#84adfc", weight: 600, shadow: false, shadowStrength: 0.55 },
+        message: { sizeCqw: 4.5, color: "#f5f5f5", weight: 400, shadow: true, shadowStrength: 0.55 },
+        end: {
+          message: { sizeCqw: 8, color: "#ffffff", weight: 700, shadow: true, shadowStrength: 0.55 },
+          hideValue: true,
+          hideTitle: false,
+          transition: { style: "crossfade", durationMs: 600 },
+        },
+        triggers: { warningAtMs: 60_000, warningColor: "#cd4900", endColor: "#d0021b" },
+      },
+      title: "El culto comienza en",
+      message: null,
+    });
+    assert(created.name === "Cuenta 5", "the stored name must be trimmed");
+    assert(created.style.background.kind === "gradient", "the background kind must survive the JSON round trip");
+    assert(created.config.format.overrun, "the format flags must survive the JSON round trip");
+    assert(created.style.triggers?.warningAtMs === 60_000, "the colour triggers must survive the JSON round trip");
+    assert(created.style.end.hideValue, "the end state must survive the JSON round trip");
+    assert(created.style.end.message.sizeCqw === 8, "the end message keeps a type of its own");
+    assert(
+      created.style.end.transition.style === "crossfade" && created.style.end.transition.durationMs === 600,
+      "the end fade must survive the JSON round trip",
+    );
+
+    const { id: _id, ...fields } = created;
+    const renamed = utilityRepo.update(created.id, { ...fields, name: "Cuenta 5 minutos", tool: "stopwatch" });
+    assert(renamed.tool === "stopwatch", "the tool is a column and must be updatable");
+    assert(renamed.style.fontFamily === "Futura", "an update must not lose the stored style");
+
+    const copy = utilityRepo.duplicate(created.id, "Cuenta 5 (copia)");
+    assert(copy.id !== created.id, "a duplicate must be its own row");
+    assert(copy.style.verticalAlign === "bottom", "a duplicate must carry the style over");
+    assert(utilityRepo.get(created.id)?.name === "Cuenta 5 minutos", "duplicating must not touch the source");
+  });
+
+  test("a new scene lands on top and reorder renormalizes the whole column", () => {
+    const first = utilityRepo.list()[0]!;
+    const newest = utilityRepo.create({ ...DEFAULT_UTILITY_SCENES[0]!, name: "Recién creada" });
+    assert(utilityRepo.list()[0]?.id === newest.id, "a new scene must land at the top of the list");
+
+    const reversed = utilityRepo.list().map((scene) => scene.id).reverse();
+    const reordered = utilityRepo.reorder(reversed);
+    assert(
+      reordered.map((scene) => scene.id).join() === reversed.join(),
+      "reorder must answer with the order it persisted",
+    );
+    assert(utilityRepo.list()[0]?.id === reversed[0], "the persisted order must survive a fresh list()");
+    assert(reversed.includes(first.id), "the fixture must still hold the scene it started from");
+  });
+
+  test("a corrupt config or style falls back field by field instead of throwing", () => {
+    const scene = utilityRepo.list()[0]!;
+    // Hand-written rows are the real case: a truncated write, a version that
+    // wrote a shape this build does not know, somebody editing the file.
+    sqlite
+      .prepare("UPDATE utility_scenes SET config_json = ?, style_json = ? WHERE id = ?")
+      .run("{ not json", JSON.stringify({ version: 1, verticalAlign: "sideways", value: { sizeCqw: 18, color: "#ff0000", weight: 400, shadow: true } }), scene.id);
+
+    const read = utilityRepo.get(scene.id);
+    assert(read !== null, "a corrupt row must still come back as a scene");
+    assert(read.config.durationMs > 0, "an unparseable config must fall back to the defaults");
+    assert(read.style.verticalAlign === "middle", "an invalid enum must fall back to its default");
+    // The half of the style that WAS valid is kept: falling back wholesale
+    // would hand the operator back a scene they never built.
+    assert(read.style.value.color === "#ff0000", "a valid field inside an invalid style must be preserved");
+  });
+});
+
+/**
+ * F3: a time scene as a row of the order of service.
+ *
+ * The three things only the database can answer — the widened CHECK
+ * constraint, the `ON DELETE restrict` FK and what a forced delete actually
+ * does — plus the draft's dead-reference filter, which is the one place a
+ * deleted scene can still be referenced (a draft is a JSON blob no constraint
+ * can reach).
+ */
+describe("A time scene as an order-of-service item", () => {
+  let scene: UtilityScene;
+  let program: ProgramSummary;
+
+  test("a program saves and reloads an item that points at a scene", () => {
+    initRepos(db, sqlite);
+    scene = utilityRepo.create({ ...DEFAULT_UTILITY_SCENES[0]!, name: "Cuenta del culto" });
+    program = programsRepo.save({
+      name: "Culto con cuenta regresiva",
+      items: [
+        { kind: "utility", utilitySceneId: scene.id, title: null },
+        { kind: "utility", utilitySceneId: scene.id, title: "Antes de empezar" },
+      ],
+    });
+
+    const [first, second] = programsRepo.load(program.id).items;
+    assert(
+      first?.kind === "utility" && first.utilitySceneId === scene.id,
+      `expected a utility item pointing at ${scene.id}, got ${JSON.stringify(first)}`,
+    );
+    // The row holds an id and NOT a copy: the scene the operator edits later is
+    // the scene this program projects.
+    assert(second?.kind === "utility" && second.title === "Antes de empezar", "a per-item title must survive");
+  });
+
+  test("the CHECK constraint refuses a utility row with no scene", () => {
+    // Invisible to Drizzle — it only ever lived in SQL — which is exactly why
+    // it is asserted here rather than trusted.
+    expect(() =>
+      sqlite
+        .prepare(
+          `INSERT INTO program_items (program_id, position, kind, created_at) VALUES (?, 99, 'utility', ?)`,
+        )
+        .run(program.id, Date.now()),
+    ).toThrow();
+  });
+
+  test("deleting a scene a saved program uses is refused, and names the program", () => {
+    const usages = programsRepo.findSceneUsages(scene.id);
+    assert(usages.length === 1, `expected exactly one program to use the scene, got ${usages.length}`);
+    assert(usages[0]!.programName === program.name, "the usage must carry the program's name, not just its id");
+    assert(usages[0]!.itemCount === 2, `expected both items counted, got ${usages[0]!.itemCount}`);
+
+    // The FK rejection surfaces as a code the renderer can act on, never as a
+    // raw SQLite error — the confirmation has to tell this case apart from a
+    // real failure.
+    expect(() => removeUtilityScene(scene.id, false)).toThrow(IpcError);
+    assert(utilityRepo.get(scene.id) !== null, "a refused delete must leave the scene exactly where it was");
+  });
+
+  test("a forced delete removes the referencing items and the scene together", () => {
+    removeUtilityScene(scene.id, true);
+    assert(utilityRepo.get(scene.id) === null, "a forced delete must remove the scene");
+    assert(
+      programsRepo.load(program.id).items.length === 0,
+      "a forced delete must take the items that referenced it with it",
+    );
+    assert(programsRepo.findSceneUsages(scene.id).length === 0, "nothing may still reference a deleted scene");
+  });
+
+  test("the draft drops an item pointing at a deleted scene", () => {
+    const draftRepo = new DraftRepo(db);
+    const liveScene = utilityRepo.list()[0]!;
+    draftRepo.save({
+      programId: null,
+      name: "Culto sin guardar",
+      notes: null,
+      items: [
+        { kind: "utility", utilitySceneId: liveScene.id, title: null },
+        // `scene` was force-deleted above: an FK protects a saved program, but
+        // a draft is JSON and nothing can protect it but this filter.
+        { kind: "utility", utilitySceneId: scene.id, title: null },
+      ],
+      updatedAt: Date.now(),
+    });
+
+    const restored = draftRepo.load();
+    assert(restored !== null, "a saved draft must come back");
+    assert(
+      restored.items.length === 1 && restored.items[0]?.kind === "utility",
+      `expected only the live scene to survive, got ${JSON.stringify(restored.items)}`,
+    );
+    draftRepo.clear();
+  });
+});
+
+describe("An overlay plate as an order-of-service item", () => {
+  let plate: Plate;
+  let program: ProgramSummary;
+
+  test("a program saves and reloads an item that points at a plate", () => {
+    initRepos(db, sqlite);
+    plate = getOverlaysRepo().create({
+      name: "Pastor Juan Pérez",
+      kind: "lower-third",
+      position: "bottom-left",
+      title: "Juan Pérez",
+      subtitle: "Pastor",
+      imageAssetId: null,
+      style: DEFAULT_PLATE_STYLE,
+    });
+    program = programsRepo.save({
+      name: "Culto con zócalo",
+      items: [{ kind: "plate", overlayPlateId: plate.id, title: null }],
+    });
+    const [first] = programsRepo.load(program.id).items;
+    assert(
+      first?.kind === "plate" && first.overlayPlateId === plate.id,
+      `expected a plate item pointing at ${plate.id}, got ${JSON.stringify(first)}`,
+    );
+  });
+
+  test("the CHECK constraint refuses a plate row with no plate, or with a scene too", () => {
+    const insert = (sql: string) => () => sqlite.prepare(sql).run(program.id, Date.now());
+    expect(
+      insert(`INSERT INTO program_items (program_id, position, kind, created_at) VALUES (?, 99, 'plate', ?)`),
+    ).toThrow();
+    const scene = utilityRepo.list()[0]!;
+    expect(
+      insert(
+        `INSERT INTO program_items (program_id, position, kind, overlay_plate_id, utility_scene_id, created_at)
+         VALUES (?, 99, 'plate', ${plate.id}, ${scene.id}, ?)`,
+      ),
+    ).toThrow();
+  });
+
+  test("deleting a plate a saved program uses is refused, and names the program", () => {
+    const usages = programsRepo.findPlateUsages(plate.id);
+    assert(usages.length === 1 && usages[0]!.programName === program.name, JSON.stringify(usages));
+    expect(() => removeOverlayPlate(plate.id, false)).toThrow(IpcError);
+    assert(getOverlaysRepo().get(plate.id) !== null, "a refused delete must leave the plate where it was");
+  });
+
+  test("a forced delete removes the referencing items and the plate together, and the draft drops it", () => {
+    removeOverlayPlate(plate.id, true);
+    assert(getOverlaysRepo().get(plate.id) === null, "a forced delete must remove the plate");
+    assert(programsRepo.load(program.id).items.length === 0, "its program rows must go with it");
+
+    const draftRepo = new DraftRepo(db);
+    draftRepo.save({
+      programId: null,
+      name: "Culto sin guardar",
+      notes: null,
+      items: [{ kind: "plate", overlayPlateId: plate.id, title: null }],
+      updatedAt: Date.now(),
+    });
+    assert(draftRepo.load()?.items.length === 0, "a draft row pointing at a deleted plate must be dropped");
+    draftRepo.clear();
+  });
+});
+
+/**
+ * The order the version picker offers is the operator's, and it survives a
+ * re-seed.
+ *
+ * Both halves matter and only one of them is visible in Ajustes: `sort_order`
+ * also drives `bible.store`'s `versions`, which is the list the Bible tab's
+ * picker is built from — so a reorder that did not persist would read as a
+ * settings screen that forgets, and a re-seed that reset it would send the
+ * bundled bible back to the bottom of that picker after an update.
+ */
+describe("Installed bibles keep the order the operator gave them", () => {
+  let extraIds: number[] = [];
+
+  beforeAll(() => {
+    const now = Date.now();
+    extraIds = ["test-a", "test-b"].map(
+      (code, index) =>
+        db
+          .insert(bibleVersions)
+          .values({
+            code,
+            name: code,
+            language: "es",
+            isBuiltin: 0,
+            verseCount: 0,
+            // What `BibleRepo.nextSortOrder` would have given them: the bundled
+            // bible was backfilled to 0 by the migration.
+            sortOrder: index + 1,
+            installedAt: now + index,
+          })
+          .run().lastInsertRowid as number,
+    );
+  });
+
+  afterAll(() => {
+    for (const id of extraIds) db.delete(bibleVersions).where(eq(bibleVersions.id, id)).run();
+    // Back to the single row every earlier case in this file assumes.
+    bibleRepo.reorderVersions(bibleRepo.listVersions().map((version) => version.id));
+  });
+
+  test("a new version is imported at the BOTTOM, never on top", () => {
+    const ids = bibleRepo.listVersions().map((version) => version.id);
+    assert(ids[0] === versionId, `the bundled bible must stay first, got ${JSON.stringify(ids)}`);
+    assert(bibleRepo.nextSortOrder() === 3, `expected the next slot to be 3, got ${bibleRepo.nextSortOrder()}`);
+  });
+
+  test("reorder persists the whole arrangement and renormalizes to 0..n-1", () => {
+    const [first, second, third] = bibleRepo.listVersions().map((version) => version.id);
+    const moved = bibleRepo.reorderVersions([third!, first!, second!]);
+    assert(
+      moved.map((version) => version.id).join(",") === [third, first, second].join(","),
+      `reorder must answer with the stored order, got ${moved.map((v) => v.id).join(",")}`,
+    );
+    assert(
+      bibleRepo.listVersions().map((version) => version.id).join(",") === [third, first, second].join(","),
+      "a fresh read must see the same order",
+    );
+    const rows = db.select().from(bibleVersions).all();
+    assert(
+      rows.every((row) => row.sortOrder >= 0 && row.sortOrder < rows.length),
+      `sort_order must be renormalized to 0..n-1, got ${rows.map((r) => r.sortOrder).join(",")}`,
+    );
+  });
+
+  test("a re-seed of the bundled bible keeps its place", () => {
+    const before = bibleRepo.listVersions().findIndex((version) => version.id === versionId);
+    assert(before > 0, "this case only proves anything with the bundled bible off the top");
+    // Clearing the hash is what a corrected `rv1960.json` shipping in a later
+    // build looks like from here: the seed stops short-circuiting and takes the
+    // delete-and-reinsert path (that is how the verses cascade), which without
+    // `existing?.sortOrder` brings the row back at the bottom.
+    db.update(bibleVersions).set({ sourceHash: null }).where(eq(bibleVersions.id, versionId)).run();
+    seedBuiltinBibles(db, sqlite, biblesDir, settingsRepo);
+    const after = bibleRepo.listVersions().findIndex((version) => version.code === BUILTIN_BIBLE_CODE);
+    assert(after === before, `expected the bundled bible to stay at ${before}, found it at ${after}`);
   });
 });

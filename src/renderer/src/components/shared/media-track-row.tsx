@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { IconButton, Icon, MediaScrubber, VolumeControl, type IconName } from "@renderer/components/ui";
+import { Button, IconButton, Icon, MediaScrubber, VolumeControl, type IconName } from "@renderer/components/ui";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { cn, formatClock } from "@renderer/lib/utils";
 
-export type MediaTrackKind = "video" | "audio" | "image" | "bible";
+export type MediaTrackKind = "video" | "audio" | "image" | "bible" | "utility" | "plate";
 
 type MediaTrackRowProps = {
   className?: string;
@@ -13,7 +13,7 @@ type MediaTrackRowProps = {
    *  showing a meaningless 0:00/0:00 and an empty bar. Such a row stays a
    *  single line: the different height is real information ("this has no
    *  time"), not an alignment defect. */
-  durationSeconds?: number;
+  durationSeconds?: number | undefined;
   /** What the projector reported it could not play, already translated.
    *  Replaces `hint` and re-tones the row — a track the operator believes is
    *  sounding, and isn't, is worth more than a tidy row. */
@@ -23,7 +23,15 @@ type MediaTrackRowProps = {
   /** Compact second line under the label — e.g. "no suena hasta EN VIVO".
    *  Part of the row itself (not a sibling paragraph) so every caller gets
    *  it inside the same bordered container for free. */
-  hint?: string;
+  hint?: string | undefined;
+  /** The row's own EN VIVO — for content that goes up WITHOUT replacing what
+   *  is projected (a plate), so the operator sends it from beside its picture
+   *  instead of reaching for the top bar. Calls `goLive()`, never a second
+   *  path to the projector. */
+  onGoLive?: (() => void) | undefined;
+  /** Shown INSTEAD of `onGoLive` once that content is up: takes it back down
+   *  without touching anything under it. */
+  onTakeDown?: (() => void) | undefined;
   /** Omit to render the row without a seek control at all (duration unknown yet). */
   onSeek?: ((seconds: number) => void) | undefined;
   /** Clears this media back to nothing live — a video, a live PPT deck, or a
@@ -38,7 +46,24 @@ type MediaTrackRowProps = {
   /** Present only for a row that actually controls playback (the live panel).
    *  Absent in the preview bar, which only picks a start point. */
   onTogglePause?: (() => void) | undefined;
+  /** Accessible names for that button. A timer is never «reproducido»: it is
+   *  started, paused and resumed, and which of the two words a stopped one
+   *  deserves is the caller's to know (see `UtilityTrackRow`). */
+  pauseLabel?: string | undefined;
+  playLabel?: string | undefined;
   paused?: boolean;
+  /** Back to the start, beside the pause button. Only where restarting means
+   *  something on its own: a timer restarts, a track is scrubbed to 0. */
+  onRestart?: (() => void) | undefined;
+  /** A value this row shows instead of deriving one from a timeline — a
+   *  timer's own digits, which no `currentSeconds` can produce (a wall clock
+   *  has no position, and a countdown's number runs backwards and may be
+   *  negative). Sits between the label and the controls, always visible. */
+  readout?: string | undefined;
+  readoutTone?: MediaTrackReadoutTone;
+  /** A word beside the readout, in the danger ink — «Terminó». Ignored
+   *  without a `readout`. */
+  readoutNote?: string | undefined;
   /** Omit the pair to render the row without a level control — an image or a
    *  verse has nothing to turn down, and the preview bar reaches no speaker. */
   onVolumeChange?: ((volume: number) => void) | undefined;
@@ -46,11 +71,26 @@ type MediaTrackRowProps = {
   volume?: number | undefined;
 };
 
+/** What the readout means right now: counting, stopped, or a countdown that
+ *  has run out. The last one has to be readable from across a dark booth — the
+ *  projector will never say so (it just rests at 00:00). */
+export type MediaTrackReadoutTone = "default" | "muted" | "danger";
+
+const readoutToneClass: Record<MediaTrackReadoutTone, string> = {
+  default: "text-foreground",
+  muted: "text-subtle",
+  danger: "text-danger-ink",
+};
+
 const kindIcon: Record<MediaTrackKind, IconName> = {
   video: "video",
   audio: "audio",
   image: "image",
   bible: "bible",
+  // Generic on purpose: the row is labelled with the scene's own name, and
+  // the tool's specific icon is what the list in the Utilities tab shows.
+  utility: "clock",
+  plate: "overlay",
 };
 // "bible" never carries a duration, so this is never actually read for it —
 // present only to keep the Record exhaustive.
@@ -59,6 +99,8 @@ const kindTone: Record<MediaTrackKind, "primary" | "audio"> = {
   audio: "audio",
   image: "primary",
   bible: "primary",
+  utility: "primary",
+  plate: "primary",
 };
 
 /**
@@ -92,6 +134,11 @@ function clockWidthClass(durationSeconds: number): string {
  * width also means the bar's pixels map to the track at a useful resolution —
  * a second of a 40-minute sermon is no longer a sub-pixel.
  *
+ * Between the two sits the optional `readout`: a value that is not a position
+ * on any timeline, which is what a timer's number is (a wall clock has none, a
+ * countdown's runs backwards and can go negative). It is text, not a control,
+ * so it goes with the identity half of the line rather than with the buttons.
+ *
  * Every control on the first line is a fixed-size `IconButton`, and the label
  * is the only element allowed to grow or shrink (`min-w-0 flex-1 truncate`) —
  * a very long file name eats into the label's own space, it never pushes a
@@ -111,9 +158,17 @@ export function MediaTrackRow({
   hint,
   onSeek,
   onDelete,
+  onGoLive,
+  onRestart,
   onStop,
+  onTakeDown,
   onTogglePause,
+  pauseLabel,
+  playLabel,
   paused = false,
+  readout,
+  readoutNote,
+  readoutTone = "default",
   onVolumeChange,
   volume,
 }: MediaTrackRowProps) {
@@ -143,14 +198,48 @@ export function MediaTrackRow({
           {label}
         </span>
 
+        {readout ? (
+          <span
+            className={cn(
+              "shrink-0 whitespace-nowrap text-sm font-medium tabular-nums",
+              readoutToneClass[readoutTone],
+            )}
+          >
+            {readout}
+          </span>
+        ) : null}
+
+        {readout && readoutNote ? (
+          <span className="shrink-0 whitespace-nowrap text-xs text-danger-ink">{readoutNote}</span>
+        ) : null}
+
+        {onTakeDown ? (
+          <Button className="shrink-0" onClick={onTakeDown} size="xs" variant="outline">
+            {t("media.takeDown")}
+          </Button>
+        ) : onGoLive ? (
+          // The top bar's EN VIVO, same variant and wording: it does exactly
+          // what that button does with this row's content in preview.
+          <Button className="shrink-0" onClick={onGoLive} size="xs" variant="live">
+            <Icon name="play" />
+            {t("actions.goLive")}
+          </Button>
+        ) : null}
+
         {onTogglePause ? (
           <IconButton
-            aria-label={paused ? t("media.play") : t("media.pause")}
+            aria-label={paused ? (playLabel ?? t("media.play")) : (pauseLabel ?? t("media.pause"))}
             onClick={onTogglePause}
             size="xs"
             variant="ghost"
           >
             <Icon name={paused ? "play" : "pause"} />
+          </IconButton>
+        ) : null}
+
+        {onRestart ? (
+          <IconButton aria-label={t("media.restart")} onClick={onRestart} size="xs" variant="ghost">
+            <Icon name="restart" />
           </IconButton>
         ) : null}
 
@@ -169,7 +258,7 @@ export function MediaTrackRow({
             <Icon name="close" />
           </IconButton>
         ) : onDelete ? (
-          <IconButton aria-label={t("common.delete")} onClick={onDelete} size="xs" variant="ghost">
+          <IconButton aria-label={t("common.remove")} onClick={onDelete} size="xs" variant="ghost">
             <Icon name="close" />
           </IconButton>
         ) : (

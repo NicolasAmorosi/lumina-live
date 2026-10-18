@@ -33,5 +33,10 @@ export function useLiveHeading(): string | null {
       return asset?.name ?? null;
     case "bible":
       return base.reference;
+    case "utility":
+      // The scene's own name, never its title/message: the header labels
+      // WHICH thing is live, and two scenes can perfectly well share the
+      // words painted on the screen.
+      return base.scene.name;
   }
 }

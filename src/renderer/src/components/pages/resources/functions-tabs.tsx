@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useT, type MessageKey } from "@renderer/lib/i18n/i18n-provider";
 import { Badge, EmptyState, TabPanel, TabPanels, Tabs, type IconName, type TabItem } from "@renderer/components/ui";
 import { PanelBody } from "@renderer/components/shared/panel";
+import { UtilitiesPanel } from "@renderer/components/pages/functions/utilities-panel";
+import { OverlaysPanel } from "@renderer/components/pages/functions/overlays-panel";
 
 type FunctionTab = "utilities" | "inputs" | "overlays";
 
@@ -19,16 +21,17 @@ const LABEL_KEY: Record<FunctionTab, MessageKey> = {
   overlays: "functions.overlays",
 };
 
-const TITLE_KEY: Record<FunctionTab, MessageKey> = {
-  utilities: "functions.utilitiesTitle",
+/** Only the tabs that are still placeholders — Utilities and Overlays have
+ *  real panels now, so a `Record<FunctionTab, …>` would force an announcement
+ *  text for a feature that has shipped. */
+type PendingTab = Exclude<FunctionTab, "utilities" | "overlays">;
+
+const TITLE_KEY: Record<PendingTab, MessageKey> = {
   inputs: "functions.inputsTitle",
-  overlays: "functions.overlaysTitle",
 };
 
-const HINT_KEY: Record<FunctionTab, MessageKey> = {
-  utilities: "functions.utilitiesHint",
+const HINT_KEY: Record<PendingTab, MessageKey> = {
   inputs: "functions.inputsHint",
-  overlays: "functions.overlaysHint",
 };
 
 const TAB_ID_BASE = "resources-functions";
@@ -37,10 +40,10 @@ const TAB_ID_BASE = "resources-functions";
  * The third resource tab: what can go on the projector that is not a file and
  * not scripture — a countdown, a camera, a lower third.
  *
- * All three are announced and none is built yet. They are real, selectable
- * tabs rather than disabled ones on purpose: the operator gets to read what
- * each one will do, which is the whole value the panel has until the features
- * land. The plans behind them live in `plans/2026-09-17-panel-funciones/`.
+ * Utilities and Overlays are built (`plans/2026-09-17-panel-funciones/`);
+ * Entradas is still an announcement. It is a real, selectable tab rather than
+ * a disabled one on purpose: the operator gets to read what it will do, which
+ * is the whole value a tab has until its feature lands.
  */
 export function FunctionsTabs() {
   const t = useT();
@@ -61,14 +64,20 @@ export function FunctionsTabs() {
             position, no listing and no conversion queue behind it. */}
         {TAB_ORDER.map((value) => (
           <TabPanel active={value === tab} idBase={TAB_ID_BASE} key={value} value={value}>
-            <PanelBody className="p-1.5">
-              <EmptyState
-                action={<Badge variant="blue">{t("functions.inDevelopment")}</Badge>}
-                description={t(HINT_KEY[value])}
-                icon={ICON[value]}
-                title={t(TITLE_KEY[value])}
-              />
-            </PanelBody>
+            {value === "utilities" ? (
+              <UtilitiesPanel />
+            ) : value === "overlays" ? (
+              <OverlaysPanel />
+            ) : (
+              <PanelBody className="p-1.5">
+                <EmptyState
+                  action={<Badge variant="blue">{t("functions.inDevelopment")}</Badge>}
+                  description={t(HINT_KEY[value])}
+                  icon={ICON[value]}
+                  title={t(TITLE_KEY[value])}
+                />
+              </PanelBody>
+            )}
           </TabPanel>
         ))}
       </TabPanels>

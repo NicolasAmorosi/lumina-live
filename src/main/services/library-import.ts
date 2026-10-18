@@ -1,9 +1,11 @@
 import fs from "node:fs";
-import { PREWARM_EXPLICIT_MAX, type AssetKind } from "@shared/constants";
+import path from "node:path";
+import { ASSET_EXTENSIONS, PREWARM_EXPLICIT_MAX, type AssetKind } from "@shared/constants";
 import type { MediaAsset } from "@shared/types/media";
 import { getMediaRepo } from "./repos";
 import { broadcast } from "./broadcast";
 import { prewarmExplicit } from "../slides/deck-service";
+import { notifyMediaChanged } from "../media/conversion-service";
 
 const CHUNK_SIZE = 100;
 /** Below this, an import resolves fast enough (a handful of `statSync` calls
@@ -29,6 +31,26 @@ function withImportLock<T>(fn: () => Promise<T>): Promise<T> {
 
 function yieldToEventLoop(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
+}
+
+/**
+ * Whether a file may become a library row of `kind`. Every way in goes through
+ * here: «Agregar», drag and drop, a linked folder, the legacy import.
+ *
+ * - **Never a sidecar.** macOS writes an AppleDouble `._522.pps` next to every
+ *   file it copies onto a FAT/exFAT stick, and PowerPoint keeps a `~$Himno.pptx`
+ *   lock file beside an open deck. Both carry the extension, neither is a
+ *   presentation: a hymnal copied from a Mac showed every tile twice, and the
+ *   copies were counted, pre-warmed and fed to `soffice` to fail.
+ * - **The extension decides, not the caller.** `kind` comes from the renderer
+ *   (a picker's filter is a hint that can be typed past), and an `.mp3` filed
+ *   as a video only fails later, on the projector.
+ */
+function importable(filePath: string, kind: AssetKind): boolean {
+  const name = path.basename(filePath);
+  if (name.startsWith("._") || name.startsWith("~$")) return false;
+  const ext = path.extname(name).slice(1).toLowerCase();
+  return ASSET_EXTENSIONS[kind].includes(ext);
 }
 
 function chunk<T>(items: readonly T[], size: number): T[][] {
@@ -63,10 +85,11 @@ const PROGRESS_MIN_DELAY_MS = 400;
  * linked folder. A `list*` read must never cause a `list*` re-read.
  */
 export async function importPaths(
-  paths: readonly string[],
+  candidates: readonly string[],
   kind: AssetKind,
   opts?: { inLibrary?: boolean; emitChanged?: boolean },
 ): Promise<MediaAsset[]> {
+  const paths = candidates.filter((filePath) => importable(filePath, kind));
   if (paths.length === 0) return [];
   const inLibrary = opts?.inLibrary ?? true;
   const emitChanged = opts?.emitChanged ?? true;
@@ -125,6 +148,11 @@ export async function importPaths(
     if (emitChanged && mutated > 0) {
       broadcast("library-changed", { kind });
     }
+
+    // Linked-folder browses too (`emitChanged: false`): every video or audio
+    // that enters the app is checked and, if Chromium cannot play it,
+    // converted in the background — the operator's call (2026-10-18).
+    if (mutated > 0 && (kind === "video" || kind === "audio")) notifyMediaChanged();
 
     // Explicit adds pre-warm in the background — never a linked-folder
     // browse (`inLibrary: false`), which the renderer's "visible tiles"

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import {
+  Caption,
   EmptyState,
   HighlightedText,
   Icon,
@@ -69,7 +70,6 @@ export function BibleBrowser() {
   const versions = useBibleStore((s) => s.versions);
   const setBookAndChapter = useBibleStore((s) => s.setBookAndChapter);
   const setVersion = useBibleStore((s) => s.setVersion);
-  const loadVersions = useBibleStore((s) => s.loadVersions);
   const target = usePreviewStore((s) => s.target);
   const [pendingBook, setPendingBook] = useState("");
   const [pendingChapter, setPendingChapter] = useState("");
@@ -78,10 +78,6 @@ export function BibleBrowser() {
   const [searchResults, setSearchResults] = useState<BibleSearchHit[]>([]);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const itemRefs = useRef<(HTMLLIElement | null)[]>([]);
-
-  useEffect(() => {
-    void loadVersions();
-  }, [loadVersions]);
 
   const selectedBook = books.find((b) => b.id === Number(pendingBook));
   const previewIndex = target?.kind === "verse" ? target.verseIndex : null;
@@ -223,11 +219,10 @@ export function BibleBrowser() {
         </div>
         <div className="flex items-center gap-1.5">
           <Tooltip
-            align="start"
             content={
               searchMode === "reference" ? t("bible.searchModeToggleHint") : t("bible.searchModeToggleHintReference")
             }
-            placement="top"
+            floating
           >
             <IconButton
               aria-label={
@@ -272,6 +267,10 @@ export function BibleBrowser() {
                       itemRefs.current[index] = el;
                     }}
                     selected={highlightedIndex === index}
+                    // Without it two hits are two snippets: «…de tal manera
+                    // amó Dios…» says nothing about WHICH verse is about to
+                    // be previewed. Same form as the PREVIEW heading.
+                    leading={<Caption className="shrink-0">{`${hit.bookName} ${hit.chapter}:${hit.verse}`}</Caption>}
                   >
                     <HighlightedText segments={parseSnippet(hit.snippet)} />
                   </ListRow>

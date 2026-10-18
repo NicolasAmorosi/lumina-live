@@ -23,14 +23,56 @@ canciones/letras con secciones proyectables.
 - **UI de favoritos e historial bíblico**: las tablas `bible_favorites` y `projection_history` y
   sus repos existen y funcionan (`HistoryRepo.record()` ya se llama en cada
   `projection:show`), pero no hay pantalla que los liste todavía.
-- **Video embebido dentro de una diapositiva**: se detecta y se loguea al convertir, pero no se
-  extrae ni se reproduce (fuera de alcance acordado). El audio embebido sí funciona.
-- **Ajustes de proyección configurables** (tamaño de fuente, alineación) para biblia/texto: hoy
-  siguen hardcodeados en `vw` dentro de `ProjectionApp.tsx`, igual que la legacy.
-- **Pantalla de Configuración**: ya tiene categorías (Proyección, Sistema) con tema e idioma
-  expuestos; falta agregar `media.volume` y las claves `slides.*` (override de LibreOffice,
-  formato/tamaño de las diapositivas cacheadas) — encajan como un grupo más dentro de una
-  categoría existente o una nueva categoría "Avanzado".
+- ~~**Video embebido dentro de una diapositiva**~~: **implementado el 2026-09-20** como overlay
+  posicionado. Queda un límite duro que no es deuda sino formato: los `.ppt`/`.pps` legacy pierden
+  el video entero, así que la feature es solo para `.pptx`/`.ppsx` — medido en
+  [`.claude/knowledge/an-embedded-deck-video-survives-to-the-pdf-but-never-survives-a-ppt.md`](../../.claude/knowledge/an-embedded-deck-video-survives-to-the-pdf-but-never-survives-a-ppt.md).
+  Lo que sí queda abierto: un video cuyo `p:pic` no trae `a:xfrm` propio (hereda la geometría de un
+  placeholder del layout, que el parser no resuelve) se descarta en vez de adivinarse, y un
+  `.wmv`/`.avi` se extrae pero se marca `playable: false`. En los dos casos la diapositiva se sigue
+  viendo bien: el fotograma de portada ya está rasterizado en su lugar.
+- ~~**Ajustes de proyección configurables** para biblia/texto~~: **implementado el 2026-09-20**.
+  El estilo del versículo vive en la clave `bible.style` de `SettingsMap` —un estilo global, no una
+  fila por preset— con `BibleStyle` (`shared/types/bible-style.ts`), sus validadores/normalizadores
+  y la primera entrada de `SETTINGS_NORMALIZERS`. Se edita en Ajustes ▸ Biblia ▸ Estilo, con la
+  vista previa dibujada por el mismo `OutputView` del proyector, y se guarda al instante: `App` lo
+  espeja a `projection.store`, que recalcula `selectOutput` **sin** tocar `sceneEpoch`, así que
+  editar lo que está EN VIVO es un parche en el lugar y no una transición.
+- **UI de favoritos bíblicos**: `bible_favorites` sigue sin pantalla. Ojo con una decisión ya
+  tomada: borrar una versión **no** borra sus favoritos (están keyed por código, no por FK)
+  justamente para que borrar-y-reimportar no sea destructivo.
+- **Pantalla de Configuración**: cuatro categorías (Proyección, Diapositivas, Biblia, Sistema) con
+  tema, idioma, `media.volume`, las carpetas por tipo (`files.defaultFolders`) y las claves
+  `slides.*` ya expuestas. Lo que sigue sin UI es el override de LibreOffice
+  (`slides.sofficePath`), que hoy solo se toca desde el diálogo de "Buscar soffice…".
+
+## Revisión pre-lanzamiento del 2026-10-18 — lo que quedó abierto a propósito
+
+La revisión completa de esa fecha (main, slides, renderer, UI y Windows) cerró todos sus hallazgos
+críticos, altos y medios. Quedó abierto esto, cada cosa con su motivo:
+
+- **Una música vinculada en WMA/AIFF no se convierte**, se rechaza (`LINKABLE_AUDIO_EXTENSIONS` en
+  `ipc/handlers/library.ts`). `worship://linked-audio/<id>` sirve el archivo tal cual, y los 1229 audios
+  vinculados del himnario real son MP3. Si hiciera falta, pasa por `conversion-service.ts`.
+- **Las filas clickeables de `ListRow` no se alcanzan con el teclado** (Escenas, Placas, Utilidades,
+  Overlays). Hacerlas focusables choca con Enter = EN VIVO: es una decisión de interacción, no un arreglo.
+- **Violaciones de estilo en `pages/`** (la tabla de la revisión de UI): los botones a mano de
+  `media-source-bar.tsx` y del selector de tema, unas 25 clases de tipografía escritas a mano en
+  `pages/`, la nota de advertencia duplicada entre `remove-asset-confirm` y `program-side-panel`, y dos
+  copias de la caja de `FieldGroup`. Son cosméticas y cada una necesita una pasada visual.
+- **Las unidades `s`, `px` y `%` siguen escritas en el código.** Son tipografía, no palabras; los
+  nombres de colores neutros sí pasaron por i18n.
+- **El paquete de Windows lleva los prebuilds de better-sqlite3 de otras plataformas** y sus fuentes
+  de SQLite (~24 MB). Excluirlos por plataforma es posible, pero se tocaría la carga del módulo nativo
+  justo antes del lanzamiento.
+- **Volver a sembrar RV1960 con un JSON distinto borraría la versión de los versículos guardados**
+  (`seed-bible.ts`). No ocurre: el archivo no cambió desde el primer commit.
+- **Sin firma de código** (SmartScreen avisa «Windows protegió su PC») — `I1`, cuesta dinero.
+- **A comprobar a mano en la PC de la iglesia**: Win+P en «Extender»; escalas distintas por monitor;
+  apagar y prender el proyector en pleno culto (la ventana se oculta, el sonido sigue, y vuelve sola a
+  pantalla completa); prender el proyector con la app ya abierta; plan de energía; LibreOffice 64 bits
+  en un primer arranque en frío; «Probar video» con HEVC de iPhone; la salida de audio por HDMI; y la
+  suite E2E contra el `.exe` instalado (`WORSHIP_E2E_EXECUTABLE`).
 
 ## Multiplataforma — resuelto
 

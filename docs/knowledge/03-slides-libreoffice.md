@@ -22,6 +22,35 @@ currentSlide/close` — el cursor vive en el store del renderer y es la única c
 
 `soffice --convert-to png` **solo exporta la primera diapositiva** — de ahí el paso por PDF.
 
+## Un PDF entra por el medio del pipeline
+
+Un `.pdf` es un deck más (`ASSET_EXTENSIONS.ppt`, `kind = "ppt"`, `ProgramItemKind` `"ppt"`) —
+no un `AssetKind` propio. En todo el renderer `kind === "ppt"` ya significa "esto es un deck",
+así que sumar la extensión alcanza para heredar el filtro del diálogo, el drag & drop, el import
+de carpeta, el cache direccionado por contenido, el prewarm, "Preparar carpeta", los thumbs y los
+badges sin una sola rama nueva.
+
+Lo que sí cambia es que **el PDF ya ES el formato intermedio**: `runConversion` lo manda directo
+al rasterizador y `warmBatchPdfCache` lo saca del lote. Pasarlo por `soffice` no es "más lento",
+es peor: LibreOffice lo importa a **Draw** y lo vuelve a dibujar glifo por glifo
+(`convert … as a Draw document … using filter: draw_pdf_Export`; medido, 157 KB → 1,76 MB).
+
+Dos consecuencias que la UI tiene que respetar:
+
+- **Un PDF no necesita LibreOffice.** `deckRequiresSoffice(ext)` (`shared/constants.ts`) es la
+  única fuente de esa pregunta, y el cartel "instalá LibreOffice" (`deck-slides.tsx`) y el botón
+  "Preparar carpeta" (`media-browser.tsx`) la hacen **por deck**, nunca por entorno.
+- **Un PDF no tiene metadata de presentación**: ni transiciones (⇒ `timings_source = "none"`, sin
+  auto-avance) ni partes de media (⇒ sin banda sonora embebida). El `.mp3` hermano *vinculado* sí
+  se resuelve, como en cualquier otro deck.
+
+El rasterizado escala para entrar en un cuadrado de `targetWidth`, no solo por ancho: toda
+diapositiva de Impress/PowerPoint es apaisada y el ancho siempre mandaba, pero una página de PDF
+puede ser vertical. Diagnóstico y mediciones —incluido por qué esto **no** obliga a bumpear
+`SLIDES_CONVERTER_VERSION`— en
+[`.claude/knowledge/a-pdf-source-breaks-two-assumptions-the-pipeline-made-about-its-own-output.md`](../../.claude/knowledge/a-pdf-source-breaks-two-assumptions-the-pipeline-made-about-its-own-output.md),
+que además explica el caso de las fuentes no embebidas y el nuevo error `PDF_PASSWORD`.
+
 ## Por qué el rasterizado va en una `BrowserWindow` oculta
 
 Rasterizar necesita un Canvas2D real. La alternativa (`@napi-rs/canvas` en un `utilityProcess`)
@@ -103,8 +132,32 @@ sea 3× más lenta que leer el archivo completo.
 - Audio: `p:pic` con `a:audioFile` + los `_rels` del slide; `p:cMediaNode` da loop/volumen.
   OOXML no tiene un booleano de "suena en todo el deck" — es una heurística documentada
   (`loop` o `repeatCount="indefinite"` ⇒ `scope: "deck"`).
+- Video: `p:pic` con `a:videoFile` (o el `p14:media` del `p:extLst`), con la misma resolución por
+  `_rels`. Tres diferencias con el audio, y las tres importan:
+  1. **La geometría es obligatoria.** El rect sale de `p:spPr/a:xfrm` (EMU) contra `p:sldSz` y se
+     guarda como fracciones 0..1. Un `p:pic` **sin** `a:xfrm` propio hereda el del placeholder del
+     layout, que este parser no resuelve: se descarta y se anota en `skippedVideoParts`. Un default
+     sería un clip pegado en el lugar equivocado en pleno culto, y la diapositiva rasterizada ya
+     muestra el fotograma de portada en su sitio.
+  2. **`p:cMediaNode` se busca por `spid`**, no en agregado. Una diapositiva con narración *y* clip
+     tiene dos nodos, y darle al video el volumen de la narración es un clip mudo sin explicación.
+     Se cae al agregado de toda la diapositiva sólo cuando ningún nodo declara un `p:tgtEl`.
+  3. **Un rel `TargetMode="External"` no es una parte.** `parseRels` lo descarta: unir un
+     `C:\clips\intro.mp4` a `ppt/slides/` produce un nombre de parte verosímil que no nombra
+     nada. Era inofensivo mientras el valor sólo se logueaba.
 - `.ppt`/`.pps` binarios (OLE2, no zip): se convierten **también** a `.pptx` con una segunda pasada
   de LibreOffice para recuperar estructura y audio embebido (`timings_source = 'ooxml-converted'`).
+  El **video no sobrevive** ese round-trip, y PowerPoint 97-2003 casi nunca lo incrustaba (lo
+  enlazaba por ruta absoluta), así que la reproducción de video embebido es de `.pptx`/`.ppsx`.
+
+### Del OOXML a la diapositiva: el índice cambia de espacio
+
+Los índices del OOXML cuentan las diapositivas **ocultas**; `deck_slides.slide_index` cuenta
+**páginas** del PDF, que no las incluyen. El video se guarda ya traducido al espacio de páginas
+(mapa construido con la misma lista `visibleSlides` que alinea los timings), y si los conteos no
+coinciden se abandonan **todos** los videos del deck en vez de aproximar — la misma disciplina que
+`mergeBinaryTimings`, por la misma razón elevada al cubo: un timing corrido adelanta una
+diapositiva, un video corrido reproduce un clip sobre la diapositiva equivocada.
 
 ## Los timings de un binario legacy NO salen del `.pptx` convertido
 

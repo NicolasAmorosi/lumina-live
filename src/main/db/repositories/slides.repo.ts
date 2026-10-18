@@ -3,9 +3,9 @@ import path from "node:path";
 import { and, asc, eq, inArray, lt, notInArray, sql } from "drizzle-orm";
 import type Database from "better-sqlite3";
 import type { Db } from "../client";
-import { deckAudio, deckSlides, mediaAssets, slideDecks } from "../schema";
-import { slideThumbUrl, slideUrl, deckAudioUrl, linkedAudioUrl } from "@shared/urls";
-import type { DeckDTO, DeckSlide, DeckStatus } from "@shared/types/deck";
+import { deckAudio, deckSlides, deckVideos, mediaAssets, slideDecks } from "../schema";
+import { slideThumbUrl, slideUrl, deckAudioUrl, deckVideoUrl, linkedAudioUrl } from "@shared/urls";
+import type { DeckDTO, DeckSlide, DeckSlideVideo, DeckStatus, SlideRect } from "@shared/types/deck";
 
 /** One `IN (...)` binds one parameter per id; SQLite refuses the statement
  *  past `SQLITE_MAX_VARIABLE_NUMBER`. Same partition size `media.repo.ts`
@@ -22,6 +22,7 @@ export type DeckRow = typeof slideDecks.$inferSelect;
 export type DeckRowSummary = { deckId: number; status: DeckStatus };
 type SlideRow = typeof deckSlides.$inferSelect;
 type AudioRow = typeof deckAudio.$inferSelect;
+type VideoRow = typeof deckVideos.$inferSelect;
 
 export type NewDeck = {
   contentHash: string;
@@ -69,6 +70,19 @@ export type NewAudio = {
   playable: boolean;
 };
 
+export type NewVideo = {
+  slideIndex: number;
+  videoFile: string;
+  ext: string;
+  bytes: number;
+  rect: SlideRect;
+  loop: boolean;
+  /** 0..1, or null when the source file doesn't say. Stored as a percent, like
+   *  `NewAudio.volume`. */
+  volume: number | null;
+  playable: boolean;
+};
+
 export class SlidesRepo {
   constructor(
     private readonly db: Db,
@@ -97,6 +111,8 @@ export class SlidesRepo {
 
   private insertSlideStatement: Database.Statement | null = null;
   private insertAudioStatement: Database.Statement | null = null;
+  private insertVideoStatement: Database.Statement | null = null;
+  private videoPathStatement: Database.Statement | null = null;
 
   private insertSlideStmt(): Database.Statement {
     this.insertSlideStatement ??= this.sqlite.prepare(
@@ -116,6 +132,25 @@ export class SlidesRepo {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     return this.insertAudioStatement;
+  }
+
+  private insertVideoStmt(): Database.Statement {
+    this.insertVideoStatement ??= this.sqlite.prepare(
+      `INSERT INTO deck_videos
+         (deck_id, slide_index, video_file, ext, bytes,
+          rect_x, rect_y, rect_width, rect_height, loop, volume, playable)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    return this.insertVideoStatement;
+  }
+
+  private videoPathStmt(): Database.Statement {
+    this.videoPathStatement ??= this.sqlite.prepare(
+      `SELECT d.cache_dir AS cacheDir, v.video_file AS videoFile
+         FROM deck_videos v JOIN slide_decks d ON d.id = v.deck_id
+        WHERE v.id = ?`,
+    );
+    return this.videoPathStatement;
   }
 
   private audioPathStmt(): Database.Statement {
@@ -310,10 +345,38 @@ export class SlidesRepo {
     return this.db.select().from(deckAudio).where(eq(deckAudio.deckId, deckId)).all();
   }
 
+  listVideos(deckId: number): VideoRow[] {
+    return this.db
+      .select()
+      .from(deckVideos)
+      .where(eq(deckVideos.deckId, deckId))
+      .orderBy(asc(deckVideos.slideIndex))
+      .all();
+  }
+
   // -- writes ---------------------------------------------------------------
 
+  /** A clip `media/deck-clips.ts` made playable in place: the same row, now
+   *  pointing at the converted file (or at the same one, found playable after
+   *  all), so its id — and the `worship://deck-video/<id>` url — never change. */
+  updateClip(kind: "video" | "audio", id: number, file: string, ext: string, bytes: number): void {
+    if (kind === "video") {
+      this.db
+        .update(deckVideos)
+        .set({ videoFile: file, ext, bytes, playable: 1 })
+        .where(eq(deckVideos.id, id))
+        .run();
+    } else {
+      this.db
+        .update(deckAudio)
+        .set({ audioFile: file, ext, bytes, playable: 1 })
+        .where(eq(deckAudio.id, id))
+        .run();
+    }
+  }
+
   /** Single transaction: a half-inserted deck must never be observable. */
-  insertDeck(deck: NewDeck, slides: NewSlide[], audio: NewAudio[]): number {
+  insertDeck(deck: NewDeck, slides: NewSlide[], audio: NewAudio[], videos: NewVideo[] = []): number {
     const now = Date.now();
     const insert = this.sqlite.transaction(() => {
       // Replace any previous conversion with the same identity (e.g. a forced
@@ -375,6 +438,24 @@ export class SlidesRepo {
           track.loop ? 1 : 0,
           track.volume === null ? null : Math.round(track.volume * 100),
           track.playable ? 1 : 0,
+        );
+      }
+
+      const insertVideo = this.insertVideoStmt();
+      for (const video of videos) {
+        insertVideo.run(
+          deckId,
+          video.slideIndex,
+          video.videoFile,
+          video.ext,
+          video.bytes,
+          video.rect.x,
+          video.rect.y,
+          video.rect.width,
+          video.rect.height,
+          video.loop ? 1 : 0,
+          video.volume === null ? null : Math.round(video.volume * 100),
+          video.playable ? 1 : 0,
         );
       }
 
@@ -532,7 +613,11 @@ export class SlidesRepo {
       .delete(deckAudio)
       .where(sql`${deckAudio.deckId} NOT IN (SELECT ${slideDecks.id} FROM ${slideDecks})`)
       .run();
-    return Number(slides.changes) + Number(audio.changes);
+    const videos = this.db
+      .delete(deckVideos)
+      .where(sql`${deckVideos.deckId} NOT IN (SELECT ${slideDecks.id} FROM ${slideDecks})`)
+      .run();
+    return Number(slides.changes) + Number(audio.changes) + Number(videos.changes);
   }
 
   /** Drops decks left mid-conversion by a crash — a crash skips before-quit,
@@ -638,6 +723,14 @@ export class SlidesRepo {
     return path.join(row.cacheDir, variant === "full" ? row.imageFile : row.thumbFile);
   }
 
+  getVideoPath(videoId: number): string | null {
+    const row = this.videoPathStmt().get(videoId) as
+      | { cacheDir: string; videoFile: string }
+      | undefined;
+    if (!row) return null;
+    return path.join(row.cacheDir, "video", row.videoFile);
+  }
+
   getAudioPath(audioId: number): string | null {
     const row = this.audioPathStmt().get(audioId) as
       | { cacheDir: string; audioFile: string }
@@ -666,7 +759,7 @@ export class SlidesRepo {
 
     const soundtrack: DeckDTO["soundtrack"] = embeddedTrack
       ? {
-          url: deckAudioUrl(embeddedTrack.id),
+          url: deckAudioUrl(embeddedTrack.id, embeddedTrack.audioFile),
           durationMs: null,
           origin: embeddedTrack.origin,
           name: embeddedTrack.audioFile,
@@ -679,6 +772,31 @@ export class SlidesRepo {
             name: path.basename(linkedAudioPath),
           }
         : null;
+
+    // One video per slide: `ProjectionOutput` sustains a single `slideVideo`,
+    // so a slide that somehow carries two keeps the first and the second is
+    // simply a still (its poster frame is already in the rasterized image).
+    // Unplayable rows never reach the renderer at all — see `DeckSlideVideo`.
+    const videos: DeckSlideVideo[] = [];
+    const slidesWithVideo = new Set<number>();
+    for (const row of this.listVideos(deckRow.id)) {
+      if (row.playable !== 1 || slidesWithVideo.has(row.slideIndex)) continue;
+      // A video whose slide no longer exists, or whose page has no size on
+      // record, has no box to be positioned inside. Dropped rather than given
+      // a default: the poster frame in the rasterized slide is already right.
+      const page = slideRows.find((slide) => slide.slideIndex === row.slideIndex);
+      if (!page || page.widthPx <= 0 || page.heightPx <= 0) continue;
+      slidesWithVideo.add(row.slideIndex);
+      videos.push({
+        slideIndex: row.slideIndex,
+        url: deckVideoUrl(row.id, row.videoFile),
+        rect: { x: row.rectX, y: row.rectY, width: row.rectWidth, height: row.rectHeight },
+        aspectRatio: page.widthPx / page.heightPx,
+        loop: row.loop === 1,
+        volume: row.volume === null ? null : row.volume / 100,
+        name: row.videoFile,
+      });
+    }
 
     const slides: DeckSlide[] = slideRows.map((row) => ({
       index: row.slideIndex,
@@ -695,6 +813,7 @@ export class SlidesRepo {
       slideCount: deckRow.slideCount,
       slides,
       soundtrack,
+      videos,
       autoAdvance: slides.some((slide) => slide.advanceAfterMs !== null),
       timingsSource: deckRow.timingsSource,
       sourceMtimeMs: deckRow.sourceMtimeMs,

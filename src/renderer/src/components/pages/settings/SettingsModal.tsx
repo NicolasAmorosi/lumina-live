@@ -4,11 +4,12 @@ import { Modal } from "@renderer/components/shared/modal/Modal";
 import { DialogHeader, IconButton, Icon, TabPanel, TabPanels, Tabs, type TabItem } from "@renderer/components/ui";
 import { ModalTitle } from "@renderer/components/shared/modal";
 import { ProjectionSection } from "./sections/projection-section";
+import { VerseSection } from "./sections/verse/verse-section";
 import { BibleSection } from "./sections/bible-section";
 import { SlidesSection } from "./sections/slides-section";
 import { SystemSection } from "./sections/system-section";
 
-type SettingsSection = "projection" | "slides" | "bible" | "system";
+type SettingsSection = "projection" | "slides" | "verse" | "bible" | "system";
 
 const SECTION_ID_BASE = "settings";
 
@@ -30,6 +31,10 @@ export function SettingsModal({ onOpenChange, open }: { onOpenChange: (open: boo
   const sections: readonly TabItem<SettingsSection>[] = [
     { icon: "display", label: t("settings.sections.projection"), value: "projection" },
     { icon: "ppt", label: t("settings.sections.slides"), value: "slides" },
+    // «Versículos» is how a verse is DRESSED; «Biblia» is which bibles are
+    // installed. They were one section with two tabs, and the tab row read as
+    // a second, competing level of the category list right beside it.
+    { icon: "text", label: t("settings.sections.verse"), value: "verse" },
     { icon: "bible", label: t("settings.sections.bible"), value: "bible" },
     { icon: "settings", label: t("settings.sections.system"), value: "system" },
   ];
@@ -52,7 +57,17 @@ export function SettingsModal({ onOpenChange, open }: { onOpenChange: (open: boo
     >
       <DialogHeader className="border-b border-border">
         <ModalTitle>{t("settings.title")}</ModalTitle>
-        <IconButton onClick={() => onOpenChange(false)} size="xs" title={t("settings.close")} variant="ghost">
+        {/* The native `title`, like the close button of every other modal here
+            (`ScenesModal`, `ProgramsModal`, `ConfirmModal`). An X needs no
+            bubble to explain it, and converting this one alone would only make
+            the four differ. */}
+        <IconButton
+          aria-label={t("settings.close")}
+          onClick={() => onOpenChange(false)}
+          size="xs"
+          title={t("settings.close")}
+          variant="ghost"
+        >
           <Icon name="close" />
         </IconButton>
       </DialogHeader>
@@ -76,7 +91,21 @@ export function SettingsModal({ onOpenChange, open }: { onOpenChange: (open: boo
               .filter((value) => visited.includes(value))
               .map((value) => (
                 <TabPanel active={value === section} idBase={SECTION_ID_BASE} key={value} value={value}>
-                  <div className="min-w-0 flex-1 overflow-y-auto p-6">
+                  {/* «Versículos» is the one section that scrolls ITSELF: its
+                      live preview is a fixed band above the controls, exactly
+                      like the scene editor's, and a band cannot be pinned from
+                      inside a scroller that also owns the padding around it. So
+                      that section gets a bare flex column and lays out its own
+                      header and its own scrolling body; every other one keeps
+                      the shared scroller, which is what makes them all share a
+                      gutter. */}
+                  <div
+                    className={
+                      value === "verse"
+                        ? "flex min-w-0 min-h-0 flex-1 flex-col"
+                        : "min-w-0 flex-1 overflow-y-auto p-6"
+                    }
+                  >
                     {value === "projection" ? (
                       <ProjectionSection />
                     ) : value === "slides" ? (
@@ -85,6 +114,8 @@ export function SettingsModal({ onOpenChange, open }: { onOpenChange: (open: boo
                       // stays mounted would keep showing the number from the
                       // first visit after a conversion or a purge.
                       <SlidesSection active={value === section} />
+                    ) : value === "verse" ? (
+                      <VerseSection />
                     ) : value === "bible" ? (
                       <BibleSection />
                     ) : (

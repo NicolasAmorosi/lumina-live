@@ -1,23 +1,17 @@
-import { useT, type MessageKey } from "@renderer/lib/i18n/i18n-provider";
-import { Button, Icon, Select, Tooltip, VolumeControl } from "@renderer/components/ui";
+import { useState } from "react";
+import { useT } from "@renderer/lib/i18n/i18n-provider";
+import { Button, FieldGroup, FieldRow, Icon, Select, Tooltip, VolumeControl } from "@renderer/components/ui";
+import { ConfirmModal } from "@renderer/components/shared/modal";
+import { transitionDurationOptions, transitionStyleOptions } from "@renderer/lib/transition";
 import { useDisplayStore } from "@renderer/stores/display.store";
-import { useProjectionStore } from "@renderer/stores/projection.store";
+import { selectOutputMemo, useProjectionStore } from "@renderer/stores/projection.store";
 import { useSettingsStore } from "@renderer/stores/settings.store";
 import { clearLive } from "@renderer/lib/actions/playback";
 import { api } from "@renderer/lib/api";
 import { toast } from "@renderer/lib/toast";
 import { IpcError } from "@shared/ipc/result";
 import { LOGO_URL } from "@shared/urls";
-import type { TransitionStyle } from "@shared/types/projection";
-import { SettingsGroup, SettingsRow } from "../settings-row";
-
-const TRANSITION_STYLE_LABEL_KEYS: Record<TransitionStyle, MessageKey> = {
-  none: "settings.transitionStyles.none",
-  crossfade: "settings.transitionStyles.crossfade",
-  "fade-through-black": "settings.transitionStyles.fadeThroughBlack",
-};
-
-const TRANSITION_DURATION_OPTIONS = [150, 300, 600] as const;
+import type { TransitionStyle } from "@shared/types/transition";
 
 /** Everything about what the projector shows: which screen, the fallback
  *  logo, and clearing whatever is currently live. */
@@ -26,6 +20,10 @@ export function ProjectionSection() {
   const { displayId, displays, setDisplayId } = useDisplayStore();
   const presentationOpen = useProjectionStore((s) => s.presentationOpen);
   const base = useProjectionStore((s) => s.base);
+  // What the projector is showing right now, read the same way the LIVE
+  // monitor reads it — the only honest way to know whether removing the logo
+  // is about to blank a screen the congregation is looking at.
+  const output = useProjectionStore(selectOutputMemo);
   const logoPath = useSettingsStore((s) => s.settings["logo.path"]);
   const transitionStyle = useSettingsStore((s) => s.settings["projection.transition.style"]);
   const transitionDurationMs = useSettingsStore((s) => s.settings["projection.transition.durationMs"]);
@@ -38,6 +36,8 @@ export function ProjectionSection() {
   // previous image after picking a new one (React sees an unchanged `src`
   // and never re-fetches).
   const logoUrl = logoPath ? `${LOGO_URL}?p=${encodeURIComponent(logoPath)}` : null;
+  const logoOnAir = presentationOpen && output.kind === "logo";
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   async function changeLogo() {
     try {
@@ -57,10 +57,23 @@ export function ProjectionSection() {
     await useSettingsStore.getState().load();
   }
 
+  /** Clears the setting, not a file: the image stays where it is on disk and
+   *  can be picked again. Written through the store (unlike `changeLogo`,
+   *  where main itself wrote the row and the store had to re-read it), so the
+   *  thumbnail below and the projector both follow immediately. */
+  async function removeLogo() {
+    await updateSettings({ "logo.path": null });
+  }
+
+  function handleRemoveLogo() {
+    if (logoOnAir) setConfirmRemove(true);
+    else void removeLogo();
+  }
+
   return (
     <div className="flex flex-col gap-6">
-      <SettingsGroup title={t("settings.groups.screen")}>
-        <SettingsRow description={t("settings.displayDesc")} label={t("settings.display")}>
+      <FieldGroup title={t("settings.groups.screen")}>
+        <FieldRow description={t("settings.displayDesc")} label={t("settings.display")}>
           <Select
             className="min-w-56"
             onChange={(value) => void setDisplayId(Number(value))}
@@ -71,8 +84,8 @@ export function ProjectionSection() {
             size="md"
             value={displayId !== null ? String(displayId) : ""}
           />
-        </SettingsRow>
-        <SettingsRow description={t("settings.windowDesc")} label={t("settings.windowLabel")}>
+        </FieldRow>
+        <FieldRow description={t("settings.windowDesc")} label={t("settings.windowLabel")}>
           {presentationOpen ? (
             <Button onClick={() => void useDisplayStore.getState().close()} variant="secondary">
               {t("header.closeDisplay")}
@@ -82,37 +95,51 @@ export function ProjectionSection() {
               {t("header.openDisplay")}
             </Button>
           )}
-        </SettingsRow>
-      </SettingsGroup>
+        </FieldRow>
+      </FieldGroup>
 
-      <SettingsGroup title={t("settings.groups.logo")}>
-        <SettingsRow description={t("settings.logoDesc")} label={t("settings.logo")}>
+      <FieldGroup title={t("settings.groups.logo")}>
+        <FieldRow description={t("settings.logoDesc")} label={t("settings.logo")}>
           <Tooltip content={t("settings.logoFormats")} floating>
             <Icon className="text-subtle" name="help" />
           </Tooltip>
           <Button onClick={() => void changeLogo()} variant="secondary">
             {t("settings.chooseFile")}
           </Button>
-        </SettingsRow>
-        <div className="flex h-64 items-center justify-center overflow-hidden bg-surface px-4 py-3">
+          {/* Asked first only when the logo IS the picture on the projector:
+              removing it then turns the screen black in front of everybody,
+              which is not what "quitar una preferencia" looks like. With
+              nothing on air it is a plain setting and gets no dialog. */}
+          <Button
+            disabled={logoPath === null}
+            onClick={handleRemoveLogo}
+            variant="outline"
+          >
+            <Icon name="close" /> {t("settings.logoRemove")}
+          </Button>
+        </FieldRow>
+        <div className="flex h-64 flex-col items-center justify-center gap-2 overflow-hidden bg-surface px-4 py-3">
           {logoUrl ? (
             <img alt="" className="h-full max-w-full object-contain" src={logoUrl} />
           ) : (
-            <Icon className="text-subtle" name="image" />
+            <>
+              <Icon className="text-subtle" name="image" />
+              <span className="text-xs text-subtle">{t("settings.logoEmpty")}</span>
+            </>
           )}
         </div>
-      </SettingsGroup>
+      </FieldGroup>
 
-      <SettingsGroup title={t("settings.groups.liveContent")}>
-        <SettingsRow description={t("settings.clearLiveDesc")} label={t("settings.clearLive")}>
+      <FieldGroup title={t("settings.groups.liveContent")}>
+        <FieldRow description={t("settings.clearLiveDesc")} label={t("settings.clearLive")}>
           <Button disabled={base === null} onClick={clearLive} variant="outline">
             <Icon name="close" /> {t("footer.clear")}
           </Button>
-        </SettingsRow>
-      </SettingsGroup>
+        </FieldRow>
+      </FieldGroup>
 
-      <SettingsGroup title={t("settings.groups.audio")}>
-        <SettingsRow description={t("settings.startVolumeDesc")} label={t("settings.startVolume")}>
+      <FieldGroup title={t("settings.groups.audio")}>
+        <FieldRow description={t("settings.startVolumeDesc")} label={t("settings.startVolume")}>
           <span className="w-10 text-right text-sm tabular-nums text-muted-foreground">
             {Math.round(startVolume * 100)}%
           </span>
@@ -122,36 +149,39 @@ export function ProjectionSection() {
             onChange={(volume) => void updateSettings({ "media.volume": volume })}
             value={startVolume}
           />
-        </SettingsRow>
-      </SettingsGroup>
+        </FieldRow>
+      </FieldGroup>
 
-      <SettingsGroup title={t("settings.groups.transition")}>
-        <SettingsRow description={t("settings.transitionStyleDesc")} label={t("settings.transitionStyle")}>
+      <ConfirmModal
+        confirmLabel={t("settings.logoRemove")}
+        description={t("settings.logoRemoveLiveBody")}
+        onConfirm={removeLogo}
+        onOpenChange={setConfirmRemove}
+        open={confirmRemove}
+        title={t("settings.logoRemoveTitle")}
+      />
+
+      <FieldGroup title={t("settings.groups.transition")}>
+        <FieldRow description={t("settings.transitionStyleDesc")} label={t("settings.transitionStyle")}>
           <Select
             className="min-w-48"
             onChange={(value) => void updateSettings({ "projection.transition.style": value as TransitionStyle })}
-            options={(Object.keys(TRANSITION_STYLE_LABEL_KEYS) as TransitionStyle[]).map((style) => ({
-              label: t(TRANSITION_STYLE_LABEL_KEYS[style]),
-              value: style,
-            }))}
+            options={transitionStyleOptions(t)}
             size="md"
             value={transitionStyle}
           />
-        </SettingsRow>
-        <SettingsRow description={t("settings.transitionDurationDesc")} label={t("settings.transitionDuration")}>
+        </FieldRow>
+        <FieldRow description={t("settings.transitionDurationDesc")} label={t("settings.transitionDuration")}>
           <Select
             className="min-w-40"
             disabled={transitionStyle === "none"}
             onChange={(value) => void updateSettings({ "projection.transition.durationMs": Number(value) })}
-            options={TRANSITION_DURATION_OPTIONS.map((ms) => ({
-              label: t(`settings.transitionDurationOptions.${ms}`),
-              value: String(ms),
-            }))}
+            options={transitionDurationOptions(t)}
             size="md"
             value={String(transitionDurationMs)}
           />
-        </SettingsRow>
-      </SettingsGroup>
+        </FieldRow>
+      </FieldGroup>
     </div>
   );
 }

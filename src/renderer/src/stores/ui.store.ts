@@ -20,18 +20,22 @@ type UiStoreState = {
    *  rather than by every mounted `MediaBrowser` — see `F1`. */
   removeAssetConfirmId: number | null;
   setRemoveAssetConfirmId: (id: number | null) => void;
-  /** "Hay cambios sin guardar, ¿cerrar igualmente?" — raised from
-   *  `effects/draft-autosave.ts` when main asks whether the window may close,
-   *  which again is not a component's question to ask. */
-  closeGuardOpen: boolean;
-  setCloseGuardOpen: (open: boolean) => void;
+  /** "¿Cerrar igualmente?" — raised from `effects/draft-autosave.ts` when main
+   *  asks whether the window may close, which again is not a component's
+   *  question to ask. `null` when closed; otherwise why it is asking. */
+  closeGuard: CloseGuardReasons | null;
+  setCloseGuard: (reasons: CloseGuardReasons | null) => void;
 };
+
+/** Why closing needs a confirmation: work that is not saved, and/or something
+ *  the congregation is looking at right now. */
+export type CloseGuardReasons = { unsaved: boolean; onAir: boolean };
 
 export const useUiStore = create<UiStoreState>((set) => ({
   settingsOpen: false,
   setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   removeAssetConfirmId: null,
   setRemoveAssetConfirmId: (removeAssetConfirmId) => set({ removeAssetConfirmId }),
-  closeGuardOpen: false,
-  setCloseGuardOpen: (closeGuardOpen) => set({ closeGuardOpen }),
+  closeGuard: null,
+  setCloseGuard: (closeGuard) => set({ closeGuard }),
 }));

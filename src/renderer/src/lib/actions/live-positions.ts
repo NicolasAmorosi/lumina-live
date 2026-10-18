@@ -3,6 +3,7 @@ import { useProjectionStore } from "@renderer/stores/projection.store";
 import { mediaTargetKey } from "@shared/types/projection";
 
 const VIDEO_STATUS_KEY = mediaTargetKey({ kind: "video" });
+const SLIDE_VIDEO_STATUS_KEY = mediaTargetKey({ kind: "slideVideo" });
 
 /**
  * Folds "where each live media element actually is" back into "where it would
@@ -47,6 +48,21 @@ export function freezeLivePositions(): void {
   useAudioStore.getState().setStartPositions(positions);
 
   const { base } = projection;
+
+  // A video embedded in the live slide is the same mount-time seek as every
+  // other element here, and forgetting it has the same cost: moving the
+  // projector to another screen mid-service would restart the clip from zero.
+  // Guarded by `slideVideoEpoch` for the reason the tracks above are — the
+  // slot is reused by every slide, so a report describing the previous one
+  // must never become this one's resume point.
+  if (base?.kind === "deck") {
+    const slideVideoStatus = mediaStatus[SLIDE_VIDEO_STATUS_KEY];
+    if (slideVideoStatus && slideVideoStatus.epoch === projection.slideVideoEpoch) {
+      projection.setSlideVideoResumeAt(slideVideoStatus.currentTimeSeconds);
+    }
+    return;
+  }
+
   if (base?.kind !== "video") return;
   const videoStatus = mediaStatus[VIDEO_STATUS_KEY];
   if (videoStatus && videoStatus.epoch === base.epoch) {

@@ -2,20 +2,26 @@ import { useProgramStore } from "@renderer/stores/program.store";
 import { buildCumulativeMs, useProjectionStore } from "@renderer/stores/projection.store";
 import { useDeckStore } from "@renderer/stores/deck.store";
 import { useDisplayStore } from "@renderer/stores/display.store";
-import { usePreviewStore } from "@renderer/stores/preview.store";
-import { useBibleStore } from "@renderer/stores/bible.store";
+import { usePreviewStore, type PreviewTarget } from "@renderer/stores/preview.store";
+import { findPlate, useOverlayStore } from "@renderer/stores/overlay.store";
+import { bibleVersionLabel, useBibleStore } from "@renderer/stores/bible.store";
 import { useAudioStore, nextAssetTrack } from "@renderer/stores/audio.store";
+import { findScene, useUtilityStore } from "@renderer/stores/utility.store";
 import { notifyManualNavigation } from "@renderer/effects/deck-autoplay";
 import { projectVerse } from "@renderer/lib/actions/bible";
 import { stopPreviewPlayback } from "@renderer/lib/actions/preview-playback";
+import { previewedScheduleItem } from "@renderer/lib/actions/preview";
 import { defaultMediaVolume } from "@renderer/stores/settings.store";
 import { api } from "@renderer/lib/api";
-import { assetUrl } from "@shared/urls";
 import type { MediaAsset } from "@shared/types/media";
 import type { DeckDTO } from "@shared/types/deck";
 import type { LiveDeck } from "@renderer/stores/projection.store";
 import type { OverlayState } from "@shared/types/projection";
-import { claimLiveIntent, isCurrentLiveIntent } from "@renderer/lib/actions/live-intent";
+import { claimLiveIntent, currentLiveIntent, isCurrentLiveIntent } from "@renderer/lib/actions/live-intent";
+import { playableAssetUrl, useConversionStore } from "@renderer/stores/conversion.store";
+import { getCachedMediaAsset } from "@renderer/lib/hooks/use-media-asset";
+import { t } from "@renderer/lib/i18n/i18n-provider";
+import { toast } from "@renderer/lib/toast";
 import type { AssetKind } from "@shared/constants";
 
 let videoEpoch = 0;
@@ -45,7 +51,7 @@ function goLiveWithAudioAsset(asset: MediaAsset, startAtSeconds: number): void {
     source: "asset",
     assetId: asset.id,
     label: asset.name,
-    url: assetUrl(asset.id),
+    url: playableAssetUrl(asset.id),
     epoch,
     paused: false,
     startAtSeconds,
@@ -59,6 +65,7 @@ function toLiveDeck(deck: DeckDTO): LiveDeck {
     deckId: deck.deckId,
     slides: deck.slides,
     soundtrack: deck.soundtrack,
+    videos: deck.videos,
     cumulativeMs: buildCumulativeMs(deck.slides),
     autoAdvance: deck.autoAdvance,
   };
@@ -166,7 +173,7 @@ async function goLiveWithMediaAsset(
   if (asset.kind === "video") {
     beginScene();
     videoEpoch += 1;
-    setBase({ kind: "video", assetId: asset.id, epoch: videoEpoch, startAtSeconds });
+    setBase({ kind: "video", assetId: asset.id, url: playableAssetUrl(asset.id), epoch: videoEpoch, startAtSeconds });
   } else if (asset.kind === "image") {
     beginScene();
     setBase({ kind: "image", assetId: asset.id });
@@ -180,6 +187,87 @@ async function goLiveWithMediaAsset(
   return "base";
 }
 
+/**
+ * A utility scene replaces `base` like any other content — it is full-screen
+ * content, not an overlay (decision of 2026-09-17).
+ *
+ * Synchronous, so the `isCurrentLiveIntent` check `goLive()` already made
+ * after opening the projector still holds: there is no `await` between there
+ * and the commit below.
+ *
+ * `scheduleIndex` is the row that claims the on-air rail — a scene sent from
+ * the Utilidades panel is live content that is not in the schedule, so it
+ * passes `null` and no row may claim it. Returns whether anything reached the
+ * projector: a scene whose row was deleted between the drag and the press
+ * changes nothing, and must not light up a rail either.
+ */
+function goLiveWithUtilityScene(sceneId: number, scheduleIndex: number | null): boolean {
+  const utility = useUtilityStore.getState();
+  const scene = findScene(utility.scenes, sceneId);
+  if (!scene) return false;
+
+  // Already on the projector: nothing to send, only to uncover. Taking the
+  // path below restarted a running countdown at its full duration — PREVIEW
+  // had just shown 03:21, because what is live wins (`clockForScene`) — and
+  // threw away the clock the operator had armed on another scene.
+  const live = useProjectionStore.getState().base;
+  if (live?.kind === "utility" && live.sceneId === scene.id) {
+    useProgramStore.getState().setActive(scheduleIndex);
+    useProjectionStore.getState().setOverlay("none");
+    return true;
+  }
+
+  // EN VIVO on a countdown nobody started means "start it": projecting a
+  // frozen 10:00 is never what the operator meant by pressing it. One they
+  // paused on purpose is left exactly as it is — same rule as a video's
+  // declarative `paused`.
+  const clock = utility.ensureStarted(scene);
+
+  useProgramStore.getState().setActive(scheduleIndex);
+  useAudioStore.getState().setDeckTrack(null);
+  useBibleStore.getState().setCurrentVerseIndex(null);
+
+  const store = useProjectionStore.getState();
+  store.beginScene();
+  store.setBase({ kind: "utility", sceneId: scene.id, scene, clock });
+  store.setOverlay("none");
+  return true;
+}
+
+/**
+ * A plate does not replace `base`: it goes UP over whatever is projected, and
+ * replaces only the plate of its own kind (`showPlate`). Everything that makes
+ * EN VIVO "send new content" is deliberately skipped — no `beginScene()`
+ * (the stage would fade into itself), no rail on the schedule (the content
+ * row below keeps it), and NEGRO/LOGO stay up: a plate is covered with
+ * everything else, and pressing EN VIVO on a name must never uncover the
+ * stage behind the operator's back.
+ *
+ * Nor does it claim the live intent. A deck still converting from an earlier
+ * EN VIVO must still land: putting a name over it is not the operator
+ * changing their mind about the content (see `liveIntent`).
+ *
+ * Already up → a no-op, like an audio track that is already sounding: EN VIVO
+ * twice must not replay its entrance or restart its count.
+ */
+async function goLiveWithPlate(plateId: number): Promise<void> {
+  const plate = findPlate(useOverlayStore.getState().plates, plateId);
+  if (!plate) return;
+  await useDisplayStore.getState().openIfNeeded();
+  const store = useProjectionStore.getState();
+  if (store.livePlates.some((live) => live.id === plate.id)) return;
+  store.showPlate(plate);
+}
+
+/** The plate a preview target puts up, if it is one — straight from the
+ *  Overlays list or from a `plate` row of the schedule. */
+function previewedPlateId(target: PreviewTarget): number | null {
+  if (target.kind === "plate") return target.plateId;
+  if (target.kind !== "scheduleItem") return null;
+  const item = previewedScheduleItem();
+  return item?.kind === "plate" ? item.overlayPlateId : null;
+}
+
 async function goLiveWithScheduleItem(
   index: number,
   startSlideIndex: number,
@@ -189,10 +277,17 @@ async function goLiveWithScheduleItem(
   const { items, setActive } = useProgramStore.getState();
   const item = items[index];
   if (!item) return;
+  /** Where that row is NOW: a deck can take seconds to convert, and a row
+   *  dropped above it or deleted meanwhile used to put the on-air rail on
+   *  whatever row ended up at the old position. */
+  const settleRail = () => {
+    const at = useProgramStore.getState().items.indexOf(item);
+    useProgramStore.getState().setActive(at >= 0 ? at : null);
+  };
 
   switch (item.kind) {
     case "ppt": {
-      if (await goLiveWithDeck(item.mediaAssetId, startSlideIndex, intent)) setActive(index);
+      if (await goLiveWithDeck(item.mediaAssetId, startSlideIndex, intent)) settleRail();
       return;
     }
     case "media": {
@@ -200,7 +295,7 @@ async function goLiveWithScheduleItem(
       // on the projector", and audio never is. Its own "sounding" indicator
       // (schedule-row.tsx) is driven by the audio store instead.
       const result = await goLiveWithMediaAsset(item.mediaAssetId, startAtSeconds, intent);
-      if (result === "base") setActive(index);
+      if (result === "base") settleRail();
       return;
     }
     case "bible": {
@@ -215,10 +310,26 @@ async function goLiveWithScheduleItem(
         kind: "bible",
         text: item.text,
         reference: item.reference,
+        // The row's own version, which may be gone — the FK is `set null`, so
+        // a program saved before a version was deleted keeps its text and its
+        // reference and loses only the label.
+        versionLabel: bibleVersionLabel(useBibleStore.getState().versions, item.bibleVersionId),
       });
       useProjectionStore.getState().setOverlay("none");
       return;
     }
+    case "utility": {
+      // The same commit the Utilidades panel uses, with the row claiming the
+      // rail. `setActive` is inside it rather than here because the scene may
+      // be gone — a program saved months ago whose scene was force-deleted
+      // since — and a rail lit on a projector that never changed is the kind
+      // of lie the monitors exist to prevent.
+      goLiveWithUtilityScene(item.utilitySceneId, index);
+      return;
+    }
+    case "plate":
+      // Handled before the live intent is claimed — see `goLive()`.
+      return;
   }
 }
 
@@ -239,6 +350,46 @@ async function goLiveWithAsset(
   if (result === "base") useProgramStore.getState().setActive(null);
 }
 
+/** Whether a preview target is a standalone audio, which goes live without
+ *  changing the picture. A schedule row only says "media", so its asset says
+ *  the kind — already cached, since PREVIEW resolved it to show it. */
+function isAudioTarget(target: PreviewTarget): boolean {
+  if (target.kind === "asset") return target.assetKind === "audio";
+  if (target.kind !== "scheduleItem") return false;
+  const item = previewedScheduleItem();
+  return item?.kind === "media" && getCachedMediaAsset(item.mediaAssetId)?.kind === "audio";
+}
+
+/** The library asset a preview target would send, when it is a video or an
+ *  audio — the only kinds main ever has to convert. */
+function previewedMediaAssetId(target: PreviewTarget): number | null {
+  if (target.kind === "asset") {
+    return target.assetKind === "video" || target.assetKind === "audio" ? target.assetId : null;
+  }
+  if (target.kind !== "scheduleItem") return null;
+  const item = previewedScheduleItem();
+  return item?.kind === "media" ? item.mediaAssetId : null;
+}
+
+/**
+ * True, with a toast saying why, when the target is a video or audio main is
+ * still converting (or could not convert). Its original would project black,
+ * or sound nothing — the very failures the conversion exists to prevent.
+ *
+ * Checked before the live intent is claimed, like a plate: a refused EN VIVO
+ * changes nothing at all. No fade starts, no NEGRO is lifted, no projector is
+ * opened onto an empty stage, and whatever was already live stays live.
+ */
+function refusesUnconverted(target: PreviewTarget): boolean {
+  const assetId = previewedMediaAssetId(target);
+  const state = assetId === null ? undefined : useConversionStore.getState().byAssetId[assetId];
+  if (assetId === null || !state) return false;
+  const name = getCachedMediaAsset(assetId)?.name ?? "";
+  if (state.status === "failed") toast.danger(t("conversion.failedLive", { name }));
+  else toast.warning(t("conversion.notReady", { name }));
+  return true;
+}
+
 /**
  * Stage two: send whatever is in the preview pane to the projector. The single
  * implementation behind the EN VIVO button, the Enter shortcut and
@@ -248,11 +399,26 @@ export async function goLive(): Promise<void> {
   const { slideIndex, positionSeconds, target } = usePreviewStore.getState();
   if (!target) return;
 
+  const plateId = previewedPlateId(target);
+  if (plateId !== null) {
+    await goLiveWithPlate(plateId);
+    return;
+  }
+
+  if (refusesUnconverted(target)) return;
+  // A verse that is not in the loaded chapter any more has nothing to send.
+  // Checked before any side effect: past this point the verse branch clears
+  // the rail, cuts the deck's music and lifts NEGRO/LOGO — and then
+  // `projectVerse` would have done nothing.
+  if (target.kind === "verse" && !useBibleStore.getState().verses[target.verseIndex]) return;
+
   // Claimed before the first `await` below, so this press supersedes anything
   // still in flight — typically an earlier EN VIVO on a deck that is still
   // converting — and is in turn superseded by whatever the operator does
-  // next. See `liveIntent`.
-  const intent = claimLiveIntent();
+  // next. See `liveIntent`. Except an audio, which is never what is on
+  // screen: sending the accompaniment while the hymn's deck converts used to
+  // drop the deck's commit for good. It only observes the intent.
+  const intent = isAudioTarget(target) ? currentLiveIntent() : claimLiveIntent();
 
   // `beginScene()` is NOT called here at the top: `goLiveWithDeck`/
   // `goLiveWithMediaAsset` below can fail (asset missing, deck not yet
@@ -275,9 +441,11 @@ export async function goLive(): Promise<void> {
   if (!isCurrentLiveIntent(intent)) return;
 
   switch (target.kind) {
-    case "scheduleItem":
-      await goLiveWithScheduleItem(target.index, slideIndex, positionSeconds, intent);
+    case "scheduleItem": {
+      const index = useProgramStore.getState().selectedIndex;
+      if (index !== null) await goLiveWithScheduleItem(index, slideIndex, positionSeconds, intent);
       return;
+    }
     case "asset":
       await goLiveWithAsset(target.assetId, target.assetKind, slideIndex, positionSeconds, intent);
       return;
@@ -287,6 +455,13 @@ export async function goLive(): Promise<void> {
       useProjectionStore.getState().beginScene();
       projectVerse(target.verseIndex);
       useProjectionStore.getState().setOverlay("none");
+      return;
+    case "utility":
+      goLiveWithUtilityScene(target.sceneId, null);
+      return;
+    case "plate":
+      // Handled above, before the live intent is claimed.
+      return;
   }
 }
 
@@ -365,8 +540,10 @@ export function clearBaseContent(): void {
 
 /** Toggles NEGRO/LOGO — shared by the status-bar buttons and the B/L
  *  shortcuts so there's one definition of "toggle" (press again to clear).
- *  A deck's soundtrack deliberately keeps playing underneath. Also opens the
- *  projection window on demand, the same as `goLive()`. */
+ *  What plays under it — a video, a deck's soundtrack and its auto-advance —
+ *  pauses and keeps its place (since 2026-09-09); a standalone audio track
+ *  keeps sounding. Also opens the projection window on demand, the same as
+ *  `goLive()`. */
 export async function toggleOverlay(kind: Extract<OverlayState, "black" | "logo">): Promise<void> {
   claimLiveIntent();
   await useDisplayStore.getState().openIfNeeded();

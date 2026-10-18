@@ -14,8 +14,17 @@ import type { MediaTarget } from "@shared/types/projection";
  * the panel showing a level the room cannot hear. Same rule as `paused`.
  */
 export function setMediaVolume(target: MediaTarget, volume: number): void {
-  if (target.kind === "video") useProjectionStore.getState().setVideoVolume(volume);
-  else useAudioStore.getState().setVolume(target.trackId, volume);
+  switch (target.kind) {
+    case "video":
+      useProjectionStore.getState().setVideoVolume(volume);
+      return;
+    case "slideVideo":
+      useProjectionStore.getState().setSlideVideoVolume(volume);
+      return;
+    case "audio":
+      useAudioStore.getState().setVolume(target.trackId, volume);
+      return;
+  }
 }
 
 /** Pauses/resumes the live video. Declarative — see `VideoUnderlay.paused` —
@@ -26,6 +35,18 @@ export function toggleVideoPause(): void {
   setVideoPaused(!videoPaused);
 }
 
+/** Pauses/resumes the video embedded in the live slide. Declarative for the
+ *  same reason `toggleVideoPause` is, and deliberately independent of it: a
+ *  slide video and a full-screen video are never live at the same time, but
+ *  they are two different elements with two different pauses, and sharing one
+ *  flag would make the projector's state depend on which of them was live
+ *  last. Never touches the deck's auto-advance: pausing a clip is not pausing
+ *  the presentation. */
+export function toggleSlideVideoPause(): void {
+  const { slideVideoPaused, setSlideVideoPaused } = useProjectionStore.getState();
+  setSlideVideoPaused(!slideVideoPaused);
+}
+
 /**
  * Pauses/resumes one audio track. The deck's own soundtrack is special-cased
  * to `toggleAutoplay()` (`effects/deck-autoplay.ts`) rather than flipping
@@ -34,7 +55,11 @@ export function toggleVideoPause(): void {
  * a PPT's music pauses the PPT).
  */
 export function toggleAudioTrackPause(trackId: string): void {
-  if (trackId === DECK_SOUNDTRACK_TRACK_ID) {
+  // Only a deck that advances by itself shares a clock with its music. A
+  // manual deck's autoplay stays "off" for good, so routing its music here too
+  // made the pause button on that row a no-op: the only ways left to silence
+  // it were NEGRO/LOGO or taking the deck off the air.
+  if (trackId === DECK_SOUNDTRACK_TRACK_ID && useProjectionStore.getState().liveDeck?.autoAdvance) {
     toggleAutoplay();
     return;
   }
@@ -45,6 +70,22 @@ export function toggleAudioTrackPause(trackId: string): void {
 /** One-shot seek command — the target is already playing, this just moves it. */
 export function seekMedia(target: MediaTarget, seconds: number): void {
   void api.projection.mediaCommand({ target, action: "seek", timeSeconds: Math.max(0, seconds) });
+}
+
+/**
+ * Back to the beginning, leaving play/pause exactly as it was.
+ *
+ * A seek to 0 and NOT the `"restart"` command, which also calls `play()` on
+ * the element (see `ProjectionApp`'s media-command handler) — that is what
+ * `restartDeck()` wants, because restarting a deck IS starting it again. Here
+ * it would be a lie twice over: the operator who paused a track and rewound
+ * it did not ask for it to sound, and `paused` is declarative state in the
+ * store (`CLAUDE.md`), so an element playing behind a store that still says
+ * "paused" leaves the panel showing a pause button while the room hears the
+ * track.
+ */
+export function restartMedia(target: MediaTarget): void {
+  seekMedia(target, 0);
 }
 
 /** Stops a standalone audio track and drops its row — never available for the

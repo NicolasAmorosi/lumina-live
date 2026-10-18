@@ -4,6 +4,14 @@
  * `selectOutput` switch (renderer/stores/projection.store.ts) is a compile error,
  * not a runtime "stuck on logo" bug like the old `restorePrevious()`.
  */
+import type { BibleStyle } from "./bible-style";
+import type { SlideRect } from "./deck";
+import type { PlateKind, PlatePosition, PlateStyle } from "./overlay";
+import type { SceneStyle } from "./scene-style";
+import type { TimerClock, TimerFormat } from "./timer";
+import type { TransitionSpec } from "./transition";
+import type { UtilityScene } from "./utility";
+
 /** Which video (if any) is the current *base* content, independent of NEGRO/
  *  LOGO. Present on every `ProjectionOutput` variant (including "black" and
  *  "logo" themselves) so the projection window can keep a video's element —
@@ -34,12 +42,78 @@ export type VideoUnderlay = {
   volume: number;
 } | null;
 
+/**
+ * A video embedded in the slide that is currently live, positioned inside it.
+ *
+ * Top-level on `ProjectionOutput` and NOT a field of the `slide` variant, for
+ * exactly the reason `videoUnderlay` is: NEGRO/LOGO replaces the output kind
+ * with `black`/`logo`, so a video that lived inside the `slide` variant would
+ * vanish from the push the instant the operator covered the stage — unmounting
+ * the element, losing its position, and recreating the hardware decoder on
+ * every toggle, which is the documented road to `PIPELINE_ERROR_DECODE`. The
+ * projector covers it (opacity 0) and pauses it instead, and uncovering
+ * resumes where it was. Same treatment as a full-screen video, deliberately:
+ * the video stops, a deck's soundtrack does not.
+ *
+ * `rect` is where it goes INSIDE the slide (fractions, 0..1) — so the
+ * projector has to lay it over the letterboxed image box, never over the whole
+ * stage. `paused`, `volume` and `startAtSeconds` are the same declarative
+ * fields, with the same meanings, that `VideoUnderlay` documents.
+ */
+export type SlideVideo = {
+  url: string;
+  /** Identity of THIS element for its whole mount. Advances when the live
+   *  slide changes, never when an overlay goes up — a slide video that keeps
+   *  its epoch is the same element, still holding its position. */
+  epoch: number;
+  rect: SlideRect;
+  /** The slide's own width/height ratio. The projector needs it to reproduce
+   *  the box `object-contain` gave the slide image, which is what `rect` is
+   *  relative to — the stage's own ratio is not it whenever the two differ. */
+  aspectRatio: number;
+  loop: boolean;
+  paused: boolean;
+  startAtSeconds: number;
+  /** 0..1 */
+  volume: number;
+} | null;
+
 export type ProjectionOutputKind =
   | { kind: "black" }
   | { kind: "logo"; url: string | null }
   | { kind: "image"; url: string }
   | { kind: "video"; url: string; epoch: number }
-  | { kind: "bible"; text: string; reference: string }
+  /**
+   * A scripture verse, dressed.
+   *
+   * `style` and `backgroundUrl` travel INSIDE the output for exactly the
+   * reason a time scene's do: the projection window resolves nothing and
+   * reads no store, and `main/services/projection-state.ts` replays this
+   * value verbatim into a window rebuilt on another screen. A style the
+   * projector had to look up somewhere would be a style the replayed snapshot
+   * does not have.
+   *
+   * It is not a copy per push either — the control window holds one
+   * `BibleStyle` object and hands the same reference to every output, so
+   * `selectOutputMemo`'s identity check still collapses a re-render into
+   * nothing.
+   *
+   * `versionLabel` is resolved in the control window because only it knows
+   * which version a verse came from: `BibleVerseDTO` carries a book and a
+   * chapter, and a saved program's version FK is `set null`, so the label can
+   * legitimately be gone. `null` means "there is nothing to print", never
+   * "look it up".
+   */
+  | {
+      kind: "bible";
+      text: string;
+      reference: string;
+      versionLabel: string | null;
+      style: BibleStyle;
+      /** Resolved from `style.background` when it is an image, exactly like a
+       *  time scene's. `null` for every other kind of background. */
+      backgroundUrl: string | null;
+    }
   | {
       kind: "slide";
       /** media_assets.id of the source deck — lets HistoryRepo coalesce a whole
@@ -53,16 +127,34 @@ export type ProjectionOutputKind =
        *  slide change never waits on a decode. Computed here (domain logic
        *  belongs in the control window), materialized there. */
       preload: string[];
+    }
+  /**
+   * A generated time scene: a countdown, the wall clock or a stopwatch.
+   *
+   * Everything here is either a MARK the projection window subtracts against
+   * its own clock, or FORMATTING it applies to the result — see `TimerClock`
+   * and `TimerFormat`. Nothing in it is a decision, and nothing in it changes
+   * while the count runs, which is what keeps `sceneContentKey` stable and
+   * the scene from re-animating once per second.
+   */
+  | {
+      kind: "timer";
+      clock: TimerClock;
+      format: TimerFormat;
+      style: SceneStyle;
+      /** Resolved from `style.background` when it is an image — the same
+       *  reason `VideoUnderlay` carries a url and not an `assetId`: the
+       *  projection window resolves nothing. `null` for every other kind of
+       *  background. */
+      backgroundUrl: string | null;
+      title: string | null;
+      /** Swapped for `endMessage` by the projector itself once the countdown
+       *  passes zero: a pure function of the mark it is already rendering, so
+       *  making the control window push it would mean a clock and a push per
+       *  second — and a full scene transition at exactly the wrong moment. */
+      message: string | null;
+      endMessage: string | null;
     };
-
-/** How the projector should move from whatever it was showing to a new
- *  scene. "none" cuts instantly (today's behaviour, and always what a
- *  confidence monitor other than LIVE gets). "crossfade" fades the new scene
- *  in over the old one without ever going fully black; "fade-through-black"
- *  fades out to black first, then in. Configurable from Settings →
- *  Projection. */
-export const TRANSITION_STYLES = ["none", "crossfade", "fade-through-black"] as const;
-export type TransitionStyle = (typeof TRANSITION_STYLES)[number];
 
 /** Carried on every `ProjectionOutput` so the projection window (and the
  *  LIVE monitor) can tell "the same scene, re-sent" from "a genuinely new
@@ -74,43 +166,80 @@ export type TransitionStyle = (typeof TRANSITION_STYLES)[number];
  *  `projection.transition.*` settings, folded in here (not sent over a
  *  separate channel) for the same reason `videoUnderlay` lives here: the
  *  projection window stays a pure function of one input, and the value
- *  survives the snapshot replay in `main/services/projection-state.ts`. */
-export type SceneTransition = {
-  epoch: number;
-  style: TransitionStyle;
-  durationMs: number;
-};
+ *  survives the snapshot replay in `main/services/projection-state.ts`. The
+ *  fade itself is the shared `TransitionSpec` (`./transition`), the same one a
+ *  time scene's end state carries — "none" here is always what a confidence
+ *  monitor other than LIVE gets. */
+export type SceneTransition = TransitionSpec & { epoch: number };
 
 /** Used by every preview output (`use-preview.ts`) — stage one of the
  *  two-stage flow never fades, no matter what the projector is configured
  *  to do. */
 export const INSTANT_TRANSITION: SceneTransition = { epoch: 0, style: "none", durationMs: 0 };
 
+/**
+ * One overlay plate the projector has to hold above the scene, RESOLVED — the
+ * text and the image url, never an id to look up — for the reason
+ * `videoUnderlay` carries its url: the projection window consults nothing,
+ * and `projection-state.ts` replays this verbatim into a rebuilt window.
+ *
+ * Outside `sceneContentKey` on purpose (`output-view.tsx`): a plate going up
+ * or down is not a new scene, and must not cross-fade the stage under it.
+ */
+export type ProjectionPlate = {
+  id: number;
+  kind: PlateKind;
+  position: PlatePosition;
+  title: string | null;
+  subtitle: string | null;
+  imageUrl: string | null;
+  style: PlateStyle;
+};
+
 export type ProjectionOutput = ProjectionOutputKind & {
   videoUnderlay: VideoUnderlay;
+  slideVideo: SlideVideo;
+  /** At most one per kind and one per edge (`platesCollide`), and always empty under NEGRO, LOGO and "nothing
+   *  live" — `selectOutput` decides, the projector only draws. */
+  plates: readonly ProjectionPlate[];
   transition: SceneTransition;
 };
 
-/** Identifies one media element in the projection window: the single video,
- *  or one of N simultaneous audio tracks by its `trackId`. */
-export type MediaTarget = { kind: "video" } | { kind: "audio"; trackId: string };
+/** Identifies one media element in the projection window: the full-screen
+ *  video, the video embedded in the live slide, or one of N simultaneous audio
+ *  tracks by its `trackId`. The first two are single slots because the
+ *  projector only ever sustains one of each. */
+export type MediaTarget =
+  | { kind: "video" }
+  | { kind: "slideVideo" }
+  | { kind: "audio"; trackId: string };
 
 /** The string key `mediaStatus` and command routing are indexed by — collapses
- *  `MediaTarget` to a value usable as an object/Map key. */
+ *  `MediaTarget` to a value usable as an object/Map key. A `switch` rather
+ *  than a ternary so a fourth target cannot be added without landing here. */
 export function mediaTargetKey(target: MediaTarget): string {
-  return target.kind === "video" ? "video" : `audio:${target.trackId}`;
+  switch (target.kind) {
+    case "video":
+      return "video";
+    case "slideVideo":
+      return "slideVideo";
+    case "audio":
+      return `audio:${target.trackId}`;
+  }
 }
 
 /** Which element of the projection window failed. "scene" is the still image
  *  of an image/slide/logo output — the only one without a `MediaTarget`,
  *  because nothing ever commands it. */
-export type MediaErrorTarget = MediaTarget | { kind: "scene" };
+/** `plate` is a bug's image — the one file an overlay plate can fail to load.
+ *  One slot for every plate, like `scene`: at most one bug is up at a time. */
+export type MediaErrorTarget = MediaTarget | { kind: "scene" } | { kind: "plate" };
 
 /** The key `mediaErrors` is indexed by. Deliberately shares the namespace of
  *  `mediaTargetKey` — "video"/"audio:<id>" mean the same element in both
  *  records, so one prune pass can keep status and error in step. */
 export function mediaErrorKey(target: MediaErrorTarget): string {
-  return target.kind === "scene" ? "scene" : mediaTargetKey(target);
+  return target.kind === "scene" || target.kind === "plate" ? target.kind : mediaTargetKey(target);
 }
 
 /**
@@ -185,8 +314,33 @@ export type AudioTrackPush = {
 /** What the control window has selected as "base" content (before black/logo overlay). */
 export type BaseContent =
   | { kind: "deck"; assetId: number; slideIndex: number }
-  | { kind: "video"; assetId: number; epoch: number; startAtSeconds: number }
+  /** `url` rides along, resolved when it went live, for the reason
+   *  `versionLabel` does below: what the projector loads depends on whether
+   *  main has converted the file (`playableAssetUrl`), and `selectOutput`
+   *  cannot ask the conversion store. Resolving it once also means a copy
+   *  finishing while the original is on air never swaps the file under the
+   *  congregation — the next EN VIVO picks it up. */
+  | { kind: "video"; assetId: number; url: string; epoch: number; startAtSeconds: number }
   | { kind: "image"; assetId: number }
-  | { kind: "bible"; text: string; reference: string };
+  /** `versionLabel` rides along rather than being re-derived at push time:
+   *  the verse may have come from a program row whose version was deleted
+   *  since, and `selectOutput` is a pure function of this state — it cannot
+   *  reach into `bible.store` to ask. The same rule `utility`'s resolved
+   *  `scene` follows, for the same reason. */
+  | { kind: "bible"; text: string; reference: string; versionLabel: string | null }
+  /**
+   * A utility scene on the projector.
+   *
+   * The scene travels RESOLVED, not as an id: `selectOutput` is a pure
+   * function of `ProjectionStoreState` and its memo compares that tuple by
+   * reference (`outputInputs`), so reaching into `utility.store` from inside
+   * it would break both. It is the same rule `videoUnderlay` follows.
+   *
+   * `clock` is separate from `scene.config` because it is the only part that
+   * moves: pause, resume and reset rewrite it in place (`setTimerClock`)
+   * without beginning a new scene, and editing the scene while it is live
+   * rewrites `scene` the same way.
+   */
+  | { kind: "utility"; sceneId: number; scene: UtilityScene; clock: TimerClock };
 
 export type OverlayState = "none" | "black" | "logo";

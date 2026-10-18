@@ -14,7 +14,12 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
-import { containerKind, extractAudioParts, readPresentationMeta } from "../src/main/slides/pptx-metadata";
+import {
+  containerKind,
+  extractAudioParts,
+  extractVideoParts,
+  readPresentationMeta,
+} from "../src/main/slides/pptx-metadata";
 import { resolveLinkedAudio } from "../src/main/slides/linked-audio";
 import { readBinarySlideTimings } from "../src/main/slides/ppt-binary-timings";
 
@@ -101,11 +106,19 @@ async function main(): Promise<void> {
       const kind = containerKind(file);
       console.log(`   contenedor: ${kind}`);
 
-      const started = Date.now();
-      const pdf = await convert(soffice, profileDir, file, path.join(work, "pdf"), "pdf");
-      const pdfMs = Date.now() - started;
-      const pdfSize = (fs.statSync(pdf).size / 1024 / 1024).toFixed(1);
-      console.log(`   PDF: ${pdfMs}ms, ${pdfSize} MB`);
+      // A PDF is already the intermediate format: `deck-service` hands it to
+      // the rasterizer untouched, so this must not convert it either — running
+      // it through `soffice` would re-render it via Draw's PDF importer and
+      // measure something the app never does.
+      if (kind === "pdf") {
+        const mb = (fs.statSync(file).size / 1024 / 1024).toFixed(1);
+        console.log(`   PDF: origen, sin conversión (${mb} MB) — no requiere LibreOffice`);
+      } else {
+        const started = Date.now();
+        const pdf = await convert(soffice, profileDir, file, path.join(work, "pdf"), "pdf");
+        const mb = (fs.statSync(pdf).size / 1024 / 1024).toFixed(1);
+        console.log(`   PDF: ${Date.now() - started}ms, ${mb} MB`);
+      }
 
       // Legacy binary .ppt has no OOXML: round-trip through .pptx to recover
       // timings and audio, exactly like deck-service does.
@@ -120,7 +133,11 @@ async function main(): Promise<void> {
       }
 
       if (timingsSource === "none") {
-        console.log("   sin metadata (contenedor no soportado)\n");
+        console.log(
+          kind === "pdf"
+            ? "   sin metadata (un PDF no tiene transiciones ni media embebida)\n"
+            : "   sin metadata (contenedor no soportado)\n",
+        );
         continue;
       }
 
@@ -174,8 +191,22 @@ async function main(): Promise<void> {
       } else {
         console.log("   audio: ninguno");
       }
+      if (meta.video.length > 0) {
+        const extracted = extractVideoParts(parseSource, meta.video, path.join(work, "video"));
+        console.log(
+          `   video: ${extracted.length} clip(s) -> ${extracted
+            .map((v) => {
+              const r = v.rect;
+              const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+              return `slide ${v.slideIndex} ${v.ext} ${(v.bytes / 1024).toFixed(0)}KB rect ${pct(r.x)},${pct(r.y)} ${pct(r.width)}x${pct(r.height)}${v.playable ? "" : " (NO reproducible)"}`;
+            })
+            .join(", ")}`,
+        );
+      } else {
+        console.log("   video: ninguno");
+      }
       if (meta.skippedVideoParts.length > 0) {
-        console.log(`   video embebido (fuera de alcance): ${meta.skippedVideoParts.length}`);
+        console.log(`   video no utilizable: ${meta.skippedVideoParts.join(", ")}`);
       }
 
       // Only relevant when the deck has no usable embedded/transition audio —

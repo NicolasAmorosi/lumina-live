@@ -2,7 +2,11 @@ node_modules/
 out/
 dist/
 release/
+test-results/
 .scratch/
+# Fetched by `scripts/fetch-ffmpeg.ts` (postinstall and the package scripts):
+# 70–210 MB of binaries per platform, pinned by sha256 instead of versioned.
+resources/ffmpeg/
 .env
 *.log
 *.tsbuildinfo

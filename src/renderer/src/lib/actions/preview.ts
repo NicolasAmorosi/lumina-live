@@ -4,6 +4,7 @@ import { useLibraryStore } from "@renderer/stores/library.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
 import { useProgramStore } from "@renderer/stores/program.store";
 import type { AssetKind } from "@shared/constants";
+import type { ProgramItemDTO } from "@shared/types/program";
 
 /**
  * Selecting something only ever previews it — nothing here touches
@@ -18,7 +19,7 @@ import type { AssetKind } from "@shared/constants";
 export function previewScheduleItem(index: number): void {
   useProgramStore.getState().select(index);
   useLibraryStore.getState().select(null);
-  usePreviewStore.getState().setTarget({ kind: "scheduleItem", index });
+  usePreviewStore.getState().setTarget({ kind: "scheduleItem" });
 }
 
 export function previewVerse(verseIndex: number): void {
@@ -31,6 +32,24 @@ export function previewAsset(assetId: number, assetKind: AssetKind): void {
   useProgramStore.getState().select(null);
   useLibraryStore.getState().select(assetId);
   usePreviewStore.getState().setTarget({ kind: "asset", assetId, assetKind });
+}
+
+/** A saved utility scene. Deliberately does NOT arm or start its timer:
+ *  selecting is never acting, and a countdown that started because somebody
+ *  clicked a row is a countdown nobody asked for. Starting it is the
+ *  transport's job, or `goLive()`'s. */
+export function previewUtilityScene(sceneId: number): void {
+  useProgramStore.getState().select(null);
+  useLibraryStore.getState().select(null);
+  usePreviewStore.getState().setTarget({ kind: "utility", sceneId });
+}
+
+/** A saved overlay plate. Putting it up is `goLive()`'s job, like everything
+ *  else — see `goLiveWithPlate`. */
+export function previewPlate(plateId: number): void {
+  useProgramStore.getState().select(null);
+  useLibraryStore.getState().select(null);
+  usePreviewStore.getState().setTarget({ kind: "plate", plateId });
 }
 
 export function setPreviewSlide(index: number): void {
@@ -46,8 +65,15 @@ export function previewDeckAssetId(): number | null {
   const target = usePreviewStore.getState().target;
   if (target?.kind === "asset") return target.assetKind === "ppt" ? target.assetId : null;
   if (target?.kind !== "scheduleItem") return null;
-  const item = useProgramStore.getState().items[target.index];
+  const item = previewedScheduleItem();
   return item?.kind === "ppt" ? item.mediaAssetId : null;
+}
+
+/** The schedule row a `scheduleItem` preview target points at: the selected
+ *  one, wherever the program's edits have moved it. */
+export function previewedScheduleItem(): ProgramItemDTO | undefined {
+  const { items, selectedIndex } = useProgramStore.getState();
+  return selectedIndex === null ? undefined : items[selectedIndex];
 }
 
 /** Moves the preview cursor — a deck slide or a verse — without touching the

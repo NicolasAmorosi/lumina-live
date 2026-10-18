@@ -1,5 +1,6 @@
 import { invoke } from "./ipc";
 import type { AssetKind } from "@shared/constants";
+import type { InternalsPage } from "@shared/types/system";
 import type {
   AudioTrackPush,
   MediaCommand,
@@ -13,7 +14,10 @@ import type {
   ProgramUpsert,
 } from "@shared/types/program";
 import type { SettingsMap } from "@shared/types/settings";
+import type { UtilitySceneUpsert } from "@shared/types/utility";
+import type { PlateUpsert } from "@shared/types/overlay";
 import type { CloseDecision } from "@shared/types/window";
+import type { DecoderSupport } from "@shared/types/media";
 
 /** Thin per-domain facade over `invoke` — pure readability sugar in the
  *  renderer, not a second definition of the contract: every method's types
@@ -34,7 +38,8 @@ export const api = {
   files: {
     pick: (kind: AssetKind | "all", multiple: boolean) => invoke("files:pick", { kind, multiple }),
     setLogo: () => invoke("files:setLogo", undefined),
-    pickFolder: () => invoke("files:pickFolder", undefined),
+    pickFolder: (defaultPath?: string) => invoke("files:pickFolder", { defaultPath }),
+    systemFolders: () => invoke("files:systemFolders", undefined),
   },
   deck: {
     get: (assetId: number) => invoke("deck:get", { assetId }),
@@ -58,6 +63,17 @@ export const api = {
     search: (versionId: number, query: string, limit?: number) =>
       invoke("bible:search", { versionId, query, ...(limit !== undefined ? { limit } : {}) }),
     import: () => invoke("bible:import", undefined),
+    rename: (id: number, name: string) => invoke("bible:rename", { id, name }),
+    delete: (id: number, force?: boolean) =>
+      invoke("bible:delete", { id, ...(force !== undefined ? { force } : {}) }),
+    usages: (id: number) => invoke("bible:usages", { id }),
+    reorder: (ids: number[]) => invoke("bible:reorder", { ids }),
+  },
+  conversion: {
+    list: () => invoke("conversion:list", undefined),
+    reportDecoders: (support: DecoderSupport) => invoke("conversion:reportDecoders", support),
+    prioritize: (id: number) => invoke("conversion:prioritize", { id }),
+    retry: (id: number) => invoke("conversion:retry", { id }),
   },
   library: {
     list: (kind: AssetKind) => invoke("library:list", { kind }),
@@ -94,8 +110,36 @@ export const api = {
     /** Answers main's `close-requested` — see `CloseDecision`. */
     closeDecision: (decision: CloseDecision) => invoke("window:closeDecision", { decision }),
   },
+  /** Saved time scenes — the countdowns, the clock and the stopwatch of
+   *  Funciones ▸ Utilidades. `remove` rather than `delete` for the same reason
+   *  `library` uses it: a reserved word reads badly as a method. */
+  utility: {
+    list: () => invoke("utility:list", undefined),
+    create: (input: UtilitySceneUpsert) => invoke("utility:create", input),
+    update: (input: UtilitySceneUpsert & { id: number }) => invoke("utility:update", input),
+    duplicate: (id: number, name: string) => invoke("utility:duplicate", { id, name }),
+    remove: (id: number, force = false) => invoke("utility:delete", { id, force }),
+    usages: (id: number) => invoke("utility:usages", { id }),
+    reorder: (ids: number[]) => invoke("utility:reorder", { ids }),
+  },
+  overlays: {
+    list: () => invoke("overlay:list", undefined),
+    create: (input: PlateUpsert) => invoke("overlay:create", input),
+    update: (input: PlateUpsert & { id: number }) => invoke("overlay:update", input),
+    duplicate: (id: number, name: string) => invoke("overlay:duplicate", { id, name }),
+    remove: (id: number, force = false) => invoke("overlay:delete", { id, force }),
+    usages: (id: number) => invoke("overlay:usages", { id }),
+    reorder: (ids: number[]) => invoke("overlay:reorder", { ids }),
+  },
   settings: {
     get: () => invoke("settings:get", undefined),
     set: (partial: Partial<SettingsMap>) => invoke("settings:set", partial),
+  },
+  system: {
+    gpuStatus: () => invoke("system:gpuStatus", undefined),
+    openInternals: (page: InternalsPage) => invoke("system:openInternals", { page }),
+    probeBegin: () => invoke("system:probeBegin", undefined),
+    probeEnd: (src: string) => invoke("system:probeEnd", { src }),
+    openLogsFolder: () => invoke("system:openLogsFolder", undefined),
   },
 };

@@ -68,4 +68,37 @@ The rule: **when adding a keyboard widget to the control window, pick the focus 
 widget is unprotected for `Enter` and `" "` — and in this app `Enter` is the button that puts
 something on the projector.
 
-**Last updated:** 2026-09-17
+### Enter after a CLICK is EN VIVO; Enter after Tab is the button's (2026-10-14)
+
+- The table above still left one trap: Chromium focuses a button on click, so after touching
+  «Pausar» (or a resource tile) with the mouse, Enter pressed that button again instead of going
+  live. «Pausar» then Enter resumed the countdown in PREVIEW; NEGRO then Enter did nothing. The
+  user decided: Enter on a button reached with the MOUSE is EN VIVO; on one reached with the
+  keyboard it stays the button's.
+- **`:focus-visible` cannot make that call.** Measured: after a real mouse press it reads `false`,
+  but Chromium flips it to `true` on the very Enter keydown being handled, already in the window
+  capture phase. So `use-global-shortcuts.ts` records the modality at FOCUS time instead:
+  `pointerdown`/`pointerup`/`pointercancel` keep a pressed flag, and `focusin` stores the target
+  only when it got focus during a press (`pointerFocused`).
+- **Companion rule:** the global handler returns early on `e.defaultPrevented`. A key a widget
+  already handled is not a shortcut. `Select` answers Enter on its own trigger, a button the mouse
+  may well have focused, and picking a Bible version must not also send the preview live.
+  Verified: Enter in the open version Select left `sceneEpoch` unchanged.
+
+### Space and the arrows after a click, too (2026-10-18)
+
+- The Enter rule left the same trap open for the other keys a button consumes. After clicking
+  EN VIVO with the mouse, → and ← did nothing: the focused button swallowed them, so a verse or a
+  slide that had just gone live could not be stepped until the operator clicked empty space. Worse,
+  Space natively pressed EN VIVO again, which is a new scene: the video and the deck's music go back
+  to 0. Found by the review and reproduced by the E2E suite
+  (`tests/e2e/bible.spec.ts`, «after clicking EN VIVO, the arrows and Space still belong to the
+  operator»). The test fails without the fix.
+- Now a mouse-focused button consumes none of `KEYS_A_CONTROL_CONSUMES`, and Space is
+  `preventDefault`ed whenever it reaches the switch, so it can never press the clicked button.
+  **Two things keep their arrows regardless:** a button with a widget role (a `tab`, which the
+  role check still covers before the pointer exemption) and any widget that handles the arrow
+  itself and `preventDefault`s it (`VirtualGrid`'s tiles), which the `defaultPrevented` early
+  return already protects.
+
+**Last updated:** 2026-10-18

@@ -1,7 +1,9 @@
 # Panel de Funciones — plan del área
 
 **Fecha:** 2026-09-17
-**Estado:** interfaz entregada (commit `c8a47c0`); las tres funciones, sin implementar.
+**Estado:** interfaz entregada (commit `c8a47c0`). **Utilidades COMPLETA** (F1 proyección, F2
+persistencia + editor, F3 ítem del orden de culto, F4 transporte en la fila de medios —
+2026-09-18). Entradas y Overlays, sin empezar.
 
 La primera columna de abajo pasó de cinco pestañas planas a tres con un segundo nivel:
 
@@ -21,7 +23,7 @@ desarrollo»; este documento es el plan para llenarlas.
 | Pestaña | Qué es | Plan |
 |---|---|---|
 | Utilidades | Cuenta regresiva, reloj y cronómetro proyectables | [`utilidades.md`](utilidades.md) |
-| Entradas | Cámara, capturadora y fuentes de video externas en vivo | [`../2026-09-17-fuentes-video-externas/ANALISIS-Y-PLAN.md`](../2026-09-17-fuentes-video-externas/ANALISIS-Y-PLAN.md) |
+| Entradas | Cámara, capturadora y fuentes de video externas en vivo — spike del capture agent en curso (2026-10-07) | [`../2026-09-17-fuentes-video-externas/ANALISIS-Y-PLAN.md`](../2026-09-17-fuentes-video-externas/ANALISIS-Y-PLAN.md) |
 | Overlays | Placas guardadas que se superponen a lo proyectado | [`overlays.md`](overlays.md) |
 
 ---
@@ -30,7 +32,7 @@ desarrollo»; este documento es el plan para llenarlas.
 
 | Tema | Decisión |
 |---|---|
-| Alcance de Utilidades | Cuenta regresiva (a hora fija **y** por duración), reloj y cronómetro |
+| Alcance de Utilidades | Cuenta regresiva (a hora fija **y** por duración), reloj y cronómetro, cada uno como **escena guardada y editable** — ver la segunda tanda de decisiones en [`utilidades.md`](utilidades.md) |
 | Cómo proyecta la cuenta regresiva | **Pantalla completa**: es un contenido más, tapa lo que había. El fondo es parte de la utilidad |
 | Alcance de Overlays | **Placas guardadas y reutilizables**, en la base de datos: se crean una vez y quedan para el próximo culto |
 | Overlay + NEGRO/LOGO | **Se tapa con todo lo demás.** NEGRO es negro, sin excepciones que el operador tenga que recordar |
@@ -74,14 +76,18 @@ Valen para las tres y no se renegocian por pestaña.
    (`.claude/knowledge/startatseconds-is-a-mount-time-seek-so-a-rebuilt-projector-restarts-everything.md`).
 4. **Los monitores usan el mismo `OutputView`.** Todo lo que se agregue al proyector se ve
    igual en LIVE y en PREVIEW, o los monitores le mienten al operador.
-5. **Seleccionar nunca proyecta** — con una excepción explícita, abajo.
+5. **Seleccionar nunca proyecta**, sin excepciones.
 
-### La excepción de Overlays, dicha en voz alta
+### Overlays: dos etapas, pero sin reemplazar
 
-Una placa **no es contenido base**: no reemplaza lo proyectado, lo modifica. Por eso no pasa
-por el flujo de dos etapas (preview → `goLive()`), sino que se muestra y se saca con su propio
-botón, igual que NEGRO y LOGO, que también actúan al instante. Utilidades y Entradas sí son
-contenido base y sí respetan las dos etapas.
+Una placa **no es contenido base**: no reemplaza lo proyectado, lo modifica. Hasta el
+2026-09-24 eso la sacaba del flujo de dos etapas (se mostraba con un botón propio del panel,
+como NEGRO). Desde entonces **sí pasa por preview → `goLive()`**, como todo lo demás: un click
+la previsualiza —el monitor PREVIEW la dibuja sobre lo que está EN VIVO— y EN VIVO, Enter, el
+doble click o el botón de su fila bajo el PREVIEW la suben. Lo que sigue siendo distinto está
+todo dentro de `goLiveWithPlate`: no toca `base`, no llama a `beginScene()`, no mueve el riel
+del programa, no levanta NEGRO/LOGO y no reclama el *live intent*. Ver la quinta tanda de
+[`overlays.md`](overlays.md).
 
 ### Dos trampas ya identificadas, antes de escribir código
 
@@ -100,9 +106,11 @@ contenido base y sí respetan las dos etapas.
 
 Uno por vez, de menor a mayor riesgo. Ninguno depende del anterior salvo donde se dice.
 
-1. **Utilidades.** Es la única de las tres que no necesita ni tabla nueva ni dependencias
-   nativas, y obliga a resolver el patrón «el proyector dibuja el tiempo desde una marca
-   absoluta» que Overlays después reutiliza para su animación.
+1. **Utilidades.** ✅ completa (F1–F4). Es la única de las tres que no necesita dependencias nativas, y
+   obliga a resolver el patrón «el proyector dibuja el tiempo desde una marca absoluta» que
+   Overlays después reutiliza para su animación. De paso dejó hechas dos piezas que Overlays da
+   por sentadas: `SceneStyle` con sus validadores, y el par `FieldGroup`/`FieldRow` + `ColorField`
+   en `components/ui/`.
 2. **Overlays.** Tabla, repositorio, IPC CRUD y —lo verdaderamente nuevo— componer una capa
    por encima de la escena sin tocar las transiciones de la escena.
 3. **Entradas.** El más grande por un orden de magnitud: agente de captura nativo, permisos,
@@ -115,10 +123,8 @@ verificación a mano contra el proyector real (no sólo los monitores).
 
 ## Lo que este plan deja explícitamente afuera
 
-- **Que una utilidad o una placa sea un ítem del orden de culto.** Sería un
-  `program_items.kind` nuevo, con migración, borrador y programas guardados detrás. Se puede
-  hacer después; ninguno de los dos planes lo asume.
 - **Composición libre** (texto sobre video con posición y tamaño arbitrarios). Overlays
-  entrega plantillas, no un editor.
+  entrega plantillas, no un editor. Una escena de utilidad tiene tres roles de texto con
+  tamaño, color y alineación vertical — tampoco es un canvas.
 - **Que el proyector muestre dos utilidades a la vez**, o una utilidad y una entrada externa.
   Contenido base hay uno.

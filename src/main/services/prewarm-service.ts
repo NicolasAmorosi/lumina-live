@@ -4,7 +4,13 @@ import type { DeckStatusSummary, PrewarmProgress } from "@shared/types/deck";
 import { slideThumbUrl } from "@shared/urls";
 import { broadcast } from "./broadcast";
 import { getSlidesRepo } from "./repos";
-import { cacheUsage, cancelBackgroundJobs, prepareDeck, warmBatchPdfCache } from "../slides/deck-service";
+import {
+  cacheUsage,
+  cancelBackgroundJobs,
+  prepareDeck,
+  releasePrecomputed,
+  warmBatchPdfCache,
+} from "../slides/deck-service";
 
 /** How full the cache is allowed to get from prewarming alone before a batch
  *  stops enqueueing more — converting 600 decks just to immediately evict
@@ -71,11 +77,13 @@ export function startPrewarmBatch(assetIds: readonly number[], label: string): {
 async function runBatch(state: BatchState, assetIds: number[], progress: PrewarmProgress): Promise<void> {
   for (let i = 0; i < assetIds.length; i++) {
     if (state.canceled) {
+      releasePrecomputed(assetIds.slice(i));
       broadcast("prewarm-progress", { ...progress, currentAssetId: null, status: "canceled" });
       activeBatches.delete(state.jobId);
       return;
     }
     if (cacheOverBudget()) {
+      releasePrecomputed(assetIds.slice(i));
       broadcast("prewarm-progress", { ...progress, currentAssetId: null, status: "cache-full" });
       activeBatches.delete(state.jobId);
       return;
@@ -110,6 +118,11 @@ async function runBatch(state: BatchState, assetIds: number[], progress: Prewarm
 
   broadcast("prewarm-progress", { ...progress, currentAssetId: null, status: "done" });
   activeBatches.delete(state.jobId);
+}
+
+/** On quit: every batch stops before its next asset. */
+export function cancelAllPrewarmBatches(): void {
+  for (const state of activeBatches.values()) state.canceled = true;
 }
 
 /** Stops enqueueing further assets in the batch and aborts whichever one of

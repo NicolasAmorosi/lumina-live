@@ -11,6 +11,8 @@ import {
   thumbTileHeight,
 } from "@renderer/components/ui";
 import { MediaTrackRow } from "@renderer/components/shared/media-track-row";
+import { UtilityTrackRow } from "@renderer/components/shared/utility-track-row";
+import { PlateTrackRow } from "@renderer/components/shared/plate-track-row";
 import { PanelBody, PanelHeader } from "@renderer/components/shared/panel";
 import { PreviewMissingState } from "@renderer/components/shared/preview-missing-state";
 import { PreviewMonitor } from "@renderer/components/pages/monitors/preview-monitor";
@@ -45,7 +47,7 @@ export function SlidesPanel() {
     }
 
     if (content.kind === "deck") {
-      return <DeckSlides assetId={content.assetId} missingSince={content.missingSince} />;
+      return <DeckSlides assetId={content.assetId} ext={content.ext} missingSince={content.missingSince} />;
     }
 
     // A verse being previewed brings its whole chapter along, so the operator
@@ -127,6 +129,26 @@ export function SlidesPanel() {
         </MediaPanel>
       );
     }
+    // The same transport the LIVE panel gives a projected scene, so a
+    // countdown can be armed, paused and aimed here and reach the projector
+    // already running — and so the two rows, which can be on screen at once,
+    // never show two numbers for one scene (`clockForScene`).
+    if (content.kind === "utility") {
+      return (
+        <MediaPanel className="w-full">
+          <UtilityTrackRow onDelete={clearPreview} scene={content.scene} />
+        </MediaPanel>
+      );
+    }
+    // A plate goes up from its own row: it does not replace what is live, so
+    // the button beside the picture of it is where the operator looks.
+    if (content.kind === "plate") {
+      return (
+        <MediaPanel className="w-full">
+          <PlateTrackRow onDelete={clearPreview} plate={content.plate} withLiveButton />
+        </MediaPanel>
+      );
+    }
     return null;
   })();
 
@@ -137,7 +159,11 @@ export function SlidesPanel() {
         ? content.asset.name
         : content?.kind === "bible"
           ? content.reference
-          : null;
+          : content?.kind === "utility"
+            ? content.scene.name
+            : content?.kind === "plate"
+              ? content.plate.name
+              : null;
 
   return (
     <>

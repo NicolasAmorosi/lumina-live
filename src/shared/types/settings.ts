@@ -4,8 +4,10 @@ import {
   SLIDES_DEFAULT_CACHE_MB,
   SLIDES_DEFAULT_RENDER_WIDTH,
 } from "../constants";
+import { isBibleStyle, normalizeBibleStyle } from "../bible-style-validators";
+import { DEFAULT_BIBLE_STYLE, type BibleStyle } from "./bible-style";
 import { MEDIA_SORT_ORDERS, type MediaSortOrder } from "./media";
-import { TRANSITION_STYLES, type TransitionStyle } from "./projection";
+import { TRANSITION_MAX_DURATION_MS, TRANSITION_STYLES, type TransitionStyle } from "./transition";
 
 export const THEMES = ["dark", "light"] as const;
 export type Theme = (typeof THEMES)[number];
@@ -18,7 +20,14 @@ export type SlideImageFormat = (typeof SLIDE_IMAGE_FORMATS)[number];
 
 export type SettingsMap = {
   "logo.path": string | null;
-  "files.lastFolder": string | null;
+  /** Where the file picker opens for each kind of asset. `null` means "the
+   *  operating system's own folder for this kind" (`systemMediaFolder` in
+   *  `main/paths.ts`), which is resolved fresh on every pick: it is looked up
+   *  through the OS API, so it follows a moved home directory and is spelled
+   *  in whatever language the machine is installed in. Storing the resolved
+   *  path instead would freeze both. A non-null value is an explicit override
+   *  the operator chose in Ajustes. */
+  "files.defaultFolders": Record<AssetKind, string | null>;
   "projection.displayId": number | null;
   "ui.theme": Theme;
   "ui.locale": Locale;
@@ -27,6 +36,10 @@ export type SettingsMap = {
   "projection.transition.style": TransitionStyle;
   /** Ignored when the style is "none". */
   "projection.transition.durationMs": number;
+  /** Whether the LIVE monitor plays its own moving copy of a live video (the
+   *  full-screen one and a slide's). Off, it shows the video's thumbnail and
+   *  the control window decodes nothing — the projector is never affected. */
+  "monitors.liveVideoMotion": boolean;
   /** Explicit user override for the LibreOffice binary. When set and invalid,
    *  discovery reports the error instead of silently falling back — a wrong
    *  override must never be invisible. */
@@ -57,15 +70,48 @@ export type SettingsMap = {
    *  a folder of hymn decks is browsed by name, a folder of sermon videos by
    *  date, and the operator should not have to re-pick on every switch. */
   "library.sort": Record<AssetKind, MediaSortOrder>;
+  /** Whether this database has ever been given the four built-in time scenes
+   *  (`DEFAULT_UTILITY_SCENES`). A flag and not a row count, deliberately:
+   *  re-seeding whenever `utility_scenes` happens to be empty would mean an
+   *  operator can never be rid of a scene they deleted — the four would come
+   *  back on the next launch. Seeding once is what makes "borrar" mean
+   *  borrar. */
+  "utility.seeded": boolean;
+  /** How a scripture verse is drawn on the projector — see `BibleStyle`.
+   *  A JSON column in all but name, so it is the one settings key with a
+   *  normalizer as well as a validator (`SETTINGS_NORMALIZERS`). */
+  "bible.style": BibleStyle;
+  /** Which version the Bible tab opens on. `null` means "whichever comes
+   *  first", which is what the app did before this key existed — an insertion
+   *  order nobody chose. Reset to `null` when the version it names is
+   *  deleted, by the delete itself: a dangling id would silently fall back
+   *  and look like the setting was never saved. */
+  "bible.defaultVersionId": number | null;
+  /** Whether this database has ever been offered the bundled RV1960.
+   *
+   *  Exists for exactly the reason `utility.seeded` does, with one extra
+   *  wrinkle. `seedBuiltinBibles()` runs on every launch, so without a flag a
+   *  deleted RV1960 would reappear at the next one and «borrar» would not
+   *  mean borrar. But the flag must NOT disable seeding outright: the seed is
+   *  also the upgrade path — it re-imports when `resources/bibles/rv1960.json`
+   *  changes hash, which is how a corrected bundle reaches an existing
+   *  install. So the flag is only consulted when the version row is GONE (see
+   *  `seedBuiltinBibles`), which is the only case that means the operator
+   *  deleted it on purpose. */
+  "bible.builtinSeeded": boolean;
 };
 
 export const DEFAULT_SETTINGS: SettingsMap = {
   "logo.path": null,
-  "files.lastFolder": null,
+  "files.defaultFolders": { video: null, image: null, audio: null, ppt: null },
   "projection.displayId": null,
   "ui.theme": "dark",
   "ui.locale": "es",
-  "media.volume": 0.5,
+  // Full. Anything sent live is meant to be heard, and a level the operator
+  // never set is a level nobody can explain from the booth — halfway up just
+  // looks like the file is quiet. Balancing down is one drag away, per track,
+  // in the En Vivo panel.
+  "media.volume": 1,
   "projection.transition.style": "crossfade",
   "projection.transition.durationMs": 300,
   "slides.sofficePath": null,
@@ -75,9 +121,14 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   "slides.cacheMaxMb": SLIDES_DEFAULT_CACHE_MB,
   "slides.maxRenderWidth": SLIDES_DEFAULT_RENDER_WIDTH,
   "slides.preemptBackground": true,
+  "monitors.liveVideoMotion": true,
   "library.linkedFolders": { video: [], image: [], audio: [], ppt: [] },
   "library.activeView": { video: "recent", image: "recent", audio: "recent", ppt: "recent" },
   "library.sort": { video: "name-asc", image: "name-asc", audio: "name-asc", ppt: "name-asc" },
+  "utility.seeded": false,
+  "bible.style": DEFAULT_BIBLE_STYLE,
+  "bible.defaultVersionId": null,
+  "bible.builtinSeeded": false,
 };
 
 /* -------------------------------------------------------------------------
@@ -136,13 +187,13 @@ const isStringArray = (v: unknown): boolean => Array.isArray(v) && v.every(isStr
 
 export const SETTINGS_VALIDATORS: Record<keyof SettingsMap, (value: unknown) => boolean> = {
   "logo.path": isNullOr(isString),
-  "files.lastFolder": isNullOr(isString),
+  "files.defaultFolders": isRecordOfKinds(isNullOr(isString)),
   "projection.displayId": isDisplayId,
   "ui.theme": isOneOf(THEMES),
   "ui.locale": isOneOf(LOCALES),
   "media.volume": isNumberIn(0, 1),
   "projection.transition.style": isOneOf(TRANSITION_STYLES),
-  "projection.transition.durationMs": isNumberIn(0, 5_000),
+  "projection.transition.durationMs": isNumberIn(0, TRANSITION_MAX_DURATION_MS),
   "slides.sofficePath": isNullOr(isString),
   "slides.sofficePathResolved": isNullOr(isString),
   "slides.profileWarmedVersion": isNullOr(isString),
@@ -150,11 +201,39 @@ export const SETTINGS_VALIDATORS: Record<keyof SettingsMap, (value: unknown) => 
   "slides.cacheMaxMb": isNumberIn(1, 1_000_000),
   "slides.maxRenderWidth": isNumberIn(320, 16_384),
   "slides.preemptBackground": isBoolean,
+  "monitors.liveVideoMotion": isBoolean,
   "library.linkedFolders": isRecordOfKinds(isStringArray),
   "library.activeView": isRecordOfKinds(isString),
   "library.sort": isRecordOfKinds(isOneOf(MEDIA_SORT_ORDERS)),
+  "utility.seeded": isBoolean,
+  "bible.style": isBibleStyle,
+  "bible.defaultVersionId": (v) => v === null || (typeof v === "number" && Number.isInteger(v) && v > 0),
+  "bible.builtinSeeded": isBoolean,
 };
 
 export function isSettingsKey(key: string): key is keyof SettingsMap {
-  return key in SETTINGS_VALIDATORS;
+  return Object.hasOwn(SETTINGS_VALIDATORS, key);
 }
+
+/**
+ * The keys whose stored value is a STRUCTURE rather than a scalar, and what to
+ * make of one that no longer matches this build's idea of it.
+ *
+ * The rule `CLAUDE.md` states for a JSON column — validate on write, normalize
+ * FIELD BY FIELD on read — has had no place to live in `settings` until now,
+ * because every key here was a scalar or a `Record` of them: a bad one falls
+ * back to its default and nothing is lost but that one value. `bible.style` is
+ * the first key where all-or-nothing would be wrong, for the same reason
+ * `utility_scenes.style_json` normalizes: a style whose gradient lost one
+ * colour must come back with the operator's own typography and a default
+ * background, not as a stranger — and a launch must never fail over it.
+ *
+ * `Partial` and not `Record`, deliberately: a scalar key needs nothing here,
+ * and requiring an entry per key would mean fifteen identity functions.
+ * `SettingsRepo.load` applies whatever it finds and leaves the rest alone.
+ */
+export const SETTINGS_NORMALIZERS: {
+  [K in keyof SettingsMap]?: (value: unknown) => SettingsMap[K];
+} = {
+  "bible.style": normalizeBibleStyle,
+};

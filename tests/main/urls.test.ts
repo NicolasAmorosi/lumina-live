@@ -23,7 +23,7 @@ describe("capability tokens", () => {
     expect(assetUrl(42)).toBe("worship://asset/42");
     expect(slideUrl(7, 3)).toBe("worship://deck/7/3");
     expect(slideThumbUrl(7, 3)).toBe("worship://deck/7/3/thumb");
-    expect(deckAudioUrl(9)).toBe("worship://deck-audio/9");
+    expect(deckAudioUrl(9, "1.mp3")).toBe("worship://deck-audio/9?f=1.mp3");
     expect(linkedAudioUrl(42)).toBe("worship://linked-audio/42");
     expect(LOGO_URL).toBe("worship://logo");
   });
@@ -32,7 +32,7 @@ describe("capability tokens", () => {
     // Ids are numbers by type, so the path-traversal shape cannot even be
     // spelled — this is the assertion that keeps that true if the signature
     // ever loosens.
-    for (const url of [assetUrl(1), slideUrl(1, 1), deckAudioUrl(1), linkedAudioUrl(1)]) {
+    for (const url of [assetUrl(1), slideUrl(1, 1), deckAudioUrl(1, "1.mp3"), linkedAudioUrl(1)]) {
       expect(url.startsWith("worship://")).toBe(true);
       expect(url).not.toContain("..");
       expect(url).not.toContain("file:");

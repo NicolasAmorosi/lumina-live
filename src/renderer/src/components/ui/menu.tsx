@@ -1,8 +1,8 @@
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@renderer/lib/utils";
-import { computeMenuPosition, type MenuPosition } from "./floating-menu";
+import { computeMenuPosition, useFollowTrigger, type MenuPosition } from "./floating-menu";
 import { Icon, type IconName } from "./icon";
 import { IconButton } from "./icon-button";
 
@@ -70,21 +70,13 @@ export function Menu<T extends string>({
   const menuRef = useRef<HTMLUListElement>(null);
   const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
-  useLayoutEffect(() => {
-    if (!open) return;
-    const reposition = () => {
-      if (triggerRef.current) setPosition(computeMenuPosition(triggerRef.current, MENU_WIDTH_PX, align));
-    };
-    reposition();
-    window.addEventListener("resize", reposition);
-    // capture: true — a scroll inside a nested panel never bubbles to window,
-    // only the capture phase sees it.
-    window.addEventListener("scroll", reposition, true);
-    return () => {
-      window.removeEventListener("resize", reposition);
-      window.removeEventListener("scroll", reposition, true);
-    };
-  }, [align, open]);
+  // The items hold focus while the menu is open, so closing it hands focus back.
+  useFollowTrigger(
+    open,
+    triggerRef,
+    (trigger) => setPosition(computeMenuPosition(trigger, MENU_WIDTH_PX, align)),
+    () => close(true),
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -113,7 +105,7 @@ export function Menu<T extends string>({
 
   function close(refocus: boolean) {
     setOpen(false);
-    if (refocus) triggerRef.current?.focus();
+    if (refocus) triggerRef.current?.focus({ preventScroll: true });
   }
 
   function handleTriggerKeyDown(e: ReactKeyboardEvent<HTMLButtonElement>) {

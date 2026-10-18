@@ -13,13 +13,19 @@ type TooltipProps = {
   children: ReactNode;
   className?: string;
   content: ReactNode;
+  /** How the floating bubble sizes itself. "text" (the default) wraps prose
+   *  at a readable measure; "path" keeps a filesystem path or a file name on
+   *  ONE line at its natural width, breaking mid-token only when it runs out
+   *  of viewport. A sentence under `path` becomes a single line the width of
+   *  the screen, which is how this bubble looked everywhere before the two
+   *  cases were told apart. Ignored without `floating`. */
+  fit?: "text" | "path";
   /** Renders the bubble through a portal to `document.body`, positioned in
    *  viewport coordinates (clamped so it never crosses the screen edge)
    *  instead of the in-flow CSS bubble — see `computeMenuPosition` for
-   *  the same pattern. Use it when the trigger sits in a narrow column and
-   *  the content (e.g. a full filesystem path) needs to render at its
-   *  natural width on a single line without being clipped by an ancestor's
-   *  `overflow-hidden`. */
+   *  the same pattern. Use it when an ancestor clips overflow (every `Panel`
+   *  does, and so does Ajustes' scrolling section), or when the content needs
+   *  to render at its natural width in a narrow column. */
   floating?: boolean;
   /** Which side of the trigger the bubble opens toward — "bottom" (default)
    *  for a trigger near a panel's top, "top" for one near a panel's bottom
@@ -67,7 +73,14 @@ const TRIGGER_GAP = 6;
 
 type BubblePosition = { left: number; top: number };
 
-function FloatingTooltip({ children, className, content }: TooltipProps) {
+const fits: Record<"text" | "path", string> = {
+  // A readable measure, and words kept whole — `break-all` on a sentence
+  // hyphenates nothing and splits mid-word wherever the line happens to end.
+  text: "max-w-80 break-words",
+  path: "max-w-[calc(100vw-1rem)] break-all",
+};
+
+function FloatingTooltip({ children, className, content, fit = "text" }: TooltipProps) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<BubblePosition | null>(null);
   const triggerRef = useRef<HTMLSpanElement>(null);
@@ -125,7 +138,8 @@ function FloatingTooltip({ children, className, content }: TooltipProps) {
         ? createPortal(
             <span
               className={cn(
-                "pointer-events-none fixed z-[var(--z-popover)] w-max max-w-[calc(100vw-1rem)] rounded-lg border border-border bg-card p-2 text-xs break-all text-foreground shadow-raised",
+                "pointer-events-none fixed z-[var(--z-popover)] w-max rounded-lg border border-border bg-card p-2 text-xs text-foreground shadow-raised",
+                fits[fit],
                 !position && "invisible",
               )}
               ref={bubbleRef}

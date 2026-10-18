@@ -75,6 +75,8 @@ respuesta, y preguntá por lo que sí depende. No se entrega nada a medias en si
 | Estado | Zustand (slices por dominio) |
 | DB | `better-sqlite3` (Node-API, sin rebuild nativo) + Drizzle ORM + FTS5 para la Biblia |
 | Empaquetado | `electron-builder` (nsis / dmg / AppImage) |
+| Conversión de medios | FFmpeg 9.0.2 (`ffmpeg` + `ffprobe`) **empaquetado**, fijado por sha256 y bajado por `scripts/fetch-ffmpeg.ts` (GPLv3, ver `resources/ffmpeg-NOTICE.txt`) |
+| E2E | Playwright 1.63 (`_electron`) contra la app compilada o la instalada — `tests/e2e/` |
 
 ## Estructura de carpetas
 
@@ -83,7 +85,9 @@ src/
 ├── shared/                    # ÚNICA fuente de verdad de tipos main↔renderer
 │   ├── ipc/contract.ts        # IpcContract — un entry por canal, agrupado por dominio
 │   ├── ipc/result.ts          # Result<T> / IpcError
-│   ├── types/                 # DTOs: display, media, bible, projection, program, settings
+│   ├── style-validators.ts    # lo que comparten TODOS los estilos (color, SceneTextStyle, fondo)
+│   ├── scene-validators.ts    # lo propio de una escena de tiempo; bible-style-validators.ts, lo del versículo
+│   ├── types/                 # DTOs: display, media, bible, bible-style, projection, program, settings
 │   ├── constants.ts           # AssetKind, extensiones, timeouts de PPT
 │   └── urls.ts                # assetUrl()/slideUrl() — tokens de capacidad, no rutas
 ├── main/
@@ -94,7 +98,8 @@ src/
 │   │   ├── schema.ts             # tablas Drizzle
 │   │   ├── client.ts             # apertura + pragmas de SQLite
 │   │   ├── migrate.ts            # backup + migrate() al arrancar
-│   │   ├── seed/                 # parseo defensivo + seed de la Biblia (FTS5 rebuild)
+│   │   ├── seed/                 # seed de la Biblia (FTS5 rebuild) + bible-formats/ (JSON,
+│   │   │                         #   Zefania, USFX, OSIS, módulos SQLite; canon de 66 libros)
 │   │   └── repositories/         # un repo por agregado (settings, media, bible, programs, history, slides)
 │   ├── ipc/
 │   │   ├── register.ts           # registerHandlers<Handlers> — exhaustividad forzada por TS
@@ -103,6 +108,11 @@ src/
 │   ├── protocol/worship-protocol.ts   # worship:// — sirve archivos por id, nunca por ruta
 │   ├── slides/                    # libreoffice.ts (discovery+soffice), pptx-metadata.ts (OOXML),
 │   │                              # rasterizer.ts (ventana oculta+pdfjs), deck-service.ts (cola+cache)
+│   ├── media/                     # media-compat.ts (qué reproduce Chromium: PURO, testeado), ffmpeg.ts
+│   │                              #   (procesos), conversion-service.ts (cola + caché de copias reproducibles),
+│   │                              #   deck-clips.ts (video/audio embebido en un .pptx), thumbnail-service.ts
+│   ├── windows/projector-screen.ts # el proyector atado a su pantalla: anti-suspensión y reconexión
+│   ├── logging.ts                 # main.log y crash.log, rotados
 │   └── services/                  # repos.ts (registro), projection-state.ts, broadcast.ts
 ├── preload/
 │   ├── index.ts                  # puente GENÉRICO invoke/on — nunca se edita al agregar canales
@@ -116,19 +126,23 @@ src/
         ├── projection/ProjectionApp.tsx  # shell de la ventana de proyección (sin lógica de dominio)
         ├── components/
         │   ├── ui/          # primitivas del design system — barrel index.ts
-        │   ├── shared/      # cross-feature: modal, panel, output-view (renderiza un ProjectionOutput)
+        │   ├── shared/      # cross-feature: modal, panel, output-view (renderiza un ProjectionOutput),
+        │   │                #   timer-scene + bible-scene (las dos escenas generadas), style-fields
         │   └── pages/       # una carpeta por feature:
         │       ├── layout/     # AppShell (grilla estilo EasyWorship), TopBar
         │       ├── schedule/   # el orden del culto (columna izq. arriba)
         │       ├── resources/  # browser con pestañas: Biblia | Videos | Imágenes | Audios | PPT
         │       ├── slides/     # grilla central de diapositivas/versículos del ítem en preview
         │       ├── monitors/   # columna der.: LIVE arriba, PREVIEW abajo, transporte del deck
+        │       ├── settings/   # Ajustes; sections/bible/ = estilo del versículo + gestor de versiones
         │       └── programs/   # modal de programas guardados
         ├── stores/          # Zustand: program, toast, preview, projection, deck, bible,
         │                    #   library, settings, audio, display, ui
         ├── effects/         # projection-sync.ts + deck-autoplay.ts + end-of-playback.ts —
         │                    #   la lógica "con orden"
-        └── lib/             # api.ts, ipc.ts, i18n/, utils.ts, hooks/, actions/ (cruza stores)
+        └── lib/             # api.ts, ipc.ts, i18n/, utils.ts, hooks/, actions/ (cruza stores),
+                             #   utility-output.ts + bible-output.ts (los dos constructores compartidos
+                             #   entre selectOutput y el monitor de PREVIEW)
 ```
 
 ## Reutilización de componentes — no negociable
@@ -276,16 +290,32 @@ allowlist.
 npm install              # instala deps — better-sqlite3 trae binarios precompilados, no compila nada.
                           #   El `postinstall` baja además el binario de Electron: desde la v42 el
                           #   paquete ya NO lo hace solo, y sin él `npm run dev` muere con
-                          #   `Error: Electron uninstall` mientras build/typecheck/lint pasan igual
+                          #   `Error: Electron uninstall` mientras build/typecheck/lint pasan igual.
+                          #   También baja el FFmpeg de esta plataforma (`resources/ffmpeg/`, ~130 MB
+                          #   en macOS, ~210 MB en Windows), verificado por sha256
 npm run dev               # electron-vite dev (HMR en renderer, restart de main en watch)
 npm run typecheck          # tsc --noEmit sobre node (main+preload+shared) y web (renderer+shared)
 npm run lint                # eslint .
-npm run test                 # vitest run — 103 casos en dos proyectos: `main` (Node: migraciones, seed,
-                              #   FTS5, repos, borrador, validadores de settings, respaldo WAL, zip reader,
-                              #   audio vinculado, urls, prune del historial) y `renderer` (jsdom: selectOutput,
-                              #   freezeLivePositions, live-intent, store de toasts, utils). Nada importa
-                              #   `electron`: ese es el límite del suite
+npm run test                 # vitest run — 395 casos en dos proyectos: `main` (Node: migraciones, seed,
+                              #   FTS5, repos, borrador, validadores de settings y de escena, respaldo WAL,
+                              #   zip reader, audio vinculado, urls, prune del historial, funciones de tiempo,
+                              #   arrastre de una cuenta regresiva, escenas de tiempo como ítem del orden de culto,
+                              #   video embebido en una diapositiva: geometría, rels externos y nodo por `spid`,
+                              #   estilo del versículo, y los lectores de formatos de Biblia contra archivos
+                              #   reales escritos al vuelo: Zefania, USFX, OSIS, módulos SQLite, Latin-1 y .zip)
+                              #   y `renderer` (jsdom: selectOutput —incluido el video de diapositiva bajo
+                              #   NEGRO—, el versículo vestido y su restilado en vivo,
+                              #   freezeLivePositions, live-intent, transporte
+                              #   de escenas de tiempo, el veredicto de «Probar video», el tamaño del
+                              #   fotograma congelado, store de toasts, utils). Nada importa `electron`: ese es
+                              #   el límite del suite
 npm run test:watch            # el mismo suite en watch, mientras se toca un módulo
+npm run test:e2e              # build + Playwright: 27 recorridos de la app real con un perfil descartable y
+                              #   medios generados al vuelo con el FFmpeg empaquetado (videos, AVI, WMA, PDF,
+                              #   y .pptx con auto-avance y con un WMV embebido si hay LibreOffice). Con
+                              #   WORSHIP_E2E_EXECUTABLE=<ruta al ejecutable instalado> corre contra la app
+                              #   EMPAQUETADA — la única forma de probar lo que resuelve desde `resources/`
+npm run fetch:ffmpeg          # FFmpeg para esta máquina (también lo hace el postinstall y cada package:*)
 npm run db:generate            # drizzle-kit generate — nueva migración tras editar db/schema.ts
 npm run slides:smoke -- x.pptx # conversión + parseo OOXML (timings/audio) SIN Electron
 npm run build                 # electron-vite build
@@ -330,17 +360,48 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
 - **El orden de culto sin guardar se espeja a SQLite solo (`program_draft`), y cerrar la ventana lo
   decide el control, no main.** `effects/draft-autosave.ts` escribe el borrador con debounce y
   `App` lo recupera al arrancar; era el único dato de usuario sin respaldo. Main **nunca** infiere
-  si hay trabajo sin guardar: `windows/close-guard.ts` veta el primer `close`, emite
-  `close-requested` y espera un `window:closeDecision`, con una gracia de 4 s para que un renderer
-  colgado no vuelva la app incerrable. Ojo con el ciclo de vida: vetar un `close` durante un quit
-  **cancela el quit entero** y `will-quit` no llega, así que reanudarlo es `app.quit()` y no
-  `win.close()` — diagnóstico en
+  si hay trabajo sin guardar ni qué está en el aire: `windows/close-guard.ts` veta el primer
+  `close`, emite `close-requested` y espera un `window:closeDecision`, con una gracia de 4 s para
+  que un renderer colgado no vuelva la app incerrable. El control pregunta por dos motivos: cambios
+  sin guardar, o algo en el proyector (contenido, placas, NEGRO/LOGO), porque un ⌘Q accidental en
+  pleno culto no puede apagar la pantalla sin preguntar. Un quit se retiene ENTERO en `before-quit`
+  (`holdQuitUntilAnswered`), antes de que se cierre ninguna ventana: vetar solo el `close` del
+  control llegaba tarde, Electron ya había cerrado la proyección y «Cancelar» dejaba la app viva y
+  el proyector apagado. Reanudarlo es `app.quit()` y no `win.close()`; diagnóstico en
   [`.claude/knowledge/vetoing-a-close-during-a-quit-cancels-the-quit.md`](.claude/knowledge/vetoing-a-close-during-a-quit-cancels-the-quit.md).
 - **El respaldo previo a una migración se toma con `VACUUM INTO` + `PRAGMA integrity_check`, nunca
   con `copyFileSync`.** La base corre en WAL: copiar solo `worship.db` pierde en silencio todo lo
   posterior al último checkpoint — medido, 5000 filas contra 4977 con un `-wal` caliente. Y la base
   se cierra en `will-quit` (`closeDatabase()`), que es lo que vacía el `-wal` en vez de dejarlo
   crecer entre sesiones.
+- **El transporte de una escena de tiempo vive en la FILA, y la fila de al lado no puede mostrar
+  otro número.** `UtilityTrackRow` (`components/shared/`) es el mismo control en PREVIEW y en EN
+  VIVO — valor, arrancar/pausar, reiniciar, y la barra arrastrable sólo para la cuenta regresiva,
+  la única herramienta con un total del que ser una posición. El reloj de una escena vive en dos
+  lugares (`base.clock`, lo proyectado; `utility.store.run`, lo armado sin proyectar) y las dos
+  filas pueden estar en pantalla a la vez: `clockForScene` los lee **en ese orden — lo proyectado
+  gana** y `commitClock` (`lib/actions/utility.ts`) los escribe en el mismo, que es lo único que
+  impide que un timer tenga dos valores. Por eso ninguna acción del transporte decide su
+  transición y su destino a la vez: la transición es pura (`shared/timer.ts`), el destino es de
+  `commitClock`. Y pausar lo que está EN VIVO **no** desarma el timer que el operador preparó para
+  otra escena.
+- **Editar lo que ya está EN VIVO parchea `base` en el lugar; nunca es una escena nueva.**
+  `setTimerClock` (pausar, reanudar, reiniciar) y `setLiveScene` (el operador editó la escena que
+  está proyectada) escriben sobre `base` sin tocar `sceneEpoch`, igual que `setVideoResumeAt`.
+  Llamar a `beginScene()` ahí haría que el proyector se funda en una copia casi idéntica de sí
+  mismo en pleno culto, y en el caso del reloj además reiniciaría la cuenta. Hay tests que lo
+  afirman en `tests/renderer/select-output.test.ts`.
+- **Una columna JSON se VALIDA al escribir y se NORMALIZA campo por campo al leer.** Las dos
+  mitades no son intercambiables: main rechaza un `utility:create` que no describa una escena
+  entera (`isUtilitySceneUpsert`) porque el operador todavía está mirando el formulario; y el repo
+  normaliza al leer (`normalizeSceneStyle`) porque una fila que YA está guardada hay que mostrarla
+  igual, y un color roto tiene que costar el color y no la escena — mucho menos el arranque. Misma
+  disciplina que `DraftRepo.load` y el seed de la Biblia. Y lo que sale de un normalizador siempre
+  pasa el validador, con un test que lo afirma. **Un campo nuevo que PARTE uno existente cae al
+  valor hermano de la fila, no al default de la app**: `SceneEnd.message` (el tipo del mensaje
+  final) se normaliza contra el `style.message` de esa misma fila, porque toda escena escrita
+  antes dibujaba esa línea así — caer al default habría re-estilado en silencio cada escena ya
+  vestida la primera vez que este build la leyó.
 - **La ventana de proyección no tiene lógica de dominio.** Es una función pura del último
   `ProjectionOutput` recibido (`src/shared/types/projection.ts`). Si necesitás que "sepa" algo del
   culto, calculalo en el control y mandalo por `projection:show`.
@@ -387,6 +448,14 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   con lo que el `.pptx` sí trajo — avanzar con el tiempo de otra diapositiva en pleno culto es peor
   que no avanzar. Diagnóstico en
   [`.claude/knowledge/libreoffice-pptx-export-drops-advtm-without-a-transition-effect.md`](.claude/knowledge/libreoffice-pptx-export-drops-advtm-without-a-transition-effect.md).
+- **Un PDF es un deck y NO se convierte con LibreOffice.** Es el formato intermedio del pipeline,
+  así que `runConversion` lo manda directo al rasterizador (`containerKind === "pdf"`) y
+  `warmBatchPdfCache` lo saca del lote. `--convert-to pdf` sobre un `.pdf` lo importa a **Draw** y
+  lo vuelve a dibujar — medido, 157 KB → 1,76 MB. De ahí se sigue que **un PDF se proyecta sin
+  LibreOffice instalado**: la pregunta es `deckRequiresSoffice(ext)` y se hace por deck, nunca por
+  entorno. Vive en el `AssetKind` `ppt` a propósito, porque en todo el renderer `kind === "ppt"`
+  ya significa "esto es un deck". Diagnóstico en
+  [`.claude/knowledge/a-pdf-source-breaks-two-assumptions-the-pipeline-made-about-its-own-output.md`](.claude/knowledge/a-pdf-source-breaks-two-assumptions-the-pipeline-made-about-its-own-output.md).
 - **Nunca leas un `.pptx` entero para sacarle sus partes XML.** Un zip es de acceso aleatorio: va
   todo por `readZipEntries` (`src/main/slides/zip-reader.ts`), que lee el directorio central y solo
   los rangos pedidos. `unzipSync` con `filter` **no** evita el `readFileSync` de 200 MB, solo el
@@ -413,15 +482,79 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   remonte: un comando se pierde en cada epoch nuevo y en cada reconstrucción de la ventana, y deja
   al operador con un panel que muestra un nivel que la sala no escucha. Por eso el volumen de
   `M2` no se implementó sobre el `setVolume` que ya existía — ese comando se borró.
-- **NEGRO/LOGO pausa un video en vivo y mantiene su posición; la pista de audio de un deck sigue
+- **Un video embebido en una diapositiva viaja como `slideVideo`, al TOPE de `ProjectionOutput` y
+  no adentro de la variante `slide`.** Bajo NEGRO el `kind` pasa a `"black"`, así que un video que
+  viviera dentro de la variante desaparecería del push justo al taparlo — desmontando el elemento,
+  perdiendo la posición y recreando el decoder en cada toggle. Se tapa con opacidad y se pausa,
+  igual que `videoUnderlay`. Su `rect` está en fracciones de la DIAPOSITIVA, no del escenario: el
+  `<img>` del slide es `object-contain` y letterboxea, así que el overlay reconstruye esa caja con
+  `min(100cqw, ratio * 100cqh)` dentro de un contenedor propio `container-type: size` — el
+  `@container` de la vista es `inline-size` y no da eje de bloque, de modo que un `cqh` suelto
+  resuelve en silencio contra otra cosa. Diagnóstico en
+  [`.claude/knowledge/an-overlay-on-a-slide-must-rebuild-the-object-contain-box-and-cqh-needs-container-type-size.md`](.claude/knowledge/an-overlay-on-a-slide-must-rebuild-the-object-contain-box-and-cqh-needs-container-type-size.md).
+  La feature es solo de `.pptx`/`.ppsx`: un `.ppt`/`.pps` legacy pierde el video entero.
+- **NEGRO/LOGO pausa lo que el proyector reproduce y conserva su posición; un audio suelto sigue
   sonando.** El `<video>` no se desmonta al taparlo (`videoUnderlay` en `ProjectionOutput` +
-  `LiveVideo` en `output-view.tsx`) — solo se oculta y se pausa, y al destapar reanuda donde
-  estaba. Son dos comportamientos deliberadamente distintos: el video se detiene, la música del
-  deck no.
+  `LiveVideo` en `output-view.tsx`): solo se oculta y se pausa, y al destapar reanuda donde estaba.
+  Desde el 2026-09-09 la pista de audio de un deck hace lo mismo, y además congela el auto-avance,
+  o al destapar la diapositiva queda adelantada a su música. Ver
+  [`.claude/knowledge/deck-soundtrack-negro-logo-pause-and-autoplay-freeze.md`](.claude/knowledge/deck-soundtrack-negro-logo-pause-and-autoplay-freeze.md).
+  La excepción deliberada es un audio mandado EN VIVO por su cuenta: es música de fondo, no
+  contenido del proyector.
+- **El versículo viaja VESTIDO, y su estilo es una clave de `settings`, no una fila.** La variante
+  `bible` de `ProjectionOutput` lleva adentro su `BibleStyle` y su `backgroundUrl` resueltos, por
+  la misma razón que los lleva una escena de tiempo: el proyector no resuelve nada y
+  `projection-state.ts` reproduce ese valor tal cual. El estilo vive en `settings["bible.style"]`,
+  `App` lo espeja a `projection.store` (como ya hace con las dos claves de transición) y por eso
+  `selectOutput` puede seguir siendo función pura de ese store. Editarlo mientras hay un versículo
+  EN VIVO llega al proyector al instante y **sin transición**: nada de eso toca `sceneEpoch`. Lo
+  construye `bibleOutputFor`, compartido con el monitor de PREVIEW igual que `timerOutputFor`.
+- **El tamaño del versículo se MIDE contra el escenario; el testamento sale de la POSICIÓN; el
+  formato de un archivo sale de sus BYTES.** Las tres son la misma regla: no se deduce de un
+  nombre. El auto-ajuste mide el bloque entero (la referencia está adentro) y su `ResizeObserver`
+  observa el ESCENARIO, nunca el bloque —observarlo es un bucle por construcción—; el testamento
+  es `index <= 39` y no una lista de abreviaturas, que es como 23 libros del Antiguo Testamento
+  estuvieron guardados como `"NT"` desde el primer commit; y `detectBibleFormat` sniffea números
+  mágicos y el elemento raíz, porque un módulo renombrado es lo normal. Los dos hallazgos:
+  [`a-book-code-namespace-is-per-format-and-testament-was-never-derived-right.md`](.claude/knowledge/a-book-code-namespace-is-per-format-and-testament-was-never-derived-right.md)
+  y
+  [`a-bible-module-is-milestoned-xml-or-latin-1-or-sqlite-and-never-what-its-name-says.md`](.claude/knowledge/a-bible-module-is-milestoned-xml-or-latin-1-or-sqlite-and-never-what-its-name-says.md).
+- **Nunca un `cqh` debajo de `OutputView`.** Su raíz es un contenedor `inline-size`: sin eje de
+  bloque, un `cqh` no falla — resuelve en silencio contra el viewport chico, que en un monitor de
+  confianza de 240 px es la ventana de control entera. Ya mordió dos veces (el overlay de video de
+  una diapositiva, y el margen vertical de `TimerScene`). Si de verdad hace falta el eje vertical,
+  va adentro de un envoltorio propio con `container-type: size`.
 - **`selectOutput` (`src/renderer/src/stores/projection.store.ts`) es la única fuente de qué se
   proyecta.** Es un `switch` exhaustivo sobre `BaseContent` — agregar un tipo de contenido nuevo
   sin manejarlo ahí es un error de compilación, no un bug de runtime como el `restorePrevious()`
   legacy.
+- **Si Chromium no puede reproducir un video o un audio, se convierte; jamás se decide por la
+  extensión ni esperando el `error`.** Medido: ProRes, MPEG-4 parte 2 o MJPEG dentro de un `.mp4`/`.mov`
+  suenan sobre NEGRO sin ningún `error`, y AC3/DTS/ALAC dan imagen SIN SONIDO. `media-compat.ts` decide
+  con los streams de ffprobe (y HEVC según la GPU, que reporta el control), y `conversion-service.ts`
+  convierte en segundo plano, al importar o al ver una carpeta vinculada, a H.264/AAC con tope 1080p, sin
+  tocar el original. `worship://asset/<id>?v=<copia>` sirve la copia y la URL sin `v` sirve SIEMPRE
+  el original. **La URL de video/audio sale de `playableAssetUrl`**, por dos razones: Chromium
+  reutiliza los datos de una URL entre elementos (cuando cambian los bytes tiene que cambiar el string),
+  y un elemento que arrancó con el original no puede recibir los bytes de la copia a mitad de una
+  canción. Por eso la URL del video viaja resuelta en `BaseContent`. Los clips de un `.pptx` llevan su
+  archivo (`?f=`) por lo mismo.
+  EN VIVO sobre algo que todavía se está convirtiendo se rechaza con un aviso. Diagnósticos en
+  [`.claude/knowledge/chromium-plays-sound-over-black-for-a-codec-it-cannot-decode.md`](.claude/knowledge/chromium-plays-sound-over-black-for-a-codec-it-cannot-decode.md)
+  y
+  [`.claude/knowledge/chromium-reuses-a-media-urls-data-across-elements-so-changed-bytes-need-a-changed-url.md`](.claude/knowledge/chromium-reuses-a-media-urls-data-across-elements-so-changed-bytes-need-a-changed-url.md).
+- **Un recurso que cambia por plataforma va en el bloque de esa plataforma de `build`** (`win`, `mac`,
+  `linux`), nunca arriba con `${platform}`: esa macro es la de la máquina que compila, y el instalador
+  de Windows hecho en la Mac salió sin FFmpeg sin ningún error. Ver
+  [`.claude/knowledge/electron-builder-platform-macro-is-the-build-host-not-the-target.md`](.claude/knowledge/electron-builder-platform-macro-is-the-build-host-not-the-target.md).
+- **Si desaparece la pantalla del proyector, su ventana se OCULTA — no se cierra — y vuelve sola**
+  cuando hay de nuevo una segunda pantalla. Lo mismo pasa si el proyector se enciende después de abrir
+  la app: la ventana pasa de la notebook a esa pantalla. Lo hace main (`windows/projector-screen.ts`,
+  regla pura en `projector-display-choice.ts`), sin reconstruir la ventana. Cerrarla callaba la sala:
+  todos los `<audio>` del culto viven en esa ventana. El control solo vuelve a listar las pantallas
+  (`display.store.refresh`) y muestra el aviso; nunca mueve la ventana, y nada la manda a la pantalla
+  principal por su cuenta. Mientras existe, un `powerSaveBlocker` impide que se apaguen las pantallas
+  en pleno sermón.
 - **Las diapositivas son imágenes pre-rasterizadas, no un slideshow controlado.** Un `.pptx` se
   convierte una sola vez (LibreOffice → PDF → WebP por slide) y se cachea en
   `userData/slides-cache` + SQLite, direccionado por **hash de contenido**. La ventana de
@@ -452,10 +585,13 @@ no reimplementando desde cero.
 
 ## Notas operativas
 
-- Se desarrolla y se verifica en macOS: ya no hay features exclusivas de Windows.
+- Se desarrolla y se verifica en macOS: ya no hay features exclusivas de Windows. Desde el
+  2026-10-18 esta Mac tiene Rosetta y `npm run package:win` genera el instalador NSIS completo;
+  verificá siempre `release/win-unpacked/resources/ffmpeg/` después.
 - Requiere **LibreOffice instalado** para convertir presentaciones (`brew install --cask libreoffice`).
   No se empaqueta; la app lo detecta y guía la instalación si falta.
 - `git` está activo; commitea/pushea solo si el usuario lo pide.
 - No hay CI configurado — es una decisión del usuario, no un pendiente.
   `npm run typecheck && npm run lint && npm run test` es la barra mínima antes de dar por buena
-  una tarea, y corre a mano.
+  una tarea, y corre a mano. Antes de un release, además `npm run test:e2e` y la misma suite contra
+  el paquete (`WORSHIP_E2E_EXECUTABLE`).

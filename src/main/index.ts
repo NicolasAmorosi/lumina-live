@@ -1,16 +1,17 @@
 import { app, BrowserWindow, dialog } from "electron";
-import fs from "node:fs";
 import path from "node:path";
 import { registerWorshipScheme, registerWorshipProtocolHandler } from "./protocol/worship-protocol";
 import { openDatabase } from "./db/client";
 import { backupBeforeMigrate, runMigrations } from "./db/migrate";
 import { seedBuiltinBibles } from "./db/seed/seed-bible";
+import { seedUtilityScenes } from "./db/seed/seed-utility-scenes";
 import {
   initRepos,
   closeDatabase,
   getHistoryRepo,
   getMediaRepo,
   getSettingsRepo,
+  getUtilityRepo,
 } from "./services/repos";
 import {
   migrateLegacySettingsIfPresent,
@@ -21,15 +22,20 @@ import { registerAllIpcHandlers } from "./ipc";
 import { createControlWindow } from "./windows/control-window";
 import { installNavigationGuards } from "./windows/navigation-guards";
 import { installApplicationMenu } from "./windows/app-menu";
-import { installCloseGuard, markQuitRequested } from "./windows/close-guard";
+import { holdQuitUntilAnswered, installCloseGuard } from "./windows/close-guard";
+import { watchDisplays } from "./windows/projector-screen";
 import { projectionState } from "./services/projection-state";
 import { dbBackupDir, dbPath, biblesDir, migrationsDir, userDataDir } from "./paths";
 import { initSlidesSubsystem, shutdownSlides } from "./slides/deck-service";
+import { cancelAllPrewarmBatches } from "./services/prewarm-service";
 import { isRasterizerWindow } from "./slides/rasterizer";
 import { startLibrarySweepScheduler } from "./services/library-sweeper";
 import { pruneThumbCache } from "./media/thumbnail-service";
 import { backfillContentHashes } from "./media/content-hash";
 import { backfillDeckTimings } from "./slides/backfill-timings";
+import { initConversions, shutdownConversions } from "./media/conversion-service";
+import { stopDeckClips } from "./media/deck-clips";
+import { appendLogLine, installMainLog } from "./logging";
 
 /** Long enough to be safely past the first paint of the control window — the
  *  prune walks a directory and is worth nothing compared to the app being on
@@ -41,6 +47,9 @@ const THUMB_PRUNE_DELAY_MS = 10_000;
  *  should not have to wait ten seconds to see the truth — but still long
  *  enough to be past the control window's first paint. */
 const CONTENT_HASH_BACKFILL_DELAY_MS = 2_000;
+
+// First of all, so nothing main says is lost on a machine with no console.
+installMainLog(path.join(userDataDir, "main.log"));
 
 // Must run before app.whenReady().
 registerWorshipScheme();
@@ -83,13 +92,22 @@ function initDatabase(): void {
         String(error),
       ].join("\n\n"),
     );
+    // Explained already: `reportCrash` still logs it, without a second dialog.
+    crashDialogShown = true;
     throw error;
   }
 
-  seedBuiltinBibles(db, sqlite, biblesDir);
   initRepos(db, sqlite);
   setBibleDb(db, sqlite);
+  // After `initRepos` now, and for the same reason the utility seed below is:
+  // it reads `bible.builtinSeeded`, which is what keeps a deleted RV1960
+  // deleted across launches. See `seedBuiltinBibles`.
+  seedBuiltinBibles(db, sqlite, biblesDir, getSettingsRepo());
   migrateLegacySettingsIfPresent(getSettingsRepo());
+  // After `initRepos`, unlike the Bible seed above: this one needs two
+  // repositories rather than a raw handle, and the flag it reads lives in
+  // `settings`.
+  seedUtilityScenes(getUtilityRepo(), getSettingsRepo());
 }
 
 function wireMinimizeRestoreSync(controlWindow: BrowserWindow): void {
@@ -129,9 +147,13 @@ function openControlWindow(): BrowserWindow {
   win.on("closed", () => {
     // `window-all-closed` only fires when NO window is left, rasterizer
     // included — so on Windows/Linux a recent conversion could leave the app
-    // running with no visible window at all. Deciding it here, against the
-    // user-facing count, is what actually ends the process.
-    if (process.platform !== "darwin" && userFacingWindows().length === 0) app.quit();
+    // running with no visible window at all. The control window IS the app
+    // there: it closing means quitting, unconditionally. Counting the windows
+    // still open did not work — the projector's own `close()` is asynchronous
+    // and still counted, so the process stayed alive with nothing on screen
+    // and kept the single-instance lock, and the next double-click on the
+    // icon found no window to bring forward.
+    if (process.platform !== "darwin") app.quit();
   });
   return win;
 }
@@ -139,23 +161,34 @@ function openControlWindow(): BrowserWindow {
 let mainControlWindow: BrowserWindow | null = null;
 
 app.on("second-instance", () => {
-  if (mainControlWindow) {
-    if (mainControlWindow.isMinimized()) mainControlWindow.restore();
-    mainControlWindow.focus();
+  // A destroyed window throws on every call, which is what turned a second
+  // launch into the «Error inesperado» dialog with no window behind it.
+  if (!mainControlWindow || mainControlWindow.isDestroyed()) {
+    if (app.isReady()) mainControlWindow = openControlWindow();
+    return;
   }
+  if (mainControlWindow.isMinimized()) mainControlWindow.restore();
+  mainControlWindow.focus();
 });
 
 if (gotSingleInstanceLock) {
   void app.whenReady().then(() => {
     try {
       initDatabase();
-    } catch {
+    } catch (error) {
+      // A migration failure has already explained itself (`initDatabase`).
+      // Anything else — a locked or corrupt `worship.db`, a backup that
+      // cannot be pruned — used to quit with no dialog and nothing in
+      // `crash.log`: the app simply never opened, on the one launch (the first
+      // after an update) when a pending migration makes that most likely.
+      reportCrash("startup", error);
       app.quit();
       return;
     }
 
     registerWorshipProtocolHandler(getMediaRepo());
     registerAllIpcHandlers();
+    watchDisplays();
     // Before the first window: the default menu's Cmd+W (which closes the
     // PROJECTOR) and Cmd+R must never be reachable, not even for one frame.
     installApplicationMenu();
@@ -169,6 +202,9 @@ if (gotSingleInstanceLock) {
       console.warn("[slides] init failed", error);
     });
     startLibrarySweepScheduler();
+    // Sweeps leftovers only. Converting waits for the control window to report
+    // what this machine decodes (`conversion:reportDecoders`).
+    initConversions();
 
     // The other half of the legacy import (`media_library.json`). Off the
     // startup path: it is a whole library's worth of files, and the rows it
@@ -232,12 +268,15 @@ app.on("window-all-closed", () => {
 
 // Cancels in-flight jobs and kills soffice/the rasterizer. The deck cache is
 // deliberately NOT deleted — persisting it is the point of the pipeline.
-app.on("before-quit", () => {
-  // Recorded BEFORE the windows get their `close`: the guard vetoes that
-  // close, which cancels the whole quit, and this is what tells it to resume
-  // the quit rather than merely close the window once the operator answers.
-  markQuitRequested();
+app.on("before-quit", (event) => {
+  // Held until the control window answers. No window closes and nothing shuts
+  // down before that: an operator who cancels must keep the projector and a
+  // working slides pipeline. See `holdQuitUntilAnswered`.
+  if (holdQuitUntilAnswered(event)) return;
+  cancelAllPrewarmBatches();
   shutdownSlides();
+  stopDeckClips();
+  shutdownConversions();
 });
 
 // `will-quit`, not `before-quit`, for two reasons. It runs after every window
@@ -262,34 +301,9 @@ app.on("will-quit", () => {
  *  during a service. Everything after the first still reaches `crash.log`. */
 let crashDialogShown = false;
 
-/** Past this, `crash.log` is rotated onto `crash.log.1`. A stack is ~1 KB, so
- *  this holds hundreds of them — and a repeating fault writes one per
- *  occurrence, forever, which is what used to grow the file without bound. */
-const CRASH_LOG_MAX_BYTES = 1_000_000;
-
-/** Rotation rather than truncation: the crash that matters is almost always
- *  the FIRST one, and a fault that repeats would otherwise erase exactly the
- *  entry worth reading. At most two files, so the ceiling stays ~2 MB. */
-function rotateCrashLog(file: string): void {
-  try {
-    if (fs.statSync(file).size < CRASH_LOG_MAX_BYTES) return;
-    fs.renameSync(file, `${file}.1`);
-  } catch {
-    // No file yet (the common case), or a rename we cannot do. Either way the
-    // append below is still worth attempting.
-  }
-}
-
 function reportCrash(label: string, error: unknown): void {
   const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
-  try {
-    const file = path.join(userDataDir, "crash.log");
-    rotateCrashLog(file);
-    fs.appendFileSync(file, `${new Date().toISOString()} [${label}] ${detail}\n`);
-  } catch {
-    // A crash handler that itself throws (a full disk) would take the process
-    // down with no trace at all.
-  }
+  appendLogLine(path.join(userDataDir, "crash.log"), label, detail);
   if (crashDialogShown) {
     console.error(`[${label}]`, error);
     return;
