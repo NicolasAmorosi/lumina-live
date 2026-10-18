@@ -2,6 +2,15 @@ import { create } from "zustand";
 import type { BibleBookDTO, BibleVerseDTO, BibleVersionDTO } from "@shared/types/bible";
 import { api } from "@renderer/lib/api";
 import { useSettingsStore } from "@renderer/stores/settings.store";
+import { usePreviewStore } from "@renderer/stores/preview.store";
+
+/** A verse PREVIEW target is an index into the chapter loaded HERE, so a
+ *  different chapter makes it name another verse: Juan 3:16 previewed, then
+ *  Romanos 8 browsed, and PREVIEW — and Enter — became Romanos 8:16 with
+ *  nothing to show it had changed. Nothing in PREVIEW beats the wrong verse. */
+function dropVersePreview(): void {
+  if (usePreviewStore.getState().target?.kind === "verse") usePreviewStore.getState().clear();
+}
 
 type BibleStoreState = {
   versions: BibleVersionDTO[];
@@ -95,11 +104,14 @@ export const useBibleStore = create<BibleStoreState>((set, get) => ({
 
   setVersion: async (versionId) => {
     const books = await api.bible.books(versionId);
+    dropVersePreview();
     set({ versionId, books, bookId: null, chapter: null, verses: [], currentVerseIndex: null });
   },
 
   setBookAndChapter: async (bookId, chapter) => {
     const verses = await api.bible.chapter(bookId, chapter);
+    const { bookId: currentBook, chapter: currentChapter } = get();
+    if (bookId !== currentBook || chapter !== currentChapter) dropVersePreview();
     set({ bookId, chapter, verses, currentVerseIndex: null });
   },
 

@@ -49,14 +49,17 @@ const ARROW_CONSUMING_ROLES = new Set([
 /**
  * The element that took focus from a pointer press, if the focused one did.
  *
- * Enter on a button means two different things depending on how the operator
- * got there. Reached with Tab, it is that button's own key. Clicked, it is not:
- * Chromium focuses a button on click, so after touching «Pausar» or a resource
- * tile, Enter pressed that button again instead of going EN VIVO, which is the
- * one key an operator presses blind. `:focus-visible` cannot tell the two apart
- * here. Chromium flips it to true on the very Enter keydown being handled,
- * already in the capture phase (measured 2026-10-14). So the modality is
- * recorded when focus moves instead.
+ * Enter, Space and the arrows on a button mean two different things depending
+ * on how the operator got there. Reached with Tab, they are that button's own
+ * keys. Clicked, they are not: Chromium focuses a button on click, so after
+ * touching «Pausar» or a resource tile, Enter pressed that button again instead
+ * of going EN VIVO, which is the one key an operator presses blind — and after
+ * clicking EN VIVO itself, → no longer moved the verse or the slide that had
+ * just gone live, and Space pressed EN VIVO again (a new scene: the video and
+ * the deck's music back to 0). `:focus-visible` cannot tell the two apart here.
+ * Chromium flips it to true on the very keydown being handled, already in the
+ * capture phase (measured 2026-10-14). So the modality is recorded when focus
+ * moves instead.
  */
 let pointerFocused: EventTarget | null = null;
 let pointerDown = false;
@@ -80,7 +83,10 @@ function suppressesKey(target: EventTarget | null, key: string): boolean {
   }
   if (target.isContentEditable || TEXT_ENTRY_TAGS.has(target.tagName)) return true;
   if (ACTIVATION_TAGS.has(target.tagName) && KEYS_A_CONTROL_CONSUMES.has(key)) {
-    return !(key === "Enter" && target === pointerFocused);
+    // A tab is a button that owns its arrows however it got focus.
+    const role = target.getAttribute("role");
+    if (role !== null && ARROW_CONSUMING_ROLES.has(role) && ARROW_KEYS.has(key)) return true;
+    return target !== pointerFocused;
   }
   const role = target.getAttribute("role");
   return role !== null && ARROW_CONSUMING_ROLES.has(role) && ARROW_KEYS.has(key);
@@ -104,7 +110,8 @@ function suppressesKey(target: EventTarget | null, key: string): boolean {
  * Suppressed entirely while `suspended` (any modal open — see
  * `useAnyModalOpen`) or while a text field has focus. On a focused button,
  * link, or element carrying a widget role, only the keys that control actually
- * consumes are suppressed — see `suppressesKey`.
+ * consumes are suppressed — see `suppressesKey` — and on a button the mouse
+ * focused, not even those: all of the above keep working right after a click.
  */
 export function useGlobalShortcuts(suspended: boolean): void {
   // Always on, modal or not: what matters is how the focused element got its
@@ -167,10 +174,12 @@ export function useGlobalShortcuts(suspended: boolean): void {
           advancePreview(e.key === "ArrowDown" ? 1 : -1);
           return;
         case " ": {
-          const { base, liveDeck } = useProjectionStore.getState();
-          if (base?.kind !== "deck" || !liveDeck?.autoAdvance) return;
+          // Prevented even when it does nothing here: reaching this switch
+          // from a clicked button, Space would otherwise press that button
+          // again (see `pointerFocused`).
           e.preventDefault();
-          toggleAutoplay();
+          const { base, liveDeck } = useProjectionStore.getState();
+          if (base?.kind === "deck" && liveDeck?.autoAdvance) toggleAutoplay();
           return;
         }
         case "b":

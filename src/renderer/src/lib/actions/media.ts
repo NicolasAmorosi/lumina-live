@@ -55,7 +55,11 @@ export function toggleSlideVideoPause(): void {
  * a PPT's music pauses the PPT).
  */
 export function toggleAudioTrackPause(trackId: string): void {
-  if (trackId === DECK_SOUNDTRACK_TRACK_ID) {
+  // Only a deck that advances by itself shares a clock with its music. A
+  // manual deck's autoplay stays "off" for good, so routing its music here too
+  // made the pause button on that row a no-op: the only ways left to silence
+  // it were NEGRO/LOGO or taking the deck off the air.
+  if (trackId === DECK_SOUNDTRACK_TRACK_ID && useProjectionStore.getState().liveDeck?.autoAdvance) {
     toggleAutoplay();
     return;
   }

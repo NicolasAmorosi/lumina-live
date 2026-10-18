@@ -1059,11 +1059,22 @@ export function OutputView({
   // A single scene and a single video are on screen at a time, and the notice
   // below only fires when the slot still matches what is showing, so a slot
   // overwritten by a later failure is exactly a slot that stopped mattering.
-  // This is also why nothing ever has to clear them.
   const [failedSceneUrl, setFailedSceneUrl] = useState<string | null>(null);
   const [failedVideoUrl, setFailedVideoUrl] = useState<string | null>(null);
   const [failedSlideVideoUrl, setFailedSlideVideoUrl] = useState<string | null>(null);
   const [failedPlateUrl, setFailedPlateUrl] = useState<string | null>(null);
+  // ...except when the SAME url comes back working. A USB drive unplugged and
+  // plugged in again, or a file relocated, keeps its `worship://asset/<id>`:
+  // the projector played it the second time and the LIVE monitor kept the red
+  // band of the first, lying to the operator about the room. A new scene is a
+  // new attempt, so it starts clean; a failure in it fills the slot again.
+  const sceneEpoch = output.transition.epoch;
+  useEffect(() => {
+    setFailedSceneUrl(null);
+    setFailedVideoUrl(null);
+    setFailedSlideVideoUrl(null);
+    setFailedPlateUrl(null);
+  }, [sceneEpoch]);
 
   function handleImageError(url: string) {
     setFailedSceneUrl(url);

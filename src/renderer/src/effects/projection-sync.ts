@@ -90,15 +90,25 @@ export function startProjectionEffects(): () => void {
     });
   });
 
+  // Coalesced the same way as the output above, and for the same reason: going
+  // live from NEGRO from deck A to deck B is `setOverlay("none")` and then
+  // `setDeckTrack(B)` in one synchronous action, and pushing each set on its
+  // own sent A's soundtrack UNcovered for a moment before B replaced it.
+  let audioFlushScheduled = false;
   const pushAudioTracks = () => {
-    const covered = useProjectionStore.getState().overlay !== "none";
-    const tracks = useAudioStore.getState().tracks;
-    // The one place that knows the complete live track list, so it is also
-    // where the status slots of tracks that no longer exist get collected —
-    // every path that can retire a track (`removeTrack`, `restartTrack`'s new
-    // epoch, `setDeckTrack`, `clear`) ends up here.
-    useProjectionStore.getState().pruneMediaStatus(tracks.map((track) => track.trackId));
-    void api.projection.setAudioTracks(tracks.map((track) => toAudioTrackPush(track, covered)));
+    if (audioFlushScheduled) return;
+    audioFlushScheduled = true;
+    queueMicrotask(() => {
+      audioFlushScheduled = false;
+      const covered = useProjectionStore.getState().overlay !== "none";
+      const tracks = useAudioStore.getState().tracks;
+      // The one place that knows the complete live track list, so it is also
+      // where the status slots of tracks that no longer exist get collected —
+      // every path that can retire a track (`removeTrack`, `restartTrack`'s new
+      // epoch, `setDeckTrack`, `clear`) ends up here.
+      useProjectionStore.getState().pruneMediaStatus(tracks.map((track) => track.trackId));
+      void api.projection.setAudioTracks(tracks.map((track) => toAudioTrackPush(track, covered)));
+    });
   };
 
   const unsubscribeAudioTracks = useAudioStore.subscribe((state) => state.tracks, pushAudioTracks);

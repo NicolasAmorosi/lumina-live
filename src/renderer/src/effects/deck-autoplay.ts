@@ -237,6 +237,12 @@ export function startDeckAutoplay(): () => void {
       const state = useProjectionStore.getState();
       if (state.autoplay !== "playing") {
         clearTimer();
+        // Every EN VIVO passes through "off" (`setLiveDeck`). Without this
+        // the next deck inherited the previous one's chain — `scheduleDetached`
+        // builds on `max(deadline, now)` — and its first slide stayed up for
+        // whatever was left of the old one's, putting every later slide that
+        // much behind the singers. A resume sets its own fresh deadline.
+        deadline = 0;
         return;
       }
       // Without a soundtrack there's no audio clock to sync to.
@@ -271,6 +277,12 @@ export function startDeckAutoplay(): () => void {
       }
 
       if (status.ended) {
+        // Only the synced deck ends with its music. A detached one — the
+        // operator stepped back to repeat a chorus — still has slides on its
+        // own clock, and whichever of the two ends LAST decides
+        // (`end-of-playback.ts`): finishing here cut it to the logo with
+        // slides still unshown.
+        if (state.autoplayMode !== "synced") return;
         clearTimer();
         if (state.autoplay === "playing") state.setAutoplay("finished");
         return;
