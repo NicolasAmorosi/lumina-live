@@ -63,7 +63,10 @@ describe("readZipEntries", () => {
 
   test("a stored (uncompressed) entry comes back intact", () => {
     const entries = readZipEntries(archive, (name) => name === "ppt/media/image1.png");
-    expect(entries["ppt/media/image1.png"]).toEqual(bulk);
+    // Byte comparison, not `toEqual`: a deep equality walks 2 MB one element at
+    // a time (12 s), which timed the suite out on a loaded machine.
+    const entry = entries["ppt/media/image1.png"];
+    expect(entry && Buffer.from(entry).equals(Buffer.from(bulk))).toBe(true);
   });
 
   test("never reads the whole archive to get at the small parts", () => {
