@@ -2,6 +2,7 @@ import { api } from "@renderer/lib/api";
 import { onIpc } from "@renderer/lib/ipc";
 import { hasUnsavedChanges, toUpsertItems } from "@renderer/lib/actions/programs";
 import { useProgramStore } from "@renderer/stores/program.store";
+import { useProjectionStore } from "@renderer/stores/projection.store";
 import { useUiStore } from "@renderer/stores/ui.store";
 import type { ProgramDraft } from "@shared/types/program";
 
@@ -51,6 +52,15 @@ export function flushDraft(): void {
   });
 }
 
+/** Something the congregation is looking at: closing the app takes the
+ *  projector down with it, so an accidental ⌘Q mid-service has to ask even
+ *  with nothing left to save. An open projector showing only the resting logo
+ *  does not count. NEGRO or LOGO put up on purpose does. */
+function isOnAir(): boolean {
+  const { presentationOpen, base, overlay, livePlates } = useProjectionStore.getState();
+  return presentationOpen && (base !== null || overlay !== "none" || livePlates.length > 0);
+}
+
 /**
  * Mirrors the unsaved order of service to SQLite as the operator builds it.
  *
@@ -74,7 +84,9 @@ export function startDraftAutosave(): () => void {
     // Whatever is still debounced goes to disk first, so "cerrar igualmente"
     // really does mean "it will be there next time".
     flushDraft();
-    if (!hasUnsavedChanges()) {
+    const unsaved = hasUnsavedChanges();
+    const onAir = isOnAir();
+    if (!unsaved && !onAir) {
       void api.window.closeDecision("close");
       return;
     }
@@ -82,7 +94,7 @@ export function startDraftAutosave(): () => void {
     // window is never shut out from under a question the operator is still
     // reading — and the answer still knows whether this started as a quit.
     void api.window.closeDecision("hold");
-    useUiStore.getState().setCloseGuardOpen(true);
+    useUiStore.getState().setCloseGuard({ unsaved, onAir });
   });
 
   return () => {

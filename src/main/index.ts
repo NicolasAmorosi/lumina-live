@@ -23,7 +23,7 @@ import { registerAllIpcHandlers } from "./ipc";
 import { createControlWindow } from "./windows/control-window";
 import { installNavigationGuards } from "./windows/navigation-guards";
 import { installApplicationMenu } from "./windows/app-menu";
-import { installCloseGuard, markQuitRequested } from "./windows/close-guard";
+import { holdQuitUntilAnswered, installCloseGuard } from "./windows/close-guard";
 import { projectionState } from "./services/projection-state";
 import { dbBackupDir, dbPath, biblesDir, migrationsDir, userDataDir } from "./paths";
 import { initSlidesSubsystem, shutdownSlides } from "./slides/deck-service";
@@ -241,11 +241,11 @@ app.on("window-all-closed", () => {
 
 // Cancels in-flight jobs and kills soffice/the rasterizer. The deck cache is
 // deliberately NOT deleted — persisting it is the point of the pipeline.
-app.on("before-quit", () => {
-  // Recorded BEFORE the windows get their `close`: the guard vetoes that
-  // close, which cancels the whole quit, and this is what tells it to resume
-  // the quit rather than merely close the window once the operator answers.
-  markQuitRequested();
+app.on("before-quit", (event) => {
+  // Held until the control window answers. No window closes and nothing shuts
+  // down before that: an operator who cancels must keep the projector and a
+  // working slides pipeline. See `holdQuitUntilAnswered`.
+  if (holdQuitUntilAnswered(event)) return;
   shutdownSlides();
 });
 

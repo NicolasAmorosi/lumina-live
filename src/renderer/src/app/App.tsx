@@ -62,8 +62,8 @@ export function App() {
   // visited, since those panels stay mounted after their first visit.
   const removeAssetConfirmId = useUiStore((s) => s.removeAssetConfirmId);
   const setRemoveAssetConfirmId = useUiStore((s) => s.setRemoveAssetConfirmId);
-  const closeGuardOpen = useUiStore((s) => s.closeGuardOpen);
-  const setCloseGuardOpen = useUiStore((s) => s.setCloseGuardOpen);
+  const closeGuard = useUiStore((s) => s.closeGuard);
+  const setCloseGuard = useUiStore((s) => s.setCloseGuard);
   /** `ConfirmModal` reports the close the same way whether the operator
    *  confirmed or backed out, and the two mean opposite things to main: one
    *  resumes the quit, the other has to release it so the NEXT close asks
@@ -264,29 +264,34 @@ export function App() {
       <ModalBoundary
         onCrash={() => {
           closeConfirmedRef.current = false;
-          setCloseGuardOpen(false);
+          setCloseGuard(null);
           void api.window.closeDecision("cancel");
           toast.danger(t("app.modalCrashed"));
         }}
-        open={closeGuardOpen}
+        open={closeGuard !== null}
       >
         <ConfirmModal
           confirmLabel={t("schedule.closeAnyway")}
           danger
-          description={t("schedule.closeConfirmBody")}
+          description={[
+            closeGuard?.unsaved ? t("schedule.closeConfirmBody") : null,
+            closeGuard?.onAir ? t("schedule.closeOnAirBody") : null,
+          ]
+            .filter(Boolean)
+            .join(" ")}
           onConfirm={async () => {
             closeConfirmedRef.current = true;
             await api.window.closeDecision("close");
           }}
           onOpenChange={(open) => {
-            setCloseGuardOpen(open);
             if (open) return;
+            setCloseGuard(null);
             const confirmed = closeConfirmedRef.current;
             closeConfirmedRef.current = false;
             if (!confirmed) void api.window.closeDecision("cancel");
           }}
-          open={closeGuardOpen}
-          title={t("schedule.closeConfirmTitle")}
+          open={closeGuard !== null}
+          title={closeGuard?.unsaved === false ? t("schedule.closeOnAirTitle") : t("schedule.closeConfirmTitle")}
         />
       </ModalBoundary>
       <ToastHost />

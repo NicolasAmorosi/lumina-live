@@ -345,11 +345,14 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
 - **El orden de culto sin guardar se espeja a SQLite solo (`program_draft`), y cerrar la ventana lo
   decide el control, no main.** `effects/draft-autosave.ts` escribe el borrador con debounce y
   `App` lo recupera al arrancar; era el único dato de usuario sin respaldo. Main **nunca** infiere
-  si hay trabajo sin guardar: `windows/close-guard.ts` veta el primer `close`, emite
-  `close-requested` y espera un `window:closeDecision`, con una gracia de 4 s para que un renderer
-  colgado no vuelva la app incerrable. Ojo con el ciclo de vida: vetar un `close` durante un quit
-  **cancela el quit entero** y `will-quit` no llega, así que reanudarlo es `app.quit()` y no
-  `win.close()` — diagnóstico en
+  si hay trabajo sin guardar ni qué está en el aire: `windows/close-guard.ts` veta el primer
+  `close`, emite `close-requested` y espera un `window:closeDecision`, con una gracia de 4 s para
+  que un renderer colgado no vuelva la app incerrable. El control pregunta por dos motivos: cambios
+  sin guardar, o algo en el proyector (contenido, placas, NEGRO/LOGO), porque un ⌘Q accidental en
+  pleno culto no puede apagar la pantalla sin preguntar. Un quit se retiene ENTERO en `before-quit`
+  (`holdQuitUntilAnswered`), antes de que se cierre ninguna ventana: vetar solo el `close` del
+  control llegaba tarde, Electron ya había cerrado la proyección y «Cancelar» dejaba la app viva y
+  el proyector apagado. Reanudarlo es `app.quit()` y no `win.close()`; diagnóstico en
   [`.claude/knowledge/vetoing-a-close-during-a-quit-cancels-the-quit.md`](.claude/knowledge/vetoing-a-close-during-a-quit-cancels-the-quit.md).
 - **El respaldo previo a una migración se toma con `VACUUM INTO` + `PRAGMA integrity_check`, nunca
   con `copyFileSync`.** La base corre en WAL: copiar solo `worship.db` pierde en silencio todo lo

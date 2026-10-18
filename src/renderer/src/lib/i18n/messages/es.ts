@@ -40,6 +40,8 @@ const es = {
     closeConfirmBody:
       "El programa tiene cambios sin guardar. Se va a recuperar solo la próxima vez que abras la app, pero no va a quedar en \"Programas guardados\".",
     closeAnyway: "Cerrar igualmente",
+    closeOnAirTitle: "¿Cerrar la app?",
+    closeOnAirBody: "Hay contenido en el proyector. Al cerrar, la pantalla de proyección se apaga.",
   },
   resources: {
     empty: "No hay archivos",
