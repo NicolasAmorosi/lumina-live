@@ -40,6 +40,11 @@ export function useDeck(assetId: number | null, requiresSoffice = true): DeckSta
   const locateSoffice = useDeckStore((s) => s.locateSoffice);
   const markStale = useDeckStore((s) => s.markStale);
   const refreshDeck = useDeckStore((s) => s.peek);
+  // Asked again whenever this deck's entry DISAPPEARS: the store drops one
+  // that turns `ready` with no DTO and nobody awaiting it — a deck the
+  // operator cancelled and a background prewarm finished later — and the
+  // panel then sat on «Preparando la conversión…» over a ready deck.
+  const missing = entry === undefined;
 
   useEffect(() => {
     if (assetId === null) return;
@@ -47,13 +52,17 @@ export function useDeck(assetId: number | null, requiresSoffice = true): DeckSta
     void (async () => {
       const cached = await peek(assetId);
       if (cancelled || cached) return;
+      // Cancelled by the operator (`stale` with nothing rendered — the same
+      // test `DeckConversionStatus` uses): converting it again is theirs to ask.
+      const current = useDeckStore.getState().byAssetId[assetId];
+      if (current?.status === "stale" && current.deck === null) return;
       if (requiresSoffice && environment && !environment.available) return;
       await ensure(assetId);
     })();
     return () => {
       cancelled = true;
     };
-  }, [assetId, ensure, peek, environment, requiresSoffice]);
+  }, [assetId, ensure, peek, environment, requiresSoffice, missing]);
 
   return {
     entry,

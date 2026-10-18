@@ -577,6 +577,11 @@ function settleCanceledJob(job: Job, message: string): void {
   inFlight.delete(job.assetId);
   releaseBatchDirFor(job.assetId);
   job.reject(new SlideError("CANCELED", message));
+  // The same push a RUNNING job's cancellation gets from `runConversion`. The
+  // control window ignores this rejection on purpose and waits for main's
+  // word, so without it a deck cancelled while still in line stayed on
+  // «Preparando la conversión…» forever.
+  emitProgress({ assetId: job.assetId, status: "stale", done: 0, total: 0, error: message });
 }
 
 export function cancel(assetId: number): void {
