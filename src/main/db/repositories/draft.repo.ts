@@ -1,7 +1,7 @@
 import { eq, inArray } from "drizzle-orm";
 import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
 import type { Db } from "../client";
-import { mediaAssets, overlayPlates, programDraft, utilityScenes } from "../schema";
+import { mediaAssets, overlayPlates, programDraft, programs, utilityScenes } from "../schema";
 import type { ProgramDraft, ProgramItemUpsert } from "@shared/types/program";
 import { PROGRAM_ITEM_KINDS } from "@shared/constants";
 
@@ -85,8 +85,15 @@ export class DraftRepo {
     const items = parsed.length > 0 ? this.withLiveAssetsOnly(parsed) : parsed;
     if (items.length === 0 && row.programId === null && row.name === "") return null;
 
+    // A draft of a program deleted since is a draft of a NEW program: keeping
+    // the dead id made «Guardar» fail on it forever (an FK error, or a
+    // TypeError on the summary), leaving only «Guardar como».
+    const programExists =
+      row.programId !== null &&
+      this.db.select({ id: programs.id }).from(programs).where(eq(programs.id, row.programId)).get() !== undefined;
+
     return {
-      programId: row.programId,
+      programId: programExists ? row.programId : null,
       name: row.name,
       notes: row.notes,
       items,

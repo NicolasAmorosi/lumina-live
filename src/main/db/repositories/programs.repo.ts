@@ -2,6 +2,7 @@ import { eq, count, desc, min } from "drizzle-orm";
 import type Database from "better-sqlite3";
 import type { Db } from "../client";
 import { programItems, programs } from "../schema";
+import { IpcError } from "@shared/ipc/result";
 import type {
   ProgramDTO,
   ProgramDuplicateInput,
@@ -118,6 +119,9 @@ export class ProgramsRepo {
     const now = Date.now();
     const run = this.sqlite.transaction(() => {
       let programId = input.id;
+      if (programId && !this.db.select({ id: programs.id }).from(programs).where(eq(programs.id, programId)).get()) {
+        throw new IpcError({ code: "PROGRAM_NOT_FOUND", message: "El programa ya no existe." });
+      }
       if (programId) {
         this.db
           .update(programs)
