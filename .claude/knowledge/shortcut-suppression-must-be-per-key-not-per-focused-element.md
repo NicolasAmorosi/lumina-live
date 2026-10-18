@@ -68,4 +68,21 @@ The rule: **when adding a keyboard widget to the control window, pick the focus 
 widget is unprotected for `Enter` and `" "` — and in this app `Enter` is the button that puts
 something on the projector.
 
-**Last updated:** 2026-09-17
+### Enter after a CLICK is EN VIVO; Enter after Tab is the button's (2026-10-14)
+
+- The table above still left one trap: Chromium focuses a button on click, so after touching
+  «Pausar» (or a resource tile) with the mouse, Enter pressed that button again instead of going
+  live. «Pausar» then Enter resumed the countdown in PREVIEW; NEGRO then Enter did nothing. The
+  user decided: Enter on a button reached with the MOUSE is EN VIVO; on one reached with the
+  keyboard it stays the button's.
+- **`:focus-visible` cannot make that call.** Measured: after a real mouse press it reads `false`,
+  but Chromium flips it to `true` on the very Enter keydown being handled, already in the window
+  capture phase. So `use-global-shortcuts.ts` records the modality at FOCUS time instead:
+  `pointerdown`/`pointerup`/`pointercancel` keep a pressed flag, and `focusin` stores the target
+  only when it got focus during a press (`pointerFocused`).
+- **Companion rule:** the global handler returns early on `e.defaultPrevented`. A key a widget
+  already handled is not a shortcut. `Select` answers Enter on its own trigger, a button the mouse
+  may well have focused, and picking a Bible version must not also send the preview live.
+  Verified: Enter in the open version Select left `sceneEpoch` unchanged.
+
+**Last updated:** 2026-10-14
