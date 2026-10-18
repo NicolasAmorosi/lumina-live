@@ -5,6 +5,7 @@ import { availableLocales, useT, type MessageKey } from "@renderer/lib/i18n/i18n
 import { Button, Callout, Caption, FieldGroup, FieldRow, Icon, Select, Switch } from "@renderer/components/ui";
 import { useSettingsStore } from "@renderer/stores/settings.store";
 import { api } from "@renderer/lib/api";
+import { toast } from "@renderer/lib/toast";
 import { PerformanceDiagnostics } from "./performance-diagnostics";
 
 const LOCALE_LABEL_KEYS: Record<Locale, MessageKey> = {
@@ -152,6 +153,15 @@ export function SystemSection() {
       <FieldGroup title={t("settings.groups.about")}>
         <FieldRow description={t("settings.versionDesc")} label={t("settings.version")}>
           <Caption className="select-text">{__APP_VERSION__}</Caption>
+        </FieldRow>
+        <FieldRow description={t("settings.logsDesc")} label={t("settings.logs")}>
+          <Button
+            onClick={() => void api.system.openLogsFolder().catch(() => toast.danger(t("settings.logsError")))}
+            size="sm"
+            variant="outline"
+          >
+            {t("settings.logsOpen")}
+          </Button>
         </FieldRow>
       </FieldGroup>
     </div>

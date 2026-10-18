@@ -133,5 +133,6 @@ export const api = {
     openInternals: (page: InternalsPage) => invoke("system:openInternals", { page }),
     probeBegin: () => invoke("system:probeBegin", undefined),
     probeEnd: (src: string) => invoke("system:probeEnd", { src }),
+    openLogsFolder: () => invoke("system:openLogsFolder", undefined),
   },
 };

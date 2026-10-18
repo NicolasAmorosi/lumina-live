@@ -1,4 +1,3 @@
-import { dialog } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import type { Handlers } from "../register";
@@ -15,6 +14,7 @@ import {
 } from "../../slides/deck-service";
 import { cancelPrewarmBatch, deckStatuses, startPrewarmBatch } from "../../services/prewarm-service";
 import { invalidateSofficeCache, locateSoffice, type SofficeStatus } from "../../slides/libreoffice";
+import { showOpenDialogFor } from "../open-dialog";
 
 function toEnvironment(status: SofficeStatus): DeckEnvironment {
   return status.available
@@ -63,8 +63,8 @@ export const slidesHandlers: Pick<
 
   "deck:environment": async () => toEnvironment(await locateSoffice()),
 
-  "deck:locateSoffice": async () => {
-    const result = await dialog.showOpenDialog({
+  "deck:locateSoffice": async (_req, ev) => {
+    const result = await showOpenDialogFor(ev.sender, {
       title: "Seleccioná el ejecutable de LibreOffice (soffice)",
       properties: ["openFile"],
       ...(process.platform === "darwin" ? { defaultPath: "/Applications" } : {}),

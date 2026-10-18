@@ -1,10 +1,10 @@
-import { dialog } from "electron";
 import fs from "node:fs";
 import type { Handlers } from "../register";
 import { ASSET_EXTENSIONS, ASSET_KINDS, type AssetKind } from "@shared/constants";
 import { IpcError } from "@shared/ipc/result";
 import { systemMediaFolder } from "../../paths";
 import { getSettingsRepo } from "../../services/repos";
+import { showOpenDialogFor } from "../open-dialog";
 import { canDecodeImage } from "../../media/thumbnail-service";
 
 function filtersFor(kind: AssetKind | "all") {
@@ -48,13 +48,13 @@ export const filesHandlers: Pick<
   Handlers,
   "files:pick" | "files:setLogo" | "files:pickFolder" | "files:systemFolders"
 > = {
-  "files:pick": async ({ kind, multiple }) => {
+  "files:pick": async ({ kind, multiple }, ev) => {
     // `"all"` accepts video, image, audio and presentations at once (the
     // order of service's own "+"), so there is no one folder it belongs in:
     // it opens wherever the OS decides rather than anchoring five kinds to
     // whichever one happened to win.
     const defaultPath = kind === "all" ? undefined : defaultFolderFor(kind);
-    const result = await dialog.showOpenDialog({
+    const result = await showOpenDialogFor(ev.sender, {
       properties: multiple ? ["openFile", "multiSelections"] : ["openFile"],
       filters: filtersFor(kind),
       ...(defaultPath ? { defaultPath } : {}),
@@ -63,8 +63,8 @@ export const filesHandlers: Pick<
     return result.filePaths;
   },
 
-  "files:pickFolder": async ({ defaultPath }) => {
-    const result = await dialog.showOpenDialog({
+  "files:pickFolder": async ({ defaultPath }, ev) => {
+    const result = await showOpenDialogFor(ev.sender, {
       properties: ["openDirectory"],
       ...(defaultPath && isDirectory(defaultPath) ? { defaultPath } : {}),
     });
@@ -80,10 +80,10 @@ export const filesHandlers: Pick<
       string
     >,
 
-  "files:setLogo": async () => {
+  "files:setLogo": async (_req, ev) => {
     // The logo is an image like any other, so it starts where images start.
     const defaultPath = defaultFolderFor("image");
-    const result = await dialog.showOpenDialog({
+    const result = await showOpenDialogFor(ev.sender, {
       properties: ["openFile"],
       filters: [{ name: "Imagen", extensions: [...ASSET_EXTENSIONS.image] }],
       ...(defaultPath ? { defaultPath } : {}),

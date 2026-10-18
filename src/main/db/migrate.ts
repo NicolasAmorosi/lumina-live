@@ -144,13 +144,20 @@ function verifySnapshot(dest: string): void {
   }
 }
 
+/** Best-effort: a backup that cannot be deleted (read-only, held open by an
+ *  antivirus on Windows: `EPERM`/`EBUSY`) costs some disk, and must never cost
+ *  the launch the fresh backup was taken for. */
 function pruneOldBackups(backupDir: string): void {
   const existing = fs
     .readdirSync(backupDir)
     .filter((f) => f.endsWith(".db"))
     .sort();
   for (const stale of existing.slice(0, Math.max(0, existing.length - 3))) {
-    fs.unlinkSync(path.join(backupDir, stale));
+    try {
+      fs.unlinkSync(path.join(backupDir, stale));
+    } catch (error) {
+      console.warn(`[db] could not prune old backup ${stale}`, error);
+    }
   }
 }
 

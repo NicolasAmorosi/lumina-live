@@ -18,8 +18,19 @@ import { app, Menu, type MenuItemConstructorOptions } from "electron";
  * Labels are hardcoded Spanish, like every other user-facing string in main
  * (`dialog.showErrorBox` in `index.ts`): the i18n dictionary lives in the
  * renderer and a menu is built before any window exists.
+ *
+ * **No menu at all on Windows** (the operator's call, 2026-10-18). There it is
+ * a bar inside the window, and a stray Alt gives it the keyboard: the next
+ * arrows and Enter walk the menu instead of the slides. Nothing in it is
+ * needed there — Chromium handles copy, paste and undo in a text field on its
+ * own, and the window's X quits — and no menu also means none of the default
+ * accelerators above.
  */
 export function installApplicationMenu(): void {
+  if (process.platform === "win32") {
+    Menu.setApplicationMenu(null);
+    return;
+  }
   const isMac = process.platform === "darwin";
 
   /** Only in a development build — see the note above. */

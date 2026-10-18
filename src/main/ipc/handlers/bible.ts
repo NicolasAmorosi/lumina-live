@@ -1,4 +1,3 @@
-import { dialog } from "electron";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { Handlers } from "../register";
@@ -9,6 +8,7 @@ import { IpcError } from "@shared/ipc/result";
 import { isBibleVersionName } from "@shared/types/bible";
 import type { Db } from "../../db/client";
 import type Database from "better-sqlite3";
+import { showOpenDialogFor } from "../open-dialog";
 
 let dbRef: { db: Db; sqlite: Database.Database } | null = null;
 export function setBibleDb(db: Db, sqlite: Database.Database): void {
@@ -32,8 +32,8 @@ export const bibleHandlers: Pick<
   "bible:chapter": ({ bookId, chapter }) => getBibleRepo().getChapter(bookId, chapter),
   "bible:search": ({ versionId, query, limit }) => getBibleRepo().search(versionId, query, limit),
 
-  "bible:import": async () => {
-    const result = await dialog.showOpenDialog({
+  "bible:import": async (_req, ev) => {
+    const result = await showOpenDialogFor(ev.sender, {
       properties: ["openFile"],
       filters: BIBLE_IMPORT_FILTERS,
     });

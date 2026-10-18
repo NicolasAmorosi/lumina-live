@@ -271,6 +271,9 @@ export type IpcContract = {
   "settings:set": { req: Partial<SettingsMap>; res: void };
 
   "system:gpuStatus": { req: void; res: GpuStatus };
+  /** Opens the folder holding `main.log` and `crash.log` in the OS's file
+   *  manager — what an operator sends along when something failed. */
+  "system:openLogsFolder": { req: void; res: void };
   /** Opens `chrome://<page>` in its own window, child of the caller's. */
   "system:openInternals": { req: { page: InternalsPage }; res: void };
   /** Starts listening to the caller's media pipeline (CDP `Media` domain).

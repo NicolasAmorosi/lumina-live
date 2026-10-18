@@ -1,4 +1,5 @@
-import { app, BrowserWindow, type WebContents } from "electron";
+import { app, BrowserWindow, shell, type WebContents } from "electron";
+import { userDataDir } from "../../paths";
 import type { Handlers } from "../register";
 import { IpcError } from "@shared/ipc/result";
 import {
@@ -121,8 +122,13 @@ function reportFor(player: ProbePlayer): VideoDecoderReport {
 
 export const systemHandlers: Pick<
   Handlers,
-  "system:gpuStatus" | "system:openInternals" | "system:probeBegin" | "system:probeEnd"
+  "system:gpuStatus" | "system:openInternals" | "system:probeBegin" | "system:probeEnd" | "system:openLogsFolder"
 > = {
+  "system:openLogsFolder": async () => {
+    // `openPath` resolves to an error MESSAGE rather than rejecting.
+    const failure = await shell.openPath(userDataDir);
+    if (failure) throw new IpcError({ code: "OPEN_FAILED", message: failure });
+  },
   "system:gpuStatus": async (): Promise<GpuStatus> => {
     const info = (await app.getGPUInfo("basic")) as { gpuDevice?: GpuDevice[] };
     const features = app.getGPUFeatureStatus();

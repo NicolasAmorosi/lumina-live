@@ -7,6 +7,7 @@ import { getMediaRepo, getProgramsRepo } from "../../services/repos";
 import { removeMediaAsset } from "../../services/media-asset-removal";
 import { importPaths } from "../../services/library-import";
 import { broadcast } from "../../services/broadcast";
+import { showOpenDialogFor } from "../open-dialog";
 
 export const libraryHandlers: Pick<
   Handlers,
@@ -49,12 +50,11 @@ export const libraryHandlers: Pick<
    * the failure would surface much later, as a conversion error in the middle
    * of a service.
    */
-  "library:relocate": async ({ id }) => {
+  "library:relocate": async ({ id }, ev) => {
     const asset = getMediaRepo().getById(id);
     if (!asset) return null;
 
-    const { dialog } = await import("electron");
-    const result = await dialog.showOpenDialog({
+    const result = await showOpenDialogFor(ev.sender, {
       properties: ["openFile"],
       filters: [{ name: asset.kind, extensions: [...ASSET_EXTENSIONS[asset.kind]] }],
       defaultPath: path.dirname(asset.path),
