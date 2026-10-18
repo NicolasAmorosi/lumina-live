@@ -33,6 +33,7 @@ const es = {
     removeHint: "Quitar del programa el elemento seleccionado",
     clear: "Vaciar",
     clearHint: "Quitar todos los elementos del programa",
+    discardAndClear: "Descartar y vaciar",
     addAll: "Agregar medios",
     addAllHint: "Agregar PPT, video, imagen o audio al programa (podés elegir varios archivos de distinto tipo a la vez)",
     draftRestored: "Se recuperó el programa que estabas armando",
