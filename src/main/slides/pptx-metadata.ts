@@ -73,7 +73,8 @@ export type ExtractedVideo = VideoRef & {
 };
 
 /** Chromium can't decode these, so mark them unplayable rather than silently
- *  producing an <audio> element that never makes a sound. */
+ *  producing an <audio> element that never makes a sound — until
+ *  `media/deck-clips.ts` converts the WMA (MIDI stays unplayable). */
 const UNPLAYABLE_AUDIO_EXT = new Set(["wma", "mid", "midi"]);
 /** Also used by `linked-audio.ts` to recognize a sibling/hinted audio file —
  *  the same "is this audio" question, just asked about a file on disk instead
@@ -90,12 +91,17 @@ export const AUDIO_EXT = new Set([
   "mid",
   "midi",
 ]);
-const VIDEO_EXT = new Set(["mp4", "m4v", "mov", "wmv", "avi", "mkv", "webm"]);
-/** What Chromium will actually decode. The rest are extracted and marked
+const VIDEO_EXT = new Set([
+  ...["mp4", "m4v", "mov", "wmv", "avi", "mkv", "webm"],
+  ...["mpg", "mpeg", "m2v", "vob", "asf", "flv", "3gp", "ogv", "ts"],
+]);
+/** What Chromium will probably decode. The rest are extracted and marked
  *  unplayable rather than mounted as a `<video>` that shows nothing: the
  *  rasterized slide underneath already carries the poster frame LibreOffice
- *  drew, so a deck with a `.wmv` in it still looks right — it just doesn't
- *  move. Same treatment `UNPLAYABLE_AUDIO_EXT` gives a `.wma`. */
+ *  drew, so a deck with a `.wmv` in it still looks right while
+ *  `media/deck-clips.ts` converts it — which it does by reading the streams,
+ *  so this flag is only the starting guess. Same treatment
+ *  `UNPLAYABLE_AUDIO_EXT` gives a `.wma`. */
 const PLAYABLE_VIDEO_EXT = new Set(["mp4", "m4v", "mov", "webm"]);
 
 /** Repeated elements that must stay arrays even when a deck happens to have

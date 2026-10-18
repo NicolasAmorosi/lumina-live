@@ -1,6 +1,12 @@
 import type { AssetKind } from "../constants";
 import type { DisplayInfo } from "../types/display";
-import type { ImportProgress, MediaAsset, MediaAssetUsage } from "../types/media";
+import type {
+  DecoderSupport,
+  ImportProgress,
+  MediaAsset,
+  MediaAssetUsage,
+  MediaConversionUpdate,
+} from "../types/media";
 import type {
   BibleBookDTO,
   BibleSearchHit,
@@ -181,6 +187,17 @@ export type IpcContract = {
    *  changed), which the panel must not show as an empty folder. */
   "library:listFolder": { req: { kind: AssetKind; path: string }; res: MediaAsset[] };
 
+  /** Every video/audio asset that cannot play yet — queued, converting or
+   *  failed — to seed `conversion.store`; `conversion-changed` keeps it current
+   *  from then on. An asset that is not listed plays. */
+  "conversion:list": { req: void; res: MediaConversionUpdate[] };
+  /** Whether this machine's Chromium decodes HEVC, which only a renderer can
+   *  ask. Nothing is converted before the first report. */
+  "conversion:reportDecoders": { req: DecoderSupport; res: void };
+  /** The operator is looking at it: it converts next. */
+  "conversion:prioritize": { req: { id: number }; res: void };
+  "conversion:retry": { req: { id: number }; res: void };
+
   "programs:list": { req: void; res: ProgramSummary[] };
   /** ADOPTS the program: main starts attributing `projection_history` to it and
    *  moves the anti-eviction deck pins onto its decks, and the row's
@@ -321,6 +338,13 @@ export type IpcEvents = {
    *  must re-ask for statuses without re-listing files. */
   "deck-statuses-changed": { kind: AssetKind };
   "library-changed": { kind: AssetKind };
+  /** One asset's conversion moved: queued, progress (≤4/s), done (`state:
+   *  null`) or failed. */
+  "conversion-changed": MediaConversionUpdate;
+  /** A converted deck's embedded clip was made playable in place
+   *  (`media/deck-clips.ts`): the deck's DTO now lists a video or soundtrack it
+   *  did not before, so a renderer holding it must read it again. */
+  "deck-updated": { deckId: number };
   /** Only fired for a batch large enough to need a progress bar
    *  (`library-import.ts`'s `PROGRESS_THRESHOLD`), throttled to a few per
    *  second — never one event per file. */

@@ -17,6 +17,7 @@ import type { SettingsMap } from "@shared/types/settings";
 import type { UtilitySceneUpsert } from "@shared/types/utility";
 import type { PlateUpsert } from "@shared/types/overlay";
 import type { CloseDecision } from "@shared/types/window";
+import type { DecoderSupport } from "@shared/types/media";
 
 /** Thin per-domain facade over `invoke` — pure readability sugar in the
  *  renderer, not a second definition of the contract: every method's types
@@ -67,6 +68,12 @@ export const api = {
       invoke("bible:delete", { id, ...(force !== undefined ? { force } : {}) }),
     usages: (id: number) => invoke("bible:usages", { id }),
     reorder: (ids: number[]) => invoke("bible:reorder", { ids }),
+  },
+  conversion: {
+    list: () => invoke("conversion:list", undefined),
+    reportDecoders: (support: DecoderSupport) => invoke("conversion:reportDecoders", support),
+    prioritize: (id: number) => invoke("conversion:prioritize", { id }),
+    retry: (id: number) => invoke("conversion:retry", { id }),
   },
   library: {
     list: (kind: AssetKind) => invoke("library:list", { kind }),

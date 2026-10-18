@@ -37,6 +37,7 @@ import {
 import { readBinarySlideTimings } from "./ppt-binary-timings";
 import { rasterizePdf, shutdownRasterizer } from "./rasterizer";
 import { hashFile } from "../media/content-hash";
+import { healDeckClips } from "../media/deck-clips";
 import { removeQuietly, renameWithRetry } from "../fs-retry";
 
 // ---------------------------------------------------------------------------
@@ -634,7 +635,12 @@ function emptyMeta(): PresentationMeta {
  *  currently know"; `deck:ensure`'s is authoritative. */
 function toDeckDTO(row: DeckRow, assetId: number, opts?: { resolve?: boolean }): DeckDTO {
   const mediaRepo = getMediaRepo();
-  if (opts?.resolve !== false) mediaRepo.ensureLinkedAudio(assetId);
+  if (opts?.resolve !== false) {
+    mediaRepo.ensureLinkedAudio(assetId);
+    // A `.wmv` on a slide or a WMA soundtrack: made playable in the background,
+    // and announced with `deck-updated` once it is.
+    healDeckClips(row.id);
+  }
   return getSlidesRepo().toDTO(row, assetId, mediaRepo.linkedAudioPathById(assetId));
 }
 

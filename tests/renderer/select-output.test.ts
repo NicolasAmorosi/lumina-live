@@ -168,7 +168,7 @@ describe("each kind of base content", () => {
   });
 
   test("a video, with its epoch", () => {
-    useProjectionStore.getState().setBase({ kind: "video", assetId: 5, epoch: 2, startAtSeconds: 0 });
+    useProjectionStore.getState().setBase({ kind: "video", assetId: 5, url: assetUrl(5), epoch: 2, startAtSeconds: 0 });
     expect(output()).toMatchObject({ kind: "video", url: assetUrl(5), epoch: 2 });
   });
 
@@ -223,7 +223,7 @@ describe("the video underlay survives the overlay", () => {
   // `PIPELINE_ERROR_DECODE` in Chromium's hardware decoder after a few cycles.
   test("a video under NEGRO is still described, so its element stays alive", () => {
     const store = useProjectionStore.getState();
-    store.setBase({ kind: "video", assetId: 5, epoch: 2, startAtSeconds: 12 });
+    store.setBase({ kind: "video", assetId: 5, url: assetUrl(5), epoch: 2, startAtSeconds: 12 });
     store.setOverlay("black");
 
     const out = output();
@@ -233,7 +233,7 @@ describe("the video underlay survives the overlay", () => {
 
   test("pause and volume travel as state, not as a command", () => {
     const store = useProjectionStore.getState();
-    store.setBase({ kind: "video", assetId: 5, epoch: 1, startAtSeconds: 0 });
+    store.setBase({ kind: "video", assetId: 5, url: assetUrl(5), epoch: 1, startAtSeconds: 0 });
     useProjectionStore.getState().setVideoPaused(true);
     useProjectionStore.getState().setVideoVolume(0.4);
 
@@ -242,7 +242,7 @@ describe("the video underlay survives the overlay", () => {
 
   test("the volume is clamped in the store, never at the call site", () => {
     const store = useProjectionStore.getState();
-    store.setBase({ kind: "video", assetId: 5, epoch: 1, startAtSeconds: 0 });
+    store.setBase({ kind: "video", assetId: 5, url: assetUrl(5), epoch: 1, startAtSeconds: 0 });
     useProjectionStore.getState().setVideoVolume(1.4);
     expect(output().videoUnderlay).toMatchObject({ volume: 1 });
     useProjectionStore.getState().setVideoVolume(-0.2);
@@ -256,9 +256,9 @@ describe("the video underlay survives the overlay", () => {
 
   test("sending something new live resets an operator's pause", () => {
     const store = useProjectionStore.getState();
-    store.setBase({ kind: "video", assetId: 5, epoch: 1, startAtSeconds: 0 });
+    store.setBase({ kind: "video", assetId: 5, url: assetUrl(5), epoch: 1, startAtSeconds: 0 });
     useProjectionStore.getState().setVideoPaused(true);
-    useProjectionStore.getState().setBase({ kind: "video", assetId: 6, epoch: 2, startAtSeconds: 0 });
+    useProjectionStore.getState().setBase({ kind: "video", assetId: 6, url: assetUrl(6), epoch: 2, startAtSeconds: 0 });
     expect(output().videoUnderlay).toMatchObject({ paused: false });
   });
 
@@ -266,7 +266,7 @@ describe("the video underlay survives the overlay", () => {
     // `setVideoResumeAt` patches `base` in place: a new epoch is what remounts
     // the `<video>`, and nothing about what the projector shows changed here.
     const store = useProjectionStore.getState();
-    store.setBase({ kind: "video", assetId: 5, epoch: 3, startAtSeconds: 0 });
+    store.setBase({ kind: "video", assetId: 5, url: assetUrl(5), epoch: 3, startAtSeconds: 0 });
     useProjectionStore.getState().setVideoResumeAt(42);
 
     expect(output().videoUnderlay).toMatchObject({ epoch: 3, startAtSeconds: 42 });

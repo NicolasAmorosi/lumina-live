@@ -33,6 +33,8 @@ import { startLibrarySweepScheduler } from "./services/library-sweeper";
 import { pruneThumbCache } from "./media/thumbnail-service";
 import { backfillContentHashes } from "./media/content-hash";
 import { backfillDeckTimings } from "./slides/backfill-timings";
+import { initConversions, shutdownConversions } from "./media/conversion-service";
+import { stopDeckClips } from "./media/deck-clips";
 import { appendLogLine, installMainLog } from "./logging";
 
 /** Long enough to be safely past the first paint of the control window — the
@@ -200,6 +202,9 @@ if (gotSingleInstanceLock) {
       console.warn("[slides] init failed", error);
     });
     startLibrarySweepScheduler();
+    // Sweeps leftovers only. Converting waits for the control window to report
+    // what this machine decodes (`conversion:reportDecoders`).
+    initConversions();
 
     // The other half of the legacy import (`media_library.json`). Off the
     // startup path: it is a whole library's worth of files, and the rows it
@@ -270,6 +275,8 @@ app.on("before-quit", (event) => {
   if (holdQuitUntilAnswered(event)) return;
   cancelAllPrewarmBatches();
   shutdownSlides();
+  stopDeckClips();
+  shutdownConversions();
 });
 
 // `will-quit`, not `before-quit`, for two reasons. It runs after every window

@@ -5,7 +5,6 @@ import { OutputView } from "@renderer/components/shared/output-view";
 import { selectOutputMemo, useProjectionStore } from "@renderer/stores/projection.store";
 import { useSettingsStore } from "@renderer/stores/settings.store";
 import { mediaTargetKey } from "@shared/types/projection";
-import { assetUrl } from "@shared/urls";
 import { useLiveVideoPoster } from "@renderer/lib/hooks/use-live-video-poster";
 
 const VIDEO_TARGET_KEY = mediaTargetKey({ kind: "video" });
@@ -63,12 +62,13 @@ export function LiveMonitor() {
   // monitor on purpose: `selectOutput` is what the projector reads.
   const videoMotion = useSettingsStore((s) => s.settings["monitors.liveVideoMotion"]);
   const liveVideoAssetId = useProjectionStore((s) => (s.base?.kind === "video" ? s.base.assetId : null));
+  const liveVideoUrl = useProjectionStore((s) => (s.base?.kind === "video" ? s.base.url : null));
   const posterUrl = useLiveVideoPoster(videoMotion ? null : liveVideoAssetId);
   const videoStill = videoMotion
     ? undefined
     : {
         posterUrl,
-        videoUrl: liveVideoAssetId === null ? null : assetUrl(liveVideoAssetId),
+        videoUrl: liveVideoUrl,
       };
   // Only while the stage is actually showing the still: under NEGRO/LOGO the
   // stage is what it says it is.

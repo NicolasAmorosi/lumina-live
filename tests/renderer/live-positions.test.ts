@@ -16,6 +16,7 @@ import { freezeLivePositions } from "@renderer/lib/actions/live-positions";
 import { useAudioStore, type LiveAudioTrack } from "@renderer/stores/audio.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import type { MediaStatus } from "@shared/types/projection";
+import { assetUrl } from "@shared/urls";
 
 const initialProjection = useProjectionStore.getState();
 const initialAudio = useAudioStore.getState();
@@ -101,7 +102,7 @@ describe("audio tracks", () => {
 
 describe("the live video", () => {
   test("its resume point becomes where it actually is, without a remount", () => {
-    useProjectionStore.getState().setBase({ kind: "video", assetId: 5, epoch: 2, startAtSeconds: 0 });
+    useProjectionStore.getState().setBase({ kind: "video", assetId: 5, url: assetUrl(5), epoch: 2, startAtSeconds: 0 });
     useProjectionStore.getState().setMediaStatus(status({ kind: "video" }, 2, 64.25));
 
     freezeLivePositions();
@@ -110,7 +111,7 @@ describe("the live video", () => {
   });
 
   test("a report from a previous epoch is ignored", () => {
-    useProjectionStore.getState().setBase({ kind: "video", assetId: 5, epoch: 3, startAtSeconds: 5 });
+    useProjectionStore.getState().setBase({ kind: "video", assetId: 5, url: assetUrl(5), epoch: 3, startAtSeconds: 5 });
     useProjectionStore.getState().setMediaStatus(status({ kind: "video" }, 2, 900));
 
     freezeLivePositions();

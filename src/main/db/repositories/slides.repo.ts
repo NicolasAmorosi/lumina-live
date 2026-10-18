@@ -356,6 +356,25 @@ export class SlidesRepo {
 
   // -- writes ---------------------------------------------------------------
 
+  /** A clip `media/deck-clips.ts` made playable in place: the same row, now
+   *  pointing at the converted file (or at the same one, found playable after
+   *  all), so its id — and the `worship://deck-video/<id>` url — never change. */
+  updateClip(kind: "video" | "audio", id: number, file: string, ext: string, bytes: number): void {
+    if (kind === "video") {
+      this.db
+        .update(deckVideos)
+        .set({ videoFile: file, ext, bytes, playable: 1 })
+        .where(eq(deckVideos.id, id))
+        .run();
+    } else {
+      this.db
+        .update(deckAudio)
+        .set({ audioFile: file, ext, bytes, playable: 1 })
+        .where(eq(deckAudio.id, id))
+        .run();
+    }
+  }
+
   /** Single transaction: a half-inserted deck must never be observable. */
   insertDeck(deck: NewDeck, slides: NewSlide[], audio: NewAudio[], videos: NewVideo[] = []): number {
     const now = Date.now();
@@ -740,7 +759,7 @@ export class SlidesRepo {
 
     const soundtrack: DeckDTO["soundtrack"] = embeddedTrack
       ? {
-          url: deckAudioUrl(embeddedTrack.id),
+          url: deckAudioUrl(embeddedTrack.id, embeddedTrack.audioFile),
           durationMs: null,
           origin: embeddedTrack.origin,
           name: embeddedTrack.audioFile,
@@ -770,7 +789,7 @@ export class SlidesRepo {
       slidesWithVideo.add(row.slideIndex);
       videos.push({
         slideIndex: row.slideIndex,
-        url: deckVideoUrl(row.id),
+        url: deckVideoUrl(row.id, row.videoFile),
         rect: { x: row.rectX, y: row.rectY, width: row.rectWidth, height: row.rectHeight },
         aspectRatio: page.widthPx / page.heightPx,
         loop: row.loop === 1,

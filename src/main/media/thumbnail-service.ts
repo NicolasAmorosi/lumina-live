@@ -11,6 +11,7 @@ import {
   MEDIA_THUMB_WIDTH,
 } from "@shared/constants";
 import type { MediaAsset } from "@shared/types/media";
+import { grabFrame } from "./ffmpeg";
 
 /**
  * On-demand, content-keyed cache of small library thumbnails.
@@ -205,10 +206,11 @@ async function renderThumbnail(asset: MediaAsset): Promise<Buffer | null> {
   const fromOs = await renderViaOsThumbnailer(asset.path);
   if (fromOs) return fromOs;
 
-  // A video gets no second attempt: decoding one in-process to grab a frame is
-  // exactly the per-tile decoding pipeline this service exists to remove.
-  // The tile falls back to its icon instead.
-  if (asset.kind !== "image") return null;
+  // A video never gets decoded in-process to grab a frame: that is exactly the
+  // per-tile decoding pipeline this service exists to remove. The OS declines
+  // what QuickLook/the shell cannot read (AVI, WMV, MKV…), and those are the
+  // very files that are converted, so ffmpeg grabs one in its own process.
+  if (asset.kind === "video") return grabFrame(asset.path, MEDIA_THUMB_WIDTH);
   return renderViaResize(asset.path);
 }
 

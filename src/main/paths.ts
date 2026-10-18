@@ -18,6 +18,15 @@ export const biblesDir = app.isPackaged
   ? path.join(resourcesRoot, "bibles")
   : path.join(app.getAppPath(), "resources/bibles");
 
+/** FFmpeg + ffprobe, fetched per platform by `scripts/fetch-ffmpeg.ts` into
+ *  `resources/ffmpeg/<platform>-<arch>/` and shipped as `resources/ffmpeg/`. */
+const ffmpegDir = app.isPackaged
+  ? path.join(resourcesRoot, "ffmpeg")
+  : path.join(app.getAppPath(), "resources/ffmpeg", `${process.platform}-${process.arch}`);
+const exe = process.platform === "win32" ? ".exe" : "";
+export const ffmpegPath = path.join(ffmpegDir, `ffmpeg${exe}`);
+export const ffprobePath = path.join(ffmpegDir, `ffprobe${exe}`);
+
 export const userDataDir = app.getPath("userData");
 export const dbPath = path.join(userDataDir, "worship.db");
 export const dbBackupDir = path.join(userDataDir, "backups");
@@ -42,6 +51,12 @@ export const sofficeProfileDir = path.join(userDataDir, "soffice-profile");
  *  listing a single directory that size. Purely derived data: deleting it
  *  costs nothing but a regeneration. */
 export const thumbCacheDir = path.join(userDataDir, "thumb-cache");
+
+/** Playable copies of videos and audios Chromium cannot decode, one file per
+ *  asset (`main/media/conversion-service.ts`). Unlike the thumbnails, NOT cheap
+ *  to lose: each one is minutes of encoding. Files no row points at are swept
+ *  at startup. */
+export const convertedMediaDir = path.join(userDataDir, "converted-media");
 
 export function thumbCachePath(key: string): string {
   return path.join(thumbCacheDir, key.slice(0, 2), `${key}.jpg`);

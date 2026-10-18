@@ -3,6 +3,8 @@ import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { Monitor } from "@renderer/components/ui";
 import { OutputView } from "@renderer/components/shared/output-view";
 import { DeckConversionStatus } from "@renderer/components/shared/deck-conversion-status";
+import { MediaConversionStatus } from "@renderer/components/shared/media-conversion-status";
+import { useConversion } from "@renderer/stores/conversion.store";
 import { usePreviewContent, usePreviewOutput } from "@renderer/lib/hooks/use-preview";
 import { usePreviewMediaStatus } from "@renderer/lib/hooks/use-preview-media-status";
 import { attachPreviewVideo } from "@renderer/lib/actions/preview-playback";
@@ -42,10 +44,16 @@ export function PreviewMonitor() {
   // yet — without this, the stage would just fall back to the generic empty
   // placeholder with no sign anything is happening.
   const convertingAssetId = !missing && !output && content?.kind === "deck" ? content.assetId : null;
+  // A video or audio being converted: its original would play black, or not
+  // at all, so the stage says so instead of mounting a player for it.
+  const mediaAsset = !missing && content?.kind === "media" ? content.asset : null;
+  const conversion = useConversion(mediaAsset?.id ?? null);
 
   return (
     <Monitor empty={empty}>
-      {output ? (
+      {mediaAsset && conversion ? (
+        <MediaConversionStatus assetId={mediaAsset.id} kind={mediaAsset.kind} state={conversion} surface="stage" />
+      ) : output ? (
         // No `reportedErrorUrls`: the preview's own elements ARE the ones being
         // checked here, which is the point — a file the operator queues up is
         // exercised in this window before it ever reaches the projector.

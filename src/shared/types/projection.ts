@@ -314,7 +314,13 @@ export type AudioTrackPush = {
 /** What the control window has selected as "base" content (before black/logo overlay). */
 export type BaseContent =
   | { kind: "deck"; assetId: number; slideIndex: number }
-  | { kind: "video"; assetId: number; epoch: number; startAtSeconds: number }
+  /** `url` rides along, resolved when it went live, for the reason
+   *  `versionLabel` does below: what the projector loads depends on whether
+   *  main has converted the file (`playableAssetUrl`), and `selectOutput`
+   *  cannot ask the conversion store. Resolving it once also means a copy
+   *  finishing while the original is on air never swaps the file under the
+   *  congregation — the next EN VIVO picks it up. */
+  | { kind: "video"; assetId: number; url: string; epoch: number; startAtSeconds: number }
   | { kind: "image"; assetId: number }
   /** `versionLabel` rides along rather than being re-derived at push time:
    *  the verse may have come from a program row whose version was deleted

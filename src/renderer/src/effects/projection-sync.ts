@@ -205,6 +205,10 @@ export function startProjectionEffects(): () => void {
     useDeckStore.getState().markStatusesChanged();
   });
 
+  const unsubscribeDeckUpdated = onIpc("deck-updated", ({ deckId }) => {
+    useDeckStore.getState().refreshDeck(deckId);
+  });
+
   const unsubscribeDisplaysChanged = onIpc("displays-changed", () => {
     void useDisplayStore.getState().refresh();
   });
@@ -236,6 +240,7 @@ export function startProjectionEffects(): () => void {
     unsubscribeProgress();
     unsubscribePrewarmProgress();
     unsubscribeStatusesChanged();
+    unsubscribeDeckUpdated();
     unsubscribeDisplaysChanged();
     unsubscribeProjectorScreen();
     stopAutoplay();

@@ -7,7 +7,7 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "postinstall": "install-electron",
+    "postinstall": "install-electron && tsx scripts/fetch-ffmpeg.ts",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
@@ -16,11 +16,12 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "slides:smoke": "TSX_TSCONFIG_PATH=tsconfig.node.json tsx scripts/convert-smoke.ts",
-    "package": "npm run build && electron-builder",
-    "package:win": "npm run build && electron-builder --win",
-    "package:mac": "npm run build && electron-builder --mac",
-    "package:linux": "npm run build && electron-builder --linux",
-    "package:dir": "npm run build && electron-builder --dir"
+    "fetch:ffmpeg": "tsx scripts/fetch-ffmpeg.ts",
+    "package": "npm run build && tsx scripts/fetch-ffmpeg.ts && electron-builder",
+    "package:win": "npm run build && tsx scripts/fetch-ffmpeg.ts win32-x64 && electron-builder --win",
+    "package:mac": "npm run build && tsx scripts/fetch-ffmpeg.ts darwin-arm64 && electron-builder --mac",
+    "package:linux": "npm run build && tsx scripts/fetch-ffmpeg.ts linux-x64 && electron-builder --linux",
+    "package:dir": "npm run build && tsx scripts/fetch-ffmpeg.ts && electron-builder --dir"
   },
   "dependencies": {
     "@fontsource-variable/noto-sans": "^5.3.0",
@@ -96,13 +97,43 @@
             "x64"
           ]
         }
+      ],
+      "extraResources": [
+        {
+          "from": "resources/ffmpeg/win32-${arch}",
+          "to": "ffmpeg",
+          "filter": [
+            "**/*",
+            "!.stamp"
+          ]
+        }
       ]
     },
     "mac": {
-      "target": "dmg"
+      "target": "dmg",
+      "extraResources": [
+        {
+          "from": "resources/ffmpeg/darwin-${arch}",
+          "to": "ffmpeg",
+          "filter": [
+            "**/*",
+            "!.stamp"
+          ]
+        }
+      ]
     },
     "linux": {
-      "target": "AppImage"
+      "target": "AppImage",
+      "extraResources": [
+        {
+          "from": "resources/ffmpeg/linux-${arch}",
+          "to": "ffmpeg",
+          "filter": [
+            "**/*",
+            "!.stamp"
+          ]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,

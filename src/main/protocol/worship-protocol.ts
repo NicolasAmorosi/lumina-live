@@ -7,6 +7,7 @@ import { getSettingsRepo, getSlidesRepo } from "../services/repos";
 import { slidesCacheDir, slidesTempDir } from "../paths";
 import { resolveRasterPdf } from "../slides/rasterizer";
 import { ensureThumbnail } from "../media/thumbnail-service";
+import { convertedPathFor } from "../media/conversion-service";
 
 /** Must run before app.whenReady(). `standard: true` gives worship:// URLs a
  *  hostname + pathname like http, which is what the parsing below relies on. */
@@ -36,9 +37,14 @@ const MIME_TYPES: Record<string, string> = {
   mkv: "video/x-matroska",
   avi: "video/x-msvideo",
   webm: "video/webm",
+  "3gp": "video/3gpp",
+  ogv: "video/ogg",
   mp3: "audio/mpeg",
   wav: "audio/wav",
   ogg: "audio/ogg",
+  oga: "audio/ogg",
+  opus: "audio/ogg",
+  weba: "audio/webm",
   m4a: "audio/mp4",
   aac: "audio/aac",
   flac: "audio/flac",
@@ -55,7 +61,8 @@ const MIME_TYPES: Record<string, string> = {
 /** Undefined for an unrecognized extension, in which case the header is left
  *  off entirely and Chromium sniffs — asserting `application/octet-stream`
  *  would make it refuse to play an otherwise fine media file. Every extension
- *  the library accepts (`ASSET_EXTENSIONS`) is covered above. */
+ *  Chromium can open is covered above; the rest of `ASSET_EXTENSIONS` (WMV,
+ *  MPG, WMA…) only ever reaches a player as its converted `.mp4`/`.m4a`. */
 function contentTypeFor(filePath: string): string | undefined {
   const ext = path.extname(filePath).slice(1).toLowerCase();
   return MIME_TYPES[ext];
@@ -228,6 +235,18 @@ async function serveFile(
   });
 }
 
+/** The file a deck clip url names (`?f=`, see `deckVideoUrl`), next to the row's
+ *  current one: the original the url was built for, even after
+ *  `media/deck-clips.ts` pointed the row at a converted copy. A name that is not
+ *  bare, or not there, falls back to the row's — and `withinCache` still has
+ *  the last word on what leaves the process. */
+function clipFile(current: string | null, url: URL): string | null {
+  const named = url.searchParams.get("f");
+  if (!current || !named || path.basename(named) !== named) return current;
+  const candidate = path.join(path.dirname(current), named);
+  return fs.existsSync(candidate) ? candidate : current;
+}
+
 /** Defence in depth: these paths are already capability-derived (a DB row, not
  *  user input), so traversal isn't reachable — this asserts and documents that
  *  invariant at the point where bytes actually leave the process. */
@@ -283,7 +302,12 @@ export function registerWorshipProtocolHandler(mediaRepo: MediaRepo): void {
             });
           }
 
-          return serveFile(request, mediaRepo.getPathById(id));
+          // The playable copy when Chromium cannot decode the original
+          // (`conversion-service.ts`).
+          // `?v=` is the copy's version: without one the original is served,
+          // so an element that started on it is never switched mid-play.
+          const converted = convertedPathFor(id, url.searchParams.get("v"));
+          return serveFile(request, converted ?? mediaRepo.getPathById(id));
         }
         case "logo": {
           return serveFile(request, getSettingsRepo().get("logo.path"));
@@ -311,7 +335,7 @@ export function registerWorshipProtocolHandler(mediaRepo: MediaRepo): void {
           const audioId = Number(segments[0]);
           if (!Number.isFinite(audioId)) return new Response("Not found", { status: 404 });
           // No immutable header: a soundtrack is seeked through, not swapped.
-          return serveFile(request, withinCache(getSlidesRepo().getAudioPath(audioId)));
+          return serveFile(request, withinCache(clipFile(getSlidesRepo().getAudioPath(audioId), url)));
         }
         case "deck-video": {
           // worship://deck-video/<id> — a clip pulled out of a .pptx, living
@@ -321,7 +345,7 @@ export function registerWorshipProtocolHandler(mediaRepo: MediaRepo): void {
           // `PIPELINE_ERROR_DECODE`.
           const videoId = Number(segments[0]);
           if (!Number.isFinite(videoId)) return new Response("Not found", { status: 404 });
-          return serveFile(request, withinCache(getSlidesRepo().getVideoPath(videoId)));
+          return serveFile(request, withinCache(clipFile(getSlidesRepo().getVideoPath(videoId), url)));
         }
         case "linked-audio": {
           // worship://linked-audio/<mediaAssetId> — an external file the

@@ -3,6 +3,7 @@ import { useDeckStore } from "@renderer/stores/deck.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
 import { useProgramStore } from "@renderer/stores/program.store";
 import { selectOutputMemo, useProjectionStore } from "@renderer/stores/projection.store";
+import { usePlayableAssetUrl } from "@renderer/stores/conversion.store";
 import { useMediaAsset } from "@renderer/lib/hooks/use-media-asset";
 import { clockForScene, findScene, useUtilityStore } from "@renderer/stores/utility.store";
 import { bibleOutputFor } from "@renderer/lib/bible-output";
@@ -160,6 +161,7 @@ function usePreviewOutputWithoutPlates(content: PreviewContent | null): Projecti
   // directly would let the preview lead the projector by one render.
   const bibleStyle = useProjectionStore((s) => s.bibleStyle);
   const deckEntry = useDeckStore((s) => (content?.kind === "deck" ? s.byAssetId[content.assetId] : undefined));
+  const playableUrl = usePlayableAssetUrl(content?.kind === "media" ? content.asset.id : null);
 
   if (!content) return null;
 
@@ -219,7 +221,8 @@ function usePreviewOutputWithoutPlates(content: PreviewContent | null): Projecti
         // monitor, which `OutputView` mutes by construction (every mode but
         // "live"). The field is here because the shape requires it, not
         // because anything reads it.
-        const underlay = { url: assetUrl(content.asset.id), epoch: 0, paused: !playing, startAtSeconds: 0, volume: 0 };
+        const url = playableUrl ?? assetUrl(content.asset.id);
+        const underlay = { url, epoch: 0, paused: !playing, startAtSeconds: 0, volume: 0 };
         return {
           kind: "video",
           url: underlay.url,

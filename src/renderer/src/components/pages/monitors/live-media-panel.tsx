@@ -78,7 +78,7 @@ export function LiveMediaPanel() {
       <MediaTrackRow
         currentSeconds={status?.currentTimeSeconds ?? 0}
         durationSeconds={status?.durationSeconds ?? 0}
-        error={errorFor(VIDEO_ERROR_KEY, assetUrl(base.assetId))}
+        error={errorFor(VIDEO_ERROR_KEY, base.url)}
         key="video"
         kind="video"
         label={heading ?? ""}

@@ -15,9 +15,19 @@ export type AssetKind = (typeof ASSET_KINDS)[number];
  *  dialog's filter, drag & drop, folder import, the content-addressed cache
  *  and "Preparar carpeta" without a single branch. */
 export const ASSET_EXTENSIONS: Record<AssetKind, readonly string[]> = {
-  video: ["mp4", "mov", "mkv", "avi", "webm"],
+  // Everything past the first six is converted to a playable copy on its way
+  // in (`main/media/conversion-service.ts`) — and so can the first six be,
+  // when what is inside them is a codec Chromium cannot decode.
+  video: [
+    ...["mp4", "m4v", "mov", "mkv", "webm", "3gp"],
+    ...["avi", "wmv", "asf", "flv", "f4v", "mpg", "mpeg", "m2v", "vob", "ts", "mts", "m2ts"],
+    ...["ogv", "divx", "mxf", "dv", "3g2"],
+  ],
   image: ["jpg", "jpeg", "png", "gif", "webp", "bmp"],
-  audio: ["mp3", "wav", "ogg", "m4a", "flac"],
+  audio: [
+    ...["mp3", "wav", "ogg", "m4a", "flac", "aac", "opus", "oga", "weba"],
+    ...["wma", "aiff", "aif", "ac3", "mka", "mp2", "amr"],
+  ],
   ppt: ["ppt", "pptx", "pptm", "pps", "ppsx", "ppsm", "odp", "pdf"],
 };
 

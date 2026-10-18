@@ -57,15 +57,19 @@ export function slideThumbUrl(deckId: number, slideIndex: number): string {
   return `worship://deck/${deckId}/${slideIndex}/thumb`;
 }
 
-export function deckAudioUrl(audioId: number): string {
-  return `worship://deck-audio/${audioId}`;
+/** `file` is the clip's file name inside the deck's cache. It changes when
+ *  `media/deck-clips.ts` replaces an unplayable clip with a converted one, so
+ *  the url changes with the bytes — which Chromium's media cache requires —
+ *  and an element still on the old url keeps reading the old file. */
+export function deckAudioUrl(audioId: number, file: string): string {
+  return `worship://deck-audio/${audioId}?f=${encodeURIComponent(file)}`;
 }
 
 /** A video embedded in one slide, extracted into the same content-addressed
  *  deck cache as `deckAudioUrl`'s audio and addressed the same way: by row id,
- *  never by a path. */
-export function deckVideoUrl(videoId: number): string {
-  return `worship://deck-video/${videoId}`;
+ *  never by a path (`file` is a bare name, see `deckAudioUrl`). */
+export function deckVideoUrl(videoId: number, file: string): string {
+  return `worship://deck-video/${videoId}?f=${encodeURIComponent(file)}`;
 }
 
 /** A deck's *linked* soundtrack — an external file the source presentation

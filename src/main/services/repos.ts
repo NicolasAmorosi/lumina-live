@@ -9,6 +9,7 @@ import { SlidesRepo } from "../db/repositories/slides.repo";
 import { DraftRepo } from "../db/repositories/draft.repo";
 import { UtilityRepo } from "../db/repositories/utility.repo";
 import { OverlaysRepo } from "../db/repositories/overlays.repo";
+import { ConversionsRepo } from "../db/repositories/conversions.repo";
 
 /**
  * Small process-wide registry so modules that can't easily receive constructor
@@ -25,6 +26,7 @@ let slidesRepo: SlidesRepo | null = null;
 let draftRepo: DraftRepo | null = null;
 let utilityRepo: UtilityRepo | null = null;
 let overlaysRepo: OverlaysRepo | null = null;
+let conversionsRepo: ConversionsRepo | null = null;
 let dbHandle: { db: Db; sqlite: Database.Database } | null = null;
 
 export function initRepos(db: Db, sqlite: Database.Database): void {
@@ -37,6 +39,7 @@ export function initRepos(db: Db, sqlite: Database.Database): void {
   draftRepo = new DraftRepo(db);
   utilityRepo = new UtilityRepo(db, sqlite);
   overlaysRepo = new OverlaysRepo(db, sqlite);
+  conversionsRepo = new ConversionsRepo(db, sqlite);
   dbHandle = { db, sqlite };
 }
 
@@ -81,3 +84,4 @@ export const getSlidesRepo = () => assertInit(slidesRepo, "SlidesRepo");
 export const getDraftRepo = () => assertInit(draftRepo, "DraftRepo");
 export const getUtilityRepo = () => assertInit(utilityRepo, "UtilityRepo");
 export const getOverlaysRepo = () => assertInit(overlaysRepo, "OverlaysRepo");
+export const getConversionsRepo = () => assertInit(conversionsRepo, "ConversionsRepo");

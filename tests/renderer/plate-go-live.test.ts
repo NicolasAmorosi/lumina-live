@@ -13,6 +13,7 @@ import { goLive } from "@renderer/lib/actions/playback";
 import { claimLiveIntent, isCurrentLiveIntent } from "@renderer/lib/actions/live-intent";
 import { platePreviewOutput } from "@renderer/lib/plate-output";
 import { DEFAULT_PLATE_STYLE, type Plate } from "@shared/types/overlay";
+import { assetUrl } from "@shared/urls";
 
 const initialProjection = useProjectionStore.getState();
 
@@ -99,7 +100,7 @@ describe("platePreviewOutput", () => {
   test("keeps the other kinds up, replaces its own, and never decodes the live video", () => {
     useProjectionStore.getState().showPlate(bug);
     useProjectionStore.getState().showPlate(plate({ id: 3, name: "Otro" }));
-    useProjectionStore.getState().setBase({ kind: "video", assetId: 7, epoch: 1, startAtSeconds: 0 });
+    useProjectionStore.getState().setBase({ kind: "video", assetId: 7, url: assetUrl(7), epoch: 1, startAtSeconds: 0 });
     const live = selectOutput(useProjectionStore.getState());
 
     const preview = platePreviewOutput(live, pastor, "worship://thumb/7");

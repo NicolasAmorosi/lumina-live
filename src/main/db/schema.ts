@@ -67,6 +67,37 @@ export const mediaAssets = sqliteTable(
   ],
 );
 
+/**
+ * What ffprobe said about a video or audio asset, and the playable copy made
+ * of it when Chromium cannot decode the original
+ * (`main/media/conversion-service.ts`).
+ *
+ * Only facts and results are stored. Whether a file NEEDS converting is
+ * re-derived from `probe_json` on every launch, because one input to that
+ * decision — can this GPU decode HEVC? — belongs to the machine and not to the
+ * file. A library copied to another PC must not keep the old PC's answer.
+ * A failed conversion is not stored either: it is retried next launch.
+ *
+ * Valid only while `source_size`/`source_mtime_ms` still match the asset's,
+ * the same stamp rule `content_hash` follows. `output_file` is a bare file
+ * name inside `convertedMediaDir`, never an absolute path: an absolute one
+ * would point at the old profile after a copy or a move
+ * (`.claude/knowledge/a-deck-cache-hit-checks-existence-but-the-protocol-checks-containment.md`).
+ */
+export const mediaConversions = sqliteTable("media_conversions", {
+  mediaAssetId: integer("media_asset_id")
+    .primaryKey()
+    .references(() => mediaAssets.id, { onDelete: "cascade" }),
+  sourceSize: integer("source_size").notNull(),
+  sourceMtimeMs: integer("source_mtime_ms").notNull(),
+  /** `MEDIA_PROBE_VERSION` at the time of the probe; an older one re-probes. */
+  probeVersion: integer("probe_version").notNull(),
+  /** A `MediaProbe`, or null when ffprobe could not read the file at all. */
+  probeJson: text("probe_json"),
+  outputFile: text("output_file"),
+  updatedAt: integer("updated_at").notNull(),
+});
+
 export const programs = sqliteTable(
   "programs",
   {

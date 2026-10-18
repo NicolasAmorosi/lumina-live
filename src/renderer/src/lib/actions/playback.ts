@@ -13,13 +13,15 @@ import { stopPreviewPlayback } from "@renderer/lib/actions/preview-playback";
 import { previewedScheduleItem } from "@renderer/lib/actions/preview";
 import { defaultMediaVolume } from "@renderer/stores/settings.store";
 import { api } from "@renderer/lib/api";
-import { assetUrl } from "@shared/urls";
 import type { MediaAsset } from "@shared/types/media";
 import type { DeckDTO } from "@shared/types/deck";
 import type { LiveDeck } from "@renderer/stores/projection.store";
 import type { OverlayState } from "@shared/types/projection";
 import { claimLiveIntent, currentLiveIntent, isCurrentLiveIntent } from "@renderer/lib/actions/live-intent";
+import { playableAssetUrl, useConversionStore } from "@renderer/stores/conversion.store";
 import { getCachedMediaAsset } from "@renderer/lib/hooks/use-media-asset";
+import { t } from "@renderer/lib/i18n/i18n-provider";
+import { toast } from "@renderer/lib/toast";
 import type { AssetKind } from "@shared/constants";
 
 let videoEpoch = 0;
@@ -49,7 +51,7 @@ function goLiveWithAudioAsset(asset: MediaAsset, startAtSeconds: number): void {
     source: "asset",
     assetId: asset.id,
     label: asset.name,
-    url: assetUrl(asset.id),
+    url: playableAssetUrl(asset.id),
     epoch,
     paused: false,
     startAtSeconds,
@@ -171,7 +173,7 @@ async function goLiveWithMediaAsset(
   if (asset.kind === "video") {
     beginScene();
     videoEpoch += 1;
-    setBase({ kind: "video", assetId: asset.id, epoch: videoEpoch, startAtSeconds });
+    setBase({ kind: "video", assetId: asset.id, url: playableAssetUrl(asset.id), epoch: videoEpoch, startAtSeconds });
   } else if (asset.kind === "image") {
     beginScene();
     setBase({ kind: "image", assetId: asset.id });
@@ -358,6 +360,36 @@ function isAudioTarget(target: PreviewTarget): boolean {
   return item?.kind === "media" && getCachedMediaAsset(item.mediaAssetId)?.kind === "audio";
 }
 
+/** The library asset a preview target would send, when it is a video or an
+ *  audio — the only kinds main ever has to convert. */
+function previewedMediaAssetId(target: PreviewTarget): number | null {
+  if (target.kind === "asset") {
+    return target.assetKind === "video" || target.assetKind === "audio" ? target.assetId : null;
+  }
+  if (target.kind !== "scheduleItem") return null;
+  const item = previewedScheduleItem();
+  return item?.kind === "media" ? item.mediaAssetId : null;
+}
+
+/**
+ * True, with a toast saying why, when the target is a video or audio main is
+ * still converting (or could not convert). Its original would project black,
+ * or sound nothing — the very failures the conversion exists to prevent.
+ *
+ * Checked before the live intent is claimed, like a plate: a refused EN VIVO
+ * changes nothing at all. No fade starts, no NEGRO is lifted, no projector is
+ * opened onto an empty stage, and whatever was already live stays live.
+ */
+function refusesUnconverted(target: PreviewTarget): boolean {
+  const assetId = previewedMediaAssetId(target);
+  const state = assetId === null ? undefined : useConversionStore.getState().byAssetId[assetId];
+  if (assetId === null || !state) return false;
+  const name = getCachedMediaAsset(assetId)?.name ?? "";
+  if (state.status === "failed") toast.danger(t("conversion.failedLive", { name }));
+  else toast.warning(t("conversion.notReady", { name }));
+  return true;
+}
+
 /**
  * Stage two: send whatever is in the preview pane to the projector. The single
  * implementation behind the EN VIVO button, the Enter shortcut and
@@ -373,6 +405,7 @@ export async function goLive(): Promise<void> {
     return;
   }
 
+  if (refusesUnconverted(target)) return;
   // A verse that is not in the loaded chapter any more has nothing to send.
   // Checked before any side effect: past this point the verse branch clears
   // the rail, cuts the deck's music and lifts NEGRO/LOGO — and then

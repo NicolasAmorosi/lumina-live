@@ -7,7 +7,16 @@ import { getMediaRepo, getProgramsRepo } from "../../services/repos";
 import { removeMediaAsset } from "../../services/media-asset-removal";
 import { importPaths } from "../../services/library-import";
 import { broadcast } from "../../services/broadcast";
+import { notifyMediaChanged } from "../../media/conversion-service";
 import { showOpenDialogFor } from "../open-dialog";
+
+/** What a deck's linked soundtrack may be. Narrower than `ASSET_EXTENSIONS.audio`
+ *  on purpose: `worship://linked-audio/<id>` serves the file itself, so only the
+ *  formats Chromium plays as they are can be linked.
+ *  ponytail: a WMA/AIFF soundtrack is refused rather than converted — every
+ *  linked audio in the real hymnal is an MP3 (1229 of 1229); route it through
+ *  `conversion-service.ts` if a church ever needs one. */
+const LINKABLE_AUDIO_EXTENSIONS = new Set(["mp3", "wav", "ogg", "oga", "opus", "m4a", "aac", "flac", "weba"]);
 
 export const libraryHandlers: Pick<
   Handlers,
@@ -78,6 +87,8 @@ export const libraryHandlers: Pick<
     // none of them asked for this — the operator repaired the file from
     // whichever one happened to be on screen.
     if (relocated) broadcast("library-changed", { kind: asset.kind });
+    // Other bytes, so another probe — and maybe a conversion.
+    if (relocated) notifyMediaChanged();
     return relocated;
   },
 
@@ -87,7 +98,7 @@ export const libraryHandlers: Pick<
         throw new IpcError({ code: "SOURCE_MISSING", message: "El archivo de audio no existe." });
       }
       const ext = path.extname(audioPath).replace(/^\./, "").toLowerCase();
-      if (!ASSET_EXTENSIONS.audio.includes(ext)) {
+      if (!LINKABLE_AUDIO_EXTENSIONS.has(ext)) {
         throw new IpcError({
           code: "INVALID_AUDIO_FILE",
           message: "El archivo elegido no es un audio soportado.",

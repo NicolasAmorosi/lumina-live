@@ -5,6 +5,7 @@ import type { MediaAsset } from "@shared/types/media";
 import { getMediaRepo } from "./repos";
 import { broadcast } from "./broadcast";
 import { prewarmExplicit } from "../slides/deck-service";
+import { notifyMediaChanged } from "../media/conversion-service";
 
 const CHUNK_SIZE = 100;
 /** Below this, an import resolves fast enough (a handful of `statSync` calls
@@ -147,6 +148,11 @@ export async function importPaths(
     if (emitChanged && mutated > 0) {
       broadcast("library-changed", { kind });
     }
+
+    // Linked-folder browses too (`emitChanged: false`): every video or audio
+    // that enters the app is checked and, if Chromium cannot play it,
+    // converted in the background — the operator's call (2026-10-18).
+    if (mutated > 0 && (kind === "video" || kind === "audio")) notifyMediaChanged();
 
     // Explicit adds pre-warm in the background — never a linked-folder
     // browse (`inLibrary: false`), which the renderer's "visible tiles"

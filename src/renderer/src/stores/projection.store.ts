@@ -521,7 +521,7 @@ export const useProjectionStore = create<ProjectionStoreState>()(
 function selectVideoUnderlay(state: ProjectionStoreState): VideoUnderlay {
   if (state.base?.kind !== "video") return null;
   return {
-    url: assetUrl(state.base.assetId),
+    url: state.base.url,
     epoch: state.base.epoch,
     paused: state.videoPaused,
     startAtSeconds: state.base.startAtSeconds,
@@ -593,7 +593,7 @@ function selectOutputWithoutUnderlay(state: ProjectionStoreState): ProjectionOut
       };
     }
     case "video":
-      return { kind: "video", url: assetUrl(state.base.assetId), epoch: state.base.epoch };
+      return { kind: "video", url: state.base.url, epoch: state.base.epoch };
     case "image":
       return { kind: "image", url: assetUrl(state.base.assetId) };
     case "bible":

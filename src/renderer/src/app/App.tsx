@@ -28,6 +28,7 @@ import { useUiStore } from "@renderer/stores/ui.store";
 import { startProjectionEffects } from "@renderer/effects/projection-sync";
 import { startLibrarySyncEffects } from "@renderer/effects/library-sync";
 import { startDraftAutosave } from "@renderer/effects/draft-autosave";
+import { startConversionSync } from "@renderer/effects/conversion-sync";
 import { useGlobalShortcuts } from "@renderer/lib/hooks/use-global-shortcuts";
 
 /**
@@ -137,12 +138,15 @@ export function App() {
     void useDeckStore.getState().loadEnvironment();
     const stopProjectionEffects = startProjectionEffects();
     const stopLibrarySync = startLibrarySyncEffects();
+    // Also what lets main start converting at all — see `conversion-sync.ts`.
+    const stopConversionSync = startConversionSync();
     // Started BEFORE the restore above can finish: its first write is
     // debounced, and the restore itself only ever rewrites the same draft.
     const stopDraftAutosave = startDraftAutosave();
     return () => {
       stopProjectionEffects();
       stopLibrarySync();
+      stopConversionSync();
       stopDraftAutosave();
     };
   }, [loadSettings]);
