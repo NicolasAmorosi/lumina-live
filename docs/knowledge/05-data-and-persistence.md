@@ -168,6 +168,15 @@ normal cuando un pendrive volvió con otra letra y su carpeta se volvió a vincu
 FUSIONAN en la que el programa referencia: programas, placas, decks e historial pasan a ese id y el
 duplicado se borra, todo en una transacción.
 
+El mismo barrido hace `stat` (no `access`) y **refresca `size_bytes`/`mtime_ms`** de un archivo editado
+en el lugar. No es un detalle: todos los sellos de la app — el hash de contenido de un deck, el probe y
+la copia convertida de un video, el cache-buster de la miniatura — se validan contra esos dos campos de
+la FILA, y hasta el 2026-10-18 nada los actualizaba para un archivo de la biblioteca: un deck o un video
+reemplazado en el lugar se seguía previsualizando y proyectando con el contenido viejo. Toda caché nueva
+que dependa de un archivo fuente se valida contra un `stat` del archivo, o contra una fila que algo
+mantiene al día. Diagnóstico en
+[`a-library-rows-size-and-mtime-are-every-stamps-identity-and-the-sweep-only-checked-existence.md`](../../.claude/knowledge/a-library-rows-size-and-mtime-are-every-stamps-identity-and-the-sweep-only-checked-existence.md).
+
 Una carpeta vinculada que no está (`library:listFolder`) responde `FOLDER_MISSING`, no una lista vacía:
 eran indistinguibles. Y ninguna importación acepta un `._x.pps` (el AppleDouble que macOS deja en un
 pendrive FAT/exFAT), un `~$x.pptx` (el lock de PowerPoint) ni un archivo cuya extensión no sea de su

@@ -334,6 +334,21 @@ describe("Media library", () => {
     assert(afterReappear?.missingSince === null, "sweep must clear missingSince once the file is back");
   });
 
+  test("the sweep refreshes the row of a file edited in place", async () => {
+    // Every stamp (deck content hash, video probe, thumbnail) is checked against
+    // the row's (size, mtime): a sweep that only checked existence left an
+    // edited deck or video "current" with last week's bytes.
+    fs.writeFileSync(filePaths[0]!, "fake pptx 0 — edited in place, longer than before");
+    const changed = await mediaRepo.sweep();
+    const stat = fs.statSync(filePaths[0]!);
+    const row = mediaRepo.getById(firstAsset.id);
+    assert(changed.has("ppt"), "an edit must be reported, so the renderer and the conversions re-read it");
+    assert(row?.sizeBytes === stat.size, `the row must carry the new size, got ${String(row?.sizeBytes)}`);
+    assert(row.mtimeMs === Math.trunc(stat.mtimeMs), "the row must carry the new mtime");
+    const again = await mediaRepo.sweep();
+    assert(!again.has("ppt"), "a file that did not change since must not be reported again");
+  });
+
   test("hasPath answers the worship://raster guard, and only for real rows", () => {
     // This is a security guard, not a convenience lookup: it is what lets the
     // rasterizer read a PDF that IS the source (kept wherever the operator
@@ -457,10 +472,7 @@ describe("Deck status is answered by CONTENT, not by row ownership", () => {
     // row describes bytes that no longer exist, so it must stop matching.
     fs.writeFileSync(dupA.path, "edited — these are different bytes now");
     const editedDupStat = fs.statSync(dupA.path);
-    db.update(mediaAssets)
-      .set({ sizeBytes: editedDupStat.size, mtimeMs: Math.trunc(editedDupStat.mtimeMs) })
-      .where(eq(mediaAssets.id, dupA.id))
-      .run();
+    mediaRepo.refreshStat(dupA.id, editedDupStat.size, Math.trunc(editedDupStat.mtimeMs));
     const afterEditStatuses = slidesRepo.statusesByAsset([dupA.id]);
     assert(
       afterEditStatuses.get(dupA.id) === undefined,

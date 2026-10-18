@@ -827,6 +827,11 @@ function tryCacheHit(assetId: number, sourcePath: string, force: boolean): DeckD
     return hit(byAsset);
   }
 
+  // The stamp below is validated against the asset row's `(size, mtime)`, so
+  // the row has to describe the file on disk first — or a deck edited in place
+  // matches its own old digest.
+  getMediaRepo().refreshStat(assetId, stat.size, Math.trunc(stat.mtimeMs));
+
   // 2. The deck this asset's BYTES belong to, via its stamped content hash.
   //    Without this, a duplicate file (the same hymn in two folders — 555 of
   //    them in the library that motivated `N3`) fell all the way through to
@@ -1317,6 +1322,14 @@ export function getDeck(assetId: number): DeckDTO | null {
   const row = repo.findDeckByAsset(assetId);
   if (!row || row.status !== "ready") return null;
   if (!fs.existsSync(row.cacheDir)) return null;
+  // A source edited in place is not a hit — the same size+mtime check as
+  // `tryCacheHit`. Without it the renderer, which peeks before it ensures,
+  // never ensured at all: an announcements deck fixed during the week
+  // previewed AND went live with last week's slides. A source that cannot be
+  // stat'ed keeps the cached deck; telling it missing is the sweeper's job.
+  const sourcePath = getMediaRepo().getPathById(assetId);
+  const stat = sourcePath ? fs.statSync(sourcePath, { throwIfNoEntry: false }) : undefined;
+  if (stat && (row.sourceSizeBytes !== stat.size || row.sourceMtimeMs !== Math.trunc(stat.mtimeMs))) return null;
   return toDeckDTO(row, assetId, { resolve: false });
 }
 
