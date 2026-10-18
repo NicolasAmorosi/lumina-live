@@ -434,7 +434,10 @@ export class MediaRepo {
     }
   }
 
-  /** Re-stats every in-library row, marking newly-missing files and clearing
+  /** Re-stats every in-library row — and every linked-folder row a saved
+   *  program uses: without those, a schedule item from a linked folder never
+   *  got `missingSince`, so its «Relocalizar…» panel never appeared and it
+   *  failed later, on EN VIVO — marking newly-missing files and clearing
    *  the flag on ones that reappeared (e.g. a reconnected drive). Never
    *  deletes rows. Chunked with a yield every 200 rows — a large library must
    *  never turn this into a multi-second main-thread stall — and writes go
@@ -442,7 +445,14 @@ export class MediaRepo {
    *  per row. Returns the kinds that actually changed, so a caller only
    *  refreshes what's stale instead of every tab. */
   async sweep(): Promise<Set<AssetKind>> {
-    const rows = this.db.select().from(mediaAssets).where(eq(mediaAssets.inLibrary, 1)).all();
+    const rows = this.db
+      .select()
+      .from(mediaAssets)
+      .where(
+        sql`${mediaAssets.inLibrary} = 1 OR ${mediaAssets.id} IN
+              (SELECT media_asset_id FROM program_items WHERE media_asset_id IS NOT NULL)`,
+      )
+      .all();
     const changedKinds = new Set<AssetKind>();
     const toClear: number[] = [];
     const toMark: number[] = [];
@@ -503,32 +513,74 @@ export class MediaRepo {
     return changedKinds;
   }
 
+  /**
+   * Points the row at `newPath`, keeping its id — the one the program items,
+   * plates and history already reference.
+   *
+   * The new path may already be a row of its own, and in a real library it
+   * usually is: 1485 of 1501 rows come from linked folders, so after a USB
+   * stick comes back as F: instead of E: and its folder is re-linked, every
+   * file there has a row before the operator relocates a single item. A plain
+   * UPDATE then broke `ux_media_path`'s UNIQUE and «Relocalizar…» failed with a
+   * generic toast. The two rows are the same file, so they are MERGED: every
+   * reference to the duplicate moves to this id, in one transaction, and the
+   * duplicate goes (its `media_conversions` row with it, by cascade).
+   *
+   * References inside JSON columns (a scene's or the verse's background
+   * image) are not rewritten. They are read through normalizers that already
+   * tolerate an asset that is gone, and a linked-folder duplicate is not what
+   * an operator picks as a background.
+   */
   relocate(id: number, newPath: string): MediaAsset | null {
     const row = this.db.select().from(mediaAssets).where(eq(mediaAssets.id, id)).get();
     if (!row) return null;
     const stat = fs.statSync(newPath);
     const mtimeMs = Math.trunc(stat.mtimeMs);
     const now = Date.now();
-    this.db
-      .update(mediaAssets)
-      .set({
-        path: newPath,
-        pathKey: toPathKey(newPath),
-        sizeBytes: stat.size,
-        mtimeMs,
-        missingSince: null,
-        lastSeenAt: now,
-        updatedAt: now,
-      })
-      .where(eq(mediaAssets.id, id))
-      .run();
+    const pathKey = toPathKey(newPath);
+
+    const inLibrary = this.sqlite.transaction(() => {
+      const duplicate = this.db.select().from(mediaAssets).where(eq(mediaAssets.pathKey, pathKey)).get();
+      let keepInLibrary = row.inLibrary;
+      if (duplicate && duplicate.id !== id) {
+        for (const statement of [
+          "UPDATE program_items SET media_asset_id = ? WHERE media_asset_id = ?",
+          "UPDATE overlay_plates SET image_asset_id = ? WHERE image_asset_id = ?",
+          "UPDATE slide_decks SET media_asset_id = ? WHERE media_asset_id = ?",
+          "UPDATE projection_history SET media_asset_id = ? WHERE media_asset_id = ?",
+        ]) {
+          this.sqlite.prepare(statement).run(id, duplicate.id);
+        }
+        // Shown in the library if either one was.
+        keepInLibrary = Math.max(row.inLibrary, duplicate.inLibrary);
+        this.db.delete(mediaAssets).where(eq(mediaAssets.id, duplicate.id)).run();
+      }
+      this.db
+        .update(mediaAssets)
+        .set({
+          path: newPath,
+          pathKey,
+          sizeBytes: stat.size,
+          mtimeMs,
+          inLibrary: keepInLibrary,
+          missingSince: null,
+          lastSeenAt: now,
+          updatedAt: now,
+        })
+        .where(eq(mediaAssets.id, id))
+        .run();
+      return keepInLibrary;
+    })();
+
     // Same reason as `upsertFromPath`: the relocated file is a different set
     // of bytes as far as the thumbnail cache is concerned.
     return toDTO({
       ...row,
       path: newPath,
+      pathKey,
       sizeBytes: stat.size,
       mtimeMs,
+      inLibrary,
       missingSince: null,
       updatedAt: now,
     });

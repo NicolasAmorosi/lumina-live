@@ -49,7 +49,27 @@ const TOUCH_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
  *  Bounded, because a pathological library shouldn't grow this without end. */
 const MAX_REMEMBERED_FAILURES = 2_000;
 
-const inFlight = new Map<string, Promise<string | null>>();
+/** One generation per key, shared by every tile asking for it. It is
+ *  abandoned only when ALL of them have walked away: tying it to the first
+ *  requester's signal meant one tile scrolling off answered 404 to every other
+ *  tile waiting on the same thumbnail, which then kept its icon until it was
+ *  remounted. */
+type Pending = { promise: Promise<string | null>; controller: AbortController; waiting: number };
+const inFlight = new Map<string, Pending>();
+
+function join(pending: Pending, signal: AbortSignal | undefined): Promise<string | null> {
+  if (signal?.aborted) return pending.promise;
+  pending.waiting += 1;
+  signal?.addEventListener(
+    "abort",
+    () => {
+      pending.waiting -= 1;
+      if (pending.waiting === 0) pending.controller.abort();
+    },
+    { once: true },
+  );
+  return pending.promise;
+}
 const failed = new Set<string>();
 let running = 0;
 const waiting: (() => void)[] = [];
@@ -161,6 +181,16 @@ function renderViaResize(filePath: string): Buffer | null {
   const sized = width > MEDIA_THUMB_WIDTH ? image.resize({ width: MEDIA_THUMB_WIDTH, quality: "good" }) : image;
   const jpeg = sized.toJPEG(MEDIA_THUMB_QUALITY);
   return jpeg.length > 0 ? jpeg : null;
+}
+
+/** Whether this image file can actually be decoded — by the OS thumbnailer
+ *  (which reads GIF, WebP and BMP, and is told apart from its own generic
+ *  icon) or, failing that, by `nativeImage` itself (PNG and JPEG). The logo
+ *  picker's check: `nativeImage.createFromPath` alone refused every GIF, WebP
+ *  and BMP the projector would have shown perfectly well. */
+export async function canDecodeImage(filePath: string): Promise<boolean> {
+  if (await renderViaOsThumbnailer(filePath)) return true;
+  return !nativeImage.createFromPath(filePath).isEmpty();
 }
 
 /** Encodes one asset to a JPEG buffer, or null when this kind/platform/file
@@ -314,13 +344,18 @@ export async function ensureThumbnail(
   }
 
   const existing = inFlight.get(key);
-  if (existing) return existing;
+  if (existing) return join(existing, signal);
 
-  const job = generate(asset, cachePath, key, signal).finally(() => {
-    inFlight.delete(key);
-  });
-  inFlight.set(key, job);
-  return job;
+  const controller = new AbortController();
+  const pending: Pending = {
+    promise: generate(asset, cachePath, key, controller.signal).finally(() => {
+      inFlight.delete(key);
+    }),
+    controller,
+    waiting: 0,
+  };
+  inFlight.set(key, pending);
+  return join(pending, signal);
 }
 
 /**

@@ -176,9 +176,9 @@ export type IpcContract = {
   "library:setLinkedAudio": { req: { id: number; path: string | null }; res: MediaAsset | null };
   /** Top-level files of `path` matching `kind`'s extensions, registered the
    *  same way `library:add` does but never marked `inLibrary` — a linked
-   *  folder is browsed live, not imported. Returns `[]` if the folder is
-   *  gone or unreadable rather than throwing, since it may have been moved
-   *  or unmounted since it was linked. */
+   *  folder is browsed live, not imported. Throws `FOLDER_MISSING` when the
+   *  folder is gone or unreadable (moved, unmounted, a drive letter that
+   *  changed), which the panel must not show as an empty folder. */
   "library:listFolder": { req: { kind: AssetKind; path: string }; res: MediaAsset[] };
 
   "programs:list": { req: void; res: ProgramSummary[] };

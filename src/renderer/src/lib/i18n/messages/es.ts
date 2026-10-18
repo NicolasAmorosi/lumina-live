@@ -106,6 +106,8 @@ const es = {
     importing: "Importando {done} de {total}…",
     loading: "Leyendo la carpeta…",
     loadFailed: "No se pudo leer la biblioteca",
+    folderMissing:
+      "La carpeta no está disponible. Si es un pendrive o un disco externo, conectalo; si cambió de letra, volvé a vincular la carpeta.",
   },
   preview: {
     placeholder: "Nada en vista previa",

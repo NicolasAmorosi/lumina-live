@@ -106,7 +106,10 @@ export const libraryHandlers: Pick<
       // PROJECTION — for as long as the drive took to answer.
       entries = await fs.promises.readdir(folderPath, { withFileTypes: true });
     } catch {
-      return [];
+      // Not `[]`: an unplugged USB stick, or one that came back as F: instead
+      // of E:, looked exactly like an empty folder, with nothing to say the
+      // folder itself was gone.
+      throw new IpcError({ code: "FOLDER_MISSING", message: "La carpeta no está disponible." });
     }
     const extensions = new Set<string>(ASSET_EXTENSIONS[kind]);
     const matched = entries

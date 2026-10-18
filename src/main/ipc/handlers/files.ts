@@ -1,10 +1,11 @@
-import { dialog, nativeImage } from "electron";
+import { dialog } from "electron";
 import fs from "node:fs";
 import type { Handlers } from "../register";
 import { ASSET_EXTENSIONS, ASSET_KINDS, type AssetKind } from "@shared/constants";
 import { IpcError } from "@shared/ipc/result";
 import { systemMediaFolder } from "../../paths";
 import { getSettingsRepo } from "../../services/repos";
+import { canDecodeImage } from "../../media/thumbnail-service";
 
 function filtersFor(kind: AssetKind | "all") {
   if (kind === "all") {
@@ -92,10 +93,9 @@ export const filesHandlers: Pick<
 
     // A logo that cannot be decoded is persisted-then-invisible: LOGO becomes a
     // black projector with no explanation, and the operator only finds out
-    // mid-service. `nativeImage` decodes here, in main, with no window
-    // involved — an unreadable or non-image file comes back empty — so the
+    // mid-service. Decoded here, in main, with no window involved, so the
     // previous logo survives a bad pick.
-    if (nativeImage.createFromPath(chosen).isEmpty()) {
+    if (!(await canDecodeImage(chosen))) {
       throw new IpcError({ code: "LOGO_UNREADABLE", message: `Cannot decode image: ${chosen}` });
     }
 
