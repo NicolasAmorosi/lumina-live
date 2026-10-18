@@ -287,7 +287,7 @@ npm install              # instala deps — better-sqlite3 trae binarios precomp
 npm run dev               # electron-vite dev (HMR en renderer, restart de main en watch)
 npm run typecheck          # tsc --noEmit sobre node (main+preload+shared) y web (renderer+shared)
 npm run lint                # eslint .
-npm run test                 # vitest run — 316 casos en dos proyectos: `main` (Node: migraciones, seed,
+npm run test                 # vitest run — 320 casos en dos proyectos: `main` (Node: migraciones, seed,
                               #   FTS5, repos, borrador, validadores de settings y de escena, respaldo WAL,
                               #   zip reader, audio vinculado, urls, prune del historial, funciones de tiempo,
                               #   arrastre de una cuenta regresiva, escenas de tiempo como ítem del orden de culto,
@@ -478,11 +478,14 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   resuelve en silencio contra otra cosa. Diagnóstico en
   [`.claude/knowledge/an-overlay-on-a-slide-must-rebuild-the-object-contain-box-and-cqh-needs-container-type-size.md`](.claude/knowledge/an-overlay-on-a-slide-must-rebuild-the-object-contain-box-and-cqh-needs-container-type-size.md).
   La feature es solo de `.pptx`/`.ppsx`: un `.ppt`/`.pps` legacy pierde el video entero.
-- **NEGRO/LOGO pausa un video en vivo y mantiene su posición; la pista de audio de un deck sigue
+- **NEGRO/LOGO pausa lo que el proyector reproduce y conserva su posición; un audio suelto sigue
   sonando.** El `<video>` no se desmonta al taparlo (`videoUnderlay` en `ProjectionOutput` +
-  `LiveVideo` en `output-view.tsx`) — solo se oculta y se pausa, y al destapar reanuda donde
-  estaba. Son dos comportamientos deliberadamente distintos: el video se detiene, la música del
-  deck no.
+  `LiveVideo` en `output-view.tsx`): solo se oculta y se pausa, y al destapar reanuda donde estaba.
+  Desde el 2026-09-09 la pista de audio de un deck hace lo mismo, y además congela el auto-avance,
+  o al destapar la diapositiva queda adelantada a su música. Ver
+  [`.claude/knowledge/deck-soundtrack-negro-logo-pause-and-autoplay-freeze.md`](.claude/knowledge/deck-soundtrack-negro-logo-pause-and-autoplay-freeze.md).
+  La excepción deliberada es un audio mandado EN VIVO por su cuenta: es música de fondo, no
+  contenido del proyector.
 - **El versículo viaja VESTIDO, y su estilo es una clave de `settings`, no una fila.** La variante
   `bible` de `ProjectionOutput` lleva adentro su `BibleStyle` y su `backgroundUrl` resueltos, por
   la misma razón que los lleva una escena de tiempo: el proyector no resuelve nada y
