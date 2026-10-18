@@ -185,6 +185,8 @@ async function probeAndRecord(c: ConversionCandidate): Promise<ConversionCandida
     return null;
   }
   const probe = parseProbe(await probeMedia(c.path));
+  // The app quit while ffprobe ran: the database is already closed.
+  if (shutDown) return null;
   // Stamped with what the LIBRARY believes about the file when it has an
   // answer, so the stamp matches the row and this does not re-probe on every
   // reconcile until the sweep catches up with an edit.
