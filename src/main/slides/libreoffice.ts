@@ -116,14 +116,20 @@ function pathLookup(): string[] {
   return found;
 }
 
+/** A cold first launch on a slow Windows PC — Defender scanning a freshly
+ *  installed LibreOffice — can take most of the ten seconds just to answer. */
+const PROBE_TIMEOUT_MS = process.platform === "win32" ? 3 * SOFFICE_PROBE_TIMEOUT_MS : SOFFICE_PROBE_TIMEOUT_MS;
+
 export async function probeVersion(
   exe: string,
 ): Promise<{ version: string; major: number } | null> {
   return new Promise((resolve) => {
     execFile(
       exe,
-      ["--version"],
-      { timeout: SOFFICE_PROBE_TIMEOUT_MS, windowsHide: true },
+      // On our own profile, like every conversion: with Impress open on the
+      // default one, `--version` can wait on that instance instead of answering.
+      ["--version", ...profileArgs()],
+      { timeout: PROBE_TIMEOUT_MS, windowsHide: true },
       (error, stdout) => {
         if (error) {
           resolve(null);
@@ -247,6 +253,7 @@ async function runLocateSoffice(): Promise<SofficeStatus> {
   for (const exe of candidatePaths()) ordered.push({ exe, source: "candidate" });
   for (const exe of pathLookup()) ordered.push({ exe, source: "path" });
 
+  let probeFailure: SofficeStatus | null = null;
   for (const { exe, source } of ordered) {
     checked.push(exe);
     if (!isExecutable(exe)) continue;
@@ -260,20 +267,29 @@ async function runLocateSoffice(): Promise<SofficeStatus> {
       cached = status;
       return status;
     }
+    probeFailure ??= status;
   }
 
-  cached = {
-    available: false,
-    reason: "not-found",
-    message: "No se encontró LibreOffice en este sistema.",
-    checkedPaths: checked,
-    overridePath: null,
-  };
+  // Installed but not answering is not "not installed": saying so sent the
+  // operator to install something that was already there.
+  cached = probeFailure
+    ? { ...probeFailure, checkedPaths: checked }
+    : {
+        available: false,
+        reason: "not-found",
+        message: "No se encontró LibreOffice en este sistema.",
+        checkedPaths: checked,
+        overridePath: null,
+      };
   return cached;
 }
 
 export async function requireSoffice(): Promise<SofficeInfo> {
-  const status = await locateSoffice();
+  let status = await locateSoffice();
+  // A failed sweep is cached for the panels that only DISPLAY the answer, but
+  // a conversion about to fail on it looks again: the startup probe can time
+  // out on a cold machine, and that must not mean "no presentations today".
+  if (!status.available && status.reason !== "unsupported-flavor") status = await locateSoffice({ force: true });
   if (!status.available) {
     const code =
       status.reason === "not-executable"
@@ -376,14 +392,32 @@ function escapeForRegex(value: string): string {
  * never touched.
  *
  * Best-effort and non-blocking: `pkill` exits 1 when nothing matched, which is
- * the normal case. **Not done on Windows**, which has no equivalent that can
- * filter by command line without going through PowerShell/WMI; there, a
- * crash's orphan is still cleared only by `resetSofficeProfile` after the
- * resulting timeouts.
+ * the normal case. On Windows there is no `pkill`, and no built-in that can
+ * filter processes by command line except WMI, so it goes through PowerShell.
+ * That case matters MORE there: a «Finalizar tarea» on a frozen app leaves
+ * `soffice.bin` holding the profile, `resetSofficeProfile` cannot delete a
+ * locked folder, and every conversion kept failing until a reboot.
  */
 export async function reapOrphanedSoffice(): Promise<void> {
-  if (process.platform === "win32") return;
   const marker = `-env:UserInstallation=${pathToFileURL(sofficeProfileDir).href}`;
+  if (process.platform === "win32") {
+    // Single quotes are PowerShell's literal strings; a quote inside one is
+    // doubled. `.Contains`, not `-like`, so brackets in the path stay literal.
+    const literal = marker.replaceAll("'", "''");
+    const script =
+      "Get-CimInstance Win32_Process -Filter \"Name='soffice.bin' OR Name='soffice.exe' OR Name='soffice.com'\" | " +
+      `Where-Object { $_.CommandLine -and $_.CommandLine.Contains('${literal}') } | ` +
+      "Invoke-CimMethod -MethodName Terminate | Out-Null";
+    await new Promise<void>((resolve) => {
+      execFile(
+        "powershell.exe",
+        ["-NoProfile", "-NonInteractive", "-Command", script],
+        { windowsHide: true, timeout: 20_000 },
+        () => resolve(),
+      );
+    });
+    return;
+  }
   await new Promise<void>((resolve) => {
     execFile("pkill", ["-f", "--", escapeForRegex(marker)], () => resolve());
   });
@@ -406,16 +440,53 @@ type RunOptions = {
  *  call through here so no future caller can reintroduce the race. */
 let sofficeChain: Promise<void> = Promise.resolve();
 
+/** How long the chain waits for a killed `soffice` to actually exit before
+ *  forcing it and moving on regardless. */
+const EXIT_WAIT_MS = 10_000;
+
 function runSoffice(options: RunOptions): Promise<void> {
-  const next = sofficeChain.then(() => runSofficeExclusive(options));
-  // Swallow rejections here so one failed conversion doesn't wedge the chain
-  // for every conversion queued after it — callers still see their own
-  // rejection via `next`.
-  sofficeChain = next.catch(() => undefined);
-  return next;
+  const started = sofficeChain.then(() => startSoffice(options));
+  // The next invocation waits for this PROCESS to be gone, not merely for its
+  // caller to have been told. A cancel or a timeout settles the caller at
+  // once, but the killed instance keeps the shared profile's lock and pipe
+  // until it exits — and on Windows `taskkill` is itself asynchronous — so a
+  // conversion started in that window exited 1 with nothing to show: the
+  // interactive EN VIVO that had just preempted a «Preparar carpeta» batch.
+  // Rejections are swallowed here so one failure never wedges the chain;
+  // callers still get their own through `done`.
+  sofficeChain = started.then((run) => run.exited).catch(() => undefined);
+  return started.then((run) => run.done);
 }
 
-function runSofficeExclusive({ info, args, timeoutMs, signal }: RunOptions): Promise<void> {
+function startSoffice(options: RunOptions): { done: Promise<void>; exited: Promise<void> } {
+  let child: ChildProcess | null = null;
+  const done = runSofficeExclusive(options, (spawned) => {
+    child = spawned;
+  });
+  const spawned = child as ChildProcess | null;
+  const exited = spawned
+    ? new Promise<void>((resolve) => {
+        if (spawned.exitCode !== null || spawned.signalCode !== null) return resolve();
+        spawned.once("close", () => resolve());
+        // Never forever: a process that ignores even this is not worth
+        // stalling every later conversion for.
+        done.catch(() => {
+          // Never spawned at all (a wrong path): there is nothing to wait for.
+          if (spawned.pid === undefined || spawned.exitCode !== null) return resolve();
+          setTimeout(() => {
+            if (spawned.exitCode === null) killTree(spawned, true);
+            resolve();
+          }, EXIT_WAIT_MS).unref();
+        });
+      })
+    : Promise.resolve();
+  return { done, exited };
+}
+
+function runSofficeExclusive(
+  { info, args, timeoutMs, signal }: RunOptions,
+  onSpawn: (child: ChildProcess) => void,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
       reject(new SlideError("CANCELED", "Conversión cancelada."));
@@ -440,6 +511,7 @@ function runSofficeExclusive({ info, args, timeoutMs, signal }: RunOptions): Pro
       },
     });
     running = child;
+    onSpawn(child);
 
     // Capped: this only ever ends up in an error message, and a chatty deck
     // can produce megabytes of warnings over a conversion that is allowed to
@@ -498,18 +570,14 @@ function runSofficeExclusive({ info, args, timeoutMs, signal }: RunOptions): Pro
 }
 
 function baseArgs(): string[] {
-  return [
-    "--headless",
-    "--invisible",
-    "--nologo",
-    "--nodefault",
-    "--norestore",
-    "--nolockcheck",
-    // A dedicated UserInstallation gets its own lock file and named pipe, which
-    // is what makes us immune to a copy of LibreOffice the user has open as a
-    // normal GUI app (the classic "conversion silently does nothing" failure).
-    `-env:UserInstallation=${pathToFileURL(sofficeProfileDir).href}`,
-  ];
+  return ["--headless", "--invisible", "--nologo", "--nodefault", "--norestore", "--nolockcheck", ...profileArgs()];
+}
+
+/** A dedicated UserInstallation gets its own lock file and named pipe, which
+ *  is what makes us immune to a copy of LibreOffice the user has open as a
+ *  normal GUI app (the classic "conversion silently does nothing" failure). */
+function profileArgs(): string[] {
+  return [`-env:UserInstallation=${pathToFileURL(sofficeProfileDir).href}`];
 }
 
 /** Arguments always travel as an argv array (never a shell string), so quoting
@@ -580,9 +648,22 @@ function matchOutputsToSources(
     if (!file.toLowerCase().endsWith(ext)) continue;
     byBase.set(normalizedBase(file), path.join(outDir, file));
   }
+  const sources = new Map<string, number>();
+  for (const source of sourcePaths) {
+    const base = normalizedBase(source);
+    sources.set(base, (sources.get(base) ?? 0) + 1);
+  }
   const result = new Map<string, string>();
   for (const source of sourcePaths) {
-    const match = byBase.get(normalizedBase(source));
+    const base = normalizedBase(source);
+    // Two sources with one output name — a weekly `Anuncios.pptx` in two
+    // folders, or `522.pps` beside `522.pptx` — overwrote each other in the
+    // shared `--outdir`, and the survivor was handed to BOTH, then cached
+    // under the first one's content hash: that deck showed the other one's
+    // slides until someone forced a reconversion. Neither result can be
+    // trusted, so both fall back to converting on their own.
+    if ((sources.get(base) ?? 0) > 1) continue;
+    const match = byBase.get(base);
     if (match) result.set(source, match);
   }
   return result;

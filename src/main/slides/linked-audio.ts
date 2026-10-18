@@ -232,8 +232,21 @@ function extractHintFromOoxml(filePath: string): string | null {
       if (!targetMatch) continue;
       const target = targetMatch[1]!;
       if (!AUDIO_EXT.has(extOf(target))) continue;
-      return path.win32.basename(decodeURIComponent(target));
+      return path.win32.basename(safeDecode(target));
     }
   }
   return null;
+}
+
+/** A link with a stray `%`, or a Latin-1 escape such as `%F1` («ñ» the way old
+ *  Office wrote it), is not valid UTF-8 percent-encoding and makes
+ *  `decodeURIComponent` throw — which, uncaught on the deck's open path, made
+ *  that presentation impossible to open again. The raw text is the better
+ *  guess. */
+function safeDecode(target: string): string {
+  try {
+    return decodeURIComponent(target);
+  } catch {
+    return target;
+  }
 }

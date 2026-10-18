@@ -242,16 +242,26 @@ export async function rasterizePdf(request: RasterRequest): Promise<RasterPage[]
       fn();
     };
 
-    const armPageTimer = () => {
-      if (pageTimer) clearTimeout(pageTimer);
-      pageTimer = setTimeout(() => {
-        finish(() =>
-          reject(new SlideError("RASTER_FAILED", "El rasterizado de una página se colgó.")),
-        );
-      }, SLIDES_RASTER_PAGE_TIMEOUT_MS);
+    /** Abandoning a job in main does not stop the page: the hidden window
+     *  kept rendering every remaining slide, alongside the next job, so a
+     *  «Cancelar» or a preemption never freed the CPU it was meant to free —
+     *  and a page that truly hung kept its window, reused by the next deck.
+     *  So the window goes too, unless another job still needs it; the next
+     *  conversion starts a fresh one. */
+    const abandon = (error: SlideError) => {
+      finish(() => reject(error));
+      if (jobs.size === 0) shutdownRasterizer();
     };
 
-    const onAbort = () => finish(() => reject(new SlideError("CANCELED", "Conversión cancelada.")));
+    const armPageTimer = () => {
+      if (pageTimer) clearTimeout(pageTimer);
+      pageTimer = setTimeout(
+        () => abandon(new SlideError("RASTER_FAILED", "El rasterizado de una página se colgó.")),
+        SLIDES_RASTER_PAGE_TIMEOUT_MS,
+      );
+    };
+
+    const onAbort = () => abandon(new SlideError("CANCELED", "Conversión cancelada."));
 
     jobs.set(jobId, {
       onPage: (payload) => {

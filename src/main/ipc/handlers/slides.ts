@@ -1,4 +1,5 @@
 import { dialog } from "electron";
+import fs from "node:fs";
 import path from "node:path";
 import type { Handlers } from "../register";
 import type { DeckEnvironment } from "@shared/types/deck";
@@ -72,10 +73,16 @@ export const slidesHandlers: Pick<
     const chosen = result.canceled ? null : (result.filePaths[0] ?? null);
     if (chosen) {
       // macOS users will naturally pick the .app bundle; resolve it to the
-      // real binary instead of failing with "not executable".
+      // real binary instead of failing with "not executable". On Windows,
+      // Explorer hides extensions, so `soffice.exe` and `soffice.com` both
+      // read "soffice" — and the `.exe` returns before the PDF exists (see
+      // `candidatePaths` in `libreoffice.ts`), which would fail every deck.
+      const comSibling = chosen.replace(/\.exe$/i, ".com");
       const resolved = chosen.endsWith(".app")
         ? path.join(chosen, "Contents/MacOS/soffice")
-        : chosen;
+        : process.platform === "win32" && comSibling !== chosen && fs.existsSync(comSibling)
+          ? comSibling
+          : chosen;
       getSettingsRepo().setMany({ "slides.sofficePath": resolved });
       invalidateSofficeCache();
     }

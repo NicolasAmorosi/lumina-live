@@ -27,6 +27,7 @@ import { holdQuitUntilAnswered, installCloseGuard } from "./windows/close-guard"
 import { projectionState } from "./services/projection-state";
 import { dbBackupDir, dbPath, biblesDir, migrationsDir, userDataDir } from "./paths";
 import { initSlidesSubsystem, shutdownSlides } from "./slides/deck-service";
+import { cancelAllPrewarmBatches } from "./services/prewarm-service";
 import { isRasterizerWindow } from "./slides/rasterizer";
 import { startLibrarySweepScheduler } from "./services/library-sweeper";
 import { pruneThumbCache } from "./media/thumbnail-service";
@@ -246,6 +247,7 @@ app.on("before-quit", (event) => {
   // down before that: an operator who cancels must keep the projector and a
   // working slides pipeline. See `holdQuitUntilAnswered`.
   if (holdQuitUntilAnswered(event)) return;
+  cancelAllPrewarmBatches();
   shutdownSlides();
 });
 

@@ -37,6 +37,7 @@ import {
 import { readBinarySlideTimings } from "./ppt-binary-timings";
 import { rasterizePdf, shutdownRasterizer } from "./rasterizer";
 import { hashFile } from "../media/content-hash";
+import { removeQuietly, renameWithRetry } from "../fs-retry";
 
 // ---------------------------------------------------------------------------
 // Render target
@@ -205,6 +206,22 @@ let consecutiveTimeouts = 0;
 
 const precomputedPdfByAsset = new Map<number, string>();
 const precomputedPptxByAsset = new Map<number, string>();
+/** The `(size, mtime)` of the source a batch pre-computed from. A file edited
+ *  between the batch and its own turn must not get the old file's slides. */
+const precomputedStampByAsset = new Map<number, string>();
+
+function stampOf(stat: fs.Stats): string {
+  return `${stat.size}-${Math.trunc(stat.mtimeMs)}`;
+}
+
+/** Whatever a batch pre-computed for this asset, if it still describes the
+ *  bytes on disk. */
+function precomputedFor(assetId: number, stat: fs.Stats): { pdf?: string; pptx?: string } {
+  if (precomputedStampByAsset.get(assetId) !== stampOf(stat)) return {};
+  const pdf = precomputedPdfByAsset.get(assetId);
+  const pptx = precomputedPptxByAsset.get(assetId);
+  return { ...(pdf ? { pdf } : {}), ...(pptx ? { pptx } : {}) };
+}
 
 /** One shared temp directory can back several assets' precomputed files at
  *  once (everything one batch `soffice` invocation produced) — it's only
@@ -240,6 +257,13 @@ function registerBatchDir(dir: string, assetIds: readonly number[]): void {
   for (const assetId of assetIds) batchDirByAsset.set(assetId, ref);
 }
 
+/** A batch that stopped early (cancelled, cache full) never reaches the rest
+ *  of its chunk: their slots — up to twenty PDFs in `.tmp` — are released
+ *  here instead of waiting for the next launch's sweep. */
+export function releasePrecomputed(assetIds: readonly number[]): void {
+  for (const assetId of assetIds) releaseBatchDirFor(assetId);
+}
+
 /** Idempotent — safe to call more than once for the same assetId (every exit
  *  path of `runConversion`/`prepareDeck` calls this defensively) and a no-op
  *  for an assetId that was never part of a batch. */
@@ -250,9 +274,8 @@ function releaseBatchDirFor(assetId: number): void {
   ref.remaining.delete(assetId);
   precomputedPdfByAsset.delete(assetId);
   precomputedPptxByAsset.delete(assetId);
-  if (ref.remaining.size === 0) {
-    fs.rmSync(ref.dir, { recursive: true, force: true });
-  }
+  precomputedStampByAsset.delete(assetId);
+  if (ref.remaining.size === 0) removeQuietly(ref.dir);
 }
 
 /** A background job always has a scope; `null` only happens for interactive
@@ -361,7 +384,13 @@ async function pump(): Promise<void> {
       job.preempted = false;
       job.preemptCount += 1;
       job.controller = new AbortController();
-      enqueueBackground(job);
+      // The operator may have opened this very deck while the preemption was
+      // landing (the job was still inside `hashFile`, which does not watch the
+      // signal): `prepareDeck` then made it interactive. Requeued behind the
+      // batch in a background lane, it waited for the batch — and a visible
+      // or batch cancel could have cancelled it under the operator.
+      if (job.priority === "interactive") interactiveQueue.unshift(job);
+      else enqueueBackground(job);
     } else {
       inFlight.delete(job.assetId);
       job.reject(error);
@@ -380,6 +409,7 @@ async function pump(): Promise<void> {
  *  interactive queue if still waiting, or left running but now immune to
  *  preemption if it already started. */
 export function prepareDeck(assetId: number, opts: PrepareOptions = {}): Promise<DeckDTO> {
+  if (shuttingDown) return Promise.reject(new SlideError("CANCELED", "La aplicación se está cerrando."));
   const priority = opts.priority ?? "interactive";
 
   // Checked before anything else, even before `inFlight`: a deck that's
@@ -522,7 +552,10 @@ export function cancelBackgroundJobs(prewarmJobId?: string): void {
     job.controller.abort();
     settleCanceledJob(job, "Preparación cancelada.");
   }
-  if (runningJob && matches(runningJob)) runningJob.controller.abort();
+  if (runningJob && matches(runningJob)) {
+    runningJob.preempted = false;
+    runningJob.controller.abort();
+  }
   // A batch `soffice` invocation is not tied to any single job's signal (one
   // process covers a whole chunk), so cancelling the batch has to abort it
   // explicitly — otherwise the chunk keeps converting for minutes after the
@@ -548,6 +581,9 @@ function settleCanceledJob(job: Job, message: string): void {
 export function cancel(assetId: number): void {
   const job = inFlight.get(assetId);
   if (!job) return;
+  // A real cancel, even if a preemption got there first: otherwise `pump`
+  // takes the abort for its own and requeues the job the operator cancelled.
+  job.preempted = false;
   job.controller.abort();
   const interactiveIndex = interactiveQueue.indexOf(job);
   const wasQueued = interactiveIndex >= 0;
@@ -561,7 +597,10 @@ export function cancelAll(): void {
   const queued = [...interactiveQueue, ...queuedBackgroundJobs()];
   interactiveQueue.length = 0;
   for (const lane of BACKGROUND_LANES) backgroundQueue[lane].length = 0;
-  for (const job of inFlight.values()) job.controller.abort();
+  for (const job of inFlight.values()) {
+    job.preempted = false;
+    job.controller.abort();
+  }
   // Unconditional, unlike `abortBatchWarm()`: this is shutdown, so the
   // `slides.preemptBackground` escape hatch doesn't apply.
   batchWarmController?.abort();
@@ -894,13 +933,13 @@ async function runConversion(job: Job): Promise<DeckDTO> {
       jobDir,
       stat.size,
       signal,
-      precomputedPptxByAsset.get(assetId),
+      precomputedFor(assetId, stat).pptx,
     );
     // A PDF source IS the intermediate format, so it goes to the rasterizer
     // untouched — no `soffice`, and therefore no LibreOffice requirement for
     // this deck at all. Round-tripping it would route the file through Draw's
     // PDF *importer* and re-render every glyph; see `deckRequiresSoffice`.
-    const precomputedPdf = precomputedPdfByAsset.get(assetId);
+    const precomputedPdf = precomputedFor(assetId, stat).pdf;
     let pdfPath: string;
     if (containerKind(sourcePath) === "pdf") {
       pdfPath = sourcePath;
@@ -1055,15 +1094,17 @@ async function runConversion(job: Job): Promise<DeckDTO> {
     }
 
     // Commit: move the finished artifacts into place, then insert in one tx.
+    // Retried: the WebPs were written milliseconds ago, and on Windows the
+    // antivirus or the indexer still has some of them open.
     const finalDir = deckCacheDir(contentHash, target.width, target.format);
-    fs.rmSync(finalDir, { recursive: true, force: true });
+    removeQuietly(finalDir);
     fs.mkdirSync(path.dirname(finalDir), { recursive: true });
-    fs.renameSync(imagesDir, finalDir);
+    await renameWithRetry(imagesDir, finalDir);
     if (fs.existsSync(audioDir)) {
-      fs.renameSync(audioDir, path.join(finalDir, "audio"));
+      await renameWithRetry(audioDir, path.join(finalDir, "audio"));
     }
     if (fs.existsSync(videoDir)) {
-      fs.renameSync(videoDir, path.join(finalDir, "video"));
+      await renameWithRetry(videoDir, path.join(finalDir, "video"));
     }
 
     const aspectRatio = meta.slideSizeEmu
@@ -1133,8 +1174,11 @@ async function runConversion(job: Job): Promise<DeckDTO> {
     });
     throw error;
   } finally {
-    // A failure never leaves garbage behind.
-    fs.rmSync(jobDir, { recursive: true, force: true });
+    // A failure never leaves garbage behind — and a cleanup that throws here
+    // (a file a dying `soffice` still holds on Windows) must not replace the
+    // result: a deck already inserted and announced `ready` was then
+    // reported to its caller as failed.
+    removeQuietly(jobDir);
     // Whether this asset's precomputed PDF/pptx was actually used above or
     // this deck fell back to converting its own, its slot in the shared
     // batch dir (if any) is spent either way.
@@ -1175,6 +1219,7 @@ async function runConversion(job: Job): Promise<DeckDTO> {
  *  the order of service must not wait a whole chunk's batch conversion, and
  *  preempting the batch to let it through would be worse than not batching. */
 export async function warmBatchPdfCache(assetIds: readonly number[]): Promise<void> {
+  if (shuttingDown) return;
   if (assetIds.length === 0) return;
   if (interactiveQueue.length > 0 || runningJob?.priority === "interactive") return;
   if (hasQueuedBackground("program", "explicit")) return;
@@ -1188,7 +1233,9 @@ export async function warmBatchPdfCache(assetIds: readonly number[]): Promise<vo
     const sourcePath = mediaRepo.getPathById(assetId);
     if (!sourcePath) continue;
     try {
-      items.push({ assetId, sourcePath, stat: fs.statSync(sourcePath) });
+      const stat = fs.statSync(sourcePath);
+      items.push({ assetId, sourcePath, stat });
+      precomputedStampByAsset.set(assetId, stampOf(stat));
     } catch {
       // Vanished — the per-file path will report SOURCE_MISSING as usual.
     }
@@ -1409,7 +1456,14 @@ export async function initSlidesSubsystem(): Promise<void> {
   await warmProfile();
 }
 
+/** Set by `shutdownSlides`: from then on nothing may start a `soffice`. A
+ *  «Preparar carpeta» batch counted the job `cancelAll` rejected as failed and
+ *  went on to the next asset, which could launch a new `soffice` that
+ *  outlived the app and held the profile's lock into the next launch. */
+let shuttingDown = false;
+
 export function shutdownSlides(): void {
+  shuttingDown = true;
   cancelAll();
   killRunningSoffice();
   shutdownRasterizer();

@@ -14,6 +14,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeEach, describe, expect, test } from "vitest";
+import { strToU8, zipSync } from "fflate";
 import { resolveLinkedAudio } from "../../src/main/slides/linked-audio";
 
 let root: string;
@@ -70,5 +71,19 @@ describe("resolveLinkedAudio", () => {
 
   test("a missing folder resolves to null rather than throwing", () => {
     expect(resolveLinkedAudio(path.join(dir, "nope", "deck.pps"))).toBeNull();
+  });
+
+  test("a link that is not valid percent-encoding does not make the deck unopenable", () => {
+    // Old Office wrote «Canción» as `Canci%F3n`: a Latin-1 escape, which
+    // `decodeURIComponent` refuses with a URIError.
+    const rels =
+      '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/audio" ' +
+      'Target="file:///C:/Himnos/Canci%F3n%20100.mp3" TargetMode="External"/></Relationships>';
+    const deck = path.join(dir, "100 Canción.pptx");
+    fs.writeFileSync(deck, zipSync({ "ppt/slides/_rels/slide1.xml.rels": strToU8(rels) }));
+    fs.writeFileSync(path.join(dir, "100 Canción.mp3"), "not real audio");
+    expect(() => resolveLinkedAudio(deck)).not.toThrow();
+    expect(resolveLinkedAudio(deck)).toBe(path.join(dir, "100 Canción.mp3"));
   });
 });
