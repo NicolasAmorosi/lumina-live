@@ -168,6 +168,7 @@ export function PlatesModal({ onOpenChange, open }: { onOpenChange: (open: boole
           <IconButton
             onClick={() => leaveEditing(() => onOpenChange(false))}
             size="xs"
+            aria-label={t("common.close")}
             title={t("common.close")}
             variant="ghost"
           >

@@ -61,7 +61,13 @@ export function SettingsModal({ onOpenChange, open }: { onOpenChange: (open: boo
             (`ScenesModal`, `ProgramsModal`, `ConfirmModal`). An X needs no
             bubble to explain it, and converting this one alone would only make
             the four differ. */}
-        <IconButton onClick={() => onOpenChange(false)} size="xs" title={t("settings.close")} variant="ghost">
+        <IconButton
+          aria-label={t("settings.close")}
+          onClick={() => onOpenChange(false)}
+          size="xs"
+          title={t("settings.close")}
+          variant="ghost"
+        >
           <Icon name="close" />
         </IconButton>
       </DialogHeader>

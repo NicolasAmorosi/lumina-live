@@ -258,7 +258,7 @@ export function MediaTrackRow({
             <Icon name="close" />
           </IconButton>
         ) : onDelete ? (
-          <IconButton aria-label={t("common.delete")} onClick={onDelete} size="xs" variant="ghost">
+          <IconButton aria-label={t("common.remove")} onClick={onDelete} size="xs" variant="ghost">
             <Icon name="close" />
           </IconButton>
         ) : (

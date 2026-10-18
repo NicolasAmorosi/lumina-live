@@ -302,7 +302,13 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
     >
       <DialogHeader className="border-b border-border">
         <ModalTitle>{t("programs.title")}</ModalTitle>
-        <IconButton onClick={requestClose} size="xs" title={t("settings.close")} variant="ghost">
+        <IconButton
+          aria-label={t("settings.close")}
+          onClick={requestClose}
+          size="xs"
+          title={t("settings.close")}
+          variant="ghost"
+        >
           <Icon name="close" />
         </IconButton>
       </DialogHeader>

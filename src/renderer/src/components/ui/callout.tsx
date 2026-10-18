@@ -6,14 +6,18 @@ import { IconButton } from "./icon-button";
 type Tone = "info" | "warning" | "danger";
 type CalloutProps = HTMLAttributes<HTMLDivElement> & {
   tone?: Tone;
-  /** Renders an X on the right that calls this. Omit for the persistent,
-   *  accountable states (e.g. deck-conversion failures) that shouldn't be
-   *  dismissible — only a transient notice should get one. */
-  onDismiss?: () => void;
-  /** Required alongside `onDismiss` — always pass a translated label, never a
-   *  hardcoded default, per this app's i18n rule. */
-  dismissLabel?: string;
-};
+} & (
+    | {
+        /** Renders an X on the right that calls this. Omit for the persistent,
+         *  accountable states (e.g. deck-conversion failures) that shouldn't be
+         *  dismissible — only a transient notice should get one. */
+        onDismiss: () => void;
+        /** The X's name — always a translated label, never a hardcoded
+         *  default, per this app's i18n rule. */
+        dismissLabel: string;
+      }
+    | { onDismiss?: undefined; dismissLabel?: undefined }
+  );
 
 const toneClassName: Record<Tone, string> = {
   info: "border-border-light bg-muted text-foreground",
@@ -27,14 +31,9 @@ const toneIconClassName: Record<Tone, string> = {
   danger: "text-danger-ink",
 };
 
-export function Callout({
-  children,
-  className,
-  dismissLabel,
-  onDismiss,
-  tone = "info",
-  ...props
-}: CalloutProps) {
+export function Callout({ children, className, tone = "info", ...rest }: CalloutProps) {
+  // Kept out of the `<div>`'s attributes; read through `rest` below, where they narrow together.
+  const { dismissLabel: _dismissLabel, onDismiss: _onDismiss, ...props } = rest;
   return (
     <div
       className={cn("flex items-start gap-2 rounded-xl border p-3 text-sm", toneClassName[tone], className)}
@@ -42,8 +41,8 @@ export function Callout({
     >
       <Icon className={cn("mt-0.5 shrink-0", toneIconClassName[tone])} name={toneIcon[tone]} />
       <div className="min-w-0 flex-1 select-text">{children}</div>
-      {onDismiss ? (
-        <IconButton aria-label={dismissLabel} onClick={onDismiss} size="xs" variant="ghost">
+      {rest.onDismiss ? (
+        <IconButton aria-label={rest.dismissLabel} onClick={rest.onDismiss} size="xs" variant="ghost">
           <Icon name="close" />
         </IconButton>
       ) : null}
