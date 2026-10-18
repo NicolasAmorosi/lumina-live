@@ -576,6 +576,7 @@ const es = {
       language: "Idioma",
       folders: "Carpetas de archivos",
       performance: "Rendimiento",
+      about: "Acerca de",
     },
     /** How a verse is DRESSED — its own section of Ajustes, next to (not
      *  inside) «Biblia», which is now only about which bibles are installed.
@@ -673,6 +674,8 @@ const es = {
     windowLabel: "Ventana de proyección",
     windowDesc: "Reiniciala si el proyector deja de responder.",
     theme: "Tema",
+    version: "Versión",
+    versionDesc: "La que hay que mencionar al reportar un problema.",
     themeDesc: "Oscuro está pensado para operar en una cabina a oscuras.",
     themeDark: "Oscuro",
     themeLight: "Claro",

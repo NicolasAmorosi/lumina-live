@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ASSET_KINDS, type AssetKind } from "@shared/constants";
 import type { Locale } from "@shared/types/settings";
 import { availableLocales, useT, type MessageKey } from "@renderer/lib/i18n/i18n-provider";
-import { Button, Callout, FieldGroup, FieldRow, Icon, Select, Switch } from "@renderer/components/ui";
+import { Button, Callout, Caption, FieldGroup, FieldRow, Icon, Select, Switch } from "@renderer/components/ui";
 import { useSettingsStore } from "@renderer/stores/settings.store";
 import { api } from "@renderer/lib/api";
 import { PerformanceDiagnostics } from "./performance-diagnostics";
@@ -148,6 +148,12 @@ export function SystemSection() {
         <p className="font-medium">{t("settings.foldersTitle")}</p>
         <p className="mt-1 text-xs text-muted-foreground">{t("settings.foldersBody")}</p>
       </Callout>
+
+      <FieldGroup title={t("settings.groups.about")}>
+        <FieldRow description={t("settings.versionDesc")} label={t("settings.version")}>
+          <Caption className="select-text">{__APP_VERSION__}</Caption>
+        </FieldRow>
+      </FieldGroup>
     </div>
   );
 }

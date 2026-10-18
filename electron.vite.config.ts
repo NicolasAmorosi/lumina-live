@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig, externalizeDepsPlugin } from "electron-vite";
 import react from "@vitejs/plugin-react";
@@ -79,6 +80,13 @@ export default defineConfig({
   },
   renderer: {
     root: resolve("src/renderer"),
+    // Ajustes ▸ Sistema shows it: the operators of the first real services could
+    // not tell which build they had run.
+    define: {
+      __APP_VERSION__: JSON.stringify(
+        (JSON.parse(readFileSync(resolve("package.json"), "utf8")) as { version: string }).version,
+      ),
+    },
     resolve: {
       alias: {
         "@renderer": resolve("src/renderer/src"),
