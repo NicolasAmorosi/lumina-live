@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { cn } from "@renderer/lib/utils";
+import { isPointerFocused } from "@renderer/lib/focus-modality";
 
 /** Rows kept mounted above and below the viewport, so a fast scroll shows
  *  tiles rather than blank space while the next frame is computed. */
@@ -294,6 +295,11 @@ export function VirtualGrid<T>({
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (items.length === 0) return;
+    // On a tile the MOUSE focused, the arrows are the operator's shortcuts
+    // (←/→ move what is live, ↑/↓ move PREVIEW), same as on any other clicked
+    // button — taking them here left → dead on the projector right after
+    // clicking a slide. Reached with Tab or the arrows, they walk the grid.
+    if (event.key.startsWith("Arrow") && isPointerFocused(event.target)) return;
     const moves: Record<string, number | undefined> = {
       ArrowRight: focusedIndex + 1,
       ArrowLeft: focusedIndex - 1,

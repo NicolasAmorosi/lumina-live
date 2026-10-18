@@ -5,6 +5,7 @@ import { advancePreview } from "@renderer/lib/actions/preview";
 import { toggleAutoplay } from "@renderer/effects/deck-autoplay";
 import { advanceVerse } from "@renderer/lib/actions/bible";
 import { removeSelected } from "@renderer/lib/actions/remove-selected";
+import { isPointerFocused, trackFocusModality } from "@renderer/lib/focus-modality";
 
 const ARROW_KEYS_LIST: string[] = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
 
@@ -47,24 +48,6 @@ const ARROW_CONSUMING_ROLES = new Set([
 ]);
 
 /**
- * The element that took focus from a pointer press, if the focused one did.
- *
- * Enter, Space and the arrows on a button mean two different things depending
- * on how the operator got there. Reached with Tab, they are that button's own
- * keys. Clicked, they are not: Chromium focuses a button on click, so after
- * touching «Pausar» or a resource tile, Enter pressed that button again instead
- * of going EN VIVO, which is the one key an operator presses blind — and after
- * clicking EN VIVO itself, → no longer moved the verse or the slide that had
- * just gone live, and Space pressed EN VIVO again (a new scene: the video and
- * the deck's music back to 0). `:focus-visible` cannot tell the two apart here.
- * Chromium flips it to true on the very keydown being handled, already in the
- * capture phase (measured 2026-10-14). So the modality is recorded when focus
- * moves instead.
- */
-let pointerFocused: EventTarget | null = null;
-let pointerDown = false;
-
-/**
  * Per KEY, not per element.
  *
  * Suppressing every shortcut whenever a `<button>` had focus looked harmless
@@ -86,7 +69,7 @@ function suppressesKey(target: EventTarget | null, key: string): boolean {
     // A tab is a button that owns its arrows however it got focus.
     const role = target.getAttribute("role");
     if (role !== null && ARROW_CONSUMING_ROLES.has(role) && ARROW_KEYS.has(key)) return true;
-    return target !== pointerFocused;
+    return !isPointerFocused(target);
   }
   const role = target.getAttribute("role");
   return role !== null && ARROW_CONSUMING_ROLES.has(role) && ARROW_KEYS.has(key);
@@ -101,7 +84,7 @@ function suppressesKey(target: EventTarget | null, key: string): boolean {
  *   mean the same thing.
  * - ↑/↓: navigate the PREVIEW cursor. Nothing reaches the projector.
  * - Enter: send the preview to the projector (the EN VIVO button), also right
- *   after clicking a button with the mouse — see `pointerFocused`.
+ *   after clicking a button with the mouse — see `lib/focus-modality.ts`.
  * - Space: pause/resume a self-advancing deck. The one shortcut a PPT that
  *   plays by itself really needs: the operator has to be able to freeze it.
  * - B/L: toggle NEGRO/LOGO overlay.
@@ -114,29 +97,7 @@ function suppressesKey(target: EventTarget | null, key: string): boolean {
  * focused, not even those: all of the above keep working right after a click.
  */
 export function useGlobalShortcuts(suspended: boolean): void {
-  // Always on, modal or not: what matters is how the focused element got its
-  // focus, whenever that was.
-  useEffect(() => {
-    const onPointerDown = () => {
-      pointerDown = true;
-    };
-    const onPointerUp = () => {
-      pointerDown = false;
-    };
-    const onFocusIn = (e: FocusEvent) => {
-      pointerFocused = pointerDown ? e.target : null;
-    };
-    window.addEventListener("pointerdown", onPointerDown, true);
-    window.addEventListener("pointerup", onPointerUp, true);
-    window.addEventListener("pointercancel", onPointerUp, true);
-    window.addEventListener("focusin", onFocusIn, true);
-    return () => {
-      window.removeEventListener("pointerdown", onPointerDown, true);
-      window.removeEventListener("pointerup", onPointerUp, true);
-      window.removeEventListener("pointercancel", onPointerUp, true);
-      window.removeEventListener("focusin", onFocusIn, true);
-    };
-  }, []);
+  useEffect(trackFocusModality, []);
 
   useEffect(() => {
     if (suspended) return;
@@ -176,7 +137,7 @@ export function useGlobalShortcuts(suspended: boolean): void {
         case " ": {
           // Prevented even when it does nothing here: reaching this switch
           // from a clicked button, Space would otherwise press that button
-          // again (see `pointerFocused`).
+          // again (see `lib/focus-modality.ts`).
           e.preventDefault();
           const { base, liveDeck } = useProjectionStore.getState();
           if (base?.kind === "deck" && liveDeck?.autoAdvance) toggleAutoplay();
