@@ -157,7 +157,7 @@ const BACKGROUND_VALIDATORS: {
 export function isSceneBackground(value: unknown): value is SceneBackground {
   if (!isRecord(value)) return false;
   const kind = value.kind;
-  if (typeof kind !== "string" || !(kind in BACKGROUND_VALIDATORS)) return false;
+  if (typeof kind !== "string" || !Object.hasOwn(BACKGROUND_VALIDATORS, kind)) return false;
   return matchesAll(value, BACKGROUND_VALIDATORS[kind as SceneBackground["kind"]]);
 }
 

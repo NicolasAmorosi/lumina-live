@@ -212,7 +212,7 @@ export const SETTINGS_VALIDATORS: Record<keyof SettingsMap, (value: unknown) => 
 };
 
 export function isSettingsKey(key: string): key is keyof SettingsMap {
-  return key in SETTINGS_VALIDATORS;
+  return Object.hasOwn(SETTINGS_VALIDATORS, key);
 }
 
 /**

@@ -21,6 +21,7 @@ import {
   SCENE_NAME_MAX_LENGTH,
   SCENE_STYLE_VALIDATORS,
 } from "../../src/shared/scene-validators";
+import { isSettingsKey } from "../../src/shared/types/settings";
 import { DEFAULT_SCENE_STYLE, DEFAULT_SHADOW_STRENGTH, type SceneStyle } from "../../src/shared/types/scene-style";
 import { DEFAULT_TIMER_FORMAT, type TimerConfig } from "../../src/shared/types/timer";
 import { DEFAULT_UTILITY_SCENES } from "../../src/shared/types/utility";
@@ -223,5 +224,16 @@ describe("The whole row", () => {
       style: { ...base.style, background: { kind: "image", assetId: 0, fit: "cover" } },
     };
     expect(isUtilitySceneUpsert(pending)).toBe(false);
+  });
+});
+
+describe("keys that only exist on Object.prototype", () => {
+  // `key in obj` also answers true for inherited names, so these passed as a
+  // setting key and as a background kind.
+  test("are neither a settings key nor a background kind", () => {
+    expect(isSettingsKey("toString")).toBe(false);
+    expect(isSettingsKey("constructor")).toBe(false);
+    expect(isSceneBackground({ kind: "constructor" })).toBe(false);
+    expect(isSceneBackground({ kind: "__proto__" })).toBe(false);
   });
 });
