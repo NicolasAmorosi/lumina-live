@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { MediaAsset, MediaConversionUpdate } from "../../src/shared/types/media";
+import { fixture } from "./support/paths";
 import { audioStates, expect, relaunch, test, videoStates, type WorshipApp } from "./support/app";
 
 /**
@@ -107,4 +108,28 @@ test("a conversion is done once and survives a restart", async ({ app }) => {
   await again.goLive();
   const projector = await again.projector();
   await expect.poll(async () => (await videoStates(projector))[0]?.videoWidth ?? 0).toBe(640);
+});
+
+test("a video replaced in place is probed again, never served from the old file's copy", async ({ app }) => {
+  // Last week's announcements needed converting…
+  const file = path.join(app.profile, "media-src", "anuncios.mp4");
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.copyFileSync(fixture("sound-over-black.mp4"), file);
+  const [asset] = await app.invoke<MediaAsset[]>("library:add", { kind: "video", paths: [file] });
+  if (!asset) throw new Error("import failed");
+  await waitConverted(app, asset);
+  await app.quit();
+
+  // …and this week's, saved over the same file, plays as it is and is longer.
+  fs.copyFileSync(fixture("clip.mp4"), file);
+  const again = await relaunch(app);
+  // The launch sweep notices the edit and re-probes: the old copy is dropped,
+  // and this file needs none.
+  await expect.poll(async () => (await conversions(again)).some((c) => c.assetId === asset.id), { timeout: 20_000 }).toBe(false);
+  await again.previewFile("Videos", "anuncios");
+  await again.goLive();
+  const projector = await again.projector();
+  await expect
+    .poll(() => projector.evaluate(() => document.querySelector("video")?.duration ?? 0), { timeout: 30_000 })
+    .toBeCloseTo(8, 0);
 });

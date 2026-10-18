@@ -296,8 +296,8 @@ npm install              # instala deps — better-sqlite3 trae binarios precomp
 npm run dev               # electron-vite dev (HMR en renderer, restart de main en watch)
 npm run typecheck          # tsc --noEmit sobre node (main+preload+shared) y web (renderer+shared)
 npm run lint                # eslint .
-npm run test                 # vitest run — 395 casos en dos proyectos: `main` (Node: migraciones, seed,
-                              #   FTS5, repos, borrador, validadores de settings y de escena, respaldo WAL,
+npm run test                 # vitest run — 396 casos en dos proyectos: `main` (Node: migraciones, seed,
+                              #   FTS5, repos y el barrido de la biblioteca, borrador, validadores de settings y de escena, respaldo WAL,
                               #   zip reader, audio vinculado, urls, prune del historial, funciones de tiempo,
                               #   arrastre de una cuenta regresiva, escenas de tiempo como ítem del orden de culto,
                               #   video embebido en una diapositiva: geometría, rels externos y nodo por `spid`,
@@ -310,11 +310,15 @@ npm run test                 # vitest run — 395 casos en dos proyectos: `main`
                               #   fotograma congelado, store de toasts, utils). Nada importa `electron`: ese es
                               #   el límite del suite
 npm run test:watch            # el mismo suite en watch, mientras se toca un módulo
-npm run test:e2e              # build + Playwright: 27 recorridos de la app real con un perfil descartable y
-                              #   medios generados al vuelo con el FFmpeg empaquetado (videos, AVI, WMA, PDF,
-                              #   y .pptx con auto-avance y con un WMV embebido si hay LibreOffice). Con
-                              #   WORSHIP_E2E_EXECUTABLE=<ruta al ejecutable instalado> corre contra la app
-                              #   EMPAQUETADA — la única forma de probar lo que resuelve desde `resources/`
+npm run test:e2e              # build + Playwright: 100 recorridos de la app real (~6 min) con un perfil
+                              #   descartable y medios generados al vuelo con el FFmpeg empaquetado (videos, AVI,
+                              #   WMA, PDF, y .pptx con auto-avance y con un WMV embebido si hay LibreOffice): en
+                              #   vivo, biblioteca, LOGO, decks, Biblia, Funciones, programas, teclado, Ajustes,
+                              #   robustez y un culto entero (`service.spec.ts`). Los diálogos nativos se
+                              #   contestan con `answerOpenDialog`. Con WORSHIP_E2E_EXECUTABLE=<ruta al ejecutable
+                              #   instalado> corre contra la app EMPAQUETADA — la única forma de probar lo que
+                              #   resuelve desde `resources/` —, y con WORSHIP_E2E_HYMNAL=<carpeta con 522.pps>
+                              #   corre también el himnario real (`hymnal.spec.ts`)
 npm run fetch:ffmpeg          # FFmpeg para esta máquina (también lo hace el postinstall y cada package:*)
 npm run db:generate            # drizzle-kit generate — nueva migración tras editar db/schema.ts
 npm run slides:smoke -- x.pptx # conversión + parseo OOXML (timings/audio) SIN Electron

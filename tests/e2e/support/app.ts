@@ -1,7 +1,15 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { _electron as electron, test as base, expect, type ElectronApplication, type Page } from "@playwright/test";
+import {
+  _electron as electron,
+  test as base,
+  expect,
+  type ElectronApplication,
+  type Locator,
+  type Page,
+} from "@playwright/test";
 import type { AssetKind } from "../../../src/shared/constants";
 import type { MediaAsset } from "../../../src/shared/types/media";
 import { ROOT, fixture } from "./paths";
@@ -89,6 +97,34 @@ export class WorshipApp {
     return this.invoke<MediaAsset[]>("library:add", { kind, paths: names.map(fixture) });
   }
 
+  /**
+   * Answers the NEXT native open dialog with `filePaths` (or a cancel, with
+   * none), so a test can press the real «Agregar», «Elegir archivo…» or
+   * «Importar versión» button. Every dialog of the app goes through
+   * `dialog.showOpenDialog` (`main/ipc/open-dialog.ts`); this swaps it for one
+   * call and puts the original back.
+   */
+  async answerOpenDialog(...filePaths: string[]): Promise<void> {
+    await this.electron.evaluate(({ dialog }, paths) => {
+      const original = dialog.showOpenDialog.bind(dialog);
+      dialog.showOpenDialog = () => {
+        dialog.showOpenDialog = original;
+        return Promise.resolve({ canceled: paths.length === 0, filePaths: paths });
+      };
+    }, filePaths);
+  }
+
+  /** The right-hand column: the LIVE monitor and everything that controls
+   *  what is on the projector. */
+  liveColumn(): Locator {
+    return this.control.locator("section").filter({ has: this.control.getByRole("heading", { name: "En Vivo" }) });
+  }
+
+  /** The centre column: PREVIEW and its grid. */
+  previewColumn(): Locator {
+    return this.control.locator("section").filter({ has: this.control.getByRole("heading", { name: "Preview" }) });
+  }
+
   /** The top bar's EN VIVO, which every kind of content shares. (A plate's
    *  own row carries a second one, and so does a time scene's.) */
   goLive(): Promise<void> {
@@ -102,6 +138,17 @@ export class WorshipApp {
   ): Promise<void> {
     await this.control.getByRole("tab", { name: tab }).click();
     if (inner) await this.control.getByRole("tab", { name: inner }).click();
+  }
+
+  /** Loads a chapter in the Bible tab the way an operator does — typed, then
+   *  Enter — waiting for the match first: on a cold start the book list loads
+   *  after the window, and an Enter with nothing to pick is ignored. */
+  async openChapter(reference: string): Promise<void> {
+    await this.openResources("Biblia");
+    const panel = this.control.getByRole("tabpanel", { name: "Biblia" });
+    await panel.getByRole("textbox", { name: "Buscar libro y capítulo…" }).fill(reference);
+    await expect(panel.getByRole("listitem").filter({ hasText: new RegExp(`^${reference}$`) })).toBeVisible();
+    await this.control.keyboard.press("Enter");
   }
 
   /** Clicks a library tile: PREVIEW only. */
@@ -137,7 +184,9 @@ export class WorshipApp {
   async quit(answer: "close" | "cancel" = "close"): Promise<void> {
     const exited = this.exited;
     await this.electron.evaluate(({ app }) => app.quit());
-    const dialog = this.control.getByRole("dialog");
+    // Only the close guard's own question: Ajustes or Programas may still be
+    // open, and a slow machine shows those before the process is gone.
+    const dialog = this.control.getByRole("dialog", { name: /^¿Cerrar/ });
     const asked = dialog.waitFor({ state: "visible", timeout: 5_000 }).then(
       () => true,
       () => false,
@@ -152,11 +201,37 @@ export class WorshipApp {
     await exited;
   }
 
-  /** Teardown: ends the process without asking anything. */
+  /**
+   * Teardown: ends the process without asking anything. Bounded, because once
+   * in a few dozen runs the process outlived `app.exit(0)` and the worker hung
+   * for minutes with nothing to show: now a stuck process gets sampled into
+   * this app's log, SIGKILLed, and the test fails saying so.
+   */
   async kill(): Promise<void> {
     if (this.hasExited) return;
-    await this.electron.evaluate(({ app }) => app.exit(0)).catch(() => undefined);
+    const within = (promise: Promise<unknown>, ms: number) =>
+      Promise.race([promise.then(() => true), new Promise<false>((resolve) => setTimeout(() => resolve(false), ms))]);
+    const answered = await within(this.electron.evaluate(({ app }) => app.exit(0)).catch(() => undefined), 5_000);
+    if (await within(this.exited, 10_000)) return;
+    const pid = this.electron.process().pid;
+    if (pid !== undefined) {
+      this.log.push(`[e2e] the app did not exit (app.exit ${answered ? "answered" : "never answered"})`, sampleOf(pid));
+      process.kill(pid, "SIGKILL");
+    }
     await this.exited;
+    throw new Error("the app did not exit within 15 s of app.exit(0) — its sample is at the end of app.log");
+  }
+}
+
+/** Where a stuck process is, for the log: `sample` on macOS, the bare process
+ *  line elsewhere. */
+function sampleOf(pid: number): string {
+  try {
+    return process.platform === "darwin"
+      ? execFileSync("sample", [String(pid), "2"], { encoding: "utf8" })
+      : execFileSync("ps", ["-o", "pid,stat,etime,command", "-p", String(pid)], { encoding: "utf8" });
+  } catch (error) {
+    return `(no sample: ${String(error)})`;
   }
 }
 
@@ -169,6 +244,8 @@ export function videoStates(page: Page) {
       paused: video.paused,
       videoWidth: video.videoWidth,
       readyState: video.readyState,
+      volume: video.volume,
+      muted: video.muted,
       opacity: Number(getComputedStyle(video).opacity),
     })),
   );
@@ -181,6 +258,7 @@ export function audioStates(page: Page) {
       currentTime: audio.currentTime,
       paused: audio.paused,
       readyState: audio.readyState,
+      volume: audio.volume,
     })),
   );
 }
@@ -209,10 +287,14 @@ export const test = base.extend<Fixtures>({
         if (await page.screenshot({ path: file }).catch(() => null)) await testInfo.attach(path.basename(file), { path: file });
       }
     }
+    // Killed before the log is attached: a stuck exit writes its sample there.
+    const exit = await Promise.all([current.kill(), app.kill()]).then(
+      () => null,
+      (error: unknown) => (error instanceof Error ? error : new Error(String(error))),
+    );
     await testInfo.attach("app.log", { body: [...app.log, ...(current === app ? [] : current.log)].join("\n") });
     const errors = [...app.unexpectedErrors(), ...(current === app ? [] : current.unexpectedErrors())];
-    await current.kill();
-    await app.kill();
+    if (exit) throw exit;
     expect(errors, "the app logged an unexpected error").toEqual([]);
   },
 });
