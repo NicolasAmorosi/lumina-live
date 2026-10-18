@@ -303,6 +303,13 @@ export type IpcEvents = {
    *  VIVO, NEGRO and LOGO would all stop reaching any projector in complete
    *  silence while the LIVE header kept claiming to be on air. */
   "projection-closed": void;
+  /** A screen was connected or disconnected (`windows/projector-screen.ts`):
+   *  the control window re-reads `displays:list`. Main itself moves the
+   *  projection window. */
+  "displays-changed": void;
+  /** The projection window's screen went away (it is hidden, still playing)
+   *  or came back (it is fullscreen on it again). */
+  "projector-screen": { connected: boolean };
   "media-status": MediaStatus;
   "media-error": ProjectionMediaError;
   "deck-progress": DeckProgress;

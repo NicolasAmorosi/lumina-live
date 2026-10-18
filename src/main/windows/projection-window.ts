@@ -1,6 +1,7 @@
 import { app, BrowserWindow, screen } from "electron";
 import path from "node:path";
 import { trustWindow } from "../ipc/trusted-senders";
+import { attachProjector } from "./projector-screen";
 
 const PRELOAD = path.join(__dirname, "../preload/index.js");
 
@@ -42,6 +43,7 @@ export function createProjectionWindow(displayId?: number): BrowserWindow {
   });
 
   trustWindow(win);
+  attachProjector(win, target.id);
 
   const devServerUrl = process.env["ELECTRON_RENDERER_URL"];
   // See `control-window.ts` for why these are `void` and not `.catch`.
@@ -51,7 +53,12 @@ export function createProjectionWindow(displayId?: number): BrowserWindow {
     void win.loadFile(path.join(__dirname, "../renderer/projection.html"));
   }
 
-  win.once("ready-to-show", () => win.show());
+  // Never focused on Windows: the operator's next →, B or Enter belongs to the
+  // control window, and a focused projector also answered the window's own
+  // shortcuts there. macOS keeps `show()`: a native fullscreen window on a
+  // second display was verified with it (2026-10-14 rehearsal), and
+  // `showInactive` there has not been.
+  win.once("ready-to-show", () => (process.platform === "win32" ? win.showInactive() : win.show()));
   if (!singleMonitor) {
     win.setAlwaysOnTop(true, "screen-saver");
   }

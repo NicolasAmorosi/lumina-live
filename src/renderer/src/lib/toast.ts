@@ -2,7 +2,9 @@ import { useToastStore, type ToastAction } from "@renderer/stores/toast.store";
 
 /** Facade over the toast store for calling from `lib/actions/*` — plain
  *  functions outside React, not components — the same way `api` wraps `invoke`. */
-type ToastOpts = { action?: ToastAction; durationMs?: number };
+/** `durationMs: null` never auto-dismisses — for a state that lasts until
+ *  something else retires the toast (`toast.dismiss`). */
+type ToastOpts = { action?: ToastAction; durationMs?: number | null };
 
 function push(tone: "info" | "success" | "warning" | "danger", message: string, opts?: ToastOpts) {
   return useToastStore.getState().push({ tone, message, action: opts?.action, durationMs: opts?.durationMs });

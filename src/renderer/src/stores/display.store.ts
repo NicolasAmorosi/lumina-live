@@ -52,6 +52,11 @@ type DisplayStoreState = {
    *  or EN VIVO is what turns the projector on. */
   openIfNeeded: () => Promise<void>;
   close: () => Promise<void>;
+  /** A screen came or went (`displays-changed`): re-lists them, so Ajustes
+   *  shows a projector turned on after launch and the next EN VIVO targets it.
+   *  It never moves the window — main already did, without rebuilding it
+   *  (`windows/projector-screen.ts`). */
+  refresh: () => Promise<void>;
 };
 
 export const useDisplayStore = create<DisplayStoreState>((set, get) => ({
@@ -137,4 +142,6 @@ export const useDisplayStore = create<DisplayStoreState>((set, get) => ({
     await api.projection.close();
     useProjectionStore.getState().setPresentationOpen(false);
   },
+
+  refresh: () => get().load(),
 }));

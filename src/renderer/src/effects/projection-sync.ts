@@ -195,6 +195,22 @@ export function startProjectionEffects(): () => void {
     useDeckStore.getState().markStatusesChanged();
   });
 
+  const unsubscribeDisplaysChanged = onIpc("displays-changed", () => {
+    void useDisplayStore.getState().refresh();
+  });
+
+  // The projector's screen went away: main hid the window — still playing,
+  // sound included — and puts it back when a screen returns
+  // (`windows/projector-screen.ts`). The operator only has to be told, and the
+  // notice stays until it is true again.
+  let screenLostToastId: string | null = null;
+  const unsubscribeProjectorScreen = onIpc("projector-screen", ({ connected }) => {
+    if (screenLostToastId !== null) toast.dismiss(screenLostToastId);
+    screenLostToastId = null;
+    if (connected) toast.success(t("projector.screenBack"));
+    else screenLostToastId = toast.warning(t("projector.screenLost"), { durationMs: null });
+  });
+
   const stopAutoplay = startDeckAutoplay();
   const stopEndOfPlayback = startEndOfPlaybackEffects();
   const stopPlateAutoHide = startPlateAutoHide();
@@ -210,6 +226,8 @@ export function startProjectionEffects(): () => void {
     unsubscribeProgress();
     unsubscribePrewarmProgress();
     unsubscribeStatusesChanged();
+    unsubscribeDisplaysChanged();
+    unsubscribeProjectorScreen();
     stopAutoplay();
     stopEndOfPlayback();
     stopPlateAutoHide();

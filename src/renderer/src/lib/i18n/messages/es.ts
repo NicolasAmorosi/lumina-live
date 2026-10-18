@@ -477,6 +477,9 @@ const es = {
   footer: { black: "NEGRO", logo: "LOGO", live: "VIVO", clear: "LIMPIAR" },
   projector: {
     closedUnexpectedly: "Se cerró la ventana de proyección",
+    screenLost:
+      "Se desconectó la pantalla del proyector. Lo que está en vivo sigue corriendo, con su sonido, y vuelve a verse en cuanto la pantalla se conecte.",
+    screenBack: "Volvió la pantalla del proyector",
     reopen: "Reabrir",
     noScreen: "No hay ninguna pantalla para proyectar",
     chooseScreen: "Elegir pantalla",

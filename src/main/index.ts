@@ -23,6 +23,7 @@ import { createControlWindow } from "./windows/control-window";
 import { installNavigationGuards } from "./windows/navigation-guards";
 import { installApplicationMenu } from "./windows/app-menu";
 import { holdQuitUntilAnswered, installCloseGuard } from "./windows/close-guard";
+import { watchDisplays } from "./windows/projector-screen";
 import { projectionState } from "./services/projection-state";
 import { dbBackupDir, dbPath, biblesDir, migrationsDir, userDataDir } from "./paths";
 import { initSlidesSubsystem, shutdownSlides } from "./slides/deck-service";
@@ -185,6 +186,7 @@ if (gotSingleInstanceLock) {
 
     registerWorshipProtocolHandler(getMediaRepo());
     registerAllIpcHandlers();
+    watchDisplays();
     // Before the first window: the default menu's Cmd+W (which closes the
     // PROJECTOR) and Cmd+R must never be reachable, not even for one frame.
     installApplicationMenu();
