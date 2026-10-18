@@ -355,12 +355,22 @@ function SlideVideoLayer({
 
   // `autoPlay` only applies to a freshly loaded element, so every later
   // transition — an overlay, an operator pause — is driven imperatively.
+  //
+  // Except one: lifting NEGRO/LOGO off a clip that had already ended. Unlike
+  // `LiveVideo`, whose ended video leaves the air on its own
+  // (`end-of-playback.ts`), this one stays on its slide, and `play()` on an
+  // ended element restarts it from 0 by spec — the whole clip again, sound
+  // included, just because the operator uncovered the slide. An explicit
+  // resume from the media panel still replays it.
+  const wasCovered = useRef(covered);
   useEffect(() => {
     const element = elementRef.current;
+    const uncovered = wasCovered.current && !covered;
+    wasCovered.current = covered;
     if (!element) return;
-    if (shouldPlay) element.play().catch(() => undefined);
+    if (shouldPlay && !(uncovered && element.ended)) element.play().catch(() => undefined);
     else element.pause();
-  }, [shouldPlay]);
+  }, [shouldPlay, covered]);
 
   useEffect(() => {
     const element = elementRef.current;
