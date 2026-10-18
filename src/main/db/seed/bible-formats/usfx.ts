@@ -144,6 +144,6 @@ export function parseUsfx(xml: string): ParsedBible {
     },
   });
 
-  if (!sawUsfx) throw new BibleFormatError("No <usfx> root element");
+  if (!sawUsfx) throw new BibleFormatError("El XML no es una Biblia USFX: falta el elemento <usfx>.");
   return { name: null, language, books: collector.finish() };
 }

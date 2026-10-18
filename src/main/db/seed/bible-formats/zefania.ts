@@ -82,7 +82,7 @@ function firstChildText(node: unknown, name: string): string | null {
 export function parseZefania(xml: string): ParsedBible {
   const root = parser.parse(xml) as Record<string, unknown>;
   const bible = root["XMLBIBLE"] ?? root["xmlbible"] ?? root["X"];
-  if (bible === undefined) throw new BibleFormatError("No <XMLBIBLE> root element");
+  if (bible === undefined) throw new BibleFormatError("El XML no es una Biblia Zefania: falta el elemento <XMLBIBLE>.");
 
   const information = (bible as Record<string, unknown>)["INFORMATION"];
   const name = firstChildText(information, "title") ?? attr(bible, "biblename");

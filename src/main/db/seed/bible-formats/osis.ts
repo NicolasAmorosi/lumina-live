@@ -152,6 +152,6 @@ export function parseOsis(xml: string): ParsedBible {
     },
   });
 
-  if (!sawOsis) throw new BibleFormatError("No <osis>/<osisText> root element");
+  if (!sawOsis) throw new BibleFormatError("El XML no es una Biblia OSIS: falta el elemento <osis>.");
   return { name: null, language, books: collector.finish() };
 }
