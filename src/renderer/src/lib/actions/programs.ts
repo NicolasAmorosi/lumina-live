@@ -4,6 +4,7 @@ import { toast } from "@renderer/lib/toast";
 import { useProgramStore } from "@renderer/stores/program.store";
 import type {
   ProgramDraft,
+  ProgramDTO,
   ProgramItemDTO,
   ProgramItemUpsert,
   ProgramSummary,
@@ -64,6 +65,22 @@ function draftItems(): ProgramItemUpsert[] {
   return toUpsertItems(useProgramStore.getState().items);
 }
 
+/**
+ * Swaps in the schedule as saved — real ids replace the provisional ones —
+ * while the operator stays where they were. A save is not an open: the same
+ * row is still selected and previewed, and the rail still marks what is on
+ * the projector. `loadProgram` clears both cursors, which is right only for
+ * an open. Before a PREVIEW of a schedule row read the selection, a save
+ * already dropped the rail; after it, a save would also have blanked PREVIEW.
+ */
+function adoptSaved(full: ProgramDTO): void {
+  const { items, selectedIndex, activeIndex } = useProgramStore.getState();
+  useProgramStore.getState().loadProgram(full);
+  // The same rows in the same order, unless the schedule changed during the
+  // round trip. Then the cursors could name other rows, and none is safer.
+  if (full.items.length === items.length) useProgramStore.setState({ selectedIndex, activeIndex });
+}
+
 /** Overwrites the currently loaded program with the schedule as it stands —
  *  requires a program to already be loaded (see `createProgramFromCurrent`
  *  for a brand new one). Re-hydrates the store from the saved row afterwards
@@ -81,8 +98,7 @@ export async function saveCurrentProgram(): Promise<void> {
       // so the star set from the programs modal survives a quick save.
       items: draftItems(),
     });
-    const full = await api.programs.load(summary.id);
-    useProgramStore.getState().loadProgram(full);
+    adoptSaved(await api.programs.load(summary.id));
     toast.success(t("programs.saved", { name: summary.name }));
   } catch {
     toast.danger(t("programs.saveError"));
@@ -95,8 +111,7 @@ export async function saveCurrentProgram(): Promise<void> {
 export async function createProgramFromCurrent(meta: ProgramMetaInput): Promise<ProgramSummary | null> {
   try {
     const summary = await api.programs.save({ ...meta, items: draftItems() });
-    const full = await api.programs.load(summary.id);
-    useProgramStore.getState().loadProgram(full);
+    adoptSaved(await api.programs.load(summary.id));
     toast.success(t("programs.saved", { name: summary.name }));
     return summary;
   } catch {

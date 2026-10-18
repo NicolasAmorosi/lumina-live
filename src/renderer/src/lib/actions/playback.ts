@@ -10,6 +10,7 @@ import { findScene, useUtilityStore } from "@renderer/stores/utility.store";
 import { notifyManualNavigation } from "@renderer/effects/deck-autoplay";
 import { projectVerse } from "@renderer/lib/actions/bible";
 import { stopPreviewPlayback } from "@renderer/lib/actions/preview-playback";
+import { previewedScheduleItem } from "@renderer/lib/actions/preview";
 import { defaultMediaVolume } from "@renderer/stores/settings.store";
 import { api } from "@renderer/lib/api";
 import { assetUrl } from "@shared/urls";
@@ -249,7 +250,7 @@ async function goLiveWithPlate(plateId: number): Promise<void> {
 function previewedPlateId(target: PreviewTarget): number | null {
   if (target.kind === "plate") return target.plateId;
   if (target.kind !== "scheduleItem") return null;
-  const item = useProgramStore.getState().items[target.index];
+  const item = previewedScheduleItem();
   return item?.kind === "plate" ? item.overlayPlateId : null;
 }
 
@@ -370,9 +371,11 @@ export async function goLive(): Promise<void> {
   if (!isCurrentLiveIntent(intent)) return;
 
   switch (target.kind) {
-    case "scheduleItem":
-      await goLiveWithScheduleItem(target.index, slideIndex, positionSeconds, intent);
+    case "scheduleItem": {
+      const index = useProgramStore.getState().selectedIndex;
+      if (index !== null) await goLiveWithScheduleItem(index, slideIndex, positionSeconds, intent);
       return;
+    }
     case "asset":
       await goLiveWithAsset(target.assetId, target.assetKind, slideIndex, positionSeconds, intent);
       return;

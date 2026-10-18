@@ -41,7 +41,8 @@ export function usePreviewContent(): PreviewContent | null {
   const scenes = useUtilityStore((s) => s.scenes);
   const plates = useOverlayStore((s) => s.plates);
 
-  const scheduleItem = target?.kind === "scheduleItem" ? items[target.index] : undefined;
+  const selectedIndex = useProgramStore((s) => s.selectedIndex);
+  const scheduleItem = target?.kind === "scheduleItem" && selectedIndex !== null ? items[selectedIndex] : undefined;
   const scheduleAssetId =
     scheduleItem?.kind === "media" || scheduleItem?.kind === "ppt" ? scheduleItem.mediaAssetId : null;
   // Both lookups are unconditional: hooks can't be called behind a branch, and

@@ -60,7 +60,8 @@ describe("goLive with a plate", () => {
     addItem({ kind: "media", mediaAssetId: 12, title: null });
     addItem({ kind: "plate", overlayPlateId: bug.id, title: null });
     setActive(0);
-    usePreviewStore.getState().setTarget({ kind: "scheduleItem", index: 1 });
+    useProgramStore.getState().select(1);
+    usePreviewStore.getState().setTarget({ kind: "scheduleItem" });
     await goLive();
 
     expect(useProjectionStore.getState().livePlates.map((p) => p.id)).toEqual([bug.id]);

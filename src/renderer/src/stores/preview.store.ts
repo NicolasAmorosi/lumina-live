@@ -8,7 +8,14 @@ import type { AssetKind } from "@shared/constants";
  * resource panel previews without adding.
  */
 export type PreviewTarget =
-  | { kind: "scheduleItem"; index: number }
+  /** The schedule row that is selected — `program.store`'s `selectedIndex`,
+   *  deliberately not a copy of it. A copy is what this used to hold, and
+   *  nothing remapped it: moving, inserting or removing a row shifted the
+   *  selection (the program store keeps its cursors right) while the preview
+   *  stayed on the old POSITION. That left one row highlighted and a
+   *  different one in PREVIEW, which is what Enter then sent to the projector
+   *  (2026-10-14 rehearsal). `previewedScheduleItem()` resolves it. */
+  | { kind: "scheduleItem" }
   | { kind: "verse"; verseIndex: number }
   | { kind: "asset"; assetId: number; assetKind: AssetKind }
   /** A saved utility scene (a countdown, the clock, a stopwatch). Only its id
