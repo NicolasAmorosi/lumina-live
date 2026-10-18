@@ -135,7 +135,6 @@ const es = {
     start: "Arrancar",
     pause: "Pausar",
     resume: "Reanudar",
-    reset: "Reiniciar",
     stop: "Detener y volver al inicio",
     finished: "Terminó",
     manage: "Escenas…",
@@ -153,6 +152,8 @@ const es = {
   // second caller appeared — a label the two features spell differently is a
   // label that drifts.
   style: {
+    /** The neutral swatches of `ColorField`; the ALPS ones keep their own names. */
+    colors: { white: "Blanco", lightGray: "Gris claro", gray: "Gris", black: "Negro" },
     groups: {
       background: "Fondo",
       typography: "Tipografía",
@@ -218,6 +219,7 @@ const es = {
     new: "Nueva escena",
     newName: "Escena nueva",
     copyName: "{name} (copia)",
+    invalidHint: "Una escena necesita un nombre, y una imagen elegida si el fondo es una imagen.",
     saved: "Se guardó «{name}»",
     empty: "Ninguna escena seleccionada",
     emptyHint: "Creá una escena para configurar su cuenta, su fondo y su tipografía.",
@@ -658,7 +660,6 @@ const es = {
       isDefault: "Por defecto",
       setDefault: "Usar por defecto",
       reorderHint: "Arrastrá desde el asa para cambiar el orden en que aparecen al elegir una versión.",
-      reorderGrip: "Reordenar la versión",
       setDefaultDone: "La pestaña Biblia va a abrir en {name}",
       rename: "Renombrar",
       renameLabel: "Nombre de la versión",

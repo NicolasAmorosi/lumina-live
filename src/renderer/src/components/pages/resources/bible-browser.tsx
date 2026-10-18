@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import {
+  Caption,
   EmptyState,
   HighlightedText,
   Icon,
@@ -266,6 +267,10 @@ export function BibleBrowser() {
                       itemRefs.current[index] = el;
                     }}
                     selected={highlightedIndex === index}
+                    // Without it two hits are two snippets: «…de tal manera
+                    // amó Dios…» says nothing about WHICH verse is about to
+                    // be previewed. Same form as the PREVIEW heading.
+                    leading={<Caption className="shrink-0">{`${hit.bookName} ${hit.chapter}:${hit.verse}`}</Caption>}
                   >
                     <HighlightedText segments={parseSnippet(hit.snippet)} />
                   </ListRow>

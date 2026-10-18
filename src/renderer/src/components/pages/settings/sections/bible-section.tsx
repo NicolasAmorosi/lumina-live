@@ -159,7 +159,13 @@ export function BibleSection() {
   async function askToDelete(version: BibleVersionDTO) {
     setBusyId(version.id);
     try {
-      setPending({ version, usages: await api.bible.usages(version.id) });
+      // A lookup that fails must not make the version undeletable: the dialog
+      // opens with no list, as the scene and plate equivalents already do.
+      const usages = await api.bible.usages(version.id).catch((error: unknown) => {
+        console.warn("[bible] usage lookup failed", error);
+        return [];
+      });
+      setPending({ version, usages });
     } finally {
       setBusyId(null);
     }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent }
 import { createPortal } from "react-dom";
 import { cn } from "@renderer/lib/utils";
 import { computeMenuPosition, useFollowTrigger, type MenuPosition } from "./floating-menu";
+import { useT, type MessageKey } from "@renderer/lib/i18n/i18n-provider";
 
 /**
  * The colours a scene can be painted with, straight out of the church's own
@@ -14,14 +15,17 @@ import { computeMenuPosition, useFollowTrigger, type MenuPosition } from "./floa
  * hex anywhere in a component's classes — the projector's stage is not themed,
  * and a scene must look the same whatever theme the control window is in.
  *
- * The names are the palette's own proper nouns and are deliberately not run
- * through `i18n`: "Campfire" is the colour's name, not a description of it.
+ * The ALPS names are the palette's own proper nouns and are deliberately not
+ * run through `i18n`: "Campfire" is the colour's name, not a description of
+ * it. The four neutrals are not ALPS names but ordinary words, so they are.
  */
-const SCENE_COLOR_PRESETS: readonly { name: string; value: string }[] = [
-  { name: "Blanco", value: "#ffffff" },
-  { name: "Gris claro", value: "#f5f5f5" },
-  { name: "Gris", value: "#717171" },
-  { name: "Negro", value: "#000000" },
+type ColorPreset = { value: string } & ({ name: string } | { labelKey: MessageKey });
+
+const SCENE_COLOR_PRESETS: readonly ColorPreset[] = [
+  { labelKey: "style.colors.white", value: "#ffffff" },
+  { labelKey: "style.colors.lightGray", value: "#f5f5f5" },
+  { labelKey: "style.colors.gray", value: "#717171" },
+  { labelKey: "style.colors.black", value: "#000000" },
   { name: "Denim darker", value: "#04132b" },
   { name: "Denim", value: "#2f557f" },
   { name: "Denim light", value: "#2e6de7" },
@@ -75,6 +79,8 @@ const sizes: Record<ColorFieldSize, string> = {
  * never holds a half-typed value.
  */
 export function ColorField({ className, label, onChange, size = "sm", value }: ColorFieldProps) {
+  const t = useT();
+  const presetName = (preset: ColorPreset) => ("labelKey" in preset ? t(preset.labelKey) : preset.name);
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<MenuPosition | null>(null);
   /** What is in the hex box while it is being typed. `null` means "show the
@@ -170,7 +176,7 @@ export function ColorField({ className, label, onChange, size = "sm", value }: C
               <div className="grid grid-cols-7 gap-1">
                 {SCENE_COLOR_PRESETS.map((preset) => (
                   <button
-                    aria-label={preset.name}
+                    aria-label={presetName(preset)}
                     aria-pressed={preset.value === value.toLowerCase()}
                     className={cn(
                       "size-7 cursor-pointer rounded-md ring-1 ring-border ring-inset transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -182,7 +188,7 @@ export function ColorField({ className, label, onChange, size = "sm", value }: C
                       setDraft(null);
                     }}
                     style={{ background: preset.value }}
-                    title={preset.name}
+                    title={presetName(preset)}
                     type="button"
                   />
                 ))}

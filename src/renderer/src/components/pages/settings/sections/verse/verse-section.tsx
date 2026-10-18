@@ -121,7 +121,11 @@ export function VerseSection() {
       .catch((error: unknown) => console.warn("[bible] could not list the image library", error));
   }, []);
 
-  const patch = (next: Partial<BibleStyle>) => void update({ "bible.style": { ...style, ...next } });
+  // Off the store at the moment of writing, not off this render: an image
+  // import resolves seconds later, and spreading the style it closed over
+  // reverted whatever was changed meanwhile.
+  const patch = (next: Partial<BibleStyle>) =>
+    void update({ "bible.style": { ...useSettingsStore.getState().settings["bible.style"], ...next } });
 
   async function handleAddImages() {
     setAddingImages(true);

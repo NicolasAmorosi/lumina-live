@@ -96,12 +96,16 @@ export function ScenesModal({ onOpenChange, open }: { onOpenChange: (open: boole
       setPending(null);
       return;
     }
+    // With no scene left, the only thing to do here is make one (see the same
+    // rule in `PlatesModal`).
     setEditing((current) => {
       if (current !== null) return current;
       const first = scenes[0];
-      return first ? { sceneId: first.id, draft: toDraft(first), baseline: toDraft(first) } : null;
+      if (first) return { sceneId: first.id, draft: toDraft(first), baseline: toDraft(first) };
+      const draft = emptySceneDraft(t("scenes.newName"));
+      return { sceneId: null, draft, baseline: draft };
     });
-  }, [open, scenes]);
+  }, [open, scenes, t]);
 
   /** Every way of leaving the current form goes through here, so unsaved work
    *  can only ever be lost through the confirmation. */
@@ -163,6 +167,7 @@ export function ScenesModal({ onOpenChange, open }: { onOpenChange: (open: boole
   }
 
   async function handleAddImages() {
+    const requestedFor = editing?.sceneId;
     setAddingImages(true);
     try {
       const paths = await api.files.pick("image", true);
@@ -172,15 +177,21 @@ export function ScenesModal({ onOpenChange, open }: { onOpenChange: (open: boole
       // Selecting the first one it just added is the point of the button: the
       // operator picked a file in order to use it, not in order to then find
       // it in a dropdown.
+      // Onto the form as it is NOW, not as it was before the file dialog and
+      // the import: anything typed meanwhile used to be reverted.
       const first = added[0];
-      if (first && editing) {
-        setEditing({
-          ...editing,
-          draft: {
-            ...editing.draft,
-            style: { ...editing.draft.style, background: { kind: "image", assetId: first.id, fit: "cover" } },
-          },
-        });
+      if (first) {
+        setEditing((current) =>
+          current && current.sceneId === requestedFor
+            ? {
+                ...current,
+                draft: {
+                  ...current.draft,
+                  style: { ...current.draft.style, background: { kind: "image", assetId: first.id, fit: "cover" } },
+                },
+              }
+            : current,
+        );
       }
     } catch (error) {
       console.warn("[scenes] could not add images", error);
@@ -232,7 +243,9 @@ export function ScenesModal({ onOpenChange, open }: { onOpenChange: (open: boole
                   onDelete={() => {
                     if (editing.sceneId !== null) void askToDelete(editing.sceneId);
                   }}
-                  onDuplicate={() => void handleDuplicate()}
+                  // Through the guard like every other exit from the form: the
+                  // copy is made of the SAVED scene and replaces the open form.
+                  onDuplicate={() => leaveEditing(() => void handleDuplicate())}
                   onRevert={() => setEditing({ ...editing, draft: editing.baseline })}
                   onSave={() => void handleSave()}
                   persisted={editing.sceneId !== null}
@@ -306,6 +319,7 @@ export function ScenesModal({ onOpenChange, open }: { onOpenChange: (open: boole
             ) : (
               <>
                 <EditorHeader
+                  invalidHint={isDraftSavable(editing.draft) ? undefined : t("scenes.invalidHint")}
                   preview={
                     <div className="flex flex-col gap-2">
                       <ScenePreview atEnd={previewAtEnd} draft={editing.draft} />

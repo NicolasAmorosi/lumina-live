@@ -28,6 +28,8 @@ export function MediaSourceBar({ activeView, folders, onAddFolder, onRemoveFolde
   return (
     <div className="flex shrink-0 items-center gap-1 border-b border-border px-1.5 py-1">
       <button
+        // Which view is showing was said by colour alone.
+        aria-pressed={activeView === "recent"}
         className={cn(baseButton, "shrink-0", activeView === "recent" ? activeButton : inactiveButton)}
         onClick={() => onSelectView("recent")}
         type="button"
@@ -40,6 +42,7 @@ export function MediaSourceBar({ activeView, folders, onAddFolder, onRemoveFolde
           <div className="relative">
             <Tooltip className="block w-full min-w-0" content={folderPath} fit="path" floating>
               <button
+                aria-pressed={activeView === folderPath}
                 className={cn(baseButton, "flex w-full items-center gap-1 pr-5", activeView === folderPath ? activeButton : inactiveButton)}
                 onClick={() => onSelectView(folderPath)}
                 type="button"
@@ -56,7 +59,9 @@ export function MediaSourceBar({ activeView, folders, onAddFolder, onRemoveFolde
             </Tooltip>
             <Tooltip
               align="end"
-              className="absolute top-1/2 right-0.5 z-[var(--z-sticky)] hidden -translate-y-1/2 group-hover/folder:inline-flex"
+              // On focus too, or unlinking a folder was mouse-only: a `hidden`
+              // button is never in the tab order.
+              className="absolute top-1/2 right-0.5 z-[var(--z-sticky)] hidden -translate-y-1/2 group-hover/folder:inline-flex group-focus-within/folder:inline-flex"
               content={t("resources.removeFolderHint")}
               placement="bottom"
             >

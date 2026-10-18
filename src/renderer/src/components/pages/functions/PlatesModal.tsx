@@ -67,12 +67,17 @@ export function PlatesModal({ onOpenChange, open }: { onOpenChange: (open: boole
       setPending(null);
       return;
     }
+    // With no plate yet, the only thing to do here is make one — and the
+    // empty Overlays panel opens this through a button that says «Nueva
+    // placa». Landing on an empty pane meant pressing it a second time.
     setEditing((current) => {
       if (current !== null) return current;
       const first = plates[0];
-      return first ? { plateId: first.id, draft: toPlateDraft(first), baseline: toPlateDraft(first) } : null;
+      if (first) return { plateId: first.id, draft: toPlateDraft(first), baseline: toPlateDraft(first) };
+      const draft = emptyPlateDraft(t("plates.newName"));
+      return { plateId: null, draft, baseline: draft };
     });
-  }, [open, plates]);
+  }, [open, plates, t]);
 
   function leaveEditing(go: () => void) {
     if (dirty) setPending({ kind: "discard", go });
@@ -127,14 +132,22 @@ export function PlatesModal({ onOpenChange, open }: { onOpenChange: (open: boole
   }
 
   async function handleAddImages() {
+    const requestedFor = editing?.plateId;
     setAddingImages(true);
     try {
       const paths = await api.files.pick("image", true);
       if (paths.length === 0) return;
       const added = await api.library.add(paths, "image");
       setImageAssets(await api.library.list("image"));
+      // Onto the form as it is NOW (see the same line in `ScenesModal`).
       const first = added[0];
-      if (first && editing) setEditing({ ...editing, draft: { ...editing.draft, imageAssetId: first.id } });
+      if (first) {
+        setEditing((current) =>
+          current && current.plateId === requestedFor
+            ? { ...current, draft: { ...current.draft, imageAssetId: first.id } }
+            : current,
+        );
+      }
     } catch (error) {
       console.warn("[plates] could not add images", error);
       toast.danger(t("style.addImageError"));
@@ -190,7 +203,9 @@ export function PlatesModal({ onOpenChange, open }: { onOpenChange: (open: boole
                   onDelete={() => {
                     if (editing.plateId !== null) void askToDelete(editing.plateId);
                   }}
-                  onDuplicate={() => void handleDuplicate()}
+                  // Through the guard like every other exit from the form: the
+                  // copy is made of the SAVED plate and replaces the open form.
+                  onDuplicate={() => leaveEditing(() => void handleDuplicate())}
                   onRevert={() => setEditing({ ...editing, draft: editing.baseline })}
                   onSave={() => void handleSave()}
                   persisted={editing.plateId !== null}

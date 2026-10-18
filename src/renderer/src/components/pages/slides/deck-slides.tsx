@@ -75,7 +75,7 @@ function DeckAudioStrip({ assetId, deck }: { assetId: number; deck: DeckDTO }) {
             <Icon name="help" />
           </IconButton>
         </Tooltip>
-        <IconButton aria-label={t("common.delete")} onClick={clearPreview} size="xs" variant="ghost">
+        <IconButton aria-label={t("common.remove")} onClick={clearPreview} size="xs" variant="ghost">
           <Icon name="close" />
         </IconButton>
       </div>

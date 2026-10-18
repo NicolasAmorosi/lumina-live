@@ -1,4 +1,4 @@
-import type { MouseEvent, ReactNode } from "react";
+import { useId, type MouseEvent, type ReactNode } from "react";
 import { cn } from "@renderer/lib/utils";
 import { Icon } from "./icon";
 import { Title } from "./title";
@@ -37,7 +37,12 @@ export function FieldGroup({ children, className, title }: { children: ReactNode
  *  The grip and drop-indicator props are spelled exactly like `ListRow`'s, and
  *  mean exactly the same thing: a reorderable list in Ajustes and one in a
  *  resource panel are the same interaction at two densities, and two spellings
- *  of it is how the two start behaving differently. */
+ *  of it is how the two start behaving differently.
+ *
+ *  The row is a `group` named by its label and described by its description.
+ *  The control inside comes from the caller, so this cannot name it directly,
+ *  but a screen reader announces the group on the way in — which is what an
+ *  unnamed `Select` that read out only «Centrado» was missing. */
 export function FieldRow({
   children,
   description,
@@ -67,13 +72,18 @@ export function FieldRow({
   onGripMouseDown?: ((e: MouseEvent<HTMLSpanElement>) => void) | undefined;
   onGripMouseUp?: ((e: MouseEvent<HTMLSpanElement>) => void) | undefined;
 }) {
+  const labelId = useId();
+  const descriptionId = useId();
   return (
     <div
+      aria-describedby={description ? descriptionId : undefined}
+      aria-labelledby={labelId}
       className={cn(
         "relative flex flex-nowrap items-center justify-between gap-6 px-4 py-3",
         dropBefore &&
           "before:absolute before:inset-x-0 before:-top-px before:h-0.5 before:rounded-full before:bg-primary",
       )}
+      role="group"
     >
       {/* Grip and `leading` share one box on a `gap-2` of their own: the row's
           own `gap-6` is the distance between the NAME and its controls, and
@@ -97,8 +107,14 @@ export function FieldRow({
         </span>
       ) : null}
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="text-sm font-medium text-foreground">{label}</span>
-        {description ? <span className="text-xs text-muted-foreground">{description}</span> : null}
+        <span className="text-sm font-medium text-foreground" id={labelId}>
+          {label}
+        </span>
+        {description ? (
+          <span className="text-xs text-muted-foreground" id={descriptionId}>
+            {description}
+          </span>
+        ) : null}
       </div>
       <div className="flex shrink-0 flex-nowrap items-center gap-2">{children}</div>
     </div>

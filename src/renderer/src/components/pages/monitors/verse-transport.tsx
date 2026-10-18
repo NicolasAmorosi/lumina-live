@@ -57,7 +57,7 @@ export function VerseTransport() {
           </span>
         ) : null}
 
-        <IconButton aria-label={t("common.delete")} onClick={clearBaseContent} size="xs" variant="ghost">
+        <IconButton aria-label={t("common.remove")} onClick={clearBaseContent} size="xs" variant="ghost">
           <Icon name="close" />
         </IconButton>
       </div>
