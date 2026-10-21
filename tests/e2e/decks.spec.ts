@@ -1,7 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { Page } from "@playwright/test";
+import Database from "better-sqlite3";
 import type { MediaAsset } from "../../src/shared/types/media";
+import { SLIDES_CONVERTER_VERSION } from "../../src/shared/constants";
 import { fixture } from "./support/paths";
 import { buildPdf } from "./support/pdf";
 import { audioStates, expect, relaunch, test, videoStates, type WorshipApp } from "./support/app";
@@ -40,6 +42,52 @@ test("a PDF is a deck: converted without LibreOffice, projected, stepped", async
   await expect.poll(() => projectedSlide(projector)).toBe(2);
   await app.control.keyboard.press("ArrowLeft");
   await expect.poll(() => projectedSlide(projector)).toBe(1);
+});
+
+test("a deck cached by an older converter is reconverted before it goes live, never under it", async ({ app }) => {
+  await app.addMedia("ppt", "deck.pdf");
+  await app.previewFile("Presentaciones", "deck");
+  await expect(slideTile(app, 3)).toBeVisible({ timeout: 60_000 });
+  await app.quit();
+
+  // What every deck converted before a `SLIDES_CONVERTER_VERSION` bump looks like.
+  const dbPath = path.join(app.profile, "worship.db");
+  const db = new Database(dbPath);
+  db.prepare("UPDATE slide_decks SET converter_version = ?").run(SLIDES_CONVERTER_VERSION - 1);
+  db.close();
+
+  const again = await relaunch(app);
+  await again.previewFile("Presentaciones", "deck");
+  await expect(slideTile(again, 3)).toBeVisible({ timeout: 60_000 });
+  await again.goLive();
+  const projector = await again.projector();
+  await expect.poll(() => projectedSlide(projector)).toBe(1);
+
+  // The upgrade has landed: the old row is gone, replaced by the new one.
+  const outdated = () => {
+    const ro = new Database(dbPath, { readonly: true });
+    try {
+      const row = ro.prepare("SELECT count(*) AS n FROM slide_decks WHERE converter_version < ?").get(SLIDES_CONVERTER_VERSION);
+      return (row as { n: number }).n;
+    } finally {
+      ro.close();
+    }
+  };
+  await expect.poll(outdated, { timeout: 60_000 }).toBe(0);
+
+  // The last slide still loads. It used to be `worship://deck/<replaced id>/3`,
+  // a 404 under the projector — the user's "the last slides never load".
+  await again.control.keyboard.press("ArrowRight");
+  await again.control.keyboard.press("ArrowRight");
+  await expect.poll(() => projectedSlide(projector)).toBe(3);
+  await expect
+    .poll(() =>
+      projector.evaluate(() => {
+        const image = [...document.querySelectorAll<HTMLImageElement>('img[src^="worship://deck/"]')].at(-1);
+        return image?.complete ? image.naturalWidth : 0;
+      }),
+    )
+    .toBeGreaterThan(0);
 });
 
 test("NEGRO over a deck, and the slide is still there underneath", async ({ app }) => {

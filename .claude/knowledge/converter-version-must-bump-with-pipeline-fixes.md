@@ -31,4 +31,28 @@
   keeps serving the old, wrong output indefinitely, with no error and no visible difference until
   someone notices the *symptom* (e.g. "no auto-advance") days later.
 
-**Last updated:** 2026-09-08
+### The other half (2026-10-21): every "is this deck usable?" must check the version, or the bump replaces a deck UNDER the projector
+
+- The bump to 3 (2026-09-24, embedded video) was only honoured by `tryCacheHit`/`runConversion`.
+  `getDeck` (`deck:get`, the renderer's `peek`) and `statusesByAsset` (`deck:statuses`, every
+  prewarm's "skip what is ready") ignored `converterVersion`. In the real library 677 of 685 decks
+  were v2: all of them showed as prepared, no prewarm ever upgraded them, and the upgrade ran at the
+  worst possible moment — EN VIVO.
+- The sequence: `peek` hands the store a v2 deck as `ready` → `goLiveWithDeck` goes live with it at
+  once and fires a background `ensure` (assuming a ready deck is a free cache hit) → `ensure`
+  reconverts → `insertDeck` deletes the old row (same `contentHash + renderWidth + imageFormat`) and
+  `removeQuietly(finalDir)` wipes the same content-addressed dir → `liveDeck` still holds the old
+  `deckId`, so every slide Chromium had not already loaded 404s. The user's report was "the last
+  slides of some decks never load", and `main.log` had
+  `[projection] media error scene worship://deck/21/13 null` for slides 13–18 of an 18-slide hymn
+  whose row 21 had been replaced by 737 in the same second.
+- Only a reconversion of the SAME identity is destructive. A render-width or format change makes a
+  new row next to the old one, so `getDeck` deliberately does not check `needsRerender`: going live
+  instantly with a slightly smaller deck is the documented intent. The version is the one check
+  `getDeck` must share with `tryCacheHit`.
+- `statusesByAsset` reports an outdated row as `stale` (thumbnail kept — the images are still good),
+  so loading a program upgrades it in the `program` lane before the service. Regression test:
+  `tests/e2e/decks.spec.ts` "a deck cached by an older converter is reconverted before it goes live",
+  which fails without the fix with that exact log line.
+
+**Last updated:** 2026-10-21

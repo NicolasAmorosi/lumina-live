@@ -36,7 +36,7 @@ import { readBinarySlideTimings } from "../../src/main/slides/ppt-binary-timings
 import { backfillDeckTimings } from "../../src/main/slides/backfill-timings";
 import { SNIPPET_MARK_END, SNIPPET_MARK_START, parseSnippet } from "../../src/shared/types/bible";
 import { DEFAULT_SETTINGS, SETTINGS_VALIDATORS, isSettingsKey } from "../../src/shared/types/settings";
-import { BUILTIN_BIBLE_CODE } from "../../src/shared/constants";
+import { BUILTIN_BIBLE_CODE, SLIDES_CONVERTER_VERSION } from "../../src/shared/constants";
 import { DEFAULT_UTILITY_SCENES } from "../../src/shared/types/utility";
 import { removeUtilityScene } from "../../src/main/services/utility-scene-removal";
 import { removeOverlayPlate } from "../../src/main/services/overlay-plate-removal";
@@ -411,7 +411,7 @@ describe("Deck status is answered by CONTENT, not by row ownership", () => {
         contentHash: dupHash,
         renderWidth: 1920,
         imageFormat: "webp",
-        converterVersion: 1,
+        converterVersion: SLIDES_CONVERTER_VERSION,
         mediaAssetId: dupA.id,
         sourcePath: dupA.path,
         sourceSizeBytes: dupStat.size,
@@ -465,6 +465,15 @@ describe("Deck status is answered by CONTENT, not by row ownership", () => {
       afterRelink.get(dupA.id)?.status === "ready" && afterRelink.get(dupB.id)?.status === "ready",
       "relinking the row to one copy must not make the other look unconverted",
     );
+  });
+
+  test("a deck from an older converter is stale, not ready", () => {
+    // Opening it reconverts it, and the new row replaces this one under
+    // whatever went live off it — so it must not be skipped by the prewarm.
+    const setVersion = sqlite.prepare("UPDATE slide_decks SET converter_version = ? WHERE id = ?");
+    setVersion.run(SLIDES_CONVERTER_VERSION - 1, deckId);
+    expect(slidesRepo.statusesByAsset([dupA.id]).get(dupA.id)?.status).toBe("stale");
+    setVersion.run(SLIDES_CONVERTER_VERSION, deckId);
   });
 
   test("a stale content-hash stamp stops matching once the file is edited", () => {

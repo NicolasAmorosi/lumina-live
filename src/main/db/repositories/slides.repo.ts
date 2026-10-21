@@ -5,6 +5,7 @@ import type Database from "better-sqlite3";
 import type { Db } from "../client";
 import { deckAudio, deckSlides, deckVideos, mediaAssets, slideDecks } from "../schema";
 import { slideThumbUrl, slideUrl, deckAudioUrl, deckVideoUrl, linkedAudioUrl } from "@shared/urls";
+import { SLIDES_CONVERTER_VERSION } from "@shared/constants";
 import type { DeckDTO, DeckSlide, DeckSlideVideo, DeckStatus, SlideRect } from "@shared/types/deck";
 
 /** One `IN (...)` binds one parameter per id; SQLite refuses the statement
@@ -222,14 +223,26 @@ export class SlidesRepo {
     // Rows arrive newest-first *within each chunk*, which is all this needs:
     // a given assetId's rows can only ever land in one chunk, since the chunks
     // partition the ids.
-    const take = (rows: readonly { id: number; assetId: number | null; status: string }[]) => {
+    const take = (
+      rows: readonly { id: number; assetId: number | null; status: string; converterVersion: number }[],
+    ) => {
       for (const row of rows) {
         if (row.assetId === null || result.has(row.assetId)) continue;
         // Same DB-status → `DeckStatus` collapse `toDTO` uses ("pending"/
         // "converting" both read as "still converting" to a caller that only
-        // wants to know whether it's safe to skip this asset).
+        // wants to know whether it's safe to skip this asset). A row from an
+        // older converter is `stale`, not `ready`: opening it reconverts it,
+        // so every prewarm that skips `ready` has to upgrade it BEFORE the
+        // service instead — 677 of 685 decks in the real library were v2 and
+        // all of them claimed to be prepared.
         const status: DeckStatus =
-          row.status === "ready" ? "ready" : row.status === "error" ? "failed" : "converting";
+          row.status === "error"
+            ? "failed"
+            : row.status !== "ready"
+              ? "converting"
+              : row.converterVersion === SLIDES_CONVERTER_VERSION
+                ? "ready"
+                : "stale";
         result.set(row.assetId, { deckId: row.id, status });
       }
     };
@@ -244,7 +257,12 @@ export class SlidesRepo {
       //    silently false-but-not-false) for any other combination.
       take(
         this.db
-          .select({ id: slideDecks.id, assetId: mediaAssets.id, status: slideDecks.status })
+          .select({
+            id: slideDecks.id,
+            assetId: mediaAssets.id,
+            status: slideDecks.status,
+            converterVersion: slideDecks.converterVersion,
+          })
           .from(mediaAssets)
           .innerJoin(slideDecks, eq(slideDecks.contentHash, mediaAssets.contentHash))
           .where(
@@ -268,6 +286,7 @@ export class SlidesRepo {
             id: slideDecks.id,
             assetId: slideDecks.mediaAssetId,
             status: slideDecks.status,
+            converterVersion: slideDecks.converterVersion,
           })
           .from(slideDecks)
           .where(inArray(slideDecks.mediaAssetId, unresolved))

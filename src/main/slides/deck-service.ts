@@ -1326,6 +1326,11 @@ export function getDeck(assetId: number): DeckDTO | null {
   const repo = getSlidesRepo();
   const row = repo.findDeckByAsset(assetId);
   if (!row || row.status !== "ready") return null;
+  // Not a hit for `tryCacheHit` either, so `ensure` reconverts it — and the new
+  // row REPLACES this one (same identity, same cache dir). A deck that went
+  // live off this peek lost, mid-service, every slide Chromium had not loaded
+  // yet: `worship://deck/<old id>/n` answered 404 under the projector.
+  if (row.converterVersion !== SLIDES_CONVERTER_VERSION) return null;
   if (!fs.existsSync(row.cacheDir)) return null;
   // A source edited in place is not a hit — the same size+mtime check as
   // `tryCacheHit`. Without it the renderer, which peeks before it ensures,
