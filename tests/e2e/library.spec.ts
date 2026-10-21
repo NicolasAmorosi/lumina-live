@@ -182,7 +182,9 @@ test("a linked folder shows what is on disk, converts what needs it, and unlinks
   const projector = await app.projector();
   await expect.poll(async () => (await videoStates(projector))[0]?.videoWidth ?? 0).toBe(640);
 
-  await panel(app, "Videos").getByRole("button", { name: folder }).hover();
+  // Focus, not hover: on macOS the fullscreen projector is the key window and a
+  // synthetic hover over the control window does not always apply `:hover`.
+  await panel(app, "Videos").getByRole("button", { name: folder }).focus();
   await panel(app, "Videos").getByRole("button", { name: "Desvincular carpeta" }).click();
   await app.control.getByRole("dialog", { name: "¿Desvincular la carpeta?" }).getByRole("button", { name: "Desvincular carpeta" }).click();
   await expect(panel(app, "Videos").getByRole("button", { name: folder })).toHaveCount(0);
