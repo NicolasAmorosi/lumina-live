@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
 import type { MediaRepo } from "../db/repositories/media.repo";
-import { getSettingsRepo, getSlidesRepo } from "../services/repos";
+import { getSettingsRepo, getSlidesRepo, isDatabaseOpen } from "../services/repos";
 import { slidesCacheDir, slidesTempDir } from "../paths";
 import { resolveRasterPdf } from "../slides/rasterizer";
 import { ensureThumbnail } from "../media/thumbnail-service";
@@ -381,6 +381,9 @@ export function registerWorshipProtocolHandler(mediaRepo: MediaRepo): void {
           return new Response("Not found", { status: 404 });
       }
     } catch (error) {
+      // A request still in flight when the app quit: not a bug, and not worth
+      // a line in the main.log the operator sends when something IS wrong.
+      if (!isDatabaseOpen()) return new Response("Shutting down", { status: 503 });
       // A mute 500 is indistinguishable from a black slide. Everything reaching
       // here is a bug (a repo throwing, a thumbnail that failed to generate),
       // so it has to leave a trace even though the renderer only sees a status.

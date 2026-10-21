@@ -268,6 +268,16 @@ export const useDeckStore = create<DeckStoreState>((set, get) => ({
     // generation counter exists to stop.
     supersede(assetId);
     pending.delete(assetId);
+    // Marked here as well: a cancel pressed before the request reached main
+    // finds nothing there to cancel and gets no push back, so the click was
+    // lost and the conversion started anyway. `useDeck` leaves a cancelled
+    // deck alone until «Reintentar».
+    set((s) => ({
+      byAssetId: {
+        ...s.byAssetId,
+        [assetId]: { status: "stale", progress: { done: 0, total: 0 }, deck: s.byAssetId[assetId]?.deck ?? null, error: null },
+      },
+    }));
     await api.deck.cancel(assetId);
   },
 

@@ -36,7 +36,7 @@ import { readBinarySlideTimings } from "../../src/main/slides/ppt-binary-timings
 import { backfillDeckTimings } from "../../src/main/slides/backfill-timings";
 import { SNIPPET_MARK_END, SNIPPET_MARK_START, parseSnippet } from "../../src/shared/types/bible";
 import { DEFAULT_SETTINGS, SETTINGS_VALIDATORS, isSettingsKey } from "../../src/shared/types/settings";
-import { BUILTIN_BIBLE_CODE } from "../../src/shared/constants";
+import { BUILTIN_BIBLE_CODE, SLIDES_CONVERTER_VERSION } from "../../src/shared/constants";
 import { DEFAULT_UTILITY_SCENES } from "../../src/shared/types/utility";
 import { removeUtilityScene } from "../../src/main/services/utility-scene-removal";
 import { removeOverlayPlate } from "../../src/main/services/overlay-plate-removal";
@@ -334,6 +334,21 @@ describe("Media library", () => {
     assert(afterReappear?.missingSince === null, "sweep must clear missingSince once the file is back");
   });
 
+  test("the sweep refreshes the row of a file edited in place", async () => {
+    // Every stamp (deck content hash, video probe, thumbnail) is checked against
+    // the row's (size, mtime): a sweep that only checked existence left an
+    // edited deck or video "current" with last week's bytes.
+    fs.writeFileSync(filePaths[0]!, "fake pptx 0 — edited in place, longer than before");
+    const changed = await mediaRepo.sweep();
+    const stat = fs.statSync(filePaths[0]!);
+    const row = mediaRepo.getById(firstAsset.id);
+    assert(changed.has("ppt"), "an edit must be reported, so the renderer and the conversions re-read it");
+    assert(row?.sizeBytes === stat.size, `the row must carry the new size, got ${String(row?.sizeBytes)}`);
+    assert(row.mtimeMs === Math.trunc(stat.mtimeMs), "the row must carry the new mtime");
+    const again = await mediaRepo.sweep();
+    assert(!again.has("ppt"), "a file that did not change since must not be reported again");
+  });
+
   test("hasPath answers the worship://raster guard, and only for real rows", () => {
     // This is a security guard, not a convenience lookup: it is what lets the
     // rasterizer read a PDF that IS the source (kept wherever the operator
@@ -396,7 +411,7 @@ describe("Deck status is answered by CONTENT, not by row ownership", () => {
         contentHash: dupHash,
         renderWidth: 1920,
         imageFormat: "webp",
-        converterVersion: 1,
+        converterVersion: SLIDES_CONVERTER_VERSION,
         mediaAssetId: dupA.id,
         sourcePath: dupA.path,
         sourceSizeBytes: dupStat.size,
@@ -452,15 +467,21 @@ describe("Deck status is answered by CONTENT, not by row ownership", () => {
     );
   });
 
+  test("a deck from an older converter is stale, not ready", () => {
+    // Opening it reconverts it, and the new row replaces this one under
+    // whatever went live off it — so it must not be skipped by the prewarm.
+    const setVersion = sqlite.prepare("UPDATE slide_decks SET converter_version = ? WHERE id = ?");
+    setVersion.run(SLIDES_CONVERTER_VERSION - 1, deckId);
+    expect(slidesRepo.statusesByAsset([dupA.id]).get(dupA.id)?.status).toBe("stale");
+    setVersion.run(SLIDES_CONVERTER_VERSION, deckId);
+  });
+
   test("a stale content-hash stamp stops matching once the file is edited", () => {
     // A file edited behind our back invalidates its own stamp: the digest on the
     // row describes bytes that no longer exist, so it must stop matching.
     fs.writeFileSync(dupA.path, "edited — these are different bytes now");
     const editedDupStat = fs.statSync(dupA.path);
-    db.update(mediaAssets)
-      .set({ sizeBytes: editedDupStat.size, mtimeMs: Math.trunc(editedDupStat.mtimeMs) })
-      .where(eq(mediaAssets.id, dupA.id))
-      .run();
+    mediaRepo.refreshStat(dupA.id, editedDupStat.size, Math.trunc(editedDupStat.mtimeMs));
     const afterEditStatuses = slidesRepo.statusesByAsset([dupA.id]);
     assert(
       afterEditStatuses.get(dupA.id) === undefined,

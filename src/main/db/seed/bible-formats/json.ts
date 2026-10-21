@@ -31,7 +31,7 @@ function extractBooks(raw: unknown): BibleSourceBook[] {
       ...(value as object),
     })) as BibleSourceBook[];
   }
-  throw new BibleFormatError("Unrecognized Bible JSON container shape");
+  throw new BibleFormatError("El archivo JSON no tiene la forma de una Biblia: no se encontraron sus libros.");
 }
 
 /**
@@ -83,7 +83,7 @@ function normalizeChapters(raw: unknown): string[][] {
       .sort((a, b) => a - b)
       .map((n) => normalizeVerses((raw as Record<string, unknown>)[String(n)]));
   }
-  throw new BibleFormatError("Unrecognized chapters shape");
+  throw new BibleFormatError("El archivo JSON no tiene la forma de una Biblia: no se encontraron sus capítulos.");
 }
 
 /** A verse is text or it is nothing. `String()` on a shape we did not expect

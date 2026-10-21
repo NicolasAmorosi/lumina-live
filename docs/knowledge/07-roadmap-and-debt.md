@@ -72,7 +72,16 @@ críticos, altos y medios. Quedó abierto esto, cada cosa con su motivo:
   apagar y prender el proyector en pleno culto (la ventana se oculta, el sonido sigue, y vuelve sola a
   pantalla completa); prender el proyector con la app ya abierta; plan de energía; LibreOffice 64 bits
   en un primer arranque en frío; «Probar video» con HEVC de iPhone; la salida de audio por HDMI; y la
-  suite E2E contra el `.exe` instalado (`WORSHIP_E2E_EXECUTABLE`).
+  suite E2E contra el `.exe` instalado (`WORSHIP_E2E_EXECUTABLE`), con `WORSHIP_E2E_HYMNAL` apuntando
+  a la carpeta del himnario de esa PC para que corra también `hymnal.spec.ts`.
+- **Lo que la suite E2E no puede ejercitar**: soltar archivos desde Finder/Explorer
+  (`getPathForFile` exige un `File` nativo), dos pantallas reales, y los diálogos nativos — esos se
+  contestan reemplazando `dialog.showOpenDialog` en main (`answerOpenDialog`), así que el botón y todo
+  lo que sigue sí son los reales.
+- **31 de los 35 `Select` no tienen nombre accesible.** Los que viven en un `FieldRow` quedan
+  nombrados solo por el `role="group"`, no el combobox; los tres del navegador de la Biblia y el
+  filtro de Programas, por nada. El arreglo es en el primitivo (que `Select` tome el `labelId` del
+  `FieldRow` que lo contiene) más un `aria-label` en los cuatro sueltos.
 
 ## Multiplataforma — resuelto
 

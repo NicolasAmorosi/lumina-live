@@ -1,0 +1,192 @@
+import fs from "node:fs";
+import path from "node:path";
+import type { MediaAsset } from "../../src/shared/types/media";
+import { fixture } from "./support/paths";
+import { expect, relaunch, test, videoStates, type WorshipApp } from "./support/app";
+
+/**
+ * The library as the operator meets it: files picked with the native dialog,
+ * found by name, removed (and un-removed), moved behind the app's back, and
+ * browsed straight off a linked folder. Files a test changes are copies under
+ * the throwaway profile, never the shared fixtures.
+ */
+
+/** A copy of a fixture under this test's profile, so it can be moved,
+ *  overwritten or deleted. */
+function copyFixture(app: WorshipApp, name: string, as: string = name): string {
+  const target = path.join(app.profile, "media-src", as);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.copyFileSync(fixture(name), target);
+  return target;
+}
+
+const panel = (app: WorshipApp, tab: "Videos" | "Imágenes" | "Audios" | "Presentaciones") =>
+  app.control.getByRole("tabpanel", { name: tab });
+
+const tileNames = (app: WorshipApp, tab: "Videos" | "Imágenes" | "Audios" | "Presentaciones") =>
+  panel(app, tab).getByRole("list").getByRole("button").evaluateAll((tiles) => tiles.map((tile) => tile.textContent?.trim()));
+
+const toast = (app: WorshipApp, text: string | RegExp) => app.control.getByRole("status").filter({ hasText: text });
+
+test("«Agregar» imports what the dialog returns, and a cancelled dialog adds nothing", async ({ app }) => {
+  await app.openResources("Media", "Videos");
+  await expect(panel(app, "Videos").getByText("No hay archivos")).toBeVisible();
+
+  await app.answerOpenDialog();
+  await panel(app, "Videos").getByRole("button", { name: "Agregar", exact: true }).click();
+  await app.control.waitForTimeout(500);
+  await expect(panel(app, "Videos").getByText("No hay archivos")).toBeVisible();
+
+  await app.answerOpenDialog(fixture("clip.mp4"));
+  await panel(app, "Videos").getByRole("button", { name: "Agregar", exact: true }).click();
+  await expect(panel(app, "Videos").getByRole("button", { name: "clip" })).toBeVisible();
+  // And it is a real asset, ready to project.
+  await panel(app, "Videos").getByRole("button", { name: "clip" }).dblclick();
+  const projector = await app.projector();
+  await expect.poll(async () => (await videoStates(projector))[0]?.currentTime ?? 0).toBeGreaterThan(0.3);
+});
+
+test("a file is found by name, and the chosen order survives a restart", async ({ app }) => {
+  const paths = ["alba.png", "coro.png", "zeta.png"].map((name) => copyFixture(app, "photo.png", name));
+  await app.invoke<MediaAsset[]>("library:add", { kind: "image", paths });
+  await app.openResources("Media", "Imágenes");
+
+  await app.control.getByRole("button", { name: "Ordenar" }).click();
+  await app.control.getByRole("menuitemradio", { name: "Nombre (A → Z)" }).click();
+  await expect.poll(() => tileNames(app, "Imágenes")).toEqual(["alba", "coro", "zeta"]);
+  await app.control.getByRole("button", { name: "Ordenar" }).click();
+  await app.control.getByRole("menuitemradio", { name: "Nombre (Z → A)" }).click();
+  await expect.poll(() => tileNames(app, "Imágenes")).toEqual(["zeta", "coro", "alba"]);
+
+  const search = panel(app, "Imágenes").getByRole("textbox", { name: "Buscar por nombre…" });
+  await search.fill("co");
+  await expect.poll(() => tileNames(app, "Imágenes")).toEqual(["coro"]);
+  await search.fill("nada");
+  await expect(panel(app, "Imágenes").getByText("Sin resultados")).toBeVisible();
+  await search.press("Escape");
+  await expect.poll(() => tileNames(app, "Imágenes")).toEqual(["zeta", "coro", "alba"]);
+
+  await app.quit();
+  const again = await relaunch(app);
+  await again.openResources("Media", "Imágenes");
+  // The order is durable; the search is not.
+  await expect.poll(() => tileNames(again, "Imágenes")).toEqual(["zeta", "coro", "alba"]);
+  await expect(panel(again, "Imágenes").getByRole("textbox", { name: "Buscar por nombre…" })).toHaveValue("");
+});
+
+test("removing a file can be undone, and otherwise it is gone for good", async ({ app }) => {
+  await app.addMedia("image", "photo.png");
+  await app.previewFile("Imágenes", "photo");
+  await panel(app, "Imágenes").getByRole("button", { name: "Quitar", exact: true }).click();
+  await expect(panel(app, "Imágenes").getByRole("button", { name: "photo" })).toHaveCount(0);
+
+  await toast(app, "Se quitó «photo» de la biblioteca.").getByRole("button", { name: "Deshacer" }).click();
+  await expect(panel(app, "Imágenes").getByRole("button", { name: "photo" })).toBeVisible();
+
+  // The Delete key does the same thing to the selected tile.
+  await panel(app, "Imágenes").getByRole("button", { name: "photo" }).click();
+  await app.control.keyboard.press("Delete");
+  await expect(panel(app, "Imágenes").getByRole("button", { name: "photo" })).toHaveCount(0);
+  // Once the undo window closes, main has really dropped it.
+  await expect.poll(() => app.invoke<MediaAsset[]>("library:list", { kind: "image" }), { timeout: 12_000 }).toEqual([]);
+});
+
+test("a file used in a saved program is only removed after a warning naming it", async ({ app }) => {
+  const { control } = app;
+  await app.addMedia("image", "photo.png");
+  await app.previewFile("Imágenes", "photo");
+  await panel(app, "Imágenes").getByRole("button", { name: "Agregar al programa" }).click();
+  await control.getByRole("button", { name: "Guardar", exact: true }).click();
+  const programs = control.getByRole("dialog", { name: "Programas" });
+  await programs.getByRole("textbox", { name: "Nombre" }).fill("Culto del sábado");
+  await programs.getByRole("button", { name: "Guardar", exact: true }).last().click();
+  await programs.getByRole("button", { name: "Cerrar" }).click();
+
+  await panel(app, "Imágenes").getByRole("button", { name: "photo" }).click();
+  await panel(app, "Imágenes").getByRole("button", { name: "Quitar", exact: true }).click();
+  // Refused, with a way through.
+  await toast(app, "No se puede quitar: se usa en un programa guardado.").getByRole("button", { name: "Eliminar igualmente" }).click();
+  const confirm = control.getByRole("dialog", { name: "¿Eliminar igualmente?" });
+  await expect(confirm).toContainText("Culto del sábado");
+  await confirm.getByRole("button", { name: "Eliminar igualmente" }).click();
+
+  await expect(panel(app, "Imágenes").getByRole("button", { name: "photo" })).toHaveCount(0);
+  await expect(control.getByText("Programa vacío")).toBeVisible();
+  const [saved] = await app.invoke<{ id: number; itemCount: number }[]>("programs:list");
+  expect(saved?.itemCount).toBe(0);
+});
+
+test("a file moved away is shown missing and relocated without losing its row", async ({ app }) => {
+  const original = copyFixture(app, "clip.mp4");
+  await app.invoke<MediaAsset[]>("library:add", { kind: "video", paths: [original] });
+  await app.previewFile("Videos", "clip");
+  await panel(app, "Videos").getByRole("button", { name: "Agregar al programa" }).click();
+  await app.quit("close");
+
+  // Moved while the app was closed, the way a renamed folder does it.
+  const moved = path.join(app.profile, "elsewhere", "clip.mp4");
+  fs.mkdirSync(path.dirname(moved), { recursive: true });
+  fs.renameSync(original, moved);
+
+  const again = await relaunch(app);
+  await again.openResources("Media", "Videos");
+  await expect(panel(again, "Videos").getByRole("button", { name: "clip" })).toContainText("No encontrado");
+  // The recovered order of service still has it, and PREVIEW says what is wrong.
+  await again.control.getByRole("main").getByRole("list").first().getByRole("listitem").filter({ hasText: "clip" }).click();
+  await expect(again.previewColumn().getByText("Media no encontrada").first()).toBeVisible();
+
+  await again.answerOpenDialog(moved);
+  await again.previewColumn().getByRole("button", { name: "Relocalizar…" }).click();
+  await expect(toast(again, "«clip» quedó apuntando al archivo nuevo")).toBeVisible();
+  await expect(panel(again, "Videos").getByRole("button", { name: "clip" })).not.toContainText("No encontrado");
+
+  await again.goLive();
+  const projector = await again.projector();
+  await expect.poll(async () => (await videoStates(projector))[0]?.currentTime ?? 0).toBeGreaterThan(0.3);
+});
+
+test("a file the projector cannot play is reported in the control window, never on the projector", async ({ app }) => {
+  const file = copyFixture(app, "clip.mp4");
+  await app.invoke<MediaAsset[]>("library:add", { kind: "video", paths: [file] });
+  // Probed as playable, then broken on disk behind the app's back.
+  await app.control.waitForTimeout(2500);
+  fs.writeFileSync(file, Buffer.alloc(64 * 1024, 7));
+
+  await app.previewFile("Videos", "clip");
+  await app.goLive();
+  const projector = await app.projector();
+  await expect(toast(app, "No se pudo reproducir «clip» en el proyector")).toBeVisible();
+  await expect(app.liveColumn().getByText("No se pudo reproducir", { exact: true })).toBeVisible();
+  // The congregation sees no error text.
+  await expect(projector.locator("body")).not.toContainText("No se pudo");
+});
+
+test("a linked folder shows what is on disk, converts what needs it, and unlinks without touching files", async ({ app }) => {
+  const folder = path.dirname(copyFixture(app, "clip.mp4"));
+  copyFixture(app, "clip-xvid.avi");
+  copyFixture(app, "photo.png");
+
+  await app.openResources("Media", "Videos");
+  await app.answerOpenDialog(folder);
+  await panel(app, "Videos").getByRole("button", { name: "Vincular carpeta" }).click();
+  await expect(panel(app, "Videos").getByRole("button", { name: folder })).toHaveAttribute("aria-pressed", "true");
+  // Only the videos of the folder, in this tab.
+  await expect.poll(() => tileNames(app, "Videos")).toEqual(expect.arrayContaining(["clip", "clip-xvid"]));
+  expect(await tileNames(app, "Videos")).toHaveLength(2);
+  // An AVI seen in a linked folder converts on its own.
+  await expect
+    .poll(() => app.log.some((line) => line.includes("[convert]") && line.includes("clip-xvid.avi →")), { timeout: 60_000 })
+    .toBe(true);
+
+  await panel(app, "Videos").getByRole("button", { name: "clip-xvid" }).dblclick();
+  const projector = await app.projector();
+  await expect.poll(async () => (await videoStates(projector))[0]?.videoWidth ?? 0).toBe(640);
+
+  // Focus, not hover: on macOS the fullscreen projector is the key window and a
+  // synthetic hover over the control window does not always apply `:hover`.
+  await panel(app, "Videos").getByRole("button", { name: folder }).focus();
+  await panel(app, "Videos").getByRole("button", { name: "Desvincular carpeta" }).click();
+  await app.control.getByRole("dialog", { name: "¿Desvincular la carpeta?" }).getByRole("button", { name: "Desvincular carpeta" }).click();
+  await expect(panel(app, "Videos").getByRole("button", { name: folder })).toHaveCount(0);
+  expect(fs.readdirSync(folder).sort()).toEqual(["clip-xvid.avi", "clip.mp4", "photo.png"]);
+});

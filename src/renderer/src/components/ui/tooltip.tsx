@@ -117,7 +117,10 @@ function FloatingTooltip({ children, className, content, fit = "text" }: Tooltip
   }, [open]);
 
   function close(e: { relatedTarget?: EventTarget | null }) {
-    if (triggerRef.current?.contains(e.relatedTarget as Node)) return;
+    // Not always a Node: when the pointer leaves straight out of the document
+    // (into the title bar, onto the projector's screen) React reports the
+    // `window`, and `contains(window)` threw — an «error inesperado» toast.
+    if (e.relatedTarget instanceof Node && triggerRef.current?.contains(e.relatedTarget)) return;
     setOpen(false);
     setPosition(null);
   }

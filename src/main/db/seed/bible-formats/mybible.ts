@@ -160,14 +160,14 @@ export function parseMyBibleModule(filePath: string): ParsedBible {
   try {
     db = new Database(filePath, { readonly: true, fileMustExist: true });
   } catch (error) {
-    throw new BibleFormatError(`Not a readable SQLite module: ${String(error)}`);
+    throw new BibleFormatError(`No se pudo abrir el módulo SQLite: ${String(error)}`);
   }
 
   try {
     const tables = tableNames(db);
     if (tables.has("verses")) return readMyBibleZone(db, tables);
     if (tables.has("bible")) return readMySword(db, tables);
-    throw new BibleFormatError("SQLite file has neither a `verses` nor a `Bible` table");
+    throw new BibleFormatError("El archivo SQLite no es un módulo de MyBible ni de MySword: no tiene versículos.");
   } finally {
     db.close();
   }

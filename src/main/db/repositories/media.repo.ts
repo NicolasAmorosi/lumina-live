@@ -349,11 +349,34 @@ export class MediaRepo {
    *  can be invalidated without re-reading the file. Called from the two
    *  places that ever compute one: a real conversion (which needs the hash
    *  anyway, so this is free) and the startup backfill. */
+  /** Stamps the digest of the file as it is NOW — so the row's own
+   *  `(size, mtime)` is written too, or the stamp would read as stale against
+   *  a row that still describes the file before an edit. */
   setContentHash(id: number, contentHash: string, sizeBytes: number, mtimeMs: number): void {
     this.db
       .update(mediaAssets)
-      .set({ contentHash, contentHashSize: sizeBytes, contentHashMtimeMs: mtimeMs })
+      .set({ contentHash, contentHashSize: sizeBytes, contentHashMtimeMs: mtimeMs, sizeBytes, mtimeMs })
       .where(eq(mediaAssets.id, id))
+      .run();
+  }
+
+  /**
+   * Points the row's `(size, mtime)` at the file on disk. Nothing else keeps
+   * them current for a library file edited in place (the sweep only checks
+   * existence), and every content-hash stamp is validated against them — so a
+   * stale row kept an edited deck's old digest "valid" and served last week's
+   * slides. Also the thumbnail's cache-buster (`assetThumbVersion`).
+   */
+  refreshStat(id: number, sizeBytes: number, mtimeMs: number): void {
+    this.db
+      .update(mediaAssets)
+      .set({ sizeBytes, mtimeMs, updatedAt: Date.now() })
+      .where(
+        and(
+          eq(mediaAssets.id, id),
+          sql`(${mediaAssets.sizeBytes} IS NOT ${sizeBytes} OR ${mediaAssets.mtimeMs} IS NOT ${mtimeMs})`,
+        ),
+      )
       .run();
   }
 
@@ -456,6 +479,7 @@ export class MediaRepo {
     const changedKinds = new Set<AssetKind>();
     const toClear: number[] = [];
     const toMark: number[] = [];
+    const toRestat: { id: number; sizeBytes: number; mtimeMs: number }[] = [];
 
     // Asynchronous existence checks, a chunk at a time. `existsSync` per row
     // was the wrong tool for the one case this function exists to handle: a
@@ -467,27 +491,31 @@ export class MediaRepo {
     const PROBE_CHUNK = 200;
     for (let i = 0; i < rows.length; i += PROBE_CHUNK) {
       const slice = rows.slice(i, i + PROBE_CHUNK);
-      const exists = await Promise.all(
-        slice.map((row) =>
-          fs.promises
-            .access(row.path, fs.constants.F_OK)
-            .then(() => true)
-            .catch(() => false),
-        ),
-      );
+      //
+      // `stat`, not `access`: the same one syscall, and it is the only place
+      // that notices a file EDITED in place. Every stamp in the app — a deck's
+      // content hash, a video's probe and converted copy, a thumbnail — is
+      // checked against the row's `(size, mtime)`, so a row nobody refreshed
+      // kept last week's announcements "current" forever.
+      const stats = await Promise.all(slice.map((row) => fs.promises.stat(row.path).catch(() => null)));
       slice.forEach((row, index) => {
-        if (exists[index] && row.missingSince !== null) {
+        const stat = stats[index];
+        if (stat && row.missingSince !== null) {
           toClear.push(row.id);
           changedKinds.add(row.kind);
-        } else if (!exists[index] && row.missingSince === null) {
+        } else if (!stat && row.missingSince === null) {
           toMark.push(row.id);
+          changedKinds.add(row.kind);
+        }
+        if (stat && (stat.size !== row.sizeBytes || Math.trunc(stat.mtimeMs) !== row.mtimeMs)) {
+          toRestat.push({ id: row.id, sizeBytes: stat.size, mtimeMs: Math.trunc(stat.mtimeMs) });
           changedKinds.add(row.kind);
         }
       });
       await new Promise((resolve) => setImmediate(resolve));
     }
 
-    if (toClear.length === 0 && toMark.length === 0) return changedKinds;
+    if (toClear.length === 0 && toMark.length === 0 && toRestat.length === 0) return changedKinds;
 
     const now = Date.now();
     const run = this.sqlite.transaction(() => {
@@ -507,6 +535,7 @@ export class MediaRepo {
           .where(inArray(mediaAssets.id, slice))
           .run();
       }
+      for (const { id, sizeBytes, mtimeMs } of toRestat) this.refreshStat(id, sizeBytes, mtimeMs);
     });
     run();
 

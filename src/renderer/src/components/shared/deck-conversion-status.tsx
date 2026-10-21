@@ -28,8 +28,12 @@ export function DeckConversionStatus({
   const entry = useDeckStore((s) => s.byAssetId[assetId]);
   const cancelConversion = useDeckStore((s) => s.cancelConversion);
 
+  // Every state below puts its action in the same slot of the same
+  // `LoadingState`, so without keys React reused one `<button>` for «Cancelar»
+  // and «Reintentar»: a conversion starting between the press and the release
+  // turned a click on «Reintentar» into a cancel.
   const cancelAction = (
-    <Button onClick={() => void cancelConversion(assetId)} size="xs" variant="ghost">
+    <Button key="cancel" onClick={() => void cancelConversion(assetId)} size="xs" variant="ghost">
       {t("deck.cancel")}
     </Button>
   );
@@ -61,7 +65,7 @@ export function DeckConversionStatus({
       <LoadingState
         action={
           onRetry ? (
-            <Button onClick={onRetry} size="xs" variant="outline">
+            <Button key="retry" onClick={onRetry} size="xs" variant="outline">
               {t("deck.retry")}
             </Button>
           ) : undefined
@@ -79,7 +83,7 @@ export function DeckConversionStatus({
       <LoadingState
         action={
           onRetry ? (
-            <Button onClick={onRetry} size="xs" variant="outline">
+            <Button key="retry" onClick={onRetry} size="xs" variant="outline">
               {t("deck.retry")}
             </Button>
           ) : undefined

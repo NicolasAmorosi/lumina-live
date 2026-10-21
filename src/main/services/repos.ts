@@ -44,6 +44,8 @@ export function initRepos(db: Db, sqlite: Database.Database): void {
 }
 
 export const getDbHandle = () => assertInit(dbHandle, "Database");
+/** False once `closeDatabase()` ran — late work on the way out checks it instead of throwing. */
+export const isDatabaseOpen = () => dbHandle !== null;
 
 /**
  * Closes the database on the way out, from `will-quit`.

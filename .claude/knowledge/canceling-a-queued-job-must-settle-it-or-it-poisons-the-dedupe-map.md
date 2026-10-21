@@ -66,7 +66,29 @@ review — the correct pattern is right there, three functions up.
   pudo convertir" for something they cancelled on purpose. That path only became reachable at all
   once the job started settling.
 
+### Settling is not telling: the queued path also has to PUSH `stale` (2026-10-18)
+
+- The "maps it to `stale`" corollary above stopped being true. `cancelConversion` later began
+  superseding its own request (so a late resolution cannot overwrite main's word) and waiting for
+  main's `deck-progress` push instead. Only the RUNNING path pushed: `runConversion`'s catch emits
+  `stale`, `settleCanceledJob` emitted nothing. A deck cancelled while it waited in line — behind
+  another deck, or behind «Preparar carpeta» — left PREVIEW on «Preparando la conversión…» forever.
+  `settleCanceledJob` now emits the same `stale` push.
+- Two more holes in the same flow, all found by the E2E suite (`tests/e2e/decks.spec.ts`):
+  - A cancel pressed before the request reached main (the first ~100 ms, while the panel already
+    shows «Preparando…») had nothing to cancel and got no push: the click was lost and the deck
+    converted anyway. `cancelConversion` marks the entry `stale` itself, and `useDeck` does not
+    ensure a deck that is `stale` with no slides (the cancelled test `DeckConversionStatus` uses).
+  - A cancelled deck that a background prewarm finished later: `applyProgress` drops an entry that
+    turns `ready` with no DTO and nobody awaiting it (the memory rule above), and `!entry` reads as
+    "queued" — «Preparando…» over a ready deck. `useDeck` re-peeks when its entry disappears.
+  - «Reintentar» and «Cancelar» sit in the same slot of the same `LoadingState`, so React reused one
+    `<button>`: a conversion starting between press and release turned a retry into a cancel. Keyed.
+- Trap for tests: right after a cancel, main is still killing `soffice` (~400 ms) and the job is
+  still in `inFlight`, so a new request for that deck JOINS the dying promise and dies with it. Wait
+  for main's `stale` push before asking again.
+
 See also [prewarm LRU grace and linked-audio full-file read](prewarm-lru-grace-and-linked-audio-full-file-read.md)
 for the other half of the prewarm queue's history.
 
-**Last updated:** 2026-09-11
+**Last updated:** 2026-10-18

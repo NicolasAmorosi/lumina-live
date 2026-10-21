@@ -77,7 +77,8 @@ something on the projector.
   keyboard it stays the button's.
 - **`:focus-visible` cannot make that call.** Measured: after a real mouse press it reads `false`,
   but Chromium flips it to `true` on the very Enter keydown being handled, already in the window
-  capture phase. So `use-global-shortcuts.ts` records the modality at FOCUS time instead:
+  capture phase. So the modality is recorded at FOCUS time instead (in
+  `lib/focus-modality.ts` since the later 2026-10-18 pass, `use-global-shortcuts.ts` before):
   `pointerdown`/`pointerup`/`pointercancel` keep a pressed flag, and `focusin` stores the target
   only when it got focus during a press (`pointerFocused`).
 - **Companion rule:** the global handler returns early on `e.defaultPrevented`. A key a widget
@@ -100,5 +101,23 @@ something on the projector.
   role check still covers before the pointer exemption) and any widget that handles the arrow
   itself and `preventDefault`s it (`VirtualGrid`'s tiles), which the `defaultPrevented` early
   return already protects.
+
+### …and on a thumbnail too: VirtualGrid lets go of the arrows after a click (2026-10-18, later)
+
+- The `VirtualGrid` exception above turned out to be the same trap one level down. Its delegated
+  `onKeyDown` runs before the `window` listener and `preventDefault`s every arrow, so the
+  `defaultPrevented` early return meant **any** widget handler beat the modality rule. Measured with
+  the E2E suite: deck live on 1, click slide 2 in PREVIEW, → — projector still on 1 (focus moved to
+  the tile below); click slide 2 in the LIVE grid, → — projector stays on 2; click a library tile,
+  ↓ — PREVIEW does not move.
+- The user decided (2026-10-18): after a MOUSE click on a thumbnail the arrows are the operator's,
+  like on any other button; the grid walks its tiles only when reached by keyboard. `VirtualGrid`
+  now returns early on an arrow whose target `isPointerFocused()`. The modality moved to
+  `src/renderer/src/lib/focus-modality.ts` because two places ask.
+- **A second trap in the modality itself:** clicking the element that ALREADY has focus moves no
+  focus, so no `focusin` fires and the keyboard's modality stuck — a tile reached with the arrows
+  and then clicked swallowed Enter (native activation) instead of going EN VIVO. `pointerup` now
+  re-records the modality when the press landed inside `document.activeElement`.
+- Covered by `tests/e2e/keyboard.spec.ts`; each test there fails on the previous build.
 
 **Last updated:** 2026-10-18

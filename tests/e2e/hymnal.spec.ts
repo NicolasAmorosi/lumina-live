@@ -1,0 +1,58 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import type { MediaAsset } from "../../src/shared/types/media";
+import { audioStates, expect, test } from "./support/app";
+
+/**
+ * The decks the app exists for: the church's hymnal, legacy OLE2 `.pps` files
+ * whose song is a separate `.mp3` beside them and whose timings LibreOffice
+ * loses on the way to `.pptx`. No generated fixture reproduces all of that, so
+ * this runs against the real folder when the machine has it —
+ * `WORSHIP_E2E_HYMNAL=<folder with 522.pps>` on the church PC — and skips
+ * otherwise. The files are only read, never changed.
+ */
+const HYMNAL = process.env["WORSHIP_E2E_HYMNAL"] ?? path.join(os.homedir(), "Downloads/PPT test/Himnario Nuevo Cantado");
+const HYMN = path.join(HYMNAL, "522.pps");
+
+test.skip(!fs.existsSync(HYMN), `no hymnal at ${HYMNAL} (set WORSHIP_E2E_HYMNAL)`);
+
+/** The slide the projector shows now: the topmost deck image. */
+function projectedSlide(page: import("@playwright/test").Page): Promise<number | null> {
+  return page.evaluate(() => {
+    const last = [...document.querySelectorAll<HTMLImageElement>('img[src^="worship://deck/"]')].at(-1);
+    const match = last ? /\/(\d+)$/.exec(last.src) : null;
+    return match ? Number(match[1]) : null;
+  });
+}
+
+test("hymn 522 finds its song, keeps its timings and advances with the music", async ({ app }) => {
+  test.setTimeout(240_000);
+  await app.invoke<MediaAsset[]>("library:add", { kind: "ppt", paths: [HYMN] });
+  await app.previewFile("Presentaciones", "522");
+  const preview = app.previewColumn();
+  await expect(preview.getByRole("list", { name: "Presentación" }).getByRole("button", { name: "14", exact: true })).toBeAttached({
+    timeout: 120_000,
+  });
+  // The song next to the file, and the timings the .pptx export dropped.
+  await expect(preview.getByText("522 Suenen las palabras")).toBeVisible();
+  await expect(preview.getByText("Auto-avance", { exact: true })).toBeVisible();
+
+  await app.goLive();
+  const projector = await app.projector();
+  await expect.poll(async () => (await audioStates(projector))[0]?.currentTime ?? 0).toBeGreaterThan(0.5);
+  await expect(app.liveColumn().getByText("522 (música)")).toBeVisible();
+  expect(await projectedSlide(projector)).toBe(1);
+  // 10.5 s on the first slide, by the deck's own clock.
+  await expect.poll(() => projectedSlide(projector), { timeout: 20_000 }).toBe(2);
+
+  // NEGRO stops the song AND the slides; uncovering picks both up together.
+  await app.control.locator("body").press("b");
+  await expect.poll(async () => (await audioStates(projector))[0]?.paused).toBe(true);
+  const coveredAt = (await audioStates(projector))[0]?.currentTime ?? 0;
+  await app.control.waitForTimeout(3000);
+  await app.control.locator("body").press("b");
+  await expect.poll(async () => (await audioStates(projector))[0]?.paused).toBe(false);
+  expect(await projectedSlide(projector)).toBe(2);
+  expect((await audioStates(projector))[0]?.currentTime).toBeGreaterThanOrEqual(coveredAt);
+});

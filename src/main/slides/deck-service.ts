@@ -577,6 +577,11 @@ function settleCanceledJob(job: Job, message: string): void {
   inFlight.delete(job.assetId);
   releaseBatchDirFor(job.assetId);
   job.reject(new SlideError("CANCELED", message));
+  // The same push a RUNNING job's cancellation gets from `runConversion`. The
+  // control window ignores this rejection on purpose and waits for main's
+  // word, so without it a deck cancelled while still in line stayed on
+  // «Preparando la conversión…» forever.
+  emitProgress({ assetId: job.assetId, status: "stale", done: 0, total: 0, error: message });
 }
 
 export function cancel(assetId: number): void {
@@ -826,6 +831,11 @@ function tryCacheHit(assetId: number, sourcePath: string, force: boolean): DeckD
   ) {
     return hit(byAsset);
   }
+
+  // The stamp below is validated against the asset row's `(size, mtime)`, so
+  // the row has to describe the file on disk first — or a deck edited in place
+  // matches its own old digest.
+  getMediaRepo().refreshStat(assetId, stat.size, Math.trunc(stat.mtimeMs));
 
   // 2. The deck this asset's BYTES belong to, via its stamped content hash.
   //    Without this, a duplicate file (the same hymn in two folders — 555 of
@@ -1316,7 +1326,20 @@ export function getDeck(assetId: number): DeckDTO | null {
   const repo = getSlidesRepo();
   const row = repo.findDeckByAsset(assetId);
   if (!row || row.status !== "ready") return null;
+  // Not a hit for `tryCacheHit` either, so `ensure` reconverts it — and the new
+  // row REPLACES this one (same identity, same cache dir). A deck that went
+  // live off this peek lost, mid-service, every slide Chromium had not loaded
+  // yet: `worship://deck/<old id>/n` answered 404 under the projector.
+  if (row.converterVersion !== SLIDES_CONVERTER_VERSION) return null;
   if (!fs.existsSync(row.cacheDir)) return null;
+  // A source edited in place is not a hit — the same size+mtime check as
+  // `tryCacheHit`. Without it the renderer, which peeks before it ensures,
+  // never ensured at all: an announcements deck fixed during the week
+  // previewed AND went live with last week's slides. A source that cannot be
+  // stat'ed keeps the cached deck; telling it missing is the sweeper's job.
+  const sourcePath = getMediaRepo().getPathById(assetId);
+  const stat = sourcePath ? fs.statSync(sourcePath, { throwIfNoEntry: false }) : undefined;
+  if (stat && (row.sourceSizeBytes !== stat.size || row.sourceMtimeMs !== Math.trunc(stat.mtimeMs))) return null;
   return toDeckDTO(row, assetId, { resolve: false });
 }
 

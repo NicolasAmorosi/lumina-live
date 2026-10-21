@@ -42,7 +42,10 @@ export function deckStatuses(assetIds: readonly number[]): Record<number, DeckSt
   const statuses = getSlidesRepo().statusesByAsset(assetIds);
   const result: Record<number, DeckStatusSummary> = {};
   for (const [assetId, { deckId, status }] of statuses) {
-    result[assetId] = { status, thumbUrl: status === "ready" ? slideThumbUrl(deckId, 1) : null };
+    // A `stale` row (older converter) still has every image on disk — it is
+    // reconverted for what it may be missing, not because its slides are bad.
+    const hasImages = status === "ready" || status === "stale";
+    result[assetId] = { status, thumbUrl: hasImages ? slideThumbUrl(deckId, 1) : null };
   }
   return result;
 }
