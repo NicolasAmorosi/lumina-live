@@ -550,6 +550,38 @@ export class SlidesRepo {
 
   // -- cache housekeeping ---------------------------------------------------
 
+  /**
+   * Points every deck row at its folder under `cacheRoot`, the slide cache of
+   * the profile open now. A row stores its folder as an ABSOLUTE path, so a
+   * profile copied to another folder, account or machine carries rows naming
+   * the original's folders: `worship://` refuses to serve outside this
+   * profile (every slide a broken image under the projector), and deleting
+   * such a deck deleted the ORIGINAL's files. A folder of the same name in
+   * this cache — which a copy brings along — is that deck's; without one the
+   * row is forgotten, never its files, and the deck converts again on demand.
+   * `path.win32.basename` because it splits on both separators: a Windows
+   * profile's rows read on a Mac, and the reverse. Returns the two counts.
+   */
+  adoptCacheRoot(cacheRoot: string): { rebased: number; forgotten: number } {
+    const root = path.resolve(cacheRoot);
+    const rows = this.db.select({ id: slideDecks.id, dir: slideDecks.cacheDir }).from(slideDecks).all();
+    const counts = { rebased: 0, forgotten: 0 };
+    this.sqlite.transaction(() => {
+      for (const row of rows) {
+        if (path.dirname(path.resolve(row.dir)) === root) continue;
+        const local = path.join(root, path.win32.basename(row.dir));
+        if (fs.existsSync(local)) {
+          this.db.update(slideDecks).set({ cacheDir: local }).where(eq(slideDecks.id, row.id)).run();
+          counts.rebased += 1;
+        } else {
+          this.deleteDeckRow(row.id);
+          counts.forgotten += 1;
+        }
+      }
+    })();
+    return counts;
+  }
+
   allDeckDirs(): string[] {
     return this.db.select({ dir: slideDecks.cacheDir }).from(slideDecks).all().map((r) => r.dir);
   }

@@ -1457,6 +1457,13 @@ export function sweepCache(): void {
   fs.rmSync(slidesTempDir, { recursive: true, force: true });
   fs.mkdirSync(slidesTempDir, { recursive: true });
 
+  // First: everything below deletes decks by the folder their row names, and
+  // a copied profile's rows name the original profile's folders.
+  const adopted = repo.adoptCacheRoot(slidesCacheDir);
+  if (adopted.rebased + adopted.forgotten > 0) {
+    console.info(`[slides] adopted a copied profile's cache: ${adopted.rebased} deck(s) rebased, ${adopted.forgotten} forgotten`);
+  }
+
   repo.deleteUnfinished();
 
   // Children whose deck row is gone. Never expected (the FK cascades), found
