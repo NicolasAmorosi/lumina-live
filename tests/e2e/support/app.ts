@@ -245,6 +245,11 @@ export function videoStates(page: Page) {
     [...document.querySelectorAll("video")].map((video) => ({
       src: video.currentSrc || video.src,
       currentTime: video.currentTime,
+      /** Where playback actually began (`played`), or `null` before any frame
+       *  played. Not `currentTime`: `play()` flips `paused` at readyState 0,
+       *  when `currentTime` still reads 0 for a video whose mount-time seek
+       *  has not landed yet. */
+      playedFrom: video.played.length > 0 ? video.played.start(0) : null,
       paused: video.paused,
       videoWidth: video.videoWidth,
       readyState: video.readyState,

@@ -86,12 +86,6 @@ críticos, altos y medios. Quedó abierto esto, cada cosa con su motivo:
   `#84adfc`, la cuenta regresiva en `#cd4900`/`#d0021b`): los defaults de Lumina Live solo visten lo
   que se crea desde el 2026-10-22, y las cuatro escenas de ejemplo se siembran una sola vez. Es a
   propósito —son contenido del operador—; pasarlas a la paleta nueva es editarlas a mano.
-- **`robustness.spec.ts` «a projector closed from outside…» falla ~1 de cada 5 contra el paquete de
-  macOS**, medido el 2026-10-22 igual en 2.2.0-beta.2 que en beta.3 (5 corridas cada uno): tras
-  «Reabrir», el test lee `currentTime` UNA vez apenas el video deja de estar en pausa, y a veces lee
-  `0`. No se investigó si es el test (leyó antes de que aterrice el seek de montaje) o el producto
-  (el video arranca un instante desde 0:00): pollear hasta `> 1,8` taparía justamente el segundo caso,
-  porque desde 0 también llega a 1,8 en dos segundos.
 - **Cuatro E2E fallaron una vez en la corrida completa del 2026-10-22 y pasaron solos al
   repetirlos**: `bible.spec` «after clicking EN VIVO…» y «a file that is not a Bible…» (el tab de
   Ajustes se desmontaba bajo el click), `keyboard.spec` «↓ after clicking a library tile…» y

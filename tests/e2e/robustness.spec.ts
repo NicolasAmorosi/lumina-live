@@ -36,9 +36,10 @@ test("a projector closed from outside is announced, and «Reabrir» brings back 
   await notice.getByRole("button", { name: "Reabrir" }).click();
 
   const second = await app.projector();
-  // Not on NEGRO, not back at 0:00: the same video, from where it was.
-  await expect.poll(async () => (await videoStates(second))[0]?.paused).toBe(false);
-  expect((await videoStates(second))[0]?.currentTime).toBeGreaterThan(1.8);
+  // Not on NEGRO, not back at 0:00: the same video, from where it was —
+  // read from where its playback began, which a frame from 0:00 would show.
+  await expect.poll(async () => (await videoStates(second))[0]?.playedFrom ?? null).not.toBeNull();
+  expect((await videoStates(second))[0]?.playedFrom).toBeGreaterThan(1.8);
   expect((await videoStates(second))[0]?.opacity).toBe(1);
   await expect(notice).toHaveCount(0);
 });
