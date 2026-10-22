@@ -89,6 +89,12 @@ críticos, altos y medios. Quedó abierto esto, cada cosa con su motivo:
   `0`. No se investigó si es el test (leyó antes de que aterrice el seek de montaje) o el producto
   (el video arranca un instante desde 0:00): pollear hasta `> 1,8` taparía justamente el segundo caso,
   porque desde 0 también llega a 1,8 en dos segundos.
+- **La primera diapositiva de un deck con auto-avance pierde el tiempo que tarda en abrir el
+  proyector**, si ese EN VIVO es el que lo abre: el temporizador arranca en el commit, no cuando el
+  proyector la pinta. Normalmente son 0,2 s; con main ocupado tras una conversión, hasta 3 s. Con
+  diapositivas de 2 s (el deck de `decks.spec.ts`) la primera no se ve nunca, y es el fallo
+  intermitente de «advances by itself». Igual en 2.2.0-beta.2. Ver
+  [el hallazgo](../../.claude/knowledge/auto-advance-starts-at-the-commit-so-a-cold-projector-eats-the-first-slide.md).
 - **Lo que la suite E2E no puede ejercitar**: soltar archivos desde Finder/Explorer
   (`getPathForFile` exige un `File` nativo), dos pantallas reales, y los diálogos nativos — esos se
   contestan reemplazando `dialog.showOpenDialog` en main (`answerOpenDialog`), así que el botón y todo
