@@ -9,7 +9,6 @@ export type DeckState = {
   /** Force a re-conversion (retry / stale file). Refused, with a toast, while
    *  that very deck is on the projector — see `reconvertDeck`. */
   reconvert: () => void;
-  locateSoffice: () => void;
   markStale: () => void;
   /** Cache-only re-fetch of the DTO — for after a change that never touches
    *  the deck cache, like setting the linked-audio override. */
@@ -37,7 +36,6 @@ export function useDeck(assetId: number | null, requiresSoffice = true): DeckSta
   const environment = useDeckStore((s) => s.environment);
   const ensure = useDeckStore((s) => s.ensure);
   const peek = useDeckStore((s) => s.peek);
-  const locateSoffice = useDeckStore((s) => s.locateSoffice);
   const markStale = useDeckStore((s) => s.markStale);
   const refreshDeck = useDeckStore((s) => s.peek);
   // Asked again whenever this deck's entry DISAPPEARS: the store drops one
@@ -70,7 +68,6 @@ export function useDeck(assetId: number | null, requiresSoffice = true): DeckSta
     reconvert: () => {
       if (assetId !== null) reconvertDeck(assetId);
     },
-    locateSoffice: () => void locateSoffice(),
     markStale: () => {
       if (assetId !== null) markStale(assetId);
     },

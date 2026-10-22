@@ -331,7 +331,7 @@ npm run test                 # vitest run — 402 casos en dos proyectos: `main`
                               #   fotograma congelado, store de toasts, utils). Nada importa `electron`: ese es
                               #   el límite del suite
 npm run test:watch            # el mismo suite en watch, mientras se toca un módulo
-npm run test:e2e              # build + Playwright: 101 recorridos de la app real (~6 min) con un perfil
+npm run test:e2e              # build + Playwright: 102 recorridos de la app real (~6 min) con un perfil
                               #   descartable y medios generados al vuelo con el FFmpeg empaquetado (videos, AVI,
                               #   WMA, PDF, y .pptx con auto-avance y con un WMV embebido si hay LibreOffice): en
                               #   vivo, biblioteca, LOGO, decks, Biblia, Funciones, programas, teclado, Ajustes,
@@ -478,8 +478,12 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   `warmBatchPdfCache` lo saca del lote. `--convert-to pdf` sobre un `.pdf` lo importa a **Draw** y
   lo vuelve a dibujar — medido, 157 KB → 1,76 MB. De ahí se sigue que **un PDF se proyecta sin
   LibreOffice instalado**: la pregunta es `deckRequiresSoffice(ext)` y se hace por deck, nunca por
-  entorno. Vive en el `AssetKind` `ppt` a propósito, porque en todo el renderer `kind === "ppt"`
-  ya significa "esto es un deck". Diagnóstico en
+  entorno. En el renderer va por `sofficeBlocks(environment, ext)` (`deck.store.ts`), y toda traba
+  pregunta además si el deck ya tiene diapositivas: uno convertido se proyecta sin LibreOffice. El
+  trabajo de fondo ni se encola si el último barrido no lo encontró (`cachedSofficeError`); lo que
+  abre el operador vuelve a buscarlo. Ver «Sin LibreOffice» en `03-slides-libreoffice.md`. Vive en
+  el `AssetKind` `ppt` a propósito, porque en todo el renderer `kind === "ppt"` ya significa "esto
+  es un deck". Diagnóstico en
   [`.claude/knowledge/a-pdf-source-breaks-two-assumptions-the-pipeline-made-about-its-own-output.md`](.claude/knowledge/a-pdf-source-breaks-two-assumptions-the-pipeline-made-about-its-own-output.md).
 - **Nunca leas un `.pptx` entero para sacarle sus partes XML.** Un zip es de acceso aleatorio: va
   todo por `readZipEntries` (`src/main/slides/zip-reader.ts`), que lee el directorio central y solo

@@ -48,6 +48,12 @@ export type SettingsMap = {
   "slides.sofficePathResolved": string | null;
   /** Guards the one-time LibreOffice profile warm-up per version. */
   "slides.profileWarmedVersion": string | null;
+  /** Whether a missing LibreOffice is announced on its own: the toast at
+   *  launch and the strip over the PPT tab. Off, the operator still meets it
+   *  where it actually stops something — a deck that cannot be converted, and
+   *  Ajustes — but a machine that never projects a PowerPoint stops being told
+   *  about it every morning. */
+  "slides.warnMissingSoffice": boolean;
   "slides.imageFormat": SlideImageFormat;
   "slides.cacheMaxMb": number;
   "slides.maxRenderWidth": number;
@@ -117,6 +123,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   "slides.sofficePath": null,
   "slides.sofficePathResolved": null,
   "slides.profileWarmedVersion": null,
+  "slides.warnMissingSoffice": true,
   "slides.imageFormat": "webp",
   "slides.cacheMaxMb": SLIDES_DEFAULT_CACHE_MB,
   "slides.maxRenderWidth": SLIDES_DEFAULT_RENDER_WIDTH,
@@ -197,6 +204,7 @@ export const SETTINGS_VALIDATORS: Record<keyof SettingsMap, (value: unknown) => 
   "slides.sofficePath": isNullOr(isString),
   "slides.sofficePathResolved": isNullOr(isString),
   "slides.profileWarmedVersion": isNullOr(isString),
+  "slides.warnMissingSoffice": isBoolean,
   "slides.imageFormat": isOneOf(SLIDE_IMAGE_FORMATS),
   "slides.cacheMaxMb": isNumberIn(1, 1_000_000),
   "slides.maxRenderWidth": isNumberIn(320, 16_384),

@@ -439,6 +439,16 @@ const es = {
       title: "LibreOffice no está disponible",
       body: "Lumina Live usa LibreOffice para convertir las presentaciones de PowerPoint a imágenes. Instalalo, o indicá dónde está el ejecutable soffice.",
       locate: "Buscar soffice…",
+      download: "Descargar LibreOffice",
+      recheck: "Comprobar de nuevo",
+      checking: "Buscando LibreOffice…",
+      found: "LibreOffice {version} está listo",
+      strip: "Los PowerPoint sin convertir no se pueden abrir. Los PDF y los ya convertidos funcionan normal.",
+      startup: "LibreOffice no está disponible: no se pueden convertir presentaciones de PowerPoint. Todo lo demás funciona normal.",
+      dontWarn: "No volver a mostrar",
+      liveRefused: "«{name}» no se puede proyectar: hace falta LibreOffice para convertirla.",
+      stageHint: "Hace falta LibreOffice para convertir esta presentación",
+      reconvertHint: "Hace falta LibreOffice para volver a convertirla.",
     },
     audio: {
       none: "Sin audio",
@@ -600,6 +610,12 @@ const es = {
     slidesQualityWarnTitle: "Cambiar estos dos obliga a reconvertir todo",
     slidesQualityWarnBody:
       "Cada presentación se guarda en caché bajo su contenido MÁS el ancho y el formato. Al cambiar cualquiera de los dos, ninguna de las ya convertidas se vuelve a encontrar: se reconvierten de a una, la primera vez que abrís cada una. No lo toques el mismo día del culto.",
+    sofficeFound: "Versión {version}",
+    sofficeMissing: "No disponible",
+    sofficeChecking: "Buscando…",
+    sofficeWarn: "Avisar si falta",
+    sofficeWarnDesc:
+      "Al abrir la app y arriba de la pestaña de presentaciones. Apagado, una presentación que no se puede convertir lo sigue diciendo.",
     sections: {
       projection: "Proyección",
       slides: "Diapositivas",
@@ -618,6 +634,7 @@ const es = {
       versionsInstalled: "Versiones instaladas",
       slidesCache: "Caché de diapositivas",
       slidesQuality: "Calidad de conversión",
+      libreoffice: "LibreOffice",
       appearance: "Apariencia",
       language: "Idioma",
       folders: "Carpetas de archivos",

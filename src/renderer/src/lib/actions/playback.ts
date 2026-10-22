@@ -9,6 +9,7 @@ import { useAudioStore, nextAssetTrack } from "@renderer/stores/audio.store";
 import { findScene, useUtilityStore } from "@renderer/stores/utility.store";
 import { notifyManualNavigation } from "@renderer/effects/deck-autoplay";
 import { projectVerse } from "@renderer/lib/actions/bible";
+import { explainSofficeRefusal } from "@renderer/lib/actions/soffice";
 import { stopPreviewPlayback } from "@renderer/lib/actions/preview-playback";
 import { previewedScheduleItem } from "@renderer/lib/actions/preview";
 import { defaultMediaVolume } from "@renderer/stores/settings.store";
@@ -98,7 +99,10 @@ async function goLiveWithDeck(assetId: number, startSlideIndex: number, intent: 
   } else {
     deck = await deckStore.ensure(assetId);
   }
-  if (!deck || deck.status !== "ready" || deck.slides.length === 0) return false;
+  if (!deck || deck.status !== "ready" || deck.slides.length === 0) {
+    if (useDeckStore.getState().byAssetId[assetId]?.status === "failed") void explainSofficeRefusal(assetId);
+    return false;
+  }
   // The conversion above may have taken seconds. Anything the operator did to
   // the projector in the meantime outranks this deck.
   if (!isCurrentLiveIntent(intent)) return false;

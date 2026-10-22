@@ -15,6 +15,7 @@ import { broadcast } from "../services/broadcast";
 import type { DeckRow, NewAudio, NewSlide, NewVideo } from "../db/repositories/slides.repo";
 import { SlideError, isSlideError } from "./errors";
 import {
+  cachedSofficeError,
   convertBatchToPdf,
   convertBatchToPptx,
   convertTimeoutFor,
@@ -24,6 +25,7 @@ import {
   killRunningSoffice,
   locateSoffice,
   reapOrphanedSoffice,
+  requireSoffice,
   resetSofficeProfile,
   warmProfile,
 } from "./libreoffice";
@@ -430,6 +432,18 @@ export function prepareDeck(assetId: number, opts: PrepareOptions = {}): Promise
         // cleaned up.
         releaseBatchDirFor(assetId);
         return Promise.resolve(cacheHit);
+      }
+      // Background work never queues for a LibreOffice the last sweep found
+      // missing. Every tile scrolled into view, every deck in the schedule and
+      // every file just imported used to enqueue a job that read the whole
+      // file to hash it, flashed a progress bar on its tile and swept the disk
+      // for `soffice` again, only to fail. The operator opening a deck still
+      // goes through `requireSoffice`, which looks again — that is how a
+      // LibreOffice installed mid-session is found.
+      const missing = priority === "background" ? cachedSofficeError() : null;
+      if (missing && containerKind(sourcePath) !== "pdf") {
+        releaseBatchDirFor(assetId);
+        return Promise.reject(missing);
       }
     }
   }
@@ -935,6 +949,13 @@ async function runConversion(job: Job): Promise<DeckDTO> {
   fs.mkdirSync(jobDir, { recursive: true });
 
   try {
+    // Asked for first, and only here: a missing LibreOffice has to fail before
+    // the work rather than halfway through it (a legacy deck swept for it
+    // twice, once per pass), but not before the content-addressed hit above,
+    // which projects a duplicate without it. Inside the `try`, so the failure
+    // is announced like any other and never leaves a tile «converting».
+    if (containerKind(sourcePath) !== "pdf") await requireSoffice();
+
     const pdfDir = path.join(jobDir, "pdf");
     fs.mkdirSync(pdfDir, { recursive: true });
 

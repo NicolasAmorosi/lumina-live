@@ -17,7 +17,9 @@ import {
 } from "@renderer/components/ui";
 import { PreviewMissingState } from "@renderer/components/shared/preview-missing-state";
 import { DeckConversionStatus } from "@renderer/components/shared/deck-conversion-status";
+import { SofficeActions } from "@renderer/components/shared/soffice-missing";
 import { useDeck } from "@renderer/lib/hooks/use-deck";
+import { sofficeBlocks } from "@renderer/stores/deck.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
 import { clearPreview, setPreviewSlide } from "@renderer/lib/actions/preview";
@@ -99,10 +101,11 @@ export function DeckSlides({
   // A missing source file has nothing to convert — skip `useDeck`'s
   // ensure/conversion trigger entirely instead of surfacing its
   // "conversion failed" error for a file that was never going to exist.
-  const { entry, environment, locateSoffice, markStale, reconvert } = useDeck(
+  const { entry, environment, markStale, reconvert } = useDeck(
     missingSince !== null ? null : assetId,
     requiresSoffice,
   );
+  const blocked = sofficeBlocks(environment, ext);
   const base = useProjectionStore((s) => s.base);
   const previewIndex = usePreviewStore((s) => s.slideIndex);
 
@@ -113,19 +116,35 @@ export function DeckSlides({
     return <PreviewMissingState assetId={assetId} />;
   }
 
-  if (requiresSoffice && environment && !environment.available) {
+  const slides = entry?.deck?.slides ?? [];
+
+  // Only in front of a deck with nothing to show: one already converted
+  // projects without LibreOffice, and this gate used to hide its slides too.
+  //
+  // Main's own reason rides along: «not installed» is not the only one — a
+  // sandboxed flatpak is installed and still unusable, and its fix is a
+  // different package.
+  if (blocked && slides.length === 0) {
     return (
       <Callout tone="warning">
         <p className="font-medium">{t("deck.noLibreOffice.title")}</p>
         <p className="mt-1 text-xs text-muted-foreground">{t("deck.noLibreOffice.body")}</p>
-        <Button className="mt-2" onClick={locateSoffice} size="sm">
-          {t("deck.noLibreOffice.locate")}
-        </Button>
+        {environment?.message ? <p className="mt-1 text-xs text-subtle">{environment.message}</p> : null}
+        <SofficeActions className="mt-2" />
       </Callout>
     );
   }
 
-  const slides = entry?.deck?.slides ?? [];
+  /** «Volver a convertir»/«Reintentar» over slides that are still there —
+   *  replaced by the reason when it cannot work, rather than offered to fail. */
+  const reconvertAction = (label: string) =>
+    blocked ? (
+      <p className="mt-1 text-xs text-muted-foreground">{t("deck.noLibreOffice.reconvertHint")}</p>
+    ) : (
+      <Button className="mt-2" onClick={reconvert} size="sm">
+        {label}
+      </Button>
+    );
 
   // Only fall back to the loading/failed placeholder when there is nothing
   // else to show. A deck that already has a rendered grid (from a previous
@@ -164,17 +183,13 @@ export function DeckSlides({
       {entry?.status === "stale" ? (
         <Callout tone="warning">
           <p>{t("deck.stale")}</p>
-          <Button className="mt-2" onClick={reconvert} size="sm">
-            {t("deck.reconvert")}
-          </Button>
+          {reconvertAction(t("deck.reconvert"))}
         </Callout>
       ) : null}
       {entry?.status === "failed" ? (
         <Callout tone="danger">
           <p>{entry.error ?? t("deck.failed")}</p>
-          <Button className="mt-2" onClick={reconvert} size="sm">
-            {t("deck.retry")}
-          </Button>
+          {reconvertAction(t("deck.retry"))}
         </Callout>
       ) : null}
       {entry?.status === "ready" && entry.deck ? (

@@ -15,12 +15,12 @@ import { installGlobalErrorHandlers } from "@renderer/lib/global-error-handlers"
 import { api } from "@renderer/lib/api";
 import { toast } from "@renderer/lib/toast";
 import { restoreDraft } from "@renderer/lib/actions/programs";
+import { announceMissingSoffice } from "@renderer/lib/actions/soffice";
 import { loadScenes } from "@renderer/lib/actions/utility";
 import { loadPlates } from "@renderer/lib/actions/overlays";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { LOGO_URL } from "@shared/urls";
 import { useSettingsStore } from "@renderer/stores/settings.store";
-import { useDeckStore } from "@renderer/stores/deck.store";
 import { useBibleStore } from "@renderer/stores/bible.store";
 import { useDisplayStore } from "@renderer/stores/display.store";
 import { useLibraryStore } from "@renderer/stores/library.store";
@@ -92,6 +92,7 @@ export function App() {
   useEffect(() => {
     void (async () => {
       await loadSettings();
+      void announceMissingSoffice();
       const { settings } = useSettingsStore.getState();
       useLibraryStore
         .getState()
@@ -135,7 +136,6 @@ export function App() {
         console.warn("[draft] restore failed", error);
       }
     })();
-    void useDeckStore.getState().loadEnvironment();
     const stopProjectionEffects = startProjectionEffects();
     const stopLibrarySync = startLibrarySyncEffects();
     // Also what lets main start converting at all — see `conversion-sync.ts`.

@@ -284,21 +284,31 @@ async function runLocateSoffice(): Promise<SofficeStatus> {
   return cached;
 }
 
+function unavailableError(status: Extract<SofficeStatus, { available: false }>): SlideError {
+  const code =
+    status.reason === "not-executable"
+      ? "SOFFICE_NOT_EXECUTABLE"
+      : status.reason === "unsupported-flavor"
+        ? "SOFFICE_UNSUPPORTED_FLAVOR"
+        : "SOFFICE_NOT_FOUND";
+  return new SlideError(code, status.message);
+}
+
+/** The error a conversion would fail with right now, by the last sweep's
+ *  answer and without looking again — `null` while LibreOffice is available or
+ *  before any sweep has answered. For work nobody is waiting on: unlike
+ *  `requireSoffice`, it never pays for a new sweep. */
+export function cachedSofficeError(): SlideError | null {
+  return cached && !cached.available ? unavailableError(cached) : null;
+}
+
 export async function requireSoffice(): Promise<SofficeInfo> {
   let status = await locateSoffice();
   // A failed sweep is cached for the panels that only DISPLAY the answer, but
   // a conversion about to fail on it looks again: the startup probe can time
   // out on a cold machine, and that must not mean "no presentations today".
   if (!status.available && status.reason !== "unsupported-flavor") status = await locateSoffice({ force: true });
-  if (!status.available) {
-    const code =
-      status.reason === "not-executable"
-        ? "SOFFICE_NOT_EXECUTABLE"
-        : status.reason === "unsupported-flavor"
-          ? "SOFFICE_UNSUPPORTED_FLAVOR"
-          : "SOFFICE_NOT_FOUND";
-    throw new SlideError(code, status.message);
-  }
+  if (!status.available) throw unavailableError(status);
   return status.info;
 }
 

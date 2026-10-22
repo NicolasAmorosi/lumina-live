@@ -43,8 +43,11 @@ canciones/letras con secciones proyectables.
   justamente para que borrar-y-reimportar no sea destructivo.
 - **Pantalla de Configuración**: cuatro categorías (Proyección, Diapositivas, Biblia, Sistema) con
   tema, idioma, `media.volume`, las carpetas por tipo (`files.defaultFolders`) y las claves
-  `slides.*` ya expuestas. Lo que sigue sin UI es el override de LibreOffice
-  (`slides.sofficePath`), que hoy solo se toca desde el diálogo de "Buscar soffice…".
+  `slides.*` ya expuestas. Desde el 2026-10-22, Diapositivas abre con un grupo **LibreOffice**
+  (estado, versión y ruta, «Descargar», «Comprobar de nuevo», «Buscar soffice…» y el switch
+  `slides.warnMissingSoffice`). Lo que sigue sin UI es **borrar** el override
+  (`slides.sofficePath`): una ruta elegida a mano manda sobre la detección automática, así que si
+  apunta a algo que no es LibreOffice la única salida es elegir otra con «Buscar soffice…».
 
 ## Revisión pre-lanzamiento del 2026-10-18 — lo que quedó abierto a propósito
 
@@ -89,6 +92,11 @@ críticos, altos y medios. Quedó abierto esto, cada cosa con su motivo:
   `0`. No se investigó si es el test (leyó antes de que aterrice el seek de montaje) o el producto
   (el video arranca un instante desde 0:00): pollear hasta `> 1,8` taparía justamente el segundo caso,
   porque desde 0 también llega a 1,8 en dos segundos.
+- **Cuatro E2E fallaron una vez en la corrida completa del 2026-10-22 y pasaron solos al
+  repetirlos**: `bible.spec` «after clicking EN VIVO…» y «a file that is not a Bible…» (el tab de
+  Ajustes se desmontaba bajo el click), `keyboard.spec` «↓ after clicking a library tile…» y
+  `logo.spec` «L covers what is live…». Corrida contra `out/`, con el i18n y el aviso de LibreOffice
+  sin commitear; no se investigó si alguno es del producto.
 - **Lo que la suite E2E no puede ejercitar**: soltar archivos desde Finder/Explorer
   (`getPathForFile` exige un `File` nativo), dos pantallas reales, y los diálogos nativos — esos se
   contestan reemplazando `dialog.showOpenDialog` en main (`answerOpenDialog`), así que el botón y todo
@@ -103,7 +111,11 @@ críticos, altos y medios. Quedó abierto esto, cada cosa con su motivo:
 Ya no hay nada Windows-only. El COM/PowerShell se eliminó por completo y las presentaciones se
 convierten con LibreOffice headless, que corre igual en macOS, Windows y Linux. LibreOffice **no
 se empaqueta**: la app lo detecta en el sistema (con override manual en `slides.sofficePath`) y,
-si falta, la UI explica cómo instalarlo.
+si falta, avisa y traba solo convertir PowerPoint; los PDF, los decks ya convertidos y todo lo
+demás siguen andando — ver «Sin LibreOffice» en `03-slides-libreoffice.md`.
+
+**Linux nunca se empaquetó ni se probó**: `release/` solo tiene el `.exe` y el `.dmg`, aunque el
+README y la landing ofrecen un AppImage.
 
 Verificado en macOS contra decks reales de iglesia, incluyendo un `.ppt` binario de 52
 diapositivas y un fixture con auto-avance + audio embebido. `legacy/` se retiró del repo el

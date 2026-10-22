@@ -99,9 +99,14 @@ export type IpcContract = {
    *  conversion is in flight joins the same job instead of queuing another. */
   "deck:ensure": { req: { assetId: number; force?: boolean }; res: DeckDTO };
   "deck:cancel": { req: { assetId: number }; res: void };
-  "deck:environment": { req: void; res: DeckEnvironment };
+  /** The last sweep's answer, or — with `force` — a new sweep: «Comprobar de
+   *  nuevo», for a LibreOffice installed while the app was open. */
+  "deck:environment": { req: { force: boolean }; res: DeckEnvironment };
   /** Opens a native file picker so the user can point at soffice by hand. */
   "deck:locateSoffice": { req: void; res: DeckEnvironment };
+  /** Opens LibreOffice's download page in the system browser. The URL is
+   *  main's, never the renderer's to choose. */
+  "deck:openSofficeDownload": { req: void; res: void };
 
   /** Fire-and-forget background conversion for decks not already converted.
    *  The scope is also the priority: main drains `program` before `explicit`

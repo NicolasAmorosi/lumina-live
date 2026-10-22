@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } fro
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import {
   Button,
+  Callout,
   EmptyState,
   Icon,
   IconButton,
@@ -15,11 +16,12 @@ import { ConfirmModal } from "@renderer/components/shared/modal";
 import { folderAssetsKey, useLibraryStore } from "@renderer/stores/library.store";
 import { useProgramStore } from "@renderer/stores/program.store";
 import { useSettingsStore } from "@renderer/stores/settings.store";
-import { useDeckStore } from "@renderer/stores/deck.store";
+import { sofficeBlocks, useDeckStore } from "@renderer/stores/deck.store";
 import { api } from "@renderer/lib/api";
 import { readOsFilesDrag, setMediaAssetDrag } from "@renderer/lib/dnd";
 import { previewAsset } from "@renderer/lib/actions/preview";
 import { goLive } from "@renderer/lib/actions/playback";
+import { silenceSofficeWarning } from "@renderer/lib/actions/soffice";
 import { removeAsset } from "@renderer/lib/actions/remove-asset";
 import {
   addLinkedFolder,
@@ -34,7 +36,7 @@ import { MediaFilterBar } from "./media-filter-bar";
 import { MediaSourceBar } from "./media-source-bar";
 import { PanelProgressRow } from "./panel-progress-row";
 import { PrewarmConfirmModal } from "./prewarm-confirm-modal";
-import { PREWARM_VISIBLE_MAX, deckRequiresSoffice, type AssetKind } from "@shared/constants";
+import { PREWARM_VISIBLE_MAX, type AssetKind } from "@shared/constants";
 import type { DeckStatusSummary } from "@shared/types/deck";
 import type { MediaAsset } from "@shared/types/media";
 
@@ -83,6 +85,7 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
   const folders = useSettingsStore((s) => s.settings["library.linkedFolders"][kind]);
   const folderAssets = useLibraryStore((s) => s.folderAssets[folderAssetsKey(kind, activeView)]);
   const sortOrder = useSettingsStore((s) => s.settings["library.sort"][kind]);
+  const warnMissingSoffice = useSettingsStore((s) => s.settings["slides.warnMissingSoffice"]);
   /** Session-only, and one per tab because each `MediaBrowser` stays mounted
    *  once visited (see `ResourcePanel`). Deliberately not persisted, unlike
    *  the order: a filter restored at launch is a tab that looks empty for no
@@ -292,22 +295,25 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
   // and the modal quotes a count back, so with a filter up it has to prepare
   // the matches the operator can see rather than the thousand decks behind
   // them.
-  const pendingDeckAssets = useMemo(
+  //
+  // Without LibreOffice, only what converts without it: the PDFs. The button
+  // used to be disabled outright for a view holding a single PowerPoint,
+  // refusing the PDFs beside it for a dependency they never had.
+  const pendingDeckAssetIds = useMemo(
     () =>
       kind !== "ppt" || deckStatuses === null
         ? []
-        : assets.filter((a) => a.missingSince === null && deckStatuses[a.id]?.status !== "ready"),
-    [assets, deckStatuses, kind],
+        : assets
+            .filter(
+              (a) =>
+                a.missingSince === null &&
+                deckStatuses[a.id]?.status !== "ready" &&
+                !sofficeBlocks(deckEnvironment, a.ext),
+            )
+            .map((a) => a.id),
+    [assets, deckEnvironment, deckStatuses, kind],
   );
-  const pendingDeckAssetIds = useMemo(() => pendingDeckAssets.map((a) => a.id), [pendingDeckAssets]);
   const pendingDeckCount = pendingDeckAssetIds.length;
-  /** Whether this batch would need LibreOffice at all. A view holding only
-   *  PDFs converts without it, so refusing the button on the environment flag
-   *  alone would block work that has no such dependency. */
-  const pendingNeedsSoffice = useMemo(
-    () => pendingDeckAssets.some((a) => deckRequiresSoffice(a.ext)),
-    [pendingDeckAssets],
-  );
 
   async function handleAdd() {
     const paths = await api.files.pick(kind, true);
@@ -342,6 +348,25 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
         query={query}
         sort={sortOrder}
       />
+      {/* Kept to a few lines: this panel is short, and the grid under it is
+          what the operator came for. The full set of fixes is one click away,
+          in front of any deck that needs it and in Ajustes. */}
+      {kind === "ppt" && deckEnvironment?.available === false && warnMissingSoffice ? (
+        <div className="px-1.5 pt-1.5">
+          <Callout tone="warning">
+            <p className="font-medium">{t("deck.noLibreOffice.title")}</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">{t("deck.noLibreOffice.strip")}</p>
+            <div className="mt-1 flex flex-wrap gap-x-3">
+              <Button onClick={() => void api.deck.openSofficeDownload()} size="xs" variant="link">
+                {t("deck.noLibreOffice.download")}
+              </Button>
+              <Button onClick={() => void silenceSofficeWarning()} size="xs" variant="link">
+                {t("deck.noLibreOffice.dontWarn")}
+              </Button>
+            </div>
+          </Callout>
+        </div>
+      ) : null}
       <PanelBody
         className="p-1.5"
         onDragOver={(e) => e.preventDefault()}
@@ -472,7 +497,6 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
           <Tooltip align="start" content={t("prewarm.actionHint")} placement="top">
             <IconButton
               aria-label={t("prewarm.action")}
-              disabled={pendingNeedsSoffice && deckEnvironment?.available === false}
               onClick={() => setConfirmPrewarmOpen(true)}
               size="sm"
               variant="outline"

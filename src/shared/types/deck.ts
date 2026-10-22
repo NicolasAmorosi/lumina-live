@@ -126,6 +126,10 @@ export type DeckEnvironment = {
   available: boolean;
   sofficePath: string | null;
   version: string | null;
+  /** Why it is not available, in the operator's language — «not found» is not
+   *  the only answer: a sandboxed flatpak, or a path picked by hand that is not
+   *  LibreOffice, are installed and still unusable. `null` when available. */
+  message: string | null;
 };
 
 export type DeckProgress = {

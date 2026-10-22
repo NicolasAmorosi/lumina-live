@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "@renderer/lib/i18n/i18n-provider";
-import { Button, Callout, FieldGroup, FieldRow, ProgressBar, Select } from "@renderer/components/ui";
+import { Button, Callout, FieldGroup, FieldRow, ProgressBar, Select, Switch } from "@renderer/components/ui";
 import { ConfirmModal } from "@renderer/components/shared/modal";
+import { SofficeActions } from "@renderer/components/shared/soffice-missing";
 import { useSettingsStore } from "@renderer/stores/settings.store";
+import { useDeckStore } from "@renderer/stores/deck.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { api } from "@renderer/lib/api";
 import { toast } from "@renderer/lib/toast";
@@ -35,7 +37,9 @@ export function SlidesSection({ active }: { active: boolean }) {
   const cacheMaxMb = useSettingsStore((s) => s.settings["slides.cacheMaxMb"]);
   const renderWidth = useSettingsStore((s) => s.settings["slides.maxRenderWidth"]);
   const imageFormat = useSettingsStore((s) => s.settings["slides.imageFormat"]);
+  const warnMissingSoffice = useSettingsStore((s) => s.settings["slides.warnMissingSoffice"]);
   const updateSettings = useSettingsStore((s) => s.update);
+  const environment = useDeckStore((s) => s.environment);
   const liveDeckAssetId = useProjectionStore((s) => (s.base?.kind === "deck" ? s.base.assetId : null));
 
   const [stats, setStats] = useState<DeckCacheStats | null>(null);
@@ -74,6 +78,30 @@ export function SlidesSection({ active }: { active: boolean }) {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Where the operator can always see whether presentations can be
+          converted, and fix it — the toast and the PPT-tab strip can be
+          silenced, this cannot. */}
+      <FieldGroup title={t("settings.groups.libreoffice")}>
+        <FieldRow
+          description={environment?.available ? environment.sofficePath : environment?.message}
+          label={
+            environment === null
+              ? t("settings.sofficeChecking")
+              : environment.available
+                ? t("settings.sofficeFound", { version: environment.version ?? "" })
+                : t("settings.sofficeMissing")
+          }
+        >
+          {environment?.available === false ? <SofficeActions /> : null}
+        </FieldRow>
+        <FieldRow description={t("settings.sofficeWarnDesc")} label={t("settings.sofficeWarn")}>
+          <Switch
+            checked={warnMissingSoffice}
+            onChange={(e) => void updateSettings({ "slides.warnMissingSoffice": e.target.checked })}
+          />
+        </FieldRow>
+      </FieldGroup>
+
       <FieldGroup title={t("settings.groups.slidesCache")}>
         <FieldRow
           description={

@@ -248,6 +248,50 @@ test("a deck that cannot be converted says so and can be retried", async ({ app 
   await expect.poll(async () => projectedSlide(await app.projector())).toBe(1);
 });
 
+test("without LibreOffice: warned at launch, a PowerPoint is gated, a PDF still projects", async ({ app }) => {
+  // A machine with no LibreOffice, whatever this one has: an override is
+  // authoritative, and one that is not there is never swapped for autodetection.
+  await app.invoke("settings:set", { "slides.sofficePath": path.join(app.profile, "missing", "soffice") });
+  await app.invoke("deck:environment", { force: true });
+  // Never converted, so its bytes never matter: the gate stops it first.
+  const pptx = path.join(app.profile, "himno.pptx");
+  fs.writeFileSync(pptx, "PK not a presentation");
+  await app.invoke<MediaAsset[]>("library:add", { kind: "ppt", paths: [pptx] });
+  await app.addMedia("ppt", "deck.pdf");
+  await app.quit();
+
+  const again = await relaunch(app);
+  const toast = (on: WorshipApp, text: string) => on.control.getByRole("status").filter({ hasText: text });
+  await expect(toast(again, "no se pueden convertir presentaciones de PowerPoint")).toBeVisible();
+
+  await again.previewFile("Presentaciones", "himno");
+  const tab = again.control.getByRole("tabpanel", { name: "Presentaciones" });
+  await expect(tab.getByText("Los PowerPoint sin convertir no se pueden abrir")).toBeVisible();
+  await expect(again.previewColumn().getByText("Lumina Live usa LibreOffice para convertir")).toBeVisible();
+  // The stage says why — it used to say «Preparando la conversión…» forever.
+  await expect(again.previewColumn().getByText("Hace falta LibreOffice para convertir esta presentación")).toBeVisible();
+  await expect(again.previewColumn().getByText("Preparando la conversión")).toHaveCount(0);
+
+  await again.goLive();
+  await expect(toast(again, "«himno» no se puede proyectar")).toBeVisible({ timeout: 30_000 });
+  expect(await projectedSlide(await again.projector())).toBeNull();
+
+  // Everything that does not need LibreOffice is untouched.
+  await again.previewFile("Presentaciones", "deck");
+  await expect(slideTile(again, 3)).toBeVisible({ timeout: 60_000 });
+  await again.goLive();
+  await expect.poll(async () => projectedSlide(await again.projector())).toBe(1);
+
+  // Silenced from the strip, and it stays silenced.
+  await tab.getByRole("button", { name: "No volver a mostrar" }).click();
+  await expect(tab.getByText("Los PowerPoint sin convertir no se pueden abrir")).toHaveCount(0);
+  await again.quit();
+  const third = await relaunch(again);
+  await third.openResources("Media", "Presentaciones");
+  await expect(third.control.getByText("Los PowerPoint sin convertir no se pueden abrir")).toHaveCount(0);
+  await expect(toast(third, "no se pueden convertir presentaciones de PowerPoint")).toHaveCount(0);
+});
+
 test("a deck edited on disk is converted again the next time it is opened", async ({ app }) => {
   const file = path.join(app.profile, "anuncios.pdf");
   fs.writeFileSync(file, buildPdf(["#1f4e9c", "#c0392b", "#27ae60"]));

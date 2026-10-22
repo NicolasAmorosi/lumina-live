@@ -441,6 +441,17 @@ const it: Messages = {
       body:
         "Lumina Live usa LibreOffice per convertire le presentazioni PowerPoint in immagini. Installalo, oppure indica dove si trova l'eseguibile soffice.",
       locate: "Individua soffice…",
+      download: "Scarica LibreOffice",
+      recheck: "Controlla di nuovo",
+      checking: "Ricerca di LibreOffice…",
+      found: "LibreOffice {version} è pronto",
+      strip: "I PowerPoint non ancora convertiti non si possono aprire. I PDF e quelli già convertiti funzionano normalmente.",
+      startup:
+        "LibreOffice non è disponibile: le presentazioni PowerPoint non si possono convertire. Tutto il resto funziona normalmente.",
+      dontWarn: "Non mostrare più",
+      liveRefused: "«{name}» non si può proiettare: serve LibreOffice per convertirla.",
+      stageHint: "Serve LibreOffice per convertire questa presentazione",
+      reconvertHint: "Per convertirla di nuovo serve LibreOffice.",
     },
     audio: {
       none: "Nessun audio",
@@ -604,6 +615,12 @@ const it: Messages = {
     slidesQualityWarnTitle: "Se cambi una di queste due opzioni, va riconvertito tutto",
     slidesQualityWarnBody:
       "Ogni presentazione viene salvata nella cache in base al suo contenuto PIÙ la larghezza e il formato. Se cambi uno dei due, nessuna di quelle già convertite viene più trovata: si riconvertono una alla volta, la prima volta che apri ciascuna. Non modificarli il giorno del culto.",
+    sofficeFound: "Versione {version}",
+    sofficeMissing: "Non disponibile",
+    sofficeChecking: "Ricerca…",
+    sofficeWarn: "Avvisa se manca",
+    sofficeWarnDesc:
+      "All'apertura dell'app e sopra la scheda delle presentazioni. Disattivato, una presentazione che non si può convertire lo dice comunque.",
     sections: {
       projection: "Proiezione",
       slides: "Diapositive",
@@ -622,6 +639,7 @@ const it: Messages = {
       versionsInstalled: "Versioni installate",
       slidesCache: "Cache delle diapositive",
       slidesQuality: "Qualità di conversione",
+      libreoffice: "LibreOffice",
       appearance: "Aspetto",
       language: "Lingua",
       folders: "Cartelle dei file",

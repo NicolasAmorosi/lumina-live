@@ -437,6 +437,16 @@ const en: Messages = {
       title: "LibreOffice isn't available",
       body: "Lumina Live uses LibreOffice to turn PowerPoint presentations into images. Install it, or tell the app where the soffice program is.",
       locate: "Locate soffice…",
+      download: "Download LibreOffice",
+      recheck: "Check again",
+      checking: "Looking for LibreOffice…",
+      found: "LibreOffice {version} is ready",
+      strip: "Unconverted PowerPoint files can't be opened. PDFs and the ones already converted work as usual.",
+      startup: "LibreOffice isn't available, so PowerPoint presentations can't be converted. Everything else works as usual.",
+      dontWarn: "Don't show again",
+      liveRefused: "“{name}” can't be projected: it needs LibreOffice to be converted.",
+      stageHint: "This presentation needs LibreOffice to be converted",
+      reconvertHint: "Converting it again needs LibreOffice.",
     },
     audio: {
       none: "No audio",
@@ -597,6 +607,12 @@ const en: Messages = {
     slidesQualityWarnTitle: "Changing either of these means reconverting everything",
     slidesQualityWarnBody:
       "Each presentation is cached by its content PLUS the width and the format. Change either one and none of the converted presentations will be found again: they're reconverted one by one, the first time you open each. Don't touch this on the day of a service.",
+    sofficeFound: "Version {version}",
+    sofficeMissing: "Not available",
+    sofficeChecking: "Looking…",
+    sofficeWarn: "Warn when it's missing",
+    sofficeWarnDesc:
+      "When the app opens and above the presentations tab. Off, a presentation that can't be converted still says so.",
     sections: {
       projection: "Projection",
       slides: "Slides",
@@ -615,6 +631,7 @@ const en: Messages = {
       versionsInstalled: "Installed versions",
       slidesCache: "Slide cache",
       slidesQuality: "Conversion quality",
+      libreoffice: "LibreOffice",
       appearance: "Appearance",
       language: "Language",
       folders: "File folders",

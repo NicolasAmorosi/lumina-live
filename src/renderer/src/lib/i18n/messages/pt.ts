@@ -439,6 +439,16 @@ const pt: Messages = {
       title: "O LibreOffice não está disponível",
       body: "O Lumina Live usa o LibreOffice para converter as apresentações do PowerPoint em imagens. Instale-o ou indique onde está o executável soffice.",
       locate: "Localizar o soffice…",
+      download: "Baixar o LibreOffice",
+      recheck: "Verificar de novo",
+      checking: "Procurando o LibreOffice…",
+      found: "O LibreOffice {version} está pronto",
+      strip: "Os PowerPoint ainda não convertidos não podem ser abertos. Os PDFs e os já convertidos funcionam normalmente.",
+      startup: "O LibreOffice não está disponível: não é possível converter apresentações do PowerPoint. Todo o resto funciona normalmente.",
+      dontWarn: "Não mostrar de novo",
+      liveRefused: "“{name}” não pode ser projetada: é preciso o LibreOffice para convertê-la.",
+      stageHint: "É preciso o LibreOffice para converter esta apresentação",
+      reconvertHint: "É preciso o LibreOffice para convertê-la de novo.",
     },
     audio: {
       none: "Sem áudio",
@@ -598,6 +608,12 @@ const pt: Messages = {
     slidesQualityWarnTitle: "Mudar qualquer um destes dois obriga a converter tudo de novo",
     slidesQualityWarnBody:
       "Cada apresentação fica no cache pelo conteúdo MAIS a largura e o formato. Ao mudar qualquer um dos dois, nenhuma das já convertidas é encontrada de novo: elas são convertidas outra vez, uma a uma, na primeira vez que você abrir cada uma. Não mexa nisso no dia do culto.",
+    sofficeFound: "Versão {version}",
+    sofficeMissing: "Não disponível",
+    sofficeChecking: "Procurando…",
+    sofficeWarn: "Avisar se estiver faltando",
+    sofficeWarnDesc:
+      "Ao abrir o app e acima da aba de apresentações. Desligado, uma apresentação que não pode ser convertida continua avisando.",
     sections: {
       projection: "Projeção",
       slides: "Slides",
@@ -616,6 +632,7 @@ const pt: Messages = {
       versionsInstalled: "Versões instaladas",
       slidesCache: "Cache de slides",
       slidesQuality: "Qualidade da conversão",
+      libreoffice: "LibreOffice",
       appearance: "Aparência",
       language: "Idioma",
       folders: "Pastas de arquivos",

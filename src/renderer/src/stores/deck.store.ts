@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { api } from "@renderer/lib/api";
 import { IpcError } from "@shared/ipc/result";
+import { deckRequiresSoffice } from "@shared/constants";
 import type { DeckDTO, DeckEnvironment, DeckProgress, DeckStatus, PrewarmProgress } from "@shared/types/deck";
 
 export type DeckEntry = {
@@ -28,7 +29,8 @@ type DeckStoreState = {
    *  entries. */
   readyEpoch: number;
 
-  loadEnvironment: () => Promise<void>;
+  /** `force` sweeps the disk again instead of reading main's last answer. */
+  loadEnvironment: (force?: boolean) => Promise<void>;
   locateSoffice: () => Promise<void>;
   /** Cache-only peek — never starts a conversion, so listing a playlist can't
    *  kick off work by accident. */
@@ -83,6 +85,17 @@ function isCurrent(assetId: number, gen: number): boolean {
   return (generation.get(assetId) ?? 0) === gen;
 }
 
+/**
+ * Whether a deck with this extension cannot be converted right now: LibreOffice
+ * is known to be missing and the deck is not a PDF (`deckRequiresSoffice`).
+ * Says nothing about a deck that is already converted — that one projects
+ * without LibreOffice, so every gate built on this also asks whether there are
+ * slides to show. An environment not asked for yet is not "missing".
+ */
+export function sofficeBlocks(environment: DeckEnvironment | null, ext: string): boolean {
+  return environment?.available === false && deckRequiresSoffice(ext);
+}
+
 function entryFor(deck: DeckDTO): DeckEntry {
   return {
     status: deck.status,
@@ -98,8 +111,8 @@ export const useDeckStore = create<DeckStoreState>((set, get) => ({
   prewarmBatch: null,
   readyEpoch: 0,
 
-  loadEnvironment: async () => {
-    set({ environment: await api.deck.environment() });
+  loadEnvironment: async (force = false) => {
+    set({ environment: await api.deck.environment(force) });
   },
 
   locateSoffice: async () => {
@@ -155,11 +168,17 @@ export const useDeckStore = create<DeckStoreState>((set, get) => ({
     const request: Promise<DeckDTO | null> = api.deck
       .ensure(assetId, force)
       .then((deck) => {
+        // A conversion asks main for LibreOffice again (`requireSoffice`), so
+        // one that worked may have found it installed since the app opened —
+        // re-read, or every other deck would stay behind the gate.
+        if (get().environment?.available === false) void get().loadEnvironment();
         if (!isCurrent(assetId, gen)) return null;
         set((s) => ({ byAssetId: { ...s.byAssetId, [assetId]: entryFor(deck) } }));
         return deck;
       })
       .catch((error: unknown) => {
+        // And the reverse: one that failed may have found it gone.
+        if (get().environment?.available) void get().loadEnvironment();
         if (!isCurrent(assetId, gen)) return null;
         const message = error instanceof Error ? error.message : String(error);
         // A cancellation is not a failure — it is what the operator asked for.

@@ -38,8 +38,8 @@ es peor: LibreOffice lo importa a **Draw** y lo vuelve a dibujar glifo por glifo
 Dos consecuencias que la UI tiene que respetar:
 
 - **Un PDF no necesita LibreOffice.** `deckRequiresSoffice(ext)` (`shared/constants.ts`) es la
-  única fuente de esa pregunta, y el cartel "instalá LibreOffice" (`deck-slides.tsx`) y el botón
-  "Preparar carpeta" (`media-browser.tsx`) la hacen **por deck**, nunca por entorno.
+  única fuente de esa pregunta, y toda traba por LibreOffice la hace **por deck**, nunca por
+  entorno — ver *Sin LibreOffice* abajo.
 - **Un PDF no tiene metadata de presentación**: ni transiciones (⇒ `timings_source = "none"`, sin
   auto-avance) ni partes de media (⇒ sin banda sonora embebida). El `.mp3` hermano *vinculado* sí
   se resuelve, como en cualquier otro deck.
@@ -50,6 +50,45 @@ puede ser vertical. Diagnóstico y mediciones —incluido por qué esto **no** o
 `SLIDES_CONVERTER_VERSION`— en
 [`.claude/knowledge/a-pdf-source-breaks-two-assumptions-the-pipeline-made-about-its-own-output.md`](../../.claude/knowledge/a-pdf-source-breaks-two-assumptions-the-pipeline-made-about-its-own-output.md),
 que además explica el caso de las fuentes no embebidas y el nuevo error `PDF_PASSWORD`.
+
+## Sin LibreOffice
+
+LibreOffice no se empaqueta, así que una máquina sin él es un caso normal, no un error: la app
+arranca, avisa, y traba **solo** lo que de verdad lo necesita — convertir un PowerPoint que todavía
+no está en caché. Un PDF, un deck ya convertido (proyectarlo es servir imágenes) y todo lo que no
+es un deck siguen andando igual.
+
+**La pregunta, en cada lado:**
+
+- **Main** recuerda la última respuesta del barrido (`locateSoffice`, en caché).
+  `cachedSofficeError()` la devuelve sin volver a buscar, y `prepareDeck` la usa para que el
+  trabajo de **fondo** (tiles visibles, orden de culto, archivos recién importados, «Preparar
+  carpeta») de un deck que no es PDF se rechace en el acto: sin cola, sin hash del archivo, sin
+  barra de progreso en el tile. Lo **interactivo** (el operador abrió el deck) pasa siempre por
+  `requireSoffice`, que vuelve a barrer — así se encuentra un LibreOffice instalado con la app
+  abierta. `runConversion` lo pide justo antes del paso 3 (conversión real): no antes del hit por
+  contenido, que proyecta un duplicado sin LibreOffice, y adentro del `try`, para que el fallo se
+  anuncie como cualquier otro.
+- **Renderer**: `deck.store.environment` (`deck:environment`, con `force` para «Comprobar de
+  nuevo») y `sofficeBlocks(environment, ext)` es la única pregunta. Nunca dice nada de un deck ya
+  convertido, así que toda traba pregunta además si hay diapositivas para mostrar. Se corrige
+  sola: una conversión que anduvo con el entorno en «falta», o que falló con el entorno en «está»,
+  lo vuelve a leer — main acaba de barrer en ese camino.
+
+**Las trabas y los avisos:**
+
+| Dónde | Qué hace |
+|---|---|
+| Arranque (`announceMissingSoffice`) | toast con «No volver a mostrar», una vez por proceso |
+| Pestaña PPT (`media-browser.tsx`) | franja corta con «Descargar LibreOffice» y «No volver a mostrar» |
+| Panel central (`deck-slides.tsx`) | el cartel con el motivo de main y las tres salidas (`SofficeActions`), **solo** si el deck no tiene diapositivas; sobre uno convertido, «Volver a convertir» se reemplaza por el porqué |
+| Monitor de PREVIEW | «LibreOffice no está disponible» en vez de «Preparando la conversión…», que quedaba para siempre |
+| EN VIVO | no cambia nada en el proyector y avisa con un toast — decidido **después** del fallo (`explainSofficeRefusal`), porque solo main sabe si el deck está en caché, y un chequeo previo rechazaba un deck convertido con doble click antes de que volviera su `peek` |
+| «Preparar carpeta» | prepara solo los PDF de la vista |
+| Ajustes → Diapositivas → LibreOffice | estado, versión y ruta (o el motivo), las tres salidas, y el switch `slides.warnMissingSoffice` |
+
+`slides.warnMissingSoffice` apaga el toast y la franja, que son los avisos «por las dudas». El
+cartel del deck y Ajustes no se apagan: son donde algo de verdad se trabó.
 
 ## Por qué el rasterizado va en una `BrowserWindow` oculta
 
