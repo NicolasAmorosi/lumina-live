@@ -455,7 +455,9 @@ const it: Messages = {
     },
     audio: {
       none: "Nessun audio",
-      assign: "Assegna audio",
+      // Not «Assegna audio»: beside «Nessun audio» it left no room for that
+      // label at the window's minimum width, and «Cambia» is one word too.
+      assign: "Assegna",
       change: "Cambia",
       remove: "Rimuovi",
       autoAdvance: "Auto-avanzamento",
