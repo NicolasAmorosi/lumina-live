@@ -279,7 +279,11 @@ ancho de la ventana:
   base. Los atajos de teclado B/L siguen usando `toggleOverlay` (comportamiento sin cambios).
 
 Las tres columnas del `<main>` son **`grid-cols-3`** — anchos iguales, ninguna de las tres tareas
-(explorar, montar, emitir) pesa visualmente más que las otras. No hay StatusBar ni indicador de
+(explorar, montar, emitir) pesa visualmente más que las otras. La línea entre columnas es el fondo
+`bg-border` asomando por un `gap-px`, **nunca `divide-x`**: un divisor es un borde ADENTRO de la
+columna y solo lo llevan dos de las tres, así que el monitor de PREVIEW quedaba 1 px más angosto que
+el de EN VIVO y todo lo de abajo desalineado con su gemelo
+([diagnóstico](../../.claude/knowledge/monitor-stage-must-size-by-width-not-flex.md)). No hay StatusBar ni indicador de
 "proyector conectado/desconectado" en el TopBar — LIMPIAR, la selección de pantalla y abrir/cerrar
 la proyección, el tema claro/oscuro y el idioma se movieron todos a
 `pages/settings/SettingsModal.tsx`, detrás del ícono de engranaje que reemplaza el título de la

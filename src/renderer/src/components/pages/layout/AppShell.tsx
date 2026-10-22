@@ -36,7 +36,12 @@ export function AppShell({ onOpenPrograms, onOpenSettings }: AppShellProps) {
     <div className="flex h-screen flex-col bg-background">
       <TopBar onOpenPrograms={onOpenPrograms} onOpenSettings={onOpenSettings} />
 
-      <main className="grid min-h-0 flex-1 grid-cols-3 divide-x divide-border">
+      {/* The column rules are the 1px gaps showing `bg-border` through, not
+          `divide-x`: a divider is a border INSIDE the column it sits on, and
+          only two of the three get one, so the centre column was 1px
+          narrower than the live one — its monitor half a pixel shorter, and
+          every row under it visibly out of line with its twin across. */}
+      <main className="grid min-h-0 flex-1 grid-cols-3 gap-px bg-border">
         {/* The minimums never bind at the window's own `minHeight` (700px, see
             `control-window.ts`) — at that size the split is the plain
             1fr / 1.1fr it has always been. They are the floor for the case
