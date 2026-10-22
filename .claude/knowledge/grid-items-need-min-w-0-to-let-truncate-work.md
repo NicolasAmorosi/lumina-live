@@ -29,10 +29,14 @@ label itself has `min-w-0 flex-1 truncate`.
   truncate` to that specific `Badge` instance (not to the shared component, since most `Badge`
   usages are short fixed pills that shouldn't shrink) while giving any sibling badge `shrink-0`
   so it isn't squeezed by the wrap that no longer happens.
+  **Correction (2026-10-22):** `truncate` on the `Badge` itself never showed the «…» — `Badge` is
+  `inline-flex`, and the text inside a flex container is an anonymous flex item that cannot
+  ellipsize. The text goes in its own `<span className="truncate">` inside the `Badge`; see
+  [the shrinking-icon entry](a-shrinking-icon-hides-labels-that-never-fit-and-truncate-needs-a-span.md).
 - How this was actually diagnosed: `npm run dev` plus a CDP (`--remote-debugging-port`) client
   driving `Runtime.evaluate` — no macOS Accessibility permission needed. Real service data was
   used, then a synthetic no-space long title was injected via `textContent` to force the
   worst case, and `getBoundingClientRect()`/`getComputedStyle()` on the ancestor chain pinpointed
   the exact element whose `min-width` needed fixing before touching any code.
 
-**Last updated:** 2026-09-08
+**Last updated:** 2026-10-22

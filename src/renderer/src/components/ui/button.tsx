@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, Ref } from "react";
+import { Children, type ButtonHTMLAttributes, type ReactNode, type Ref } from "react";
 import { cn } from "@renderer/lib/utils";
 
 type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger" | "live" | "link";
@@ -49,6 +49,29 @@ const sizes: Record<ButtonSize, string> = {
   lg: "h-12 px-5 text-base gap-2",
 };
 
+/** Puts each run of text children in its own `truncate` span. A bare text
+ *  node is an anonymous flex item, and those can't ellipsize: a squeezed
+ *  button clipped its label mid-letter (and, before `Icon` was `shrink-0`,
+ *  shrank the icon beside it). Adjacent strings stay one run, so
+ *  `{count} {label}` keeps its space. */
+function truncateText(children: ReactNode): ReactNode[] {
+  const out: ReactNode[] = [];
+  let run = "";
+  const flush = () => {
+    if (run.trim()) out.push(<span className="truncate" key={`text-${out.length}`}>{run}</span>);
+    run = "";
+  };
+  for (const child of Children.toArray(children)) {
+    if (typeof child === "string" || typeof child === "number") run += child;
+    else {
+      flush();
+      out.push(child);
+    }
+  }
+  flush();
+  return out;
+}
+
 export function Button({
   children,
   className,
@@ -84,7 +107,7 @@ export function Button({
       {...props}
     >
       <span className={cn("inline-flex min-w-0 items-center justify-center gap-2", loading && "invisible")}>
-        {children}
+        {truncateText(children)}
       </span>
       {loading ? (
         <>

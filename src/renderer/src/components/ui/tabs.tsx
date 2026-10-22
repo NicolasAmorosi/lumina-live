@@ -51,11 +51,11 @@ const tabVariants: Record<TabsVariant, string> = {
   // flex-1 + justify-center: every tab claims the same share of the row
   // regardless of its label's length, so the resource tabs always fill the
   // whole width instead of leaving dead space after short labels.
-  folder: "min-w-0 flex-1 justify-center gap-1 truncate rounded-t-md border border-b-0 px-2 py-1 text-xs",
+  folder: "min-w-0 flex-1 justify-center gap-1 rounded-t-md border border-b-0 px-2 py-1 text-xs",
   // No tab-shaped border, on purpose: a second row of folder tabs under the
   // first reads as two competing levels of the same thing. This one is a
   // segmented control — a filled pill inside the panel the folder row opened.
-  segment: "min-w-0 flex-1 justify-center gap-1 truncate rounded-full px-2 py-1 text-xs",
+  segment: "min-w-0 flex-1 justify-center gap-1 rounded-full px-2 py-1 text-xs",
   sidebar: "w-full justify-start gap-2 rounded-full px-3 py-2 text-sm",
 };
 
@@ -130,12 +130,19 @@ export function Tabs<T extends string>({
             id={idBase ? tabDomId(idBase, tab.value) : undefined}
             key={tab.value}
             onClick={() => onChange(tab.value)}
+            // The full name, only on a label that is actually cut. Measured on
+            // hover and not at render: whether it fits depends on the window.
+            onPointerEnter={(event) => {
+              const label = event.currentTarget.lastElementChild;
+              event.currentTarget.title = label && label.scrollWidth > label.clientWidth ? tab.label : "";
+            }}
             role="tab"
             tabIndex={active ? 0 : -1}
             type="button"
           >
             {tab.icon ? <Icon className="size-3.5" name={tab.icon} /> : null}
-            {tab.label}
+            {/* A bare text node is an anonymous flex item and can't ellipsize. */}
+            <span className="truncate">{tab.label}</span>
           </button>
         );
       })}

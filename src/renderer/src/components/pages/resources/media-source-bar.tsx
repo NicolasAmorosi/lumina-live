@@ -47,7 +47,7 @@ export function MediaSourceBar({ activeView, folders, onAddFolder, onRemoveFolde
                 onClick={() => onSelectView(folderPath)}
                 type="button"
               >
-                <Icon className="shrink-0 size-3" name="folder" />
+                <Icon className="size-3" name="folder" />
                 {/* `dir="rtl"` + `text-align: left` makes the ellipsis eat the
                  *  start of the path instead of the end — the tail (file/folder
                  *  name) is what tells two similar paths apart, not the shared

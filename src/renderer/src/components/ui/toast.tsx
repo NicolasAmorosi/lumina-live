@@ -39,7 +39,7 @@ function Toast({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }) 
       )}
       role="status"
     >
-      <Icon className={cn("mt-0.5 shrink-0", toneIconClassName[item.tone])} name={toneIcon[item.tone]} />
+      <Icon className={cn("mt-0.5", toneIconClassName[item.tone])} name={toneIcon[item.tone]} />
       <div className="min-w-0 flex-1">
         {/* Selectable for the same reason as `LoadingState`'s hint: some
             messages carry a name or a count the operator needs to repeat over

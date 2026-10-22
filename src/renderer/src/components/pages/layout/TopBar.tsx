@@ -111,7 +111,7 @@ export function TopBar({ onOpenPrograms, onOpenSettings }: TopBarProps) {
 
       <div className="flex items-center justify-end gap-1.5">
         <Button
-          className="w-24"
+          className="w-24 px-2"
           onClick={() => void setOverlayDirect("logo")}
           size="sm"
           toggled={overlay === "logo"}
@@ -120,7 +120,7 @@ export function TopBar({ onOpenPrograms, onOpenSettings }: TopBarProps) {
           <Icon name="image" /> {t("footer.logo")}
         </Button>
         <Button
-          className="w-24"
+          className="w-24 px-2"
           onClick={() => void setOverlayDirect("black")}
           size="sm"
           toggled={overlay === "black"}
@@ -129,7 +129,7 @@ export function TopBar({ onOpenPrograms, onOpenSettings }: TopBarProps) {
           <Icon name="stop" /> {t("footer.black")}
         </Button>
         <Button
-          className="w-24"
+          className="w-24 px-2"
           disabled={base === null}
           onClick={() => void setOverlayDirect("none")}
           size="sm"

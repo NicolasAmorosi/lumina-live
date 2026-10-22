@@ -198,7 +198,7 @@ export function Menu<T extends string>({
                   type="button"
                 >
                   <span className="truncate">{option.label}</span>
-                  {option.value === value ? <Icon className="shrink-0 text-accent-ink" name="check" /> : null}
+                  {option.value === value ? <Icon className="text-accent-ink" name="check" /> : null}
                 </button>
               </li>
             ))}

@@ -125,6 +125,10 @@ para operarse en una cabina de proyección a oscuras.
   (el pulso del punto EN VIVO, el del audio vinculado, el skeleton, el spinner). Las transiciones
   del PROYECTOR no: esas son contenido, no interfaz (ver la nota en `globals.css`).
 - El velo de un modal es `bg-scrim`: negro al 60 % en oscuro, navy al 40 % en claro.
+- **Sin espacio, cede el texto, nunca el ícono** (regla del dueño, 2026-10-22). `Icon` y `Badge`
+  son `shrink-0` de base; el texto se trunca en su propio `<span className="truncate">` —
+  `Button` (`truncateText()`) y `Tabs` lo hacen solos. Las pestañas de ancho igual (`folder`,
+  `segment`) muestran el nombre completo como `title` al pasar el mouse, solo si está cortado.
 
 ## Tipografía: Noto Sans y su corte ExtraCondensed
 

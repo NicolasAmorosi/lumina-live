@@ -68,7 +68,7 @@ export function RemoveAssetConfirm({ assetId, onOpenChange }: RemoveAssetConfirm
           />
           {assetMissing ? (
             <p className="flex items-start gap-1.5 text-warning-ink">
-              <Icon className="mt-0.5 shrink-0" name="alert" />
+              <Icon className="mt-0.5" name="alert" />
               <span>{t("library.removeMissingNote")}</span>
             </p>
           ) : null}

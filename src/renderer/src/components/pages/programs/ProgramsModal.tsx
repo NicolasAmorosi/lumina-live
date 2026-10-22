@@ -479,7 +479,7 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
                 width: dragPreview.width,
               }}
             >
-              <Icon className="shrink-0 text-subtle" name="grip" />
+              <Icon className="text-subtle" name="grip" />
               <span className="min-w-0 flex-1 truncate">{dragPreview.name}</span>
             </div>,
             document.body,

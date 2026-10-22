@@ -39,7 +39,7 @@ export function Callout({ children, className, tone = "info", ...rest }: Callout
       className={cn("flex items-start gap-2 rounded-xl border p-3 text-sm", toneClassName[tone], className)}
       {...props}
     >
-      <Icon className={cn("mt-0.5 shrink-0", toneIconClassName[tone])} name={toneIcon[tone]} />
+      <Icon className={cn("mt-0.5", toneIconClassName[tone])} name={toneIcon[tone]} />
       <div className="min-w-0 flex-1 select-text">{children}</div>
       {rest.onDismiss ? (
         <IconButton aria-label={rest.dismissLabel} onClick={rest.onDismiss} size="xs" variant="ghost">

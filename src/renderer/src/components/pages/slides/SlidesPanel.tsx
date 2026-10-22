@@ -170,8 +170,8 @@ export function SlidesPanel() {
       <PanelHeader
         actions={
           heading ? (
-            <Badge className="min-w-0 flex-1 truncate" variant="blue">
-              {heading}
+            <Badge className="min-w-0 flex-1" variant="blue">
+              <span className="truncate">{heading}</span>
             </Badge>
           ) : null
         }

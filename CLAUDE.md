@@ -173,6 +173,12 @@ Esta es la regla central del sistema de componentes, calcado de
   offsets a partir de su altura, ese número va en `components/ui/thumb-tile.geometry.ts`,
   impuesto por el CSS — nunca estimado desde él. Diagnóstico completo en
   [`.claude/knowledge/tile-height-uniformity-flex-min-height-and-grid-auto-rows.md`](.claude/knowledge/tile-height-uniformity-flex-min-height-and-grid-auto-rows.md).
+- **Cuando no hay espacio, el texto se trunca; un ícono nunca se achica.** `Icon` ya lleva
+  `shrink-0` (no hace falta repetirlo). Y el texto que se trunca va en su propio
+  `<span className="truncate">`: sobre un `flex`/`inline-flex` el texto suelto es un ítem anónimo y
+  se corta a mitad de letra sin «…» (`Button` y `Tabs` ya lo envuelven solos). Diagnóstico y
+  detector en
+  [`.claude/knowledge/a-shrinking-icon-hides-labels-that-never-fit-and-truncate-needs-a-span.md`](.claude/knowledge/a-shrinking-icon-hides-labels-that-never-fit-and-truncate-needs-a-span.md).
 - **Barrel exports**: `components/ui/index.ts` reexporta todo con named exports. Sin default
   exports en componentes.
 - **Naming**: archivos `kebab-case` en `ui/` y sueltos; `PascalCase` para componentes dentro de
