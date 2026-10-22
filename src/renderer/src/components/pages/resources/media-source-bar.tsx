@@ -12,8 +12,8 @@ type MediaSourceBarProps = {
 };
 
 const baseButton =
-  "min-w-0 shrink-0 truncate rounded-md border px-2 py-1 text-left text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-const activeButton = "border-border bg-surface text-primary-ink";
+  "focus-ring-inset min-w-0 shrink-0 truncate rounded-full border px-2.5 py-1 text-left text-xs font-medium transition-colors";
+const activeButton = "border-border bg-surface text-accent-ink";
 const inactiveButton = "border-transparent bg-muted/50 text-subtle hover:bg-hover hover:text-foreground";
 
 /**

@@ -64,7 +64,7 @@ export function ScheduleRow({
       selected={selected}
       trailing={
         sounding ? (
-          <Icon className="size-3.5 animate-pulse text-badge-audio-ink" name="audio" />
+          <Icon className="size-3.5 text-badge-audio-ink motion-safe:animate-pulse" name="audio" />
         ) : conversion ? (
           <Badge variant={conversion.status === "failed" ? "danger" : "neutral"}>
             {conversion.status === "failed"

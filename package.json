@@ -1,9 +1,9 @@
 {
   "name": "worship-app",
-  "version": "2.2.0-beta.2",
+  "version": "2.2.0-beta.3",
   "description": "Aplicación de proyección para iglesias - Reemplazo de EasyWorship",
   "main": "./out/main/index.js",
-  "author": "WorshipApp",
+  "author": "Lumina Live",
   "license": "MIT",
   "type": "module",
   "scripts": {
@@ -66,7 +66,7 @@
   },
   "build": {
     "appId": "com.worshipapp.app",
-    "productName": "WorshipApp",
+    "productName": "Lumina Live",
     "asar": true,
     "asarUnpack": [
       "**/node_modules/better-sqlite3/**"

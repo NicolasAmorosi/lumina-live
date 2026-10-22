@@ -257,7 +257,7 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
                   onClick={() => setFavorite((v) => !v)}
                   variant="ghost"
                 >
-                  <Icon className={cn(favorite ? "fill-current text-primary-ink" : "text-subtle")} name="favorite" />
+                  <Icon className={cn(favorite ? "fill-current text-accent-ink" : "text-subtle")} name="favorite" />
                 </IconButton>
               </Tooltip>
             </div>

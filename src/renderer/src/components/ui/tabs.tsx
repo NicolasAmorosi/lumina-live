@@ -55,15 +55,15 @@ const tabVariants: Record<TabsVariant, string> = {
   // No tab-shaped border, on purpose: a second row of folder tabs under the
   // first reads as two competing levels of the same thing. This one is a
   // segmented control — a filled pill inside the panel the folder row opened.
-  segment: "min-w-0 flex-1 justify-center gap-1 truncate rounded-md px-2 py-1 text-xs",
-  sidebar: "w-full justify-start gap-2 rounded-lg px-3 py-2 text-sm",
+  segment: "min-w-0 flex-1 justify-center gap-1 truncate rounded-full px-2 py-1 text-xs",
+  sidebar: "w-full justify-start gap-2 rounded-full px-3 py-2 text-sm",
 };
 
 const activeVariants: Record<TabsVariant, string> = {
-  underline: "border-primary text-primary-ink",
-  folder: "border-border bg-surface text-primary-ink",
-  segment: "bg-active text-primary-ink",
-  sidebar: "bg-active font-medium text-foreground",
+  underline: "border-accent text-foreground",
+  folder: "border-border bg-surface text-accent-ink",
+  segment: "bg-active text-foreground ring-1 ring-accent/40 ring-inset",
+  sidebar: "bg-active font-medium text-foreground ring-1 ring-accent/40 ring-inset",
 };
 
 const inactiveVariants: Record<TabsVariant, string> = {
@@ -123,7 +123,7 @@ export function Tabs<T extends string>({
             aria-controls={idBase ? panelDomId(idBase, tab.value) : undefined}
             aria-selected={active}
             className={cn(
-              "inline-flex cursor-pointer items-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              "focus-ring-inset inline-flex cursor-pointer items-center font-medium transition-colors",
               tabVariants[variant],
               active ? activeVariants[variant] : inactiveVariants[variant],
             )}

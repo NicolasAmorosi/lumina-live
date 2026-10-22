@@ -379,7 +379,7 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
             ) : filtered.length === 0 && filtersActive ? (
               <EmptyState icon="search" title={t("programs.noResults")} />
             ) : (
-              <ul className="flex flex-col divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface">
+              <ul className="flex flex-col divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
                 {showDraftRow ? (
                   <ListRow
                     className="rounded-none px-4 py-1.5"

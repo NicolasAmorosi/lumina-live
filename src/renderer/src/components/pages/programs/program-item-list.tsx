@@ -47,7 +47,7 @@ function PreviewItemRow({ item }: { item: ProgramItemDTO }) {
  *  the title actually overflows and truncates. */
 export function ProgramItemList({ items }: { items: ProgramItemDTO[] }) {
   return (
-    <ul className="flex flex-col divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface">
+    <ul className="flex flex-col divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
       {items.map((item) => (
         <PreviewItemRow item={item} key={item.id} />
       ))}

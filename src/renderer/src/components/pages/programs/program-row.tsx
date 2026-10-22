@@ -78,7 +78,7 @@ export function ProgramRow({
             size="xs"
             variant="ghost"
           >
-            <Icon className={cn(program.favorite ? "fill-current text-primary-ink" : "text-subtle")} name="favorite" />
+            <Icon className={cn(program.favorite ? "fill-current text-accent-ink" : "text-subtle")} name="favorite" />
           </IconButton>
         </Tooltip>
       }

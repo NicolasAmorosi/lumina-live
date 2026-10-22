@@ -18,8 +18,8 @@ const BADGE_BY_KIND: Record<ProgramItemDTO["kind"], BadgeVariant> = {
   media: "video",
   ppt: "ppt",
   bible: "bible",
-  // Deliberately `neutral`: every ALPS hue is already spoken for by another
-  // content type, and inventing one outside the church's palette is against
+  // Deliberately `neutral`: every hue of the sheet is already spoken for by
+  // another content type, and inventing one outside the palette is against
   // `docs/knowledge/06-ui-and-theme.md`. The tool's own icon is what tells a
   // countdown from a clock.
   utility: "neutral",

@@ -2,12 +2,14 @@
 
 Guía de trabajo para Claude Code en este repositorio. Léela antes de tocar código.
 
-WorshipApp es una aplicación de proyección de escritorio para iglesias, desarrollada en
+WorshipApp —el producto se llama **Lumina Live** desde el 2026-10-22; el repo, los paquetes y los
+identificadores internos siguen como `worship*`— es una aplicación de proyección de escritorio para iglesias, desarrollada en
 **Electron + TypeScript + React + Vite + Tailwind**, con **SQLite embebido** como backend,
 pensada como reemplazo de EasyWorship. Controla dos ventanas — control y proyección — para
 mostrar diapositivas de PowerPoint (convertidas con LibreOffice headless), video, imagen, audio y
-versículos bíblicos (RV1960) durante un culto. Identidad visual: azul + blanco de la Iglesia Adventista del Séptimo Día, con tema
-claro/oscuro conmutable (oscuro por defecto, pensado para operarse en una cabina a oscuras).
+versículos bíblicos (RV1960) durante un culto. Identidad visual: la de Lumina Live (navy + acento
+teal + la llama, hoja de identidad del 2026-10-22), con tema claro/oscuro conmutable (oscuro por
+defecto, pensado para operarse en una cabina a oscuras).
 
 Es el sucesor directo de la versión vanilla JS de este mismo repo (conservada temporalmente en
 `legacy/`, ver la sección **Legacy** al final) y, más atrás, de `church-presenter`
@@ -70,7 +72,7 @@ respuesta, y preguntá por lo que sí depende. No se entrega nada a medias en si
 | Build | `electron-vite` (main + preload + renderer en un solo config, HMR, dev-server URL correcto) |
 | Lenguaje | TypeScript 5.9 estricto (`strict`, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`) |
 | UI | React 19 + Tailwind v4 (`@theme inline`, sin `tailwind.config.js`) |
-| Identidad | paleta y tipografía oficiales de la iglesia (ALPS / `adventist.design`): Denim + Noto Sans |
+| Identidad | Lumina Live: paleta de la hoja de identidad (`styles/globals.css`), Noto Sans + su corte ExtraCondensed para títulos, logo en `assets/brand/` |
 | Utilidades UI | `clsx` + `tailwind-merge` (`cn()`), `lucide-react` — **sin cva, sin Radix** |
 | Estado | Zustand (slices por dominio) |
 | DB | `better-sqlite3` (Node-API, sin rebuild nativo) + Drizzle ORM + FTS5 para la Biblia |
@@ -186,29 +188,36 @@ Esta es la regla central del sistema de componentes, calcado de
 | `bg-surface` / `bg-card` | paneles / tarjetas |
 | `bg-muted` / `text-muted-foreground` | fondos y texto secundario |
 | `text-subtle` | texto terciario (hints, placeholders) |
-| `bg-primary` / `bg-primary-hover` | acento principal (azul adventista) |
+| `bg-primary` / `bg-primary-hover` / `border-primary-border` | el botón principal (Primario de la hoja). En oscuro es navy a 1,31:1 del fondo: el borde no es opcional |
+| `bg-secondary` / `bg-secondary-hover` | el botón secundario (Secundario de la hoja: navy en claro, acero `#8299b2` con texto oscuro en oscuro) |
+| `bg-accent` / `ring-accent` / `bg-active` | el teal: **seleccionado / con foco / encendido** — selección, anillo de foco, switch, slider, progreso, pestaña activa, toggle presionado. Nunca decoración |
 | `bg-danger` / `bg-success` | estados |
 | `bg-on-air` / `border-on-air` | **reservado**: esto está en el proyector AHORA (monitor LIVE, riel de la fila activa) |
 | `bg-badge-{ppt,video,image,audio,bible}` | color por tipo de contenido en playlist/biblioteca |
-| `text-{danger,primary,success,warning,badge-audio}-ink` | **ese color como TEXTO o ÍCONO** sobre una superficie de la app. No es lo mismo que el token pelado, que es un RELLENO (`bg-danger` + blanco encima): en el tema oscuro un rojo legible sobre `bg-card` es un rojo claro, y blanco sobre un rojo claro no se lee. Los dos roles tiran para lados opuestos y **no pueden ser un solo valor** |
+| `text-{danger,accent,success,warning,badge-audio}-ink` | **ese color como TEXTO o ÍCONO** sobre una superficie de la app. No es lo mismo que el token pelado, que es un RELLENO (`bg-danger` + blanco encima): en el tema oscuro un rojo legible sobre `bg-card` es un rojo claro, y blanco sobre un rojo claro no se lee. Los dos roles tiran para lados opuestos y **no pueden ser un solo valor** |
 | `shadow-surface` / `shadow-raised` / `shadow-overlay` | los ÚNICOS 3 niveles de elevación — cards / dropdowns-tooltips / modales-toasts |
 
 El tema (`ui.theme` en `settings`, `data-theme` en `<html>`) redefine los `--wa-*`; los
 componentes nunca necesitan saber en qué tema están.
 
 **Regla derivada, no negociable: un color que se escribe como texto va siempre por su `-ink`.**
-`text-danger`, `text-primary`, `text-success`, `text-warning` y `text-badge-audio` **no existen**
-como clases de texto — quedaron entre 2,18:1 y 2,89:1 sobre `bg-card` en el tema oscuro, por debajo
+`text-danger`, `text-accent`, `text-success`, `text-warning` y `text-badge-audio` **no existen**
+como clases de texto: el rojo de la hoja da 2,89:1 sobre `bg-card` en el tema oscuro, por debajo
 del 3:1 que WCAG pide hasta para un ícono. Solo los cinco tonos que aparecen como texto o ícono
 suelto tienen `-ink`; el resto de los badges únicamente pintan el tinte de `Badge`, que ya lleva
-`text-foreground`. Cada `-ink` es su propio color de ALPS aclarado hacia blanco, igual que este
-archivo ya interpola la rampa Denim para superficies oscuras que ALPS no define — `primary-ink` es
-literalmente el Denim `#84adfc`.
+`text-foreground`. Cada `-ink` es su propio color de la hoja aclarado (oscuro) u oscurecido (claro)
+justo hasta pasar 4,5:1. Y al revés, un relleno con texto blanco encima tiene que pasar 4,5:1: por
+eso `success` y `accent` son un 6–8 % más oscuros que el valor de la hoja (invisible, medido), y el
+ámbar lleva texto oscuro, nunca blanco.
 
-Todos los valores de color salen del sistema de identidad oficial de la iglesia (familia **Denim**
-+ colores de acento de ALPS) y la tipografía es **Noto Sans** self-hosted. Antes de agregar un
-color nuevo, leé la tabla de la paleta en `docs/knowledge/06-ui-and-theme.md` — tiene que salir de
-ahí, no inventarse.
+Todos los valores de color salen de la hoja de identidad de Lumina Live, o son una mezcla de dos de
+sus colores — nunca inventados. Antes de agregar uno, leé la tabla de la paleta en
+`docs/knowledge/06-ui-and-theme.md`. Las formas también son de la identidad: botones, insignias,
+switches y segmentos son **píldora** (`rounded-full`), un diálogo `rounded-2xl`, una tarjeta o un
+grupo `rounded-xl`, un campo o una miniatura `rounded-lg` — una superficie nunca contiene un radio
+mayor que el suyo. El foco es el `outline` de la utilidad `focus-ring` (o `focus-ring-inset` dentro
+de algo que recorta), **nunca** `ring-offset-*`: su hueco se pinta de blanco y en el tema oscuro
+dibujaba un halo blanco alrededor de cada control enfocado.
 
 ## Base de conocimiento — léela según la tarea
 
@@ -564,6 +573,15 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
   `userData/slides-cache` + SQLite, direccionado por **hash de contenido**. La ventana de
   proyección nunca se esconde: NEGRO/LOGO son resultados normales de `selectOutput`. No
   reintroduzcas COM, PowerShell ni `assertWindows()`.
+- **El `name` de `package.json` (`worship-app`) y el `appId` (`com.worshipapp.app`) no se tocan,
+  aunque el producto se llame Lumina Live.** Electron nombra la carpeta de datos por `name` —el
+  `productName` vive en `build`, es de electron-builder y no llega al `package.json` empaquetado—,
+  así que el perfil es `<appData>/worship-app` en dev y en el instalador. Cambiar `name` deja el
+  culto de la iglesia (programas, biblioteca, Biblias, ajustes) en una carpeta que nadie abre; cambiar
+  `appId` hace que el instalador nuevo se instale AL LADO del viejo en vez de reemplazarlo. Cualquier
+  razonamiento sobre la ruta por defecto se verifica lanzando el paquete SIN `--user-data-dir` (los
+  E2E siempre lo pasan). Ver
+  [`.claude/knowledge/electron-userdata-follows-package-name-not-build-productname.md`](.claude/knowledge/electron-userdata-follows-package-name-not-build-productname.md).
 - **Nunca escribas datos de usuario dentro del bundle de la app.** La DB vive en
   `app.getPath('userData')/worship.db`; los recursos empaquetados (`resources/bibles/*.json`,
   `drizzle/*.sql`) son de solo lectura en producción — accedelos siempre vía `src/main/paths.ts`.

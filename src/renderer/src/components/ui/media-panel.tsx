@@ -22,7 +22,7 @@ type MediaPanelProps = {
 export function MediaPanel({ children, className }: MediaPanelProps) {
   return (
     <div
-      className={cn("flex min-w-0 flex-col divide-y divide-border rounded-lg border border-border bg-card", className)}
+      className={cn("flex min-w-0 flex-col divide-y divide-border rounded-xl border border-border bg-card", className)}
     >
       {children}
     </div>

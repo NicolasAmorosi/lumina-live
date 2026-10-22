@@ -8,8 +8,9 @@ import { VerseSection } from "./sections/verse/verse-section";
 import { BibleSection } from "./sections/bible-section";
 import { SlidesSection } from "./sections/slides-section";
 import { SystemSection } from "./sections/system-section";
+import { AboutSection } from "./sections/about-section";
 
-type SettingsSection = "projection" | "slides" | "verse" | "bible" | "system";
+type SettingsSection = "projection" | "slides" | "verse" | "bible" | "system" | "about";
 
 const SECTION_ID_BASE = "settings";
 
@@ -37,6 +38,7 @@ export function SettingsModal({ onOpenChange, open }: { onOpenChange: (open: boo
     { icon: "text", label: t("settings.sections.verse"), value: "verse" },
     { icon: "bible", label: t("settings.sections.bible"), value: "bible" },
     { icon: "settings", label: t("settings.sections.system"), value: "system" },
+    { icon: "info", label: t("settings.sections.about"), value: "about" },
   ];
 
   return (
@@ -118,8 +120,10 @@ export function SettingsModal({ onOpenChange, open }: { onOpenChange: (open: boo
                       <VerseSection />
                     ) : value === "bible" ? (
                       <BibleSection />
-                    ) : (
+                    ) : value === "system" ? (
                       <SystemSection />
+                    ) : (
+                      <AboutSection />
                     )}
                   </div>
                 </TabPanel>

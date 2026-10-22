@@ -13,10 +13,11 @@ test("a first launch on an empty profile opens clean", async ({ app }) => {
   await expect(control.getByText("Ocurrió un error inesperado")).toHaveCount(0);
 });
 
-test("Ajustes › Sistema names the build that is running", async ({ app }) => {
+test("Ajustes › Acerca de names the product and the build that is running", async ({ app }) => {
   const { version } = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")) as { version: string };
   await app.control.getByRole("button", { name: "Configuración" }).click();
   const dialog = app.control.getByRole("dialog");
-  await dialog.getByRole("tab", { name: "Sistema" }).click();
+  await dialog.getByRole("tab", { name: "Acerca de" }).click();
   await expect(dialog.getByText(version, { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Lumina", { exact: true })).toBeVisible();
 });

@@ -141,7 +141,7 @@ export function Modal({
         {isTop ? (
           <button
             aria-hidden="true"
-            className="absolute inset-0 cursor-default bg-black/60 backdrop-blur-sm"
+            className="wa-backdrop-enter absolute inset-0 cursor-default bg-scrim backdrop-blur-sm"
             onClick={() => closeOnOverlay && onOpenChange(false)}
             tabIndex={-1}
             type="button"
@@ -159,7 +159,7 @@ export function Modal({
           aria-labelledby={titleId}
           aria-modal="true"
           className={cn(
-            "relative max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)]",
+            "wa-modal-enter relative max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)]",
             modalSizes[size],
             modalHeights[height],
             className,

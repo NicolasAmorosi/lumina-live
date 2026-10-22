@@ -26,7 +26,7 @@ const toneClassName: Record<Tone, string> = {
 };
 const toneIcon: Record<Tone, "alert"> = { info: "alert", warning: "alert", danger: "alert" };
 const toneIconClassName: Record<Tone, string> = {
-  info: "text-primary-ink",
+  info: "text-accent-ink",
   warning: "text-warning-ink",
   danger: "text-danger-ink",
 };

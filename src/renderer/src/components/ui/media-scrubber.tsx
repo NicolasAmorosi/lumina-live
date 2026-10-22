@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
 import { cn, formatClock } from "@renderer/lib/utils";
 
-type MediaScrubberTone = "primary" | "audio";
+type MediaScrubberTone = "accent" | "audio";
 
 type MediaScrubberProps = {
   className?: string;
@@ -33,7 +33,7 @@ type MediaScrubberProps = {
 };
 
 const toneClassName: Record<MediaScrubberTone, string> = {
-  primary: "bg-primary",
+  accent: "bg-accent",
   audio: "bg-badge-audio",
 };
 
@@ -89,7 +89,7 @@ export function MediaScrubber({
   label,
   onPositionChange,
   onSeek,
-  tone = "primary",
+  tone = "accent",
   valueTextFormatter,
 }: MediaScrubberProps) {
   const trackRef = useRef<HTMLDivElement | null>(null);

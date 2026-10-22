@@ -28,7 +28,7 @@ export function HighlightedText({ className, segments }: HighlightedTextProps) {
     <span className={cn(className)}>
       {segments.map((segment, index) =>
         segment.match ? (
-          <mark className="rounded-sm bg-primary/30 px-0.5 text-foreground" key={index}>
+          <mark className="rounded-sm bg-warning/35 px-0.5 text-foreground" key={index}>
             {segment.text}
           </mark>
         ) : (

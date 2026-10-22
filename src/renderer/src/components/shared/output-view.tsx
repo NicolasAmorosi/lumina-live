@@ -604,8 +604,9 @@ type OutputNoticeProps = {
  *  one because a black projector the operator CHOSE and a file that failed to
  *  decode must not look the same from across a dark booth. */
 const noticeToneClass: Record<OutputNoticeTone, string> = {
-  danger: "bg-danger/90",
-  warning: "bg-warning/90",
+  danger: "bg-danger/90 text-danger-foreground",
+  // The amber indicator carries dark text, never white (1.92:1).
+  warning: "bg-warning/90 text-warning-foreground",
 };
 
 /**
@@ -630,7 +631,7 @@ function OutputNotice({ detail, label, tone }: OutputNoticeProps) {
         // why the horizontal padding is symmetric and wide enough to clear
         // it: a long notice on a narrow monitor then shrinks away from the
         // icon instead of running under it.
-        "absolute inset-x-0 bottom-0 z-[var(--z-raised)] flex items-center justify-center px-[7cqw] py-[1.6cqw] text-center text-[3cqw] leading-tight font-semibold text-white",
+        "absolute inset-x-0 bottom-0 z-[var(--z-raised)] flex items-center justify-center px-[7cqw] py-[1.6cqw] text-center text-[3cqw] leading-tight font-semibold",
         noticeToneClass[tone],
       )}
       role="status"

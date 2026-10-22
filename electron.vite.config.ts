@@ -80,7 +80,7 @@ export default defineConfig({
   },
   renderer: {
     root: resolve("src/renderer"),
-    // Ajustes ▸ Sistema shows it: the operators of the first real services could
+    // Ajustes ▸ Acerca de shows it: the operators of the first real services could
     // not tell which build they had run.
     define: {
       __APP_VERSION__: JSON.stringify(

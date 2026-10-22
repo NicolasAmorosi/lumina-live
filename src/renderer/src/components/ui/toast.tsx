@@ -19,7 +19,7 @@ const toneIcon: Record<ToastTone, "check" | "alert"> = {
   danger: "alert",
 };
 const toneIconClassName: Record<ToastTone, string> = {
-  info: "text-primary-ink",
+  info: "text-accent-ink",
   success: "text-success-ink",
   warning: "text-warning-ink",
   danger: "text-danger-ink",

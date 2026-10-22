@@ -6,7 +6,7 @@ type DialogProps = HTMLAttributes<HTMLDivElement> & { ref?: Ref<HTMLDivElement> 
 export function Dialog({ className, ref, ...props }: DialogProps) {
   return (
     <div
-      className={cn("flex flex-col rounded-xl border border-border bg-card shadow-overlay outline-none", className)}
+      className={cn("flex flex-col rounded-2xl border border-border bg-card shadow-overlay outline-none", className)}
       ref={ref}
       role="dialog"
       {...props}
@@ -15,7 +15,7 @@ export function Dialog({ className, ref, ...props }: DialogProps) {
 }
 
 export function DialogHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("flex items-center justify-between px-4 pt-4 pb-3", className)} {...props} />;
+  return <div className={cn("flex items-center justify-between px-5 pt-4 pb-3", className)} {...props} />;
 }
 
 /** The scrollable middle of a dialog. Mirrors the `FieldGroup` pattern:
@@ -24,7 +24,7 @@ export function DialogHeader({ className, ...props }: HTMLAttributes<HTMLDivElem
 export function DialogContent({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-      <div className={cn("rounded-lg border border-border bg-surface p-4", className)} {...props} />
+      <div className={cn("rounded-xl border border-border bg-surface p-4", className)} {...props} />
     </div>
   );
 }

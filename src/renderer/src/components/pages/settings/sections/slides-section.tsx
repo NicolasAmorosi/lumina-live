@@ -97,7 +97,7 @@ export function SlidesSection({ active }: { active: boolean }) {
               // At the cap nothing is broken — eviction just starts taking the
               // oldest decks. The colour says "this is why a deck you prepared
               // last month is gone", which is the only question it ever raises.
-              tone={usedFraction >= 1 ? "danger" : "primary"}
+              tone={usedFraction >= 1 ? "danger" : "accent"}
               value={usedFraction}
             />
           </div>

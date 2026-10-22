@@ -94,13 +94,13 @@ const kindIcon: Record<MediaTrackKind, IconName> = {
 };
 // "bible" never carries a duration, so this is never actually read for it —
 // present only to keep the Record exhaustive.
-const kindTone: Record<MediaTrackKind, "primary" | "audio"> = {
-  video: "primary",
+const kindTone: Record<MediaTrackKind, "accent" | "audio"> = {
+  video: "accent",
   audio: "audio",
-  image: "primary",
-  bible: "primary",
-  utility: "primary",
-  plate: "primary",
+  image: "accent",
+  bible: "accent",
+  utility: "accent",
+  plate: "accent",
 };
 
 /**
@@ -187,7 +187,7 @@ export function MediaTrackRow({
         <Icon
           className={cn(
             "size-4 shrink-0",
-            error ? "text-danger-ink" : kind === "audio" ? "text-badge-audio-ink" : "text-primary-ink",
+            error ? "text-danger-ink" : kind === "audio" ? "text-badge-audio-ink" : "text-accent-ink",
           )}
           name={error ? "alert" : kindIcon[kind]}
         />

@@ -59,9 +59,9 @@ export function ListRow({
       aria-current={selected || undefined}
       className={cn(
         "relative flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
-        selected ? "bg-active text-foreground" : "hover:bg-hover",
+        selected ? "bg-active text-foreground ring-1 ring-accent/40 ring-inset" : "hover:bg-hover",
         active && "font-medium",
-        dropBefore && "before:absolute before:inset-x-0 before:-top-px before:h-0.5 before:rounded-full before:bg-primary",
+        dropBefore && "before:absolute before:inset-x-0 before:-top-px before:h-0.5 before:rounded-full before:bg-accent",
         className,
       )}
       ref={ref}
