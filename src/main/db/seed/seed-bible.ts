@@ -9,7 +9,8 @@ import { bibleBooks, bibleVersions } from "../schema";
 import { BibleFormatError, parseBibleFile } from "./bible-formats";
 import { BUILTIN_BIBLE_CODE } from "@shared/constants";
 
-const BUILTIN_BIBLE_NAME = "Reina-Valera 1960";
+const BUILTIN_BIBLE_NAME = "Reina-Valera 1909";
+const BUILTIN_BIBLE_FILE = "rv1909.json";
 
 /** The column's own default, and what a file that does not say gets. */
 const DEFAULT_LANGUAGE = "es";
@@ -78,7 +79,7 @@ export function seedBibleFromFile(
 
   // A re-seed KEEPS the name the row already has. The bundled bible can be
   // renamed like any other (it is what the projector prints under a verse),
-  // and a corrected `rv1960.json` shipping in a later build must not quietly
+  // and a corrected `rv1909.json` shipping in a later build must not quietly
   // undo that rename on the next launch.
   const name = existing?.name ?? parsed.name?.trim() ?? fallbackName;
   const language = parsed.language ?? existing?.language ?? DEFAULT_LANGUAGE;
@@ -102,7 +103,7 @@ export function seedBibleFromFile(
         // A re-seed KEEPS the row's place in the operator's arrangement for
         // the same reason it keeps its name: the row is deleted and
         // re-inserted (cascade is how the verses go), so without this a
-        // corrected `rv1960.json` in a later build would silently send the
+        // corrected `rv1909.json` in a later build would silently send the
         // bundled bible to the bottom of the picker. A brand new one lands at
         // the bottom — see `BibleRepo.nextSortOrder`.
         sortOrder: existing?.sortOrder ?? nextSortOrder(db),
@@ -143,14 +144,14 @@ export function seedBibleFromFile(
 }
 
 /**
- * Puts the bundled RV1960 in place, unless the operator has deleted it.
+ * Puts the bundled RV1909 in place, unless the operator has deleted it.
  *
  * The flag is consulted ONLY when the row is gone, and that asymmetry is the
  * whole design:
  *
  * - row present → seed anyway. `seedBibleFromFile` short-circuits on an
  *   unchanged hash, so this costs a digest per launch and is the path by which
- *   a corrected `resources/bibles/rv1960.json` in a later build reaches an
+ *   a corrected `resources/bibles/rv1909.json` in a later build reaches an
  *   existing install.
  * - row gone, flag set → the operator deleted it. Leave it deleted; this is
  *   what makes «borrar» mean borrar, exactly like `utility.seeded`.
@@ -165,7 +166,7 @@ export function seedBuiltinBibles(
   biblesDir: string,
   settings: SettingsRepo,
 ): void {
-  const filePath = path.join(biblesDir, `${BUILTIN_BIBLE_CODE}.json`);
+  const filePath = path.join(biblesDir, BUILTIN_BIBLE_FILE);
   if (!fs.existsSync(filePath)) return;
 
   const existing = db.select().from(bibleVersions).where(eq(bibleVersions.code, BUILTIN_BIBLE_CODE)).get();

@@ -4,7 +4,7 @@
  *
  * Deliberately not a timer type. The same structure is meant to dress:
  *   - the utility scenes (countdown, clock, stopwatch) — today;
- *   - the Overlays plates (`plans/2026-09-17-panel-funciones/overlays.md`);
+ *   - the Overlays plates;
  *   - the Bible/text projection settings, hardcoded in `output-view.tsx` today
  *     and listed as debt in `docs/knowledge/07-roadmap-and-debt.md`.
  *

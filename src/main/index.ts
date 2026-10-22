@@ -100,7 +100,7 @@ function initDatabase(): void {
   initRepos(db, sqlite);
   setBibleDb(db, sqlite);
   // After `initRepos` now, and for the same reason the utility seed below is:
-  // it reads `bible.builtinSeeded`, which is what keeps a deleted RV1960
+  // it reads `bible.builtinSeeded`, which is what keeps a deleted RV1909
   // deleted across launches. See `seedBuiltinBibles`.
   seedBuiltinBibles(db, sqlite, biblesDir, getSettingsRepo());
   migrateLegacySettingsIfPresent(getSettingsRepo());

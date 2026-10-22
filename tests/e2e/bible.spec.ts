@@ -113,7 +113,7 @@ test("a Bible imported in Ajustes becomes the default and projects its own text"
   await expect((await again.projector()).getByText("Texto de prueba dieciséis.")).toBeVisible();
 });
 
-test("an imported version is renamed and deleted, and the Bible tab falls back to RV1960", async ({ app }) => {
+test("an imported version is renamed and deleted, and the Bible tab falls back to RV1909", async ({ app }) => {
   const settings = await openBibleSettings(app);
   await app.answerOpenDialog(writeZefania(app.profile, "Prueba"));
   await settings.getByRole("button", { name: "Importar", exact: true }).click();
@@ -130,7 +130,7 @@ test("an imported version is renamed and deleted, and the Bible tab falls back t
   await app.control.getByRole("dialog", { name: "¿Eliminar esta versión?" }).getByRole("button", { name: "Eliminar" }).click();
   await expect(toast(app, "Se eliminó «PRB»")).toBeVisible();
   await expect(versions.getByRole("group", { name: "PRB" })).toHaveCount(0);
-  await expect(versions.getByRole("group", { name: /RV1960|Reina/ })).toHaveCount(1);
+  await expect(versions.getByRole("group", { name: /RV1909|Reina/ })).toHaveCount(1);
 });
 
 for (const [file, contents] of [

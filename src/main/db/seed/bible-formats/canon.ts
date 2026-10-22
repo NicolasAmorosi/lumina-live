@@ -9,8 +9,8 @@
  * its `abbrev` — and that abbrev is not free to invent, because
  * `bible_favorites` rows are keyed by `(version_code, book_abbrev)` and a
  * reference is shown to the operator. So the abbrevs below are exactly the
- * ones the bundled `rv1960.json` already uses, read out of the file itself:
- * a verse imported from a Zefania module and the same verse in RV1960 have to
+ * ones the bundled `rv1909.json` already uses, read out of the file itself:
+ * a verse imported from a Zefania module and the same verse in RV1909 have to
  * be the same `gn 1:1`, or "the same reference in two versions" stops being a
  * thing the app can express.
  *
@@ -18,7 +18,7 @@
  *
  * It used to be derived from a set of 39 abbreviations in `bible-source.ts`,
  * and that set did not match the bundled bible: it lists `1s`, `1r`, `sal`,
- * `pr`, `cnt`, `jer`, `abd`… while `rv1960.json` spells those `1sm`, `1kgs`,
+ * `pr`, `cnt`, `jer`, `abd`… while `rv1909.json` spells those `1sm`, `1kgs`,
  * `ps`, `prv`, `so`, `jr`, `ob`. Only 16 of the 39 Old Testament books
  * matched, so the other 23 — Samuel through Malachi, most of the Old
  * Testament — have been stored with `testament: "NT"` since the seed was
@@ -35,7 +35,7 @@
 export type CanonBook = {
   /** 1-based canonical position. 1–39 = OT, 40–66 = NT. */
   index: number;
-  /** The app's own identity for the book — `rv1960.json`'s spelling. */
+  /** The app's own identity for the book — `rv1909.json`'s spelling. */
   abbrev: string;
   /** Spanish name, used when a file carries no name of its own. */
   name: string;
@@ -139,7 +139,7 @@ export function testamentOf(index: number): "OT" | "NT" {
  * and that is not tidiness — merging them is wrong.
  *
  * `jud` is this app's abbreviation for **Jueces**, because that is how
- * `rv1960.json` spells it. `JUD` is USFX's code for **Judas**. Uppercased into
+ * `rv1909.json` spells it. `JUD` is USFX's code for **Judas**. Uppercased into
  * one map they are the same key, the later entry wins, and Judges quietly
  * becomes a New Testament book — which is exactly what the data-layer test
  * caught: 38 Old Testament books instead of 39.
@@ -167,7 +167,7 @@ export function canonByStandardCode(code: string): CanonBook | null {
   return BY_STANDARD.get(head.toUpperCase()) ?? null;
 }
 
-/** This app's own abbreviation — `rv1960.json`'s spelling, which is also what
+/** This app's own abbreviation — `rv1909.json`'s spelling, which is also what
  *  `bible_favorites` rows are keyed by. */
 export function canonByAbbrev(abbrev: string): CanonBook | null {
   return BY_ABBREV.get(abbrev.trim().toUpperCase()) ?? null;

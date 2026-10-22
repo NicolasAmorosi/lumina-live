@@ -3,8 +3,7 @@
  * drawn ON TOP of whatever is projected, without replacing it.
  *
  * The operator builds «Pastor Juan Pérez» once and shows it every Sunday after
- * that. Decisions in `plans/2026-09-17-panel-funciones/overlays.md` — above
- * all: several plates may be up at once but at most ONE PER KIND AND ONE PER
+ * that. Several plates may be up at once, but at most ONE PER KIND AND ONE PER
  * EDGE (`platesCollide`), and NEGRO, LOGO and "nothing live" cover every plate.
  *
  * The style reuses the pieces `SceneStyle` was written to share (a

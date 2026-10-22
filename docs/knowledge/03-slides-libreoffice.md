@@ -94,7 +94,7 @@ está haciendo una pregunta de pertenencia sobre un caché de contenido, y se eq
 dos archivos idénticos: uno figura convertido y el otro no, para siempre.
 
 **Es un defecto abierto, no una sutileza teórica:** `N3` en
-[`auditorias/reports/2026-09-11-cadena-de-media.md`](../../auditorias/reports/2026-09-11-cadena-de-media.md)
+la auditoría interna `2026-09-11-cadena-de-media`
 §5.2, medido en 555 falsos pendientes sobre 1235 assets con 0 trabajo real. No cuentes filas por
 asset para saber qué falta convertir.
 

@@ -8,7 +8,7 @@ favourites screen, a reference parser).
 - **Believed:** a book has *a* short code, so uppercasing every spelling a format uses — USFX
   `GEN`, OSIS `Gen`, the app's own `gn` — into one `Map` is a convenience. **False, and it
   corrupts the canon.** `jud` is this app's abbreviation for **Jueces**, because that is how the
-  bundled `rv1960.json` spells it; `JUD` is USFX's code for **Judas**. Uppercased into one map
+  bundled `rv1909.json` spells it; `JUD` is USFX's code for **Judas**. Uppercased into one map
   they are the same key, the later entry wins, and Judges becomes a New Testament book. Caught
   only because a test counted: `expected 39 OT books, got 38`. The fix is one map per namespace
   (`canonByStandardCode` / `canonByAbbrev`, plus an explicit `canonByLooseCode` for Zefania's
@@ -17,7 +17,7 @@ favourites screen, a reference parser).
 - **The same class of bug was already in the tree, and much bigger.** `bible-source.ts` derived
   `testament` from a hand-written `OT_ABBREVS` set of 39 strings — and that set did not match the
   bible in the box. It spelled Samuel `1s`, Kings `1r`, Psalms `sal`, Proverbs `pr`, Song `cnt`,
-  Jeremiah `jer`, Obadiah `abd`…, while `rv1960.json` actually says `1sm`, `1kgs`, `ps`, `prv`,
+  Jeremiah `jer`, Obadiah `abd`…, while `rv1909.json` actually says `1sm`, `1kgs`, `ps`, `prv`,
   `so`, `jr`, `ob`. **Only 16 of the 39 Old Testament books matched**, so the other 23 — Samuel
   through Malachi — have been stored as `testament: "NT"` since the seed was written. Nothing in
   the app reads the column yet, which is the only reason nobody ever saw Isaiah filed next to
@@ -32,8 +32,8 @@ favourites screen, a reference parser).
 
 - **The app's own abbreviations are not free to change.** `bible_favorites` rows are keyed by
   `(version_code, book_abbrev)` and a reference is shown to the operator, so the canon table's
-  `abbrev` column was read out of `rv1960.json` itself rather than invented. A verse imported
-  from a Zefania module and the same verse in RV1960 have to be the same `gn 1:1`, or "the same
+  `abbrev` column was read out of `rv1909.json` itself rather than invented. A verse imported
+  from a Zefania module and the same verse in RV1909 have to be the same `gn 1:1`, or "the same
   reference in two versions" stops being something the app can express.
 
 - **A merged-namespace lookup is invisible without a count.** The unit test that exercises each

@@ -42,8 +42,7 @@ export const mediaAssets = sqliteTable(
      *  "which deck is its first slide in?") can be answered by CONTENT rather
      *  than by which asset happens to own the deck row: `slide_decks`
      *  .`media_asset_id` is exclusive and `relinkDeck` moves it, so with the
-     *  same file present twice only the last one opened looked converted.
-     *  See `N3` in `auditorias/reports/2026-09-11-cadena-de-media.md` §5.2. */
+     *  same file present twice only the last one opened looked converted. */
     contentHash: text("content_hash"),
     /** The `(size, mtime)` the hash was computed over. `contentHash` is only
      *  trustworthy while these still match `sizeBytes`/`mtimeMs` — the same
@@ -182,7 +181,7 @@ export const bibleVersions = sqliteTable("bible_versions", {
    *  `utility_scenes.sort_order`: lower comes first, a newly imported version
    *  takes `MAX(sort_order) + 1` so it lands at the BOTTOM — unlike a new
    *  program, an import is not what the operator is about to project, and
-   *  pushing RV1960 off the top of the picker mid-service is the failure mode
+   *  pushing RV1909 off the top of the picker mid-service is the failure mode
    *  that matters here. `reorder()` renormalizes to `0..n-1`. */
   sortOrder: integer("sort_order").notNull().default(0),
   installedAt: integer("installed_at").notNull(),
@@ -431,8 +430,7 @@ export const programDraft = sqliteTable("program_draft", {
  *
  * `tool` is a COLUMN rather than a field of `config_json` because it is the
  * discriminant: the list shows an icon and a label per scene, and it must not
- * have to parse a JSON blob per row to do it. Everything else splits the way
- * `plans/2026-09-17-panel-funciones/utilidades.md` argues it should —
+ * have to parse a JSON blob per row to do it. Everything else splits by role —
  * `config_json` is what the operator configured (`TimerConfig`) and
  * `style_json` is how it looks (`SceneStyle`, deliberately shaped to be reused
  * by Overlays and by the Bible/text projection settings later). Both are JSON
@@ -467,8 +465,7 @@ export const utilityScenes = sqliteTable(
 );
 
 /**
- * Saved overlay plates — see `shared/types/overlay.ts` and
- * `plans/2026-09-17-panel-funciones/overlays.md`.
+ * Saved overlay plates — see `shared/types/overlay.ts`.
  *
  * Same shape discipline as `utility_scenes`: `kind` and `position` are columns
  * (the list's discriminants), the style is JSON (`PlateStyle`) so a change of

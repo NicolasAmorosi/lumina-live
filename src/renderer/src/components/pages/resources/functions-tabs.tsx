@@ -40,7 +40,7 @@ const TAB_ID_BASE = "resources-functions";
  * The third resource tab: what can go on the projector that is not a file and
  * not scripture — a countdown, a camera, a lower third.
  *
- * Utilities and Overlays are built (`plans/2026-09-17-panel-funciones/`);
+ * Utilities and Overlays are built;
  * Entradas is still an announcement. It is a real, selectable tab rather than
  * a disabled one on purpose: the operator gets to read what it will do, which
  * is the whole value a tab has until its feature lands.

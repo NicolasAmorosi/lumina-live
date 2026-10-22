@@ -6,8 +6,8 @@ Se completó: andamiaje `electron-vite` + TS estricto, el design system (`compon
 `shared`), la capa de datos completa (SQLite + Drizzle + FTS5, con smoke test verificado), el
 contrato IPC tipado end-to-end, el protocolo `worship://`, el pipeline de diapositivas con
 LibreOffice headless (multiplataforma, ver `03-slides-libreoffice.md`), la
-ventana de proyección declarativa, y una UI de control funcional para las 6 áreas de
-`auditorias/README.md` (playlist, biblioteca, biblia, PPT, negro/logo, display) más el módulo
+ventana de proyección declarativa, y una UI de control funcional para las 6 áreas auditadas
+(playlist, biblioteca, biblia, PPT, negro/logo, display) más el módulo
 nuevo de servicios guardados.
 
 **No se implementó** (fuera de alcance explícito de esta tarea, acordado con el usuario):
@@ -66,7 +66,7 @@ críticos, altos y medios. Quedó abierto esto, cada cosa con su motivo:
 - **El paquete de Windows lleva los prebuilds de better-sqlite3 de otras plataformas** y sus fuentes
   de SQLite (~24 MB). Excluirlos por plataforma es posible, pero se tocaría la carga del módulo nativo
   justo antes del lanzamiento.
-- **Volver a sembrar RV1960 con un JSON distinto borraría la versión de los versículos guardados**
+- **Volver a sembrar RV1909 con un JSON distinto borraría la versión de los versículos guardados**
   (`seed-bible.ts`). No ocurre: el archivo no cambió desde el primer commit.
 - **Sin firma de código** (SmartScreen avisa «Windows protegió su PC») — `I1`, cuesta dinero.
 - **A comprobar a mano en la PC de la iglesia**: Win+P en «Extender»; escalas distintas por monitor;
@@ -106,8 +106,8 @@ se empaqueta**: la app lo detecta en el sistema (con override manual en `slides.
 si falta, la UI explica cómo instalarlo.
 
 Verificado en macOS contra decks reales de iglesia, incluyendo un `.ppt` binario de 52
-diapositivas y un fixture con auto-avance + audio embebido. `legacy/` ya **no** está bloqueado por
-una validación en Windows.
+diapositivas y un fixture con auto-avance + audio embebido. `legacy/` se retiró del repo el
+2026-10-22; sigue en la historia de git.
 
 ## Objetivo: más idiomas
 

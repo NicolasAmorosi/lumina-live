@@ -123,8 +123,8 @@ export const useBibleStore = create<BibleStoreState>((set, get) => ({
  * there is nothing to print.
  *
  * It is the version's NAME, which is also what the operator can rename — that
- * is the lever. «Reina-Valera 1960» is too long to sit under a verse on a
- * three-metre screen, and the short form every church actually uses («RV1960»)
+ * is the lever. «Reina-Valera 1909» is too long to sit under a verse on a
+ * three-metre screen, and the short form every church actually uses («RV1909»)
  * is a preference, not a fact the app can derive: a Spanish congregation
  * writes RV60 and an Italian one writes NR94. So there is no second `abbrev`
  * column and no formatting rule here — the name IS the label, and Ajustes ▸

@@ -139,7 +139,7 @@ export type ProjectionStoreState = {
    * Independent of `base` and of `overlay`: a plate stays "up" under NEGRO and
    * while nothing is live, and `selectOutput` is what keeps it off the stage
    * then. None of the three actions below calls `beginScene()` — a plate is
-   * not a new scene (see `plans/2026-09-17-panel-funciones/overlays.md`).
+   * not a new scene.
    */
   livePlates: readonly Plate[];
   /**

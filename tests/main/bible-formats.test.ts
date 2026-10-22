@@ -83,7 +83,7 @@ describe("the canon", () => {
   });
 
   test("the app's abbreviations and the standards' codes are different namespaces", () => {
-    // `jud` is Jueces here, because that is how `rv1960.json` spells it.
+    // `jud` is Jueces here, because that is how `rv1909.json` spells it.
     // `JUD` is Judas in USFX. In one shared map the later one wins and Judges
     // becomes a New Testament book — which is what merging them actually did.
     expect(canonByAbbrev("jud")?.name).toBe("Jueces");

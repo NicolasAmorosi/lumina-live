@@ -7,7 +7,7 @@ another screen. Also before adding any new field to `ProjectionOutput`/`AudioTra
 projector applies "once, on mount".
 
 Found on 2026-09-13 closing `M1` of the feature-5 audit
-([`AUDIT-black-logo-2026-09-13.md`](../../auditorias/reports/AUDIT-black-logo-2026-09-13.md)).
+(`AUDIT-black-logo-2026-09-13`, internal).
 
 ### The claim
 

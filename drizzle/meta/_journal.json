@@ -120,6 +120,13 @@
       "when": 1792332614982,
       "tag": "0016_media_conversions",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1792687782774,
+      "tag": "0017_builtin_bible_rv1909",
+      "breakpoints": true
     }
   ]
 }

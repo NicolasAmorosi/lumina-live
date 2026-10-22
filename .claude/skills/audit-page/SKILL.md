@@ -1,6 +1,6 @@
 ---
 name: audit-page
-description: Full end-to-end auditor for one WorshipApp feature (IPC contract → main handlers → React/Zustand renderer → design-system usage). Checks correctness, unhandled states (loading/empty/error), projection-output coverage, slide-deck and NEGRO/LOGO overlay correctness, and style/token uniformity. Writes a severity-rated report to auditorias/reports/ and updates the status index. Report-only — never fixes unless asked. Use when asked to audit, review in depth, or QA a complete feature (playlist, library, bible, ppt, black/logo controls, programs).
+description: Full end-to-end auditor for one WorshipApp feature (IPC contract → main handlers → React/Zustand renderer → design-system usage). Checks correctness, unhandled states (loading/empty/error), projection-output coverage, slide-deck and NEGRO/LOGO overlay correctness, and style/token uniformity. Writes a severity-rated report to the maintainer workspace (../docs/auditorias/reports/) and updates the status index. Report-only — never fixes unless asked. Use when asked to audit, review in depth, or QA a complete feature (playlist, library, bible, ppt, black/logo controls, programs).
 user-invocable: true
 tools: Read, Write, Edit, Bash, Glob, Grep
 ---
@@ -8,9 +8,11 @@ tools: Read, Write, Edit, Bash, Glob, Grep
 # /audit-page — Full-stack Feature Auditor (WorshipApp)
 
 You audit **one feature end-to-end** across all WorshipApp layers and produce a single,
-severity-rated report under `auditorias/reports/`, then update the status table in
-`auditorias/README.md`. `npm run typecheck` already catches missing/mis-typed IPC handlers and
+severity-rated report under `../docs/auditorias/reports/`, then update the status table in
+`../docs/auditorias/README.md`. `npm run typecheck` already catches missing/mis-typed IPC handlers and
 non-exhaustive `selectOutput` switches — don't re-derive what the compiler already guarantees.
+Reports are maintainer notes and are not published: `../docs/auditorias/` is the maintainer
+workspace next to this repo. If it does not exist, write under `.scratch/auditorias/` (gitignored).
 Focus your manual tracing on what TypeScript can't see: runtime behavior, error handling, UX
 states, LibreOffice pipeline safety, and design-system consistency. Run `npm run typecheck && npm run lint`
 first and fold any failures into the report as Critical findings.
@@ -160,10 +162,10 @@ features require Windows; audited on macOS").
 ## Phase 8 — Write the report + update the index
 
 1. Get today's date: `date +%F`.
-2. Write a single markdown file to **`auditorias/reports/AUDIT-<feature>-<YYYY-MM-DD>.md`** using
+2. Write a single markdown file to **`../docs/auditorias/reports/AUDIT-<feature>-<YYYY-MM-DD>.md`** using
    the structure below. Every finding gets a **severity**, a **`file:line`** anchor, and a
    concrete **recommendation**.
-3. **Update the row** for this feature in `auditorias/README.md`: set Estado (🔵 en progreso /
+3. **Update the row** for this feature in `../docs/auditorias/README.md`: set Estado (🔵 en progreso /
    🟡 hallazgos abiertos / 🟢 limpia), the Hallazgos counts, the date, and a relative link to the
    report. Refresh the "última actualización" footer line.
 4. If you found something durable enough to matter next session (a real bug, a gotcha), also add
