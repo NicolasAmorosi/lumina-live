@@ -150,7 +150,10 @@ primer render.
 colores son del logo y no del tema, y es el único lugar donde un hex es legítimo) y `Wordmark`
 («Lumina / Live» en ExtraCondensed ExtraBold, interlineado 0,858 como en la hoja, «Live» en
 `text-brand-live`). Aparece en dos lugares, por decisión del dueño: el isotipo a la izquierda de la
-TopBar y el encabezado de **Ajustes ▸ Acerca de** (logo, nombre, versión, registros). Nunca en el
+TopBar y el encabezado de **Ajustes ▸ Acerca de** (logo, nombre, versión, registros). El cuadrado
+del logo es `#162231`, el mismo fondo del tema oscuro: sin borde solo se veía la llama flotando. Por
+eso `BrandMark` lleva un contorno interior de 1 px en `brand-edge` (en oscuro, el mismo `#384f69`
+que el borde del botón primario, por la misma razón; en claro, transparente). Nunca en el
 proyector: con LOGO y sin logo elegido el escenario sigue negro, la congregación ve la marca de la
 iglesia y no la del software.
 

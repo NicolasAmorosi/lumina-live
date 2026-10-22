@@ -175,6 +175,9 @@
   /* The dark primario sits 1.31:1 from the fondo: without an edge a primary
    * button is a label floating on nothing. primario -> secundario, 25%. */
   --wa-primary-border: #384f69;
+  /* The mark's tile IS the fondo (#162231): on the toolbar only the flame
+   * showed. Same problem as the primario, same edge. */
+  --wa-brand-edge: #384f69;
   --wa-secondary: #8299b2;
   --wa-secondary-hover: #91a5bb;
   --wa-secondary-foreground: #162231;
@@ -231,6 +234,8 @@
   --wa-primary: #2f557f;
   --wa-primary-hover: #213c59;
   --wa-primary-border: #2f557f;
+  /* A navy tile on white needs no edge. */
+  --wa-brand-edge: transparent;
   --wa-secondary: #213c59;
   --wa-secondary-hover: #182d44;
   --wa-secondary-foreground: #ffffff;
@@ -301,6 +306,7 @@
   /* The "Live" of the wordmark and the flame's core. Logo-only: it is the
    * same in both themes, like the logo, and never a UI state. */
   --color-brand-live: #d14600;
+  --color-brand-edge: var(--wa-brand-edge);
 
   --color-badge-ppt: var(--wa-badge-ppt);
   --color-badge-video: var(--wa-badge-video);
