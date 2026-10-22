@@ -75,6 +75,7 @@
   "build": {
     "appId": "com.worshipapp.app",
     "productName": "Lumina Live",
+    "artifactName": "Lumina-Live-${os}-${arch}.${ext}",
     "asar": true,
     "asarUnpack": [
       "**/node_modules/better-sqlite3/**"
