@@ -1,5 +1,11 @@
 import { app, Menu, type MenuItemConstructorOptions } from "electron";
 
+/** NOT `app.name`: that is package.json's `name` ("worship-app" — electron-builder
+ *  never ships `build.productName`), and it cannot be changed with
+ *  `app.setName()` because it also names the userData folder. See
+ *  `.claude/knowledge/electron-userdata-follows-package-name-not-build-productname.md`. */
+const PRODUCT_NAME = "Lumina Live";
+
 /**
  * The app's own menu, replacing Electron's default one.
  *
@@ -47,17 +53,17 @@ export function installApplicationMenu(): void {
     ...(isMac
       ? ([
           {
-            label: app.name,
+            label: PRODUCT_NAME,
             submenu: [
-              { role: "about", label: `Acerca de ${app.name}` },
+              { role: "about", label: `Acerca de ${PRODUCT_NAME}` },
               { type: "separator" },
               { role: "services", label: "Servicios" },
               { type: "separator" },
-              { role: "hide", label: `Ocultar ${app.name}` },
+              { role: "hide", label: `Ocultar ${PRODUCT_NAME}` },
               { role: "hideOthers", label: "Ocultar otros" },
               { role: "unhide", label: "Mostrar todo" },
               { type: "separator" },
-              { role: "quit", label: `Salir de ${app.name}` },
+              { role: "quit", label: `Salir de ${PRODUCT_NAME}` },
             ],
           },
         ] satisfies MenuItemConstructorOptions[])

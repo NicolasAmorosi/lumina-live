@@ -21,7 +21,7 @@ export type BadgeVariant = "blue" | "neutral" | "danger" | "success" | "ppt" | "
  * and being quieter than the rest is the point of it.
  */
 const variants: Record<BadgeVariant, string> = {
-  blue: "bg-primary/20 text-foreground",
+  blue: "bg-accent/20 text-foreground",
   neutral: "bg-muted text-muted-foreground",
   danger: "bg-danger/20 text-foreground",
   success: "bg-success/20 text-foreground",
@@ -38,7 +38,7 @@ export function Badge({ className, variant = "neutral", ...props }: BadgeProps) 
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+        "inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
         variants[variant],
         className,
       )}

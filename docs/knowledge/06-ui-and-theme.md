@@ -16,85 +16,148 @@ Piezas copiadas casi literalmente porque resuelven un problema no obvio:
 - `components/shared/modal/` → stack global + portal, para que solo el modal superior pinte el
   backdrop cuando hay más de uno abierto.
 
-## Tema claro/oscuro y paleta oficial adventista
+## Identidad: Lumina Live
+
+Desde el 2026-10-22 el producto se llama **Lumina Live** y tiene identidad propia, que reemplazó a
+la paleta adventista (ALPS/Denim) de las versiones anteriores. La fuente es la hoja «Identidad App
+Lumina Live» (PDF de Illustrator, dos páginas: paleta por modo, y logo + wordmark). Tres cosas de esa
+hoja que no se ven a simple vista y se sacaron leyendo el PDF por dentro:
+
+- El **Secundario del modo claro** está rotulado `#2f557f` (igual que el Primario) pero dibujado
+  `#213c59`. Vale el dibujado.
+- La tipografía de la hoja es **Noto Sans ExtraCondensed** (ExtraBold en títulos y en el wordmark,
+  SemiBold en rótulos). Es la misma familia que el texto de la app, en otro ancho.
+- El logo es vectorial: rectángulo redondeado `#162231` (radio 7,3 %), un resplandor radial
+  `#f7931e` al 8 %, y cuatro llamas — `#ffad40` al 31 %, `#ffa92d`, `#e36520`, `#d14600`. «Live»
+  va en `#d14600`. Está trazado tal cual en `src/renderer/src/assets/brand/lumina-live-mark.svg`.
+
+### La paleta y sus roles
 
 `src/renderer/src/styles/globals.css` define **dos paletas físicas** (`--wa-*`, en `:root`/
 `[data-theme="dark"]` y en `[data-theme="light"]`) mapeadas a **un solo set de tokens
-semánticos** vía `@theme inline` (`--color-background`, `--color-primary`, etc.). Los componentes
-solo referencian los tokens semánticos — nunca `--wa-*` directo — así el toggle de tema
-(`settings.store.ts`, `data-theme` en `<html>`) no requiere tocar ningún componente.
+semánticos** vía `@theme inline`. Los componentes solo referencian los semánticos — nunca `--wa-*`
+directo — así el toggle de tema no requiere tocar ningún componente.
 
-Los valores salen del **sistema de identidad oficial de la Iglesia Adventista**. `adventist.design`
-y `styleguide.adventist.io` bloquean el acceso automatizado (403), así que la fuente usable es
-**ALPS** (Adventist Living Pattern System, `github.com/adventistchurch/alps`), que es la
-implementación de referencia de esa identidad —
-`src/documentation/core/colors/_config.tsx` tiene cada color con su hex, RGB, CMYK y Pantone:
-
-| Familia | darker / dark / base / light / lighter |
-|---|---|
-| Denim (primaria acá) | `#04132b` · `#04132b` · `#2f557f` · `#2e6de7` · `#84adfc` |
-| Bluejay | `#052252` · `#2f557f` · `#2e6de7` · `#84adfc` |
-| Campfire `#cd4900`, Iris `#9013fe`, Ming `#007f98`, Tree Frog `#2b8500`, Forest `#355724`, Cave `#255760`, Emperor `#4b207f`, Scarlett `#d0021b` |
-| Neutros | `#000` `#222222` `#4a4a4a` `#717171` `#f5f5f5` `#ffffff` |
-
-Dos consecuencias que importan al tocar la paleta:
-
-1. **ALPS no define superficies de UI oscura** (es un sistema web/print). El tema oscuro
-   **interpola la rampa Denim** entre `#04132b` y `#2f557f` en lugar de inventar matices nuevos.
-   Cualquier valor nuevo tiene que salir de esa rampa o de un color de la tabla.
-2. **No hay paleta global oficial de "colores de estado"** más allá de los de la tabla: el rojo es
-   Scarlett, el verde es Tree Frog (oscuro) / Forest (claro). El token `--color-on-air` (Scarlett)
-   tiene **un solo significado reservado**: esto está en el proyector ahora mismo. No se usa para
-   errores — eso es `--color-danger`.
-
-Los badges por tipo de contenido también son colores de la tabla (ppt = Campfire, video = Iris /
-Emperor, image = Tree Frog / Forest, audio = Ming / Cave, bible = Bluejay / Denim).
-
-### Un color no puede ser relleno y texto a la vez — la rampa `-ink`
-
-Un token de color tiene **dos roles incompatibles** y el tema oscuro los enfrenta: como **relleno**
-(`bg-danger` con blanco encima) tiene que ser oscuro para que el blanco se lea; como **texto** sobre
-`bg-card` (#123054) tiene que ser claro para leerse él. Con un solo valor, uno de los dos falla — y
-el que fallaba era el texto: medido sobre los valores reales, `text-danger` daba **2,35:1**,
-`text-primary` 2,83, `text-success` 2,83, `text-badge-audio` 2,85 y `text-warning` 2,89, todos por
-debajo del 3:1 que WCAG pide hasta para un objeto gráfico, y muy lejos del 4,5:1 de texto chico.
-El peor caso no era decorativo: era el aviso de "este archivo no se pudo reproducir" en
-`MediaTrackRow`, justo lo que el operador tiene que leer a oscuras y de reojo.
-
-Por eso hay una segunda familia, `--color-<tono>-ink`, para los **cinco tonos que aparecen como
-texto o ícono suelto**. Mismo hue, aclarado hacia blanco — igual que el tema oscuro ya interpola
-Denim para superficies que ALPS no define:
-
-| Token | Oscuro | Derivación | Sobre `bg-card` |
+| Hoja | Claro | Oscuro | Token |
 |---|---|---|---|
-| `--color-danger-ink` | `#e8808d` | Scarlett `#d0021b` + 50 % blanco | 2,35 → **5,01** |
-| `--color-primary-ink` | `#84adfc` | Denim `#84adfc`, tal cual de ALPS | 2,83 → **5,94** |
-| `--color-success-ink` | `#80b666` | Tree Frog `#2b8500` + 40 % | 2,83 → **5,58** |
-| `--color-warning-ink` | `#e6a480` | Campfire `#cd4900` + 50 % | 2,89 → **6,33** |
-| `--color-badge-audio-ink` | `#66b2c1` | Ming `#007f98` + 40 % | 2,85 → **5,52** |
+| Fondo | `#ffffff` | `#162231` | `background`, `surface` (paneles, barra, campos) |
+| Cuadro de diálogo | `#f5f6f9` | `#1b2c41` | `card` (diálogos, menús, tooltips, miniaturas) |
+| Bordes | `#c8d2dc` | `#2e4155` | `border` |
+| Primario | `#2f557f` | `#203651` | `primary` — el botón principal |
+| Secundario | `#213c59` | `#8299b2` | `secondary` — el botón secundario |
+| Texto primario / secundario | `#182a40` / `#5c7089` | `#eef2f6` / `#9aa9b8` | `foreground` / `muted-foreground` |
+| Acento | `#3e8391` | `#3e8391` | `accent` — seleccionado, foco, encendido |
+| Indicadores | `#448d21` `#ffa92d` `#e36520` `#dd1f1f` | iguales | `success`, `warning`, `badge-ppt`, `danger` y `on-air` |
 
-En el tema claro `-ink` vale lo mismo que el relleno: ahí ya pasaba en todos los pares donde se usa.
-Se parten igual, para que ningún componente tenga que saber en qué tema está.
+Los roles los decidió el dueño de la identidad (2026-10-22): **Primario = botón principal,
+Secundario = botón secundario, Acento = selección/foco**, y **en vivo = rojo** (convención de
+tally; el naranja del «Live» del logo quedó para la marca y el badge de presentaciones).
 
-Los otros badges **no** tienen `-ink` a propósito: solo se pintan como tinte de `Badge`, que desde
-el arreglo `H7` lleva `text-foreground` (2,18–3,19 → 12,5–13,8). `--wa-text-muted` del tema oscuro
-se subió en su lugar, de `#7089a8` a `#92aac8` (3,70 → 5,59 sobre `bg-card`), porque `text-subtle`
-es texto y nada más — 32 usos, ninguno como fondo ni borde.
+Consecuencias que importan al tocar la paleta:
 
-**Lo que queda abierto:** el tema **claro** roza el límite en dos pares que nadie había medido —
-`--wa-warning` sobre `bg-muted` a 4,00 y `--wa-text-muted` sobre `bg-muted` a 4,22. No se tocó:
-subirlos significa mover neutros de ALPS y colapsaría la jerarquía contra `--wa-text-secondary`
-(`#4a4a4a`), que es una decisión de diseño, no un ajuste.
+1. **El Primario oscuro está a 1,31:1 del fondo.** Un botón principal sin borde es una etiqueta
+   flotando en la nada, así que lleva `border-primary-border` (`#384f69`, Primario → Secundario al
+   25 %). En claro ese token vale lo mismo que el relleno y no agrega nada. Es sobrio a propósito
+   —la cabina está a oscuras—, y por lo mismo el Secundario (acero claro) resalta más que el
+   Primario en oscuro: es la lectura literal de la hoja, aceptada así.
+2. **Lo que la hoja no define se MEZCLA, no se inventa.** `muted` y `hover` son Diálogo → Bordes al
+   35 % y 65 %; el borde claro más fuerte es Bordes → Texto secundario al 20 %; la fila
+   seleccionada (`active`) es Fondo + 26 % de acento en oscuro, que es lo máximo antes de que
+   `text-subtle` sobre ella baje de 4,5:1.
+3. **La selección es teal en todos lados**: borde de la miniatura elegida, riel de la pestaña
+   activa, toggle presionado (relleno), switch, slider, progreso, indicador de arrastre. Las filas
+   y pestañas seleccionadas llevan además un filete `ring-accent/40`: el tinte solo, en claro, está
+   apenas un tono por debajo del diálogo.
+4. **El texto terciario no existe en claro.** La hoja tiene dos grises y `#5c7089` ya está en
+   4,57:1 sobre `bg-muted`: un tercer gris más claro falla AA. `text-subtle` vale lo mismo que
+   `muted-foreground` en claro; la jerarquía sale del tamaño y el peso.
+5. Los badges por tipo de contenido salen de la hoja: presentaciones = naranja, video = ámbar,
+   imagen = verde, audio = teal, Biblia = Primario (claro) / Secundario (oscuro). Se pintan como
+   tinte al 20 % con `text-foreground` encima.
+
+### Relleno, tinta y AA — la rampa `-ink`
+
+Un token de color tiene **dos roles incompatibles**: como **relleno** (`bg-danger` con blanco
+encima) tiene que ser oscuro para que el blanco se lea; como **texto** sobre `bg-card` tiene que
+ser claro para leerse él. Por eso hay una segunda familia, `--color-<tono>-ink`, para los cinco tonos
+que aparecen como texto o ícono suelto. Cada una es su color de la hoja aclarado (oscuro) u
+oscurecido (claro) justo hasta pasar 4,5:1 sobre la peor superficie donde cae:
+
+| Token | Oscuro | Claro |
+|---|---|---|
+| `danger-ink` | `#eb7979` (rojo + 40 % blanco, 5,09) | `#dd1f1f` tal cual (4,53 sobre `#f5f6f9`) |
+| `accent-ink` | `#78a8b2` (teal + 30 %, 5,42) | `#356f7b` (teal − 15 %, 5,24) |
+| `success-ink` | `#7caf64` (verde + 30 %, 5,51) | `#3a781c` (verde − 15 %, 5,00) |
+| `warning-ink` | `#ffa92d` tal cual (7,39) | `#8c5d19` (ámbar − 45 %, 5,26) |
+| `badge-audio-ink` | = `accent-ink` | = `accent-ink` |
+
+(`accent-ink` se llamaba `primary-ink` cuando el azul era a la vez acción y selección.)
+
+El otro sentido también se mide: **un relleno con texto blanco encima tiene que pasar 4,5:1**. El
+verde de la hoja da 4,14 y el teal 4,32, así que `success` es `#3f821e` (−8 %) y `accent` es
+`#3a7b88` (−6 %) — a la vista son el mismo color. El ámbar nunca lleva blanco (1,92:1): su
+`warning-foreground` es el texto oscuro de la hoja (7,59:1). La banda «No hay logo cargado» del
+monitor lo violó la primera vez que se aplicó esta paleta, porque escribía `text-white` para
+cualquier tono.
 
 Oscuro es el default (`DEFAULT_SETTINGS['ui.theme']` en `shared/types/settings.ts`) — pensado
-para operarse en una cabina de proyección a oscuras, igual que la versión legacy.
+para operarse en una cabina de proyección a oscuras.
 
-## Noto Sans self-hosted
+### Forma, foco, elevación y movimiento
 
-**Noto Sans es la tipografía oficial de la iglesia** (Advent Sans es exclusiva de logos y
-señalética, por eso no se usa acá). Se sirve desde `@fontsource-variable/noto-sans`, importado en
-`main.tsx`/`projection.tsx` — no hay `@import` de Google Fonts: la app queda usable sin internet
-desde el primer render, incluyendo en una iglesia sin conexión.
+- **Píldora** para todo lo que actúa o marca: `Button`, `IconButton` (círculo), `Badge`, `Switch`,
+  los segmentos y la barra lateral de `Tabs`. Diálogos `rounded-2xl`; tarjetas, grupos
+  (`FieldGroup`), menús y popovers `rounded-xl`; campos, miniaturas y filas `rounded-lg`. Una
+  superficie nunca contiene un radio mayor que el suyo.
+- **Foco = `outline`** con las utilidades `focus-ring` / `focus-ring-inset` de `globals.css`, nunca
+  `ring` + `ring-offset`: Tailwind pinta el hueco del offset con un color explícito (blanco por
+  defecto), y en el tema oscuro cada control enfocado tenía un halo blanco de 1 px. El hueco de un
+  `outline-offset` es transparente en cualquier superficie. `-inset` es para lo que vive dentro de
+  algo que recorta (pestañas, grillas de miniaturas, listas).
+- **Un toggle presionado se RELLENA de acento** (`toggled` de `Button`/`IconButton`). Antes era un
+  anillo del color del foco: «está encendido» y «tiene el teclado» se veían igual. Los tres estados
+  del proyector de la TopBar (LOGO / NEGRO / VIVO) son `outline` y el encendido se llena de teal.
+- **Superficies en reposo planas** (`shadow-surface` = nada): la hoja dibuja sus cajas con borde y
+  sin sombra. `raised` y `overlay` siguen, en navy y más suaves en el tema claro.
+- **Movimiento**: `--ease-enter`/`--ease-exit`; el modal y su velo entran en 150 ms
+  (`wa-modal-enter`/`wa-backdrop-enter`), sin animación de salida a propósito — un diálogo que se
+  está cerrando no debería seguir tomando foco ni clicks. Todo lo decorativo va por `motion-safe:`
+  (el pulso del punto EN VIVO, el del audio vinculado, el skeleton, el spinner). Las transiciones
+  del PROYECTOR no: esas son contenido, no interfaz (ver la nota en `globals.css`).
+- El velo de un modal es `bg-scrim`: negro al 60 % en oscuro, navy al 40 % en claro.
+- **Sin espacio, cede el texto, nunca el ícono** (regla del dueño, 2026-10-22). `Icon` y `Badge`
+  son `shrink-0` de base; el texto se trunca en su propio `<span className="truncate">` —
+  `Button` (`truncateText()`) y `Tabs` lo hacen solos. Las pestañas de ancho igual (`folder`,
+  `segment`) muestran el nombre completo como `title` al pasar el mouse, solo si está cortado.
+
+## Tipografía: Noto Sans y su corte ExtraCondensed
+
+Noto Sans para todo lo que el operador lee; **Noto Sans ExtraCondensed** (`font-stretch-extra-condensed`,
+62,5 %) para los títulos — `Title` h1/h2 (las cabeceras PROGRAMA / PREVIEW / EN VIVO y los grupos
+de Ajustes), los títulos de modal (`ModalTitle`) y el wordmark. Un corte condensado se lee más chico
+que su tamaño, por eso h2 sube a 15 px donde un rótulo de texto tendría 14.
+
+Las dos salen del MISMO archivo variable: `main.tsx` importa
+`@fontsource-variable/noto-sans/wdth.css` (ejes `wdth` 62,5–100 % + `wght`), no el import por
+defecto del paquete, que trae solo `wght` — con ese, `font-stretch` no hace nada y el navegador
+sintetiza un condensado falso. La proyección sigue con el import por defecto: el escenario no usa
+el corte condensado. Todo self-hosted, sin Google Fonts: la app queda usable sin internet desde el
+primer render.
+
+## La marca dentro de la app
+
+`components/ui/brand.tsx`: `BrandMark` (el SVG del logo, como `<img alt="">` — es un asset, sus
+colores son del logo y no del tema, y es el único lugar donde un hex es legítimo) y `Wordmark`
+(«Lumina / Live» en ExtraCondensed ExtraBold, interlineado 0,858 como en la hoja, «Live» en
+`text-brand-live`). Aparece en dos lugares, por decisión del dueño: el isotipo a la izquierda de la
+TopBar y el encabezado de **Ajustes ▸ Acerca de** (logo, nombre, versión, registros). Nunca en el
+proyector: con LOGO y sin logo elegido el escenario sigue negro, la congregación ve la marca de la
+iglesia y no la del software.
+
+Íconos de la app, generados desde el mismo SVG: `build/icon.icns` (macOS, grilla de Apple: cuerpo
+de 824 px con radio ~22 % y la sombra de la plantilla) y `build/icon.png` (Windows/Linux, la forma
+de la hoja con 3 % de margen; electron-builder saca el `.ico` de ahí). Se renderizaron con una
+ventana offscreen de Electron (evento `paint`, que sí conserva el alfa) e `iconutil`.
 
 ## Formularios: `FieldGroup`/`FieldRow`, y `ColorField`
 
@@ -106,14 +169,16 @@ Utilidades fue el segundo consumidor: es literalmente la regla de reutilización
 disparándose. Se agrega una opción a un grupo existente, o se abre un grupo nuevo; nunca una lista
 plana de filas.
 
-`ColorField` es el control de color. Elige de la paleta oficial (las muestras son valores de la
-tabla de ALPS de más arriba) o acepta un hex propio, y **solo emite `#rrggbb`** — una sola forma
+`ColorField` es el control de color. Elige de las muestras de la hoja de Lumina Live (neutros,
+azules, acento, indicadores y la llama, con los valores EXACTOS de la hoja y no los ajustados a AA
+de la interfaz: en el proyector el color es de la marca) o acepta un hex propio, y **solo emite `#rrggbb`** — una sola forma
 canónica, porque dos escrituras del mismo color en la base es una comparación que falla sobre un
 valor que el operador nunca ve. Abre su popover por portal con `computeMenuPosition`, igual que
 `Select` y `Menu`, porque todo panel y todo diálogo de esta app recorta su overflow.
 
 Los hex que aparecen en `color-field.tsx`, en `DEFAULT_SCENE_STYLE` y en `DEFAULT_BIBLE_STYLE`
-**no violan** la regla de "nada de colores hardcodeados en un componente": son valores de
+**no violan** la regla de "nada de colores hardcodeados en un componente" —y desde el
+2026-10-22 también salen de la hoja de Lumina Live; una escena guardada antes conserva los suyos—: son valores de
 CONTENIDO, guardados en una fila y editables por el operador —la misma categoría que el nombre de
 un programa—, y terminan en un `style` inline sobre el escenario del proyector, que no tiene tema.
 Un color de la INTERFAZ sigue saliendo siempre de un token semántico.
@@ -200,7 +265,7 @@ El `TopBar` es un **grid de 3 columnas idéntico al del `<main>`** de abajo (`gr
 cada grupo de controles queda exactamente arriba de la columna sobre la que actúa, no importa el
 ancho de la ventana:
 
-- **Columna 1** (arriba de Programa/Recursos): el ícono de engranaje (Configuraciones) y el card
+- **Columna 1** (arriba de Programa/Recursos): el isotipo de Lumina Live, el ícono de engranaje (Configuraciones) y el card
   del programa actual — nombre, badge Guardado/No guardado, y tres botones (guardado rápido, nuevo
   programa, administrar programas guardados) que abren `pages/programs/ProgramsModal.tsx`.
 - **Columna 2** (arriba de Diapositivas): un único botón **EN VIVO** que llama a
@@ -214,7 +279,11 @@ ancho de la ventana:
   base. Los atajos de teclado B/L siguen usando `toggleOverlay` (comportamiento sin cambios).
 
 Las tres columnas del `<main>` son **`grid-cols-3`** — anchos iguales, ninguna de las tres tareas
-(explorar, montar, emitir) pesa visualmente más que las otras. No hay StatusBar ni indicador de
+(explorar, montar, emitir) pesa visualmente más que las otras. La línea entre columnas es el fondo
+`bg-border` asomando por un `gap-px`, **nunca `divide-x`**: un divisor es un borde ADENTRO de la
+columna y solo lo llevan dos de las tres, así que el monitor de PREVIEW quedaba 1 px más angosto que
+el de EN VIVO y todo lo de abajo desalineado con su gemelo
+([diagnóstico](../../.claude/knowledge/monitor-stage-must-size-by-width-not-flex.md)). No hay StatusBar ni indicador de
 "proyector conectado/desconectado" en el TopBar — LIMPIAR, la selección de pantalla y abrir/cerrar
 la proyección, el tema claro/oscuro y el idioma se movieron todos a
 `pages/settings/SettingsModal.tsx`, detrás del ícono de engranaje que reemplaza el título de la
@@ -231,8 +300,8 @@ etiqueta (+ descripción opcional) a la izquierda, control(es) a la derecha, sin
 Categorías de hoy: **Proyección** (pantalla, abrir/cerrar la ventana, logo, limpiar contenido en
 vivo, transición, volumen inicial), **Diapositivas** (caché y calidad de conversión),
 **Versículos** (cómo se VISTE un versículo, con su vista previa 16:9 arriba), **Biblia** (qué
-versiones hay instaladas: importar, renombrar, por defecto, borrar) y **Sistema** (tema, idioma,
-carpetas). Una configuración nueva entra en un grupo existente o crea uno dentro de su sección —
+versiones hay instaladas: importar, renombrar, por defecto, borrar), **Sistema** (tema, idioma,
+carpetas, rendimiento) y **Acerca de** (logo, versión y carpeta de registros). Una configuración nueva entra en un grupo existente o crea uno dentro de su sección —
 no se agrega una categoría sin necesidad.
 
 «Versículos» y «Biblia» son dos categorías y no una con pestañas, que es como estuvieron primero:

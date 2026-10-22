@@ -64,7 +64,7 @@ type Pending = { version: BibleVersionDTO; usages: BibleVersionUsage[] };
  * - **The star is the LEADING control, and it is the only mark of «por
  *   defecto» there is.** It replaced both a decorative bible icon and a pair
  *   of badges, and it is the same star `ProgramRow` uses — a filled
- *   `primary-ink` glyph, not a badge and not a filled button. One shape for
+ *   `accent-ink` glyph, not a badge and not a filled button. One shape for
  *   "this is the one I keep coming back to" across the app. Clicking the one
  *   that already is the default does nothing on purpose: there is always
  *   exactly one, because a dangling default sends the Bible tab back to
@@ -460,7 +460,7 @@ function VersionRow({
               size="xs"
               variant="ghost"
             >
-              <Icon className={cn(isDefault ? "fill-current text-primary-ink" : "text-subtle")} name="favorite" />
+              <Icon className={cn(isDefault ? "fill-current text-accent-ink" : "text-subtle")} name="favorite" />
             </IconButton>
           </Tooltip>
         }

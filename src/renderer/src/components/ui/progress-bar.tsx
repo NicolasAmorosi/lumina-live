@@ -1,7 +1,7 @@
 import type { HTMLAttributes } from "react";
 import { cn } from "@renderer/lib/utils";
 
-type Tone = "primary" | "success" | "danger";
+type Tone = "accent" | "success" | "danger";
 type ProgressBarProps = HTMLAttributes<HTMLDivElement> & {
   /** 0..1. Values outside the range are clamped. */
   value: number;
@@ -9,7 +9,7 @@ type ProgressBarProps = HTMLAttributes<HTMLDivElement> & {
 };
 
 const toneClassName: Record<Tone, string> = {
-  primary: "bg-primary",
+  accent: "bg-accent",
   success: "bg-success",
   danger: "bg-danger",
 };
@@ -19,7 +19,7 @@ const toneClassName: Record<Tone, string> = {
  * the total"). Used by deck conversion progress, the time-to-next-slide bar,
  * and video/audio playback position.
  */
-export function ProgressBar({ className, tone = "primary", value, ...props }: ProgressBarProps) {
+export function ProgressBar({ className, tone = "accent", value, ...props }: ProgressBarProps) {
   const pct = Math.round(Math.min(1, Math.max(0, value)) * 100);
   return (
     <div

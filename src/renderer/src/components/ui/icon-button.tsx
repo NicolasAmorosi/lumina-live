@@ -16,8 +16,8 @@ type IconButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const variants: Record<IconButtonVariant, string> = {
-  primary: "bg-primary text-primary-foreground hover:bg-primary-hover",
-  outline: "border border-border bg-transparent text-foreground hover:border-primary hover:bg-muted",
+  primary: "border border-primary-border bg-primary text-primary-foreground hover:bg-primary-hover",
+  outline: "border border-border bg-transparent text-foreground hover:border-accent hover:bg-muted",
   ghost: "text-foreground hover:bg-muted",
   success: "bg-success text-success-foreground hover:bg-success/90",
   warning: "bg-warning text-warning-foreground hover:bg-warning/90",
@@ -43,10 +43,10 @@ export function IconButton({
     <button
       aria-pressed={toggled || undefined}
       className={cn(
-        "inline-flex shrink-0 cursor-pointer items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60",
+        "focus-ring inline-flex shrink-0 cursor-pointer items-center justify-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60",
         variants[variant],
         sizes[size],
-        toggled && "bg-primary text-primary-foreground",
+        toggled && "border-accent bg-accent text-accent-foreground hover:bg-accent",
         className,
       )}
       ref={ref}

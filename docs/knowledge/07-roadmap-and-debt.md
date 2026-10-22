@@ -57,7 +57,8 @@ críticos, altos y medios. Quedó abierto esto, cada cosa con su motivo:
 - **Las filas clickeables de `ListRow` no se alcanzan con el teclado** (Escenas, Placas, Utilidades,
   Overlays). Hacerlas focusables choca con Enter = EN VIVO: es una decisión de interacción, no un arreglo.
 - **Violaciones de estilo en `pages/`** (la tabla de la revisión de UI): los botones a mano de
-  `media-source-bar.tsx` y del selector de tema, unas 25 clases de tipografía escritas a mano en
+  `media-source-bar.tsx` y del selector de tema (el rebrand a Lumina Live solo les cambió forma y
+  foco, siguen escritos a mano), unas 25 clases de tipografía escritas a mano en
   `pages/`, la nota de advertencia duplicada entre `remove-asset-confirm` y `program-side-panel`, y dos
   copias de la caja de `FieldGroup`. Son cosméticas y cada una necesita una pasada visual.
 - **Las unidades `s`, `px` y `%` siguen escritas en el código.** Son tipografía, no palabras; los
@@ -73,7 +74,21 @@ críticos, altos y medios. Quedó abierto esto, cada cosa con su motivo:
   pantalla completa); prender el proyector con la app ya abierta; plan de energía; LibreOffice 64 bits
   en un primer arranque en frío; «Probar video» con HEVC de iPhone; la salida de audio por HDMI; y la
   suite E2E contra el `.exe` instalado (`WORSHIP_E2E_EXECUTABLE`), con `WORSHIP_E2E_HYMNAL` apuntando
-  a la carpeta del himnario de esa PC para que corra también `hymnal.spec.ts`.
+  a la carpeta del himnario de esa PC para que corra también `hymnal.spec.ts`. Y, desde el rebrand a
+  **Lumina Live** (2026-10-22), que el instalador nuevo REEMPLACE al de WorshipApp: un solo acceso
+  directo, una sola entrada en «Aplicaciones instaladas», y los programas, la biblioteca y las Biblias
+  de esa PC presentes en el primer arranque (`userData` sigue en `%APPDATA%\worship-app`, mismo
+  `appId`).
+- **Las escenas y placas guardadas antes del rebrand conservan los colores de ALPS** (`#04132b`,
+  `#84adfc`, la cuenta regresiva en `#cd4900`/`#d0021b`): los defaults de Lumina Live solo visten lo
+  que se crea desde el 2026-10-22, y las cuatro escenas de ejemplo se siembran una sola vez. Es a
+  propósito —son contenido del operador—; pasarlas a la paleta nueva es editarlas a mano.
+- **`robustness.spec.ts` «a projector closed from outside…» falla ~1 de cada 5 contra el paquete de
+  macOS**, medido el 2026-10-22 igual en 2.2.0-beta.2 que en beta.3 (5 corridas cada uno): tras
+  «Reabrir», el test lee `currentTime` UNA vez apenas el video deja de estar en pausa, y a veces lee
+  `0`. No se investigó si es el test (leyó antes de que aterrice el seek de montaje) o el producto
+  (el video arranca un instante desde 0:00): pollear hasta `> 1,8` taparía justamente el segundo caso,
+  porque desde 0 también llega a 1,8 en dos segundos.
 - **Lo que la suite E2E no puede ejercitar**: soltar archivos desde Finder/Explorer
   (`getPathForFile` exige un `File` nativo), dos pantallas reales, y los diálogos nativos — esos se
   contestan reemplazando `dialog.showOpenDialog` en main (`answerOpenDialog`), así que el botón y todo

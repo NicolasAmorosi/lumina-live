@@ -1,4 +1,4 @@
-/** Spanish is the default and, for now, only shipped locale — WorshipApp's
+/** Spanish is the default and, for now, only shipped locale — Lumina Live's
  *  audience is a Spanish-speaking church. The dictionary + provider exist so
  *  adding `it`/`en` later means dropping in another file here, not touching
  *  ~40 components again. */
@@ -153,8 +153,23 @@ const es = {
   // second caller appeared — a label the two features spell differently is a
   // label that drifts.
   style: {
-    /** The neutral swatches of `ColorField`; the ALPS ones keep their own names. */
-    colors: { white: "Blanco", lightGray: "Gris claro", gray: "Gris", black: "Negro" },
+    /** The swatches of `ColorField`, all from the Lumina Live sheet. */
+    colors: {
+      white: "Blanco",
+      lightGray: "Gris claro",
+      gray: "Gris",
+      black: "Negro",
+      navy: "Azul noche",
+      deepBlue: "Azul profundo",
+      blue: "Azul",
+      steel: "Acero",
+      teal: "Turquesa",
+      green: "Verde",
+      amber: "Ámbar",
+      orange: "Naranja",
+      flame: "Llama",
+      red: "Rojo",
+    },
     groups: {
       background: "Fondo",
       typography: "Tipografía",
@@ -424,7 +439,7 @@ const es = {
     noSlides: "La presentación no tiene diapositivas",
     noLibreOffice: {
       title: "LibreOffice no está instalado",
-      body: "WorshipApp usa LibreOffice para convertir las presentaciones a imágenes. Instalalo, o indicá dónde está el ejecutable soffice.",
+      body: "Lumina Live usa LibreOffice para convertir las presentaciones a imágenes. Instalalo, o indicá dónde está el ejecutable soffice.",
       locate: "Buscar soffice…",
     },
     audio: {
@@ -486,7 +501,7 @@ const es = {
     errors: {
       CONVERSION_FAILED: "El archivo puede estar dañado, o el disco lleno.",
       SOURCE_MISSING: "El archivo ya no está donde estaba.",
-      FFMPEG_MISSING: "Falta el conversor de la aplicación. Volvé a instalar WorshipApp.",
+      FFMPEG_MISSING: "Falta el conversor de la aplicación. Volvé a instalar Lumina Live.",
     },
   },
   live: {
@@ -591,6 +606,7 @@ const es = {
       verse: "Versículos",
       bible: "Biblia",
       system: "Sistema",
+      about: "Acerca de",
     },
     groups: {
       screen: "Pantalla",
@@ -704,6 +720,7 @@ const es = {
     windowDesc: "Reiniciala si el proyector deja de responder.",
     theme: "Tema",
     version: "Versión",
+    aboutTagline: "Proyección para iglesias",
     versionDesc: "La que hay que mencionar al reportar un problema.",
     logs: "Registros",
     logsDesc: "main.log y crash.log, para mandar cuando algo falla.",
@@ -775,7 +792,7 @@ const es = {
     folderSystemValue: "Carpeta del sistema · {path}",
     foldersTitle: "Dónde se abre el selector de archivos",
     foldersBody:
-      "Al agregar archivos con el botón + de una pestaña de recursos, el selector abre siempre la carpeta de ese tipo. Sin tocar nada, es la carpeta del sistema operativo (Música, Videos, Imágenes y Documentos): WorshipApp la resuelve en cada equipo, así que funciona igual en Windows, macOS y Linux y no depende del idioma del sistema. Si tus archivos están en otro lado, fijá acá la carpeta de cada tipo.",
+      "Al agregar archivos con el botón + de una pestaña de recursos, el selector abre siempre la carpeta de ese tipo. Sin tocar nada, es la carpeta del sistema operativo (Música, Videos, Imágenes y Documentos): Lumina Live la resuelve en cada equipo, así que funciona igual en Windows, macOS y Linux y no depende del idioma del sistema. Si tus archivos están en otro lado, fijá acá la carpeta de cada tipo.",
     // Endonyms: a language is named in itself, so the option is readable to
     // whoever is looking for it. The three cover `Locale` in full — the
     // picker only offers the ones with a dictionary (`availableLocales`),

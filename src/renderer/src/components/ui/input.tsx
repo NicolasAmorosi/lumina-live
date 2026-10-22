@@ -30,7 +30,7 @@ export function Input({ className, icon, ref, size = "sm", ...props }: InputProp
   const field = (
     <input
       className={cn(
-        "w-full rounded-lg border border-border bg-surface text-foreground placeholder:text-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-danger/80 aria-invalid:focus-visible:ring-danger/80",
+        "w-full rounded-lg border border-border bg-surface text-foreground placeholder:text-subtle focus-ring hover:border-border-light disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-danger/80 aria-invalid:focus-visible:outline-danger",
         sizes[size],
         icon && iconOffsets[size].padding,
         className,

@@ -12,7 +12,8 @@ type MonitorProps = {
 };
 
 /**
- * The EasyWorship-style monitor: a bare 16:9 stage, no frame of its own — the
+ * The EasyWorship-style monitor: a bare 16:9 stage with one neutral border —
+ * the same on both panes, never a status colour — the
  * ONE primitive for both the live and the preview pane, which is exactly what
  * keeps the two panes visually identical by construction. Which one is which
  * (label, on-air state) lives in each column's own header, not here.
@@ -26,9 +27,15 @@ export function Monitor({ children, className, empty }: MonitorProps) {
           change how big this box renders. That decoupling is what keeps the
           LIVE and PREVIEW monitors pixel-identical, and keeps a PPT deck's
           transport controls from squeezing the live rectangle smaller than a
-          plain video's. */}
-      <div className="aspect-video w-full max-w-full overflow-hidden rounded-md bg-black">
-        <div className="flex size-full items-center justify-center">
+          plain video's.
+
+          The border is what keeps a stage whose content is the app's own
+          colour from melting into the panel. It sits on the outer box and the
+          ratio on the inner one, so the picture inside stays exactly 16:9 —
+          a border on the `aspect-video` box itself would eat 2px out of a
+          ratio the projector doesn't share. */}
+      <div className="w-full overflow-hidden rounded-md border border-border bg-black">
+        <div className="flex aspect-video w-full items-center justify-center">
           {children ?? (
             <span className="px-4 text-center text-xs text-white/60">{empty}</span>
           )}

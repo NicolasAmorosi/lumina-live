@@ -20,7 +20,11 @@ import { buildPdf } from "./pdf";
  */
 export default function globalSetup(): void {
   const stamp = path.join(FIXTURES_DIR, ".version");
-  if (fs.existsSync(stamp) && fs.readFileSync(stamp, "utf8") === String(FIXTURE_VERSION)) return;
+  // The stamp alone is not proof: the OS purges files in its temp folder it
+  // thinks are stale (macOS does after a few days) and can leave the stamp
+  // behind, and then every test fails on a missing fixture as if the app broke.
+  const intact = fs.existsSync(path.join(FIXTURES_DIR, "clip.mp4"));
+  if (intact && fs.existsSync(stamp) && fs.readFileSync(stamp, "utf8") === String(FIXTURE_VERSION)) return;
 
   fs.rmSync(FIXTURES_DIR, { recursive: true, force: true });
   fs.mkdirSync(FIXTURES_DIR, { recursive: true });

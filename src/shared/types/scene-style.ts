@@ -18,8 +18,10 @@
  * break that rule: these are default *content* values, stored in a row and
  * editable by the operator — the same category as a program's name, not the
  * same category as a Tailwind class. Every default is a literal from the
- * church's own ALPS palette (see `docs/knowledge/06-ui-and-theme.md`), so a
- * scene nobody customizes still looks like the rest of the app.
+ * Lumina Live identity sheet (see `docs/knowledge/06-ui-and-theme.md`), so a
+ * scene nobody customizes still looks like the rest of the app. They were the
+ * ALPS palette's until 2026-10-22; a scene saved before keeps its own colours,
+ * since defaults only dress what is created from now on.
  */
 
 import type { TransitionSpec } from "./transition";
@@ -154,7 +156,7 @@ export type SceneStyle = {
  *  `SceneEnd.message`. */
 const DEFAULT_MESSAGE_STYLE: SceneTextStyle = {
   sizeCqw: 4.5,
-  color: "#f5f5f5",
+  color: "#eef2f6",
   weight: 400,
   shadow: true,
   shadowStrength: DEFAULT_SHADOW_STRENGTH,
@@ -169,13 +171,13 @@ const DEFAULT_END_TRANSITION: TransitionSpec = { style: "none", durationMs: 300 
 
 export const DEFAULT_SCENE_STYLE: SceneStyle = {
   version: SCENE_STYLE_VERSION,
-  // Denim darker — the same hue the dark theme uses for `bg-background`.
-  background: { kind: "solid", color: "#04132b" },
+  // The sheet's dark fondo — the same hue the dark theme uses for `bg-background`.
+  background: { kind: "solid", color: "#162231" },
   fontFamily: null,
   verticalAlign: "middle",
   value: { sizeCqw: 20, color: "#ffffff", weight: 300, shadow: true, shadowStrength: DEFAULT_SHADOW_STRENGTH },
-  // Denim light, the palette's accent.
-  title: { sizeCqw: 4, color: "#84adfc", weight: 600, shadow: true, shadowStrength: DEFAULT_SHADOW_STRENGTH },
+  // The dark theme's secundario, the light blue of the sheet.
+  title: { sizeCqw: 4, color: "#8299b2", weight: 600, shadow: true, shadowStrength: DEFAULT_SHADOW_STRENGTH },
   message: DEFAULT_MESSAGE_STYLE,
   // The end message starts out looking exactly like the message it replaces,
   // so turning the group on changes nothing until the operator asks it to.

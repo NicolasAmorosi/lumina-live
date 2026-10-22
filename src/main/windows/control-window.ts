@@ -12,7 +12,7 @@ export function createControlWindow(): BrowserWindow {
     height: Math.min(900, height),
     minWidth: 1000,
     minHeight: 700,
-    backgroundColor: "#0b1929",
+    backgroundColor: "#162231",
     show: false,
     webPreferences: {
       preload: PRELOAD,

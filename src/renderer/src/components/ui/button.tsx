@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, Ref } from "react";
+import { Children, type ButtonHTMLAttributes, type ReactNode, type Ref } from "react";
 import { cn } from "@renderer/lib/utils";
 
 type ButtonVariant = "primary" | "secondary" | "outline" | "ghost" | "danger" | "live" | "link";
@@ -14,18 +14,21 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-primary text-primary-foreground shadow-surface hover:bg-primary-hover active:bg-primary-hover/80",
-  secondary: "bg-secondary text-secondary-foreground shadow-surface hover:bg-muted active:bg-muted/80",
-  outline: "border border-border bg-transparent text-foreground hover:border-primary hover:bg-muted active:bg-muted/80",
+  // The border is the dark theme's: its primario is 1.31:1 from the fondo,
+  // and without an edge the button is a label floating on nothing. On the
+  // light theme `primary-border` IS the fill, so it adds nothing there.
+  primary: "border border-primary-border bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-hover/80",
+  secondary: "bg-secondary text-secondary-foreground hover:bg-secondary-hover active:bg-secondary-hover/80",
+  outline: "border border-border bg-transparent text-foreground hover:border-accent hover:bg-muted active:bg-muted/80",
   ghost: "text-foreground hover:bg-muted active:bg-muted/80",
-  danger: "bg-danger text-danger-foreground shadow-surface hover:bg-danger/90 active:bg-danger/75",
-  live: "bg-success text-white shadow-surface hover:bg-success/90 active:bg-success/75",
+  danger: "bg-danger text-danger-foreground hover:bg-danger/90 active:bg-danger/75",
+  live: "bg-success text-success-foreground hover:bg-success/90 active:bg-success/75",
   // Text that acts, inside a sentence: a toast's "Deshacer", a callout's
   // "Reintentar", the deck transport's "Resincronizar". It had been written by
   // hand in three features before it became a variant. No box of its own — it
   // drops the height, padding and background every other variant carries, so
   // it sits on the line of the text around it.
-  link: "h-auto rounded-sm bg-transparent p-0 text-primary-ink underline-offset-2 hover:underline active:opacity-80",
+  link: "h-auto rounded-sm bg-transparent p-0 text-accent-ink underline-offset-2 hover:underline active:opacity-80",
 };
 
 // `link` has no box, so the size scale can only mean type size. Kept as its
@@ -46,6 +49,29 @@ const sizes: Record<ButtonSize, string> = {
   lg: "h-12 px-5 text-base gap-2",
 };
 
+/** Puts each run of text children in its own `truncate` span. A bare text
+ *  node is an anonymous flex item, and those can't ellipsize: a squeezed
+ *  button clipped its label mid-letter (and, before `Icon` was `shrink-0`,
+ *  shrank the icon beside it). Adjacent strings stay one run, so
+ *  `{count} {label}` keeps its space. */
+function truncateText(children: ReactNode): ReactNode[] {
+  const out: ReactNode[] = [];
+  let run = "";
+  const flush = () => {
+    if (run.trim()) out.push(<span className="truncate" key={`text-${out.length}`}>{run}</span>);
+    run = "";
+  };
+  for (const child of Children.toArray(children)) {
+    if (typeof child === "string" || typeof child === "number") run += child;
+    else {
+      flush();
+      out.push(child);
+    }
+  }
+  flush();
+  return out;
+}
+
 export function Button({
   children,
   className,
@@ -65,10 +91,14 @@ export function Button({
       aria-busy={loading || undefined}
       aria-pressed={toggled || undefined}
       className={cn(
-        "relative inline-flex cursor-pointer items-center justify-center overflow-hidden rounded-lg font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60",
+        // Pill: the identity draws every control that acts as a capsule.
+        "focus-ring relative inline-flex cursor-pointer items-center justify-center overflow-hidden rounded-full font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60",
         variants[variant],
         variant === "link" ? linkSizes[size] : sizes[size],
-        toggled && "ring-2 ring-ring",
+        // A pressed toggle is FILLED with the accent, whatever its variant.
+        // It used to be a ring in the focus ring's own colour, so "this one is
+        // on" and "this one has the keyboard" looked the same.
+        toggled && "border-accent bg-accent text-accent-foreground hover:bg-accent active:bg-accent",
         className,
       )}
       disabled={disabledEffective}
@@ -77,7 +107,7 @@ export function Button({
       {...props}
     >
       <span className={cn("inline-flex min-w-0 items-center justify-center gap-2", loading && "invisible")}>
-        {children}
+        {truncateText(children)}
       </span>
       {loading ? (
         <>

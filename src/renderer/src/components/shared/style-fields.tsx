@@ -91,11 +91,11 @@ function backgroundOfKind(kind: SceneBackground["kind"], current: SceneBackgroun
   if (kind === current.kind) return current;
   switch (kind) {
     case "solid":
-      return { kind: "solid", color: current.kind === "gradient" ? current.from : "#04132b" };
+      return { kind: "solid", color: current.kind === "gradient" ? current.from : "#162231" };
     case "gradient":
       return {
         kind: "gradient",
-        from: current.kind === "solid" ? current.color : "#04132b",
+        from: current.kind === "solid" ? current.color : "#162231",
         to: "#2f557f",
         direction: "to-bottom",
       };

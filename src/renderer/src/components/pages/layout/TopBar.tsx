@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
-import { Button, Icon, IconButton, Toolbar, Tooltip } from "@renderer/components/ui";
+import { BrandMark, Button, Icon, IconButton, Toolbar, Tooltip } from "@renderer/components/ui";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { useProgramStore } from "@renderer/stores/program.store";
 import { goLive, setOverlayDirect } from "@renderer/lib/actions/playback";
@@ -17,7 +17,7 @@ type TopBarProps = {
  * Chrome bar, laid out in the same three columns as the workspace below it so
  * each group of controls sits exactly above the column it acts on:
  *
- *   col 1 (schedule/resources) — settings, the current-program card
+ *   col 1 (schedule/resources) — the mark, settings, the current-program card
  *   col 2 (slides)             — EN VIVO: preview -> live, right now
  *   col 3 (monitors)           — NEGRO / LOGO / VIVO: what the projector shows
  *
@@ -64,6 +64,7 @@ export function TopBar({ onOpenPrograms, onOpenSettings }: TopBarProps) {
     <Toolbar className="grid grid-cols-3 items-center">
       <div className="flex min-w-0 items-center justify-between gap-2">
         <div className="flex shrink-0 items-center gap-1.5">
+          <BrandMark className="mx-1 size-7 rounded-md" />
           <Tooltip content={t("settings.title")} floating>
             <IconButton aria-label={t("settings.title")} onClick={onOpenSettings} variant="ghost">
               <Icon name="settings" />
@@ -95,7 +96,7 @@ export function TopBar({ onOpenPrograms, onOpenSettings }: TopBarProps) {
           </Tooltip>
         </div>
 
-        <div className="flex min-w-0 items-center gap-1.5 rounded-lg border border-border bg-surface px-2 py-1">
+        <div className="flex min-w-0 items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1">
           <span className="min-w-0 truncate text-sm font-medium">
             {currentProgramName || t("programs.new")}
           </span>
@@ -110,30 +111,30 @@ export function TopBar({ onOpenPrograms, onOpenSettings }: TopBarProps) {
 
       <div className="flex items-center justify-end gap-1.5">
         <Button
-          className="w-24"
+          className="w-24 px-2"
           onClick={() => void setOverlayDirect("logo")}
           size="sm"
           toggled={overlay === "logo"}
-          variant="secondary"
+          variant="outline"
         >
           <Icon name="image" /> {t("footer.logo")}
         </Button>
         <Button
-          className="w-24"
+          className="w-24 px-2"
           onClick={() => void setOverlayDirect("black")}
           size="sm"
           toggled={overlay === "black"}
-          variant="secondary"
+          variant="outline"
         >
           <Icon name="stop" /> {t("footer.black")}
         </Button>
         <Button
-          className="w-24"
+          className="w-24 px-2"
           disabled={base === null}
           onClick={() => void setOverlayDirect("none")}
           size="sm"
           toggled={overlay === "none"}
-          variant="secondary"
+          variant="outline"
         >
           <Icon name="play" /> {t("footer.live")}
         </Button>

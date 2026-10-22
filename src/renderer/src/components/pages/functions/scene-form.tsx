@@ -286,7 +286,7 @@ export function SceneForm({ addingImages, imageAssets, onAddImages, onChange, va
               onChange={(e) =>
                 patchStyle({
                   triggers: e.target.checked
-                    ? { warningAtMs: 60_000, warningColor: "#cd4900", endColor: "#d0021b" }
+                    ? { warningAtMs: 60_000, warningColor: "#ffa92d", endColor: "#dd1f1f" }
                     : null,
                 })
               }

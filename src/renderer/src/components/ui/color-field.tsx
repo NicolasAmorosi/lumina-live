@@ -5,9 +5,9 @@ import { computeMenuPosition, useFollowTrigger, type MenuPosition } from "./floa
 import { useT, type MessageKey } from "@renderer/lib/i18n/i18n-provider";
 
 /**
- * The colours a scene can be painted with, straight out of the church's own
- * identity system (ALPS — see the palette table in
- * `docs/knowledge/06-ui-and-theme.md`).
+ * The colours a scene can be painted with, straight out of the Lumina Live
+ * identity sheet (see the palette table in `docs/knowledge/06-ui-and-theme.md`):
+ * its neutrals, its blues, the accent, and the four indicators plus the flame.
  *
  * These are CONTENT values, not design tokens: they end up stored in a row and
  * rendered into an inline style on the projector, exactly like a program's
@@ -15,27 +15,26 @@ import { useT, type MessageKey } from "@renderer/lib/i18n/i18n-provider";
  * hex anywhere in a component's classes — the projector's stage is not themed,
  * and a scene must look the same whatever theme the control window is in.
  *
- * The ALPS names are the palette's own proper nouns and are deliberately not
- * run through `i18n`: "Campfire" is the colour's name, not a description of
- * it. The four neutrals are not ALPS names but ordinary words, so they are.
+ * Exact sheet values, not the AA-adjusted UI fills: on the projector a colour
+ * is the brand's, and its legibility is the operator's call on that stage.
  */
-type ColorPreset = { value: string } & ({ name: string } | { labelKey: MessageKey });
+type ColorPreset = { labelKey: MessageKey; value: string };
 
 const SCENE_COLOR_PRESETS: readonly ColorPreset[] = [
   { labelKey: "style.colors.white", value: "#ffffff" },
-  { labelKey: "style.colors.lightGray", value: "#f5f5f5" },
-  { labelKey: "style.colors.gray", value: "#717171" },
+  { labelKey: "style.colors.lightGray", value: "#eef2f6" },
+  { labelKey: "style.colors.gray", value: "#9aa9b8" },
   { labelKey: "style.colors.black", value: "#000000" },
-  { name: "Denim darker", value: "#04132b" },
-  { name: "Denim", value: "#2f557f" },
-  { name: "Denim light", value: "#2e6de7" },
-  { name: "Denim lighter", value: "#84adfc" },
-  { name: "Campfire", value: "#cd4900" },
-  { name: "Tree Frog", value: "#2b8500" },
-  { name: "Ming", value: "#007f98" },
-  { name: "Iris", value: "#9013fe" },
-  { name: "Emperor", value: "#4b207f" },
-  { name: "Scarlett", value: "#d0021b" },
+  { labelKey: "style.colors.navy", value: "#162231" },
+  { labelKey: "style.colors.deepBlue", value: "#213c59" },
+  { labelKey: "style.colors.blue", value: "#2f557f" },
+  { labelKey: "style.colors.steel", value: "#8299b2" },
+  { labelKey: "style.colors.teal", value: "#3e8391" },
+  { labelKey: "style.colors.green", value: "#448d21" },
+  { labelKey: "style.colors.amber", value: "#ffa92d" },
+  { labelKey: "style.colors.orange", value: "#e36520" },
+  { labelKey: "style.colors.flame", value: "#d14600" },
+  { labelKey: "style.colors.red", value: "#dd1f1f" },
 ];
 
 const PICKER_WIDTH_PX = 232;
@@ -80,7 +79,7 @@ const sizes: Record<ColorFieldSize, string> = {
  */
 export function ColorField({ className, label, onChange, size = "sm", value }: ColorFieldProps) {
   const t = useT();
-  const presetName = (preset: ColorPreset) => ("labelKey" in preset ? t(preset.labelKey) : preset.name);
+  const presetName = (preset: ColorPreset) => t(preset.labelKey);
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<MenuPosition | null>(null);
   /** What is in the hex box while it is being typed. `null` means "show the
@@ -139,9 +138,9 @@ export function ColorField({ className, label, onChange, size = "sm", value }: C
         aria-haspopup="dialog"
         aria-label={label}
         className={cn(
-          "flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface text-foreground transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+          "focus-ring flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface text-foreground transition-colors hover:border-accent",
           sizes[size],
-          open && "border-primary",
+          open && "border-accent",
           className,
         )}
         onClick={() => (open ? close(false) : setOpen(true))}
@@ -179,8 +178,8 @@ export function ColorField({ className, label, onChange, size = "sm", value }: C
                     aria-label={presetName(preset)}
                     aria-pressed={preset.value === value.toLowerCase()}
                     className={cn(
-                      "size-7 cursor-pointer rounded-md ring-1 ring-border ring-inset transition-transform hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      preset.value === value.toLowerCase() && "ring-2 ring-primary",
+                      "size-7 cursor-pointer rounded-md ring-1 ring-border ring-inset transition-transform hover:scale-110 focus-ring",
+                      preset.value === value.toLowerCase() && "ring-2 ring-accent",
                     )}
                     key={preset.value}
                     onClick={() => {
@@ -208,7 +207,7 @@ export function ColorField({ className, label, onChange, size = "sm", value }: C
                 <input
                   aria-invalid={invalid || undefined}
                   aria-label={label}
-                  className="h-7 w-full rounded-lg border border-border bg-surface px-2 font-mono text-xs text-foreground uppercase focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:outline-none aria-invalid:border-danger/80"
+                  className="h-7 w-full rounded-lg border border-border bg-surface px-2 font-mono text-xs text-foreground uppercase focus-ring aria-invalid:border-danger/80 aria-invalid:focus-visible:outline-danger"
                   maxLength={7}
                   onChange={(e) => commitDraft(e.target.value)}
                   spellCheck={false}

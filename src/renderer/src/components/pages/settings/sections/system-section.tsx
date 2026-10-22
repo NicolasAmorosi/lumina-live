@@ -2,10 +2,9 @@ import { useEffect, useState } from "react";
 import { ASSET_KINDS, type AssetKind } from "@shared/constants";
 import type { Locale } from "@shared/types/settings";
 import { availableLocales, useT, type MessageKey } from "@renderer/lib/i18n/i18n-provider";
-import { Button, Callout, Caption, FieldGroup, FieldRow, Icon, Select, Switch } from "@renderer/components/ui";
+import { Button, Callout, FieldGroup, FieldRow, Icon, Select, Switch } from "@renderer/components/ui";
 import { useSettingsStore } from "@renderer/stores/settings.store";
 import { api } from "@renderer/lib/api";
-import { toast } from "@renderer/lib/toast";
 import { PerformanceDiagnostics } from "./performance-diagnostics";
 
 const LOCALE_LABEL_KEYS: Record<Locale, MessageKey> = {
@@ -68,7 +67,7 @@ export function SystemSection() {
     <div className="flex flex-col gap-6">
       <FieldGroup title={t("settings.groups.appearance")}>
         <FieldRow description={t("settings.themeDesc")} label={t("settings.theme")}>
-          <div className="inline-flex gap-1 rounded-lg border border-border p-0.5">
+          <div className="inline-flex gap-1 rounded-full border border-border p-0.5">
             <Button
               className="w-28 justify-center"
               onClick={() => void updateSettings({ "ui.theme": "dark" })}
@@ -150,20 +149,6 @@ export function SystemSection() {
         <p className="mt-1 text-xs text-muted-foreground">{t("settings.foldersBody")}</p>
       </Callout>
 
-      <FieldGroup title={t("settings.groups.about")}>
-        <FieldRow description={t("settings.versionDesc")} label={t("settings.version")}>
-          <Caption className="select-text">{__APP_VERSION__}</Caption>
-        </FieldRow>
-        <FieldRow description={t("settings.logsDesc")} label={t("settings.logs")}>
-          <Button
-            onClick={() => void api.system.openLogsFolder().catch(() => toast.danger(t("settings.logsError")))}
-            size="sm"
-            variant="outline"
-          >
-            {t("settings.logsOpen")}
-          </Button>
-        </FieldRow>
-      </FieldGroup>
     </div>
   );
 }

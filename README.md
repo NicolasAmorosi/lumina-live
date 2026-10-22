@@ -1,6 +1,6 @@
-# WorshipApp
+# Lumina Live
 
-Aplicación de proyección para iglesias — Electron + TypeScript + React + Vite + Tailwind, con
+(Repositorio `WorshipApp`.) Aplicación de proyección para iglesias — Electron + TypeScript + React + Vite + Tailwind, con
 SQLite embebido. Ver `CLAUDE.md` para la guía técnica completa y `docs/knowledge/` para el
 detalle de cada capa.
 
@@ -35,9 +35,10 @@ npm run package:mac     # dmg
 npm run package:linux    # AppImage
 ```
 
-## Paleta de colores
-Basada en la identidad visual de la Iglesia Adventista del Séptimo Día (azul + blanco), con
-tema oscuro por defecto (pensado para operarse en una cabina a oscuras) y tema claro alternativo.
+## Identidad visual
+La de Lumina Live: navy, acento teal y la llama del logo, con Noto Sans (y su corte
+ExtraCondensed para títulos). Tema oscuro por defecto (pensado para operarse en una cabina a
+oscuras) y tema claro alternativo. Detalle en `docs/knowledge/06-ui-and-theme.md`.
 
 ## `legacy/`
 Contiene la versión previa de la app (Electron vanilla JS, sin bundler). Se conserva solo como

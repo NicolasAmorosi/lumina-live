@@ -29,7 +29,7 @@ const sizes: Record<NonNullable<SelectProps["size"]>, string> = {
 };
 
 /**
- * A styled dropdown, not a native `<select>` — WorshipApp's identity (design
+ * A styled dropdown, not a native `<select>` — Lumina Live's identity (design
  * tokens, dark cabin theme) has to reach into the option list itself, which a
  * native listbox never lets a page style. Renders its menu through a portal
  * to `document.body`, positioned in viewport coordinates (`computeMenuPosition`),
@@ -273,7 +273,7 @@ export function Select({
       aria-expanded={open}
       aria-haspopup="listbox"
       className={cn(
-        "relative inline-flex items-center rounded-lg border border-border bg-surface text-left text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60",
+        "focus-ring relative inline-flex items-center rounded-lg border border-border bg-surface text-left text-foreground transition-colors hover:border-border-light disabled:cursor-not-allowed disabled:opacity-60",
         sizes[size],
         className,
       )}
@@ -306,7 +306,7 @@ export function Select({
     open && position
       ? createPortal(
           <div
-            className="fixed z-[var(--z-popover)] flex flex-col rounded-lg border border-border bg-card shadow-overlay"
+            className="fixed z-[var(--z-popover)] flex flex-col rounded-xl border border-border bg-card shadow-overlay"
             ref={menuRef}
             style={{
               left: position.left,
@@ -331,7 +331,7 @@ export function Select({
                     aria-controls={listboxId}
                     aria-expanded
                     aria-label={t("common.search")}
-                    className="h-8 w-full rounded-md bg-muted pr-2 pl-7 text-sm text-foreground placeholder:text-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="h-8 w-full rounded-md bg-muted pr-2 pl-7 text-sm text-foreground placeholder:text-subtle focus-ring-inset"
                     onChange={(e) => handleQueryChange(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder={t("common.search")}
@@ -360,7 +360,7 @@ export function Select({
                   aria-disabled={option.disabled || undefined}
                   aria-selected={option.value === value}
                   className={cn(
-                    "flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-sm text-foreground",
+                    "flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-sm text-foreground",
                     option.disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer",
                     !option.disabled && index === highlightedIndex && "bg-hover",
                   )}
@@ -374,7 +374,7 @@ export function Select({
                   role="option"
                 >
                   <span className="truncate">{option.label}</span>
-                  {option.value === value ? <Icon className="shrink-0 text-primary-ink" name="check" /> : null}
+                  {option.value === value ? <Icon className="text-accent-ink" name="check" /> : null}
                 </li>
               ))}
             </ul>

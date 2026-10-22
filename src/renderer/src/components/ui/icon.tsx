@@ -27,6 +27,7 @@ import {
   HelpCircle,
   Hourglass,
   Image as ImageIcon,
+  Info,
   Import,
   Layers,
   LayoutTemplate,
@@ -93,6 +94,7 @@ const icons = {
   grip: GripVertical,
   help: HelpCircle,
   image: ImageIcon,
+  info: Info,
   import: Import,
   layers: Layers,
   banner: Megaphone,
@@ -136,13 +138,17 @@ type IconProps = {
 };
 
 /** Closed registry — no feature imports lucide-react directly, so every icon in
- *  the app is guaranteed to come from this one visually-consistent set. */
+ *  the app is guaranteed to come from this one visually-consistent set.
+ *
+ *  `shrink-0` lives here, not at the call sites: an icon is a flex item almost
+ *  everywhere it appears, and a squeezed row shrank the glyph instead of
+ *  truncating the label next to it. A label gives way; an icon never does. */
 export function Icon({ className, decorative = true, name }: IconProps) {
   const Component = icons[name];
   return (
     <Component
       aria-hidden={decorative || undefined}
-      className={cn("size-4", className)}
+      className={cn("size-4 shrink-0", className)}
       focusable="false"
     />
   );

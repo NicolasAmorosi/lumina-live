@@ -121,8 +121,8 @@ export function ThumbTile({
         // named "001", 267px for a long filename, tiles overlapping each
         // other. A grid item gets stretched for free and hid this for as long
         // as the tile was one.
-        "group flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-lg border bg-card text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        selected ? "border-primary ring-2 ring-primary" : "border-border hover:border-border-light",
+        "group flex h-full w-full cursor-pointer flex-col overflow-hidden rounded-lg border bg-card text-left transition-colors focus-ring-inset",
+        selected ? "border-accent ring-2 ring-accent" : "border-border hover:border-border-light",
         live && !selected && "border-on-air ring-1 ring-on-air",
         className,
       )}

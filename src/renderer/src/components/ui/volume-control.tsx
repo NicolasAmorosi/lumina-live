@@ -12,13 +12,13 @@ type VolumeControlProps = {
   /** What the slider announces at 0, e.g. "Silenciar" / "Activar sonido". */
   muteLabel: string;
   onChange: (volume: number) => void;
-  tone?: "primary" | "audio";
+  tone?: "accent" | "audio";
   /** 0..1. */
   value: number;
 };
 
 const accent: Record<NonNullable<VolumeControlProps["tone"]>, string> = {
-  primary: "accent-primary",
+  accent: "accent-accent",
   audio: "accent-badge-audio",
 };
 
@@ -41,7 +41,7 @@ const FALLBACK_LEVEL = 0.5;
  * separate flag: one number crosses IPC, and nothing can get out of step with
  * the element's own `volume`.
  */
-export function VolumeControl({ className, label, muteLabel, onChange, tone = "primary", value }: VolumeControlProps) {
+export function VolumeControl({ className, label, muteLabel, onChange, tone = "accent", value }: VolumeControlProps) {
   const muted = value === 0;
   /** Only ever written with a level the operator actually heard, so unmuting
    *  restores what they set rather than a default they never chose. */

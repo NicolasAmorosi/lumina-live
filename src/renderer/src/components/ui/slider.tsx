@@ -47,7 +47,7 @@ export function Slider({ className, format, label, onChange, readoutChars = 4, v
     <>
       <input
         aria-label={label}
-        className={cn("w-40 accent-primary disabled:opacity-50", className)}
+        className={cn("w-40 accent-accent disabled:opacity-50", className)}
         onChange={(e) => onChange(Number(e.target.value))}
         type="range"
         value={value}

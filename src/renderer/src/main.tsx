@@ -1,4 +1,6 @@
-import "@fontsource-variable/noto-sans";
+// The wdth+wght file, not the default wght-only one: titles and the wordmark use
+// the ExtraCondensed cut of this same family (`font-stretch-extra-condensed`).
+import "@fontsource-variable/noto-sans/wdth.css";
 import "./styles/globals.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";

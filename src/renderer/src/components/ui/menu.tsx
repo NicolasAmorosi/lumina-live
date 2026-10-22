@@ -154,7 +154,7 @@ export function Menu<T extends string>({
       // already saying `aria-expanded` is not also a toggle — the two together
       // are read out as two different states of the same control. The open
       // look is the same one hover gives, held.
-      className={cn(triggerSizes[size], open && "border-primary bg-muted", className)}
+      className={cn(triggerSizes[size], open && "border-accent bg-muted", className)}
       onClick={() => (open ? close(false) : openMenu())}
       onKeyDown={handleTriggerKeyDown}
       ref={triggerRef}
@@ -169,7 +169,7 @@ export function Menu<T extends string>({
       ? createPortal(
           <ul
             aria-label={label}
-            className="fixed z-[var(--z-popover)] overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-overlay"
+            className="fixed z-[var(--z-popover)] overflow-y-auto rounded-xl border border-border bg-card p-1 shadow-overlay"
             id={menuId}
             ref={menuRef}
             role="menu"
@@ -184,7 +184,7 @@ export function Menu<T extends string>({
               <li key={option.value} role="none">
                 <button
                   aria-checked={option.value === value}
-                  className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground hover:bg-hover focus-visible:bg-hover focus-visible:outline-none"
+                  className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-foreground hover:bg-hover focus-visible:bg-hover focus-visible:outline-none"
                   onClick={() => {
                     onSelect(option.value);
                     close(true);
@@ -198,7 +198,7 @@ export function Menu<T extends string>({
                   type="button"
                 >
                   <span className="truncate">{option.label}</span>
-                  {option.value === value ? <Icon className="shrink-0 text-primary-ink" name="check" /> : null}
+                  {option.value === value ? <Icon className="text-accent-ink" name="check" /> : null}
                 </button>
               </li>
             ))}

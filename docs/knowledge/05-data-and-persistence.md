@@ -3,6 +3,12 @@
 **Ya no hay JSON plano.** Todo vive en SQLite (`app.getPath('userData')/worship.db`), vía
 `better-sqlite3` + Drizzle ORM. Ver `src/main/db/schema.ts` para el DDL completo.
 
+`userData` es `<appData>/worship-app` (`~/Library/Application Support/worship-app`,
+`%APPDATA%\worship-app`), en dev y en el instalador: Electron lo nombra por el `name` de
+`package.json`, no por `build.productName` (que electron-builder no copia al paquete). Por eso el
+rebrand a Lumina Live no movió los datos, y por eso `name` no se cambia nunca. `--user-data-dir` lo
+reemplaza (así corre cada test E2E).
+
 ## Por qué `better-sqlite3` y no `node:sqlite`
 
 Verificado contra el runtime real de Electron 36 (Node 22.15.1): `node:sqlite` existe pero es

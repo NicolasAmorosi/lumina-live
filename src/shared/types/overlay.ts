@@ -126,17 +126,17 @@ export type PlateUsage = {
   itemCount: number;
 };
 
-/** Default CONTENT values out of the ALPS palette, the same category as
+/** Default CONTENT values out of the Lumina Live sheet, the same category as
  *  `DEFAULT_SCENE_STYLE`'s — see the note at the top of `scene-style.ts`. */
 export const DEFAULT_PLATE_STYLE: PlateStyle = {
   version: PLATE_STYLE_VERSION,
-  // Denim darker.
-  background: { kind: "solid", color: "#04132b" },
+  // The sheet's dark fondo.
+  background: { kind: "solid", color: "#162231" },
   backgroundOpacity: 0.85,
   fontFamily: null,
   title: { sizeCqw: 3, color: "#ffffff", weight: 600, shadow: false, shadowStrength: DEFAULT_SHADOW_STRENGTH },
-  // Denim lighter.
-  subtitle: { sizeCqw: 2, color: "#84adfc", weight: 400, shadow: false, shadowStrength: DEFAULT_SHADOW_STRENGTH },
+  // The dark theme's secundario.
+  subtitle: { sizeCqw: 2, color: "#8299b2", weight: 400, shadow: false, shadowStrength: DEFAULT_SHADOW_STRENGTH },
   marginCqw: 3,
   image: { sizeCqw: 8, opacity: 1 },
   animation: { style: "fade", durationMs: 300 },

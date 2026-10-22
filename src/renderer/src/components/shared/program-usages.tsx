@@ -21,7 +21,7 @@ export function ProgramUsages({ intro, usages, warning }: ProgramUsagesProps) {
       <ul className="flex flex-col gap-1 rounded-lg border border-border bg-muted p-1.5">
         {usages.map((usage) => (
           <li className="flex items-center gap-2 rounded-md px-2 py-1.5 text-foreground" key={usage.programId}>
-            <Icon className="shrink-0 text-subtle" name="fileText" />
+            <Icon className="text-subtle" name="fileText" />
             <span className="min-w-0 flex-1 truncate">{usage.programName}</span>
             <Badge>{t("common.itemCount", { count: usage.itemCount })}</Badge>
           </li>

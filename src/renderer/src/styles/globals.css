@@ -13,12 +13,39 @@
   from { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
   to   { opacity: 0; transform: translate3d(0.75rem, 0.5rem, 0) scale(0.94); }
 }
-.wa-toast-enter { animation: toast-enter 180ms ease-out; }
+.wa-toast-enter { animation: toast-enter 180ms var(--ease-enter); }
 /* `forwards`: the store removes the item when this ends (EXIT_MS in
  * `toast.store.ts`), and without holding the last frame the toast snaps back
  * to full opacity for the tick between the animation ending and the state
  * update landing. */
-.wa-toast-exit { animation: toast-exit 180ms ease-in forwards; }
+.wa-toast-exit { animation: toast-exit 180ms var(--ease-exit) forwards; }
+
+/* A modal arrives; it does not blink in. Enter only: an exit would have to
+ * keep the dialog mounted after `open` turns false, and a closing dialog that
+ * still takes focus and clicks for 120 ms is worse than one that just goes. */
+@keyframes modal-enter {
+  from { opacity: 0; transform: translate3d(0, 0.5rem, 0) scale(0.98); }
+  to   { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+}
+@keyframes backdrop-enter {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.wa-modal-enter { animation: modal-enter 150ms var(--ease-enter); }
+.wa-backdrop-enter { animation: backdrop-enter 150ms var(--ease-enter); }
+
+/* The focus indicator of every control. An OUTLINE, not a ring: Tailwind's
+ * `ring-offset-*` paints its gap in an explicit colour (white by default), so
+ * on the dark theme every focused control showed a 1px white halo. An
+ * outline's offset is transparent — it shows whatever is behind it, on any
+ * surface, in either theme. `-inset` is for things inside a box that clips
+ * (a tab strip, a tile grid, a listbox). */
+@utility focus-ring {
+  &:focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; }
+}
+@utility focus-ring-inset {
+  &:focus-visible { outline: 2px solid var(--color-ring); outline-offset: -2px; }
+}
 
 /* The programs modal's side panel (`components/pages/programs/`) expands the
  * dialog itself sideways rather than compressing the list column — see
@@ -89,117 +116,151 @@
   .wa-toast-exit { animation-duration: 1ms; }
   @keyframes program-panel-enter { from { opacity: 0; } to { opacity: 1; } }
   .wa-program-panel-enter { animation-duration: 1ms; }
+  .wa-modal-enter, .wa-backdrop-enter { animation-duration: 1ms; }
 }
 
 /*
- * Palette derived from the official Seventh-day Adventist identity system
- * (ALPS — adventistchurch/alps, the church's reference implementation of
- * adventist.design). Every hue below is a literal value from that palette:
+ * Palette: the Lumina Live identity sheet ("Identidad App Lumina Live.pdf",
+ * 2026-10-22). Every hue below is a value from that sheet, or a step derived
+ * from two of them — never an invented colour:
  *
- *   Denim   #04132b / #2f557f / #2e6de7 / #84adfc   (primary family)
- *   Bluejay #2e6de7   Campfire #cd4900   Iris #9013fe
- *   Ming    #007f98   Tree Frog #2b8500  Forest #355724
- *   Cave    #255760   Emperor #4b207f    Scarlett #d0021b
- *   Neutrals: #000 #222222 #4a4a4a #717171 #f5f5f5 #ffffff
+ *   Light   fondo #ffffff · diálogo #f5f6f9 · bordes #c8d2dc
+ *           primario #2f557f · secundario #213c59 (the sheet LABELS it
+ *           #2f557f but draws #213c59; the drawn value is the one used)
+ *           texto #182a40 / #5c7089
+ *   Dark    fondo #162231 · diálogo #1b2c41 · bordes #2e4155
+ *           primario #203651 · secundario #8299b2
+ *           texto #eef2f6 / #9aa9b8
+ *   Both    acento #3e8391 · indicadores #448d21 #ffa92d #e36520 #dd1f1f
+ *   Logo    flame #ffa92d / #e36520 / #d14600, "Live" wordmark #d14600
  *
- * ALPS defines no dark UI surfaces (it is a web/print system), so the dark
- * theme interpolates the Denim ramp between #04132b and #2f557f rather than
- * inventing new hues. Two physical palettes (dark = default, light =
- * alternate) map onto ONE semantic token set consumed by @theme inline below.
- * Components only ever reference the semantic names (bg-background,
- * text-foreground, bg-primary, ...) — never --wa-* directly — so the theme
- * toggle (settings 'ui.theme', `data-theme` on <html>) needs no per-component
- * changes.
+ * Roles, as decided with the owner: PRIMARIO fills the main buttons,
+ * SECUNDARIO the secondary ones, and the teal ACENTO means "selected /
+ * focused / on" everywhere — selection, focus ring, switches, sliders,
+ * progress, the active tab, a pressed toggle. The red indicator is the
+ * on-air colour (and danger, as two tokens).
+ *
+ * Steps the sheet does not define (hover, muted, the selected row) are mixes
+ * of two sheet colours, the same way the old ALPS palette interpolated its
+ * Denim ramp. Two fills are a few % darker than their sheet value so white
+ * text on them passes WCAG AA (4.5:1) — invisible to the eye, measured:
+ *   success #448d21 -> #3f821e (white 4.14 -> 4.75)
+ *   accent  #3e8391 -> #3a7b88 (white 4.32 -> 4.81)
+ * The amber indicator never carries white text: its foreground is the
+ * sheet's dark text (7.59:1).
+ *
+ * Two physical palettes (dark = default, light = alternate) map onto ONE
+ * semantic token set consumed by @theme inline below. Components only ever
+ * reference the semantic names (bg-background, text-foreground, bg-primary,
+ * ...) — never --wa-* directly — so the theme toggle (settings 'ui.theme',
+ * `data-theme` on <html>) needs no per-component changes.
  */
 :root, [data-theme="dark"] {
-  --wa-bg-primary: #04132b;
-  --wa-bg-secondary: #081c39;
-  --wa-bg-tertiary: #0e2749;
-  --wa-bg-card: #123054;
-  --wa-bg-hover: #1a3c69;
-  --wa-bg-active: #2f557f;
-  --wa-text-primary: #f5f5f5;
-  --wa-text-secondary: #a9c0dd;
-  /* 60% of the way to --wa-text-secondary along the same Denim ramp: 3.70 ->
-   * 5.59 on bg-card, while staying a visible step below it (7.15). */
-  --wa-text-muted: #92aac8;
-  --wa-accent-primary: #2e6de7;
-  --wa-accent-hover: #5589ee;
-  --wa-accent-light: #84adfc;
-  --wa-danger: #d0021b;
-  --wa-success: #2b8500;
-  --wa-warning: #cd4900;
-  --wa-warning-foreground: #ffffff;
-  --wa-on-air: #d0021b;
-  --wa-border: #12294a;
-  --wa-border-light: #1e3d66;
-  --wa-badge-ppt: #cd4900;
-  --wa-badge-video: #9013fe;
-  --wa-badge-image: #2b8500;
-  --wa-badge-audio: #007f98;
-  --wa-badge-bible: #2e6de7;
+  --wa-bg-primary: #162231;
+  --wa-bg-secondary: #162231;
+  /* diálogo -> bordes, 35% / 65% */
+  --wa-bg-tertiary: #223348;
+  --wa-bg-card: #1b2c41;
+  --wa-bg-hover: #273a4e;
+  /* The selected row: fondo + 26% acento. Teal because selection IS the
+   * accent's meaning; 26% is the most it takes before `text-subtle` on it
+   * drops under 4.5:1. */
+  --wa-bg-active: #203b4a;
+  --wa-text-primary: #eef2f6;
+  --wa-text-secondary: #9aa9b8;
+  /* One visible step below secondary that still reads 4.5:1 on muted. */
+  --wa-text-muted: #93a2b3;
+  --wa-primary: #203651;
+  --wa-primary-hover: #283e59;
+  /* The dark primario sits 1.31:1 from the fondo: without an edge a primary
+   * button is a label floating on nothing. primario -> secundario, 25%. */
+  --wa-primary-border: #384f69;
+  --wa-secondary: #8299b2;
+  --wa-secondary-hover: #91a5bb;
+  --wa-secondary-foreground: #162231;
+  --wa-accent: #3a7b88;
+  --wa-ring: #78a8b2;
+  --wa-danger: #dd1f1f;
+  --wa-success: #3f821e;
+  --wa-warning: #ffa92d;
+  --wa-warning-foreground: #182a40;
+  --wa-on-air: #dd1f1f;
+  --wa-border: #2e4155;
+  --wa-border-light: #3f5368;
+  --wa-badge-ppt: #e36520;
+  --wa-badge-video: #ffa92d;
+  --wa-badge-image: #448d21;
+  --wa-badge-audio: #3e8391;
+  --wa-badge-bible: #8299b2;
+  --wa-scrim: rgb(0 0 0 / 0.6);
+  --wa-shadow-raised: 0 2px 4px -2px rgb(0 0 0 / 0.3), 0 4px 12px -2px rgb(0 0 0 / 0.25);
+  --wa-shadow-overlay: 0 8px 16px -8px rgb(0 0 0 / 0.4), 0 20px 40px -8px rgb(0 0 0 / 0.5);
 
   /*
    * "ink" = this hue as TEXT/ICON on one of the app's own surfaces, as opposed
-   * to the plain token, which is a FILL (bg-danger, bg-primary, ... with white
+   * to the plain token, which is a FILL (bg-danger, bg-accent, ... with white
    * on top). They cannot be one value: on the dark theme a red readable on
-   * #123054 is a light red, and white on a light red is unreadable — the two
+   * #1b2c41 is a light red, and white on a light red is unreadable — the two
    * roles pull in opposite directions.
    *
-   * Measured on `bg-card` (#123054), the worst surface any of these lands on:
-   *   text-danger      2.35 -> 5.01     text-primary     2.83 -> 5.94
-   *   text-success     2.83 -> 5.58     text-badge-audio 2.85 -> 5.52
-   *   text-warning     2.89 -> 6.33     text-subtle      3.70 -> 5.59
-   * WCAG AA asks 4.5 for small text; every one of them used to fail even the
-   * 3.0 asked of a graphical object.
-   *
-   * Hues are not invented: each is its own ALPS colour tinted toward white,
-   * the same way this file already interpolates the Denim ramp for dark
-   * surfaces ALPS does not define. `primary-ink` is literally Denim #84adfc.
-   * Only the five hues that actually appear as bare text or a bare icon get
-   * one — the other badge colours are only ever a `Badge` tint, which the
-   * badge's own `text-foreground` already made readable.
+   * Each is its sheet colour tinted toward white just past 4.5:1 on the
+   * worst surface it lands on (`bg-card`, or `bg-muted` where noted):
+   *   danger  #dd1f1f + 40% -> 5.09      accent  #3e8391 + 30% -> 5.42
+   *   success #448d21 + 30% -> 5.51      warning #ffa92d as is  -> 7.39
    */
-  --wa-danger-ink: #e8808d;        /* Scarlett  #d0021b + 50% white */
-  --wa-accent-ink: #84adfc;        /* Denim     #84adfc, straight from ALPS */
-  --wa-success-ink: #80b666;       /* Tree Frog #2b8500 + 40% white */
-  --wa-warning-ink: #e6a480;       /* Campfire  #cd4900 + 50% white */
-  --wa-badge-audio-ink: #66b2c1;   /* Ming      #007f98 + 40% white */
+  --wa-danger-ink: #eb7979;
+  --wa-accent-ink: #78a8b2;
+  --wa-success-ink: #7caf64;
+  --wa-warning-ink: #ffa92d;
+  --wa-badge-audio-ink: #78a8b2;
 }
 
 [data-theme="light"] {
-  --wa-bg-primary: #f5f5f5;
+  --wa-bg-primary: #ffffff;
   --wa-bg-secondary: #ffffff;
-  --wa-bg-tertiary: #eaeff6;
-  --wa-bg-card: #ffffff;
-  --wa-bg-hover: #e1eaf6;
-  --wa-bg-active: #cfe0f5;
-  --wa-text-primary: #04132b;
-  --wa-text-secondary: #4a4a4a;
-  --wa-text-muted: #717171;
-  --wa-accent-primary: #2f557f;
-  --wa-accent-hover: #04132b;
-  --wa-accent-light: #84adfc;
-  --wa-danger: #d0021b;
-  --wa-success: #355724;
-  --wa-warning: #cd4900;
-  --wa-warning-foreground: #ffffff;
-  --wa-on-air: #d0021b;
-  --wa-border: #d7dee7;
-  --wa-border-light: #c2ccd9;
-  --wa-badge-ppt: #cd4900;
-  --wa-badge-video: #4b207f;
-  --wa-badge-image: #355724;
-  --wa-badge-audio: #255760;
+  --wa-bg-tertiary: #f1f3f7;
+  --wa-bg-card: #f5f6f9;
+  --wa-bg-hover: #eef1f5;
+  --wa-bg-active: #e8f0f2;
+  --wa-text-primary: #182a40;
+  --wa-text-secondary: #5c7089;
+  /* The sheet has two text greys, and #5c7089 is already at 4.57:1 on
+   * bg-muted: any lighter third step fails AA. Hierarchy comes from size and
+   * weight here instead. */
+  --wa-text-muted: #5c7089;
+  --wa-primary: #2f557f;
+  --wa-primary-hover: #213c59;
+  --wa-primary-border: #2f557f;
+  --wa-secondary: #213c59;
+  --wa-secondary-hover: #182d44;
+  --wa-secondary-foreground: #ffffff;
+  --wa-accent: #3a7b88;
+  --wa-ring: #3a7b88;
+  --wa-danger: #dd1f1f;
+  --wa-success: #3f821e;
+  --wa-warning: #ffa92d;
+  --wa-warning-foreground: #182a40;
+  --wa-on-air: #dd1f1f;
+  --wa-border: #c8d2dc;
+  --wa-border-light: #b2becb;
+  --wa-badge-ppt: #e36520;
+  --wa-badge-video: #ffa92d;
+  --wa-badge-image: #448d21;
+  --wa-badge-audio: #3e8391;
   --wa-badge-bible: #2f557f;
-  /* The light theme already passes on every surface these land on, so ink ==
-   * fill here. Split anyway, so a component never has to know which theme it
-   * is in — which is the whole point of the token layer. */
-  --wa-danger-ink: #d0021b;
-  --wa-accent-ink: #2f557f;
-  --wa-success-ink: #355724;
-  --wa-warning-ink: #cd4900;
-  --wa-badge-audio-ink: #255760;
+  /* Navy, not black, and lighter: a black 50% overlay shadow on white reads
+   * as a smudge. */
+  /* What dims the app behind a modal. Black at 60% over white is a grey
+   * smear; the navy text colour at 40% reads as "behind", not "broken". */
+  --wa-scrim: rgb(24 42 64 / 0.4);
+  --wa-shadow-raised: 0 2px 4px -2px rgb(24 42 64 / 0.12), 0 4px 12px -2px rgb(24 42 64 / 0.1);
+  --wa-shadow-overlay: 0 8px 16px -8px rgb(24 42 64 / 0.16), 0 20px 40px -8px rgb(24 42 64 / 0.2);
+  /* Shaded instead of tinted: the light surfaces need the dark side. */
+  --wa-danger-ink: #dd1f1f;        /* as is, 4.53 on #f5f6f9 */
+  --wa-accent-ink: #356f7b;        /* acento - 15% black, 5.24 */
+  --wa-success-ink: #3a781c;       /* #448d21 - 15% black, 5.00 */
+  --wa-warning-ink: #8c5d19;       /* #ffa92d - 45% black, 5.26 */
+  --wa-badge-audio-ink: #356f7b;
 }
 
 @theme inline {
@@ -214,23 +275,32 @@
   --color-hover: var(--wa-bg-hover);
   --color-active: var(--wa-bg-active);
   --color-subtle: var(--wa-text-muted);
-  --color-primary: var(--wa-accent-primary);
-  --color-primary-hover: var(--wa-accent-hover);
+  --color-primary: var(--wa-primary);
+  --color-primary-hover: var(--wa-primary-hover);
+  --color-primary-border: var(--wa-primary-border);
   --color-primary-foreground: #ffffff;
-  --color-secondary: var(--wa-bg-hover);
-  --color-secondary-foreground: var(--wa-text-primary);
+  --color-secondary: var(--wa-secondary);
+  --color-secondary-hover: var(--wa-secondary-hover);
+  --color-secondary-foreground: var(--wa-secondary-foreground);
+  /* Teal: selected / focused / on. Never a plain decoration. */
+  --color-accent: var(--wa-accent);
+  --color-accent-foreground: #ffffff;
+  --color-scrim: var(--wa-scrim);
   --color-border: var(--wa-border);
   --color-border-light: var(--wa-border-light);
-  --color-ring: var(--wa-accent-light);
+  --color-ring: var(--wa-ring);
   --color-danger: var(--wa-danger);
   --color-danger-foreground: #ffffff;
   --color-success: var(--wa-success);
   --color-success-foreground: #ffffff;
   --color-warning: var(--wa-warning);
   --color-warning-foreground: var(--wa-warning-foreground);
-  /* Scarlett, reserved for ONE meaning: content is on the projector right now. */
+  /* Red, reserved for ONE meaning: content is on the projector right now. */
   --color-on-air: var(--wa-on-air);
   --color-on-air-foreground: #ffffff;
+  /* The "Live" of the wordmark and the flame's core. Logo-only: it is the
+   * same in both themes, like the logo, and never a UI state. */
+  --color-brand-live: #d14600;
 
   --color-badge-ppt: var(--wa-badge-ppt);
   --color-badge-video: var(--wa-badge-video);
@@ -240,22 +310,31 @@
 
   /* Text/icon counterparts of the fills above — see the note by the palette. */
   --color-danger-ink: var(--wa-danger-ink);
-  --color-primary-ink: var(--wa-accent-ink);
+  --color-accent-ink: var(--wa-accent-ink);
   --color-success-ink: var(--wa-success-ink);
   --color-warning-ink: var(--wa-warning-ink);
   --color-badge-audio-ink: var(--wa-badge-audio-ink);
 
-  /* Noto Sans is the church's official typeface (Advent Sans is logo-only). */
+  /* Noto Sans for everything the operator reads; its ExtraCondensed cut (the
+   * same variable file, `font-stretch-extra-condensed`) for titles and the
+   * wordmark, as the identity sheet sets them. */
   --font-sans: "Noto Sans Variable", "Noto Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
 
   /*
    * Elevation scale — 3 levels only. surface = resting cards/panels,
    * raised = non-blocking floating panels (dropdown/tooltip/date-picker),
-   * overlay = blocking modals/toasts.
+   * overlay = blocking modals/toasts. Resting surfaces are FLAT: the identity
+   * draws its boxes with a border and no shadow, and a shadow on a navy
+   * panel was never visible anyway.
    */
-  --shadow-surface: 0 1px 2px 0 rgb(0 0 0 / 0.25), 0 1px 3px 0 rgb(0 0 0 / 0.2);
-  --shadow-raised: 0 2px 4px -2px rgb(0 0 0 / 0.3), 0 4px 12px -2px rgb(0 0 0 / 0.25);
-  --shadow-overlay: 0 8px 16px -8px rgb(0 0 0 / 0.4), 0 20px 40px -8px rgb(0 0 0 / 0.5);
+  --shadow-surface: 0 0 #0000;
+  --shadow-raised: var(--wa-shadow-raised);
+  --shadow-overlay: var(--wa-shadow-overlay);
+
+  /* Motion: one curve per direction, the durations of the system (enter 150,
+   * exit 120). Things arriving decelerate; things leaving accelerate. */
+  --ease-enter: cubic-bezier(0, 0, 0.38, 0.9);
+  --ease-exit: cubic-bezier(0.2, 0, 1, 0.9);
 
   /*
    * Stacking scale — the missing half of the elevation scale above. Until

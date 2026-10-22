@@ -1,4 +1,5 @@
 export { Button } from "./button";
+export { BrandMark, Wordmark } from "./brand";
 export { IconButton } from "./icon-button";
 export { Icon, iconNames, type IconName } from "./icon";
 export { Badge, type BadgeVariant } from "./badge";

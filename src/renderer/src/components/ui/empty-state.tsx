@@ -23,14 +23,24 @@ export function EmptyState({ action, className, description, icon, title, tone =
     <div className="absolute inset-0 flex items-center justify-center">
       <div
         className={cn(
-          "flex max-w-md flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-6 text-center",
-          tone === "danger" ? "border-danger/40" : "border-border",
+          // No box: a dashed outline is what a drop zone looks like, and most
+          // of these are not one. The icon's disc carries the shape instead.
+          "flex max-w-md flex-col items-center justify-center gap-2 p-6 text-center",
           className,
         )}
         {...props}
       >
-        {icon ? <Icon className={cn("size-6", tone === "danger" ? "text-danger-ink" : "text-subtle")} name={icon} /> : null}
-        <p className={cn("text-sm font-medium", tone === "danger" ? "text-danger-ink" : "text-foreground")}>{title}</p>
+        {icon ? (
+          <span
+            className={cn(
+              "mb-1 flex size-12 items-center justify-center rounded-full",
+              tone === "danger" ? "bg-danger/15 text-danger-ink" : "bg-muted text-subtle",
+            )}
+          >
+            <Icon className="size-6" name={icon} />
+          </span>
+        ) : null}
+        <p className={cn("text-sm font-semibold", tone === "danger" ? "text-danger-ink" : "text-foreground")}>{title}</p>
         {description ? <p className="text-xs text-subtle">{description}</p> : null}
         {action}
       </div>

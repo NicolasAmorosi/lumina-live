@@ -37,13 +37,13 @@ const surfaceTrackClassName: Record<LoadingStateSurface, string> = {
   panel: "bg-muted",
 };
 const toneIconClassName: Record<LoadingStateTone, string> = {
-  busy: "text-primary-ink",
+  busy: "text-accent-ink",
   queued: "text-muted-foreground",
   failed: "text-danger-ink",
 };
-const toneBarTone: Record<LoadingStateTone, "primary" | "danger"> = {
-  busy: "primary",
-  queued: "primary",
+const toneBarTone: Record<LoadingStateTone, "accent" | "danger"> = {
+  busy: "accent",
+  queued: "accent",
   failed: "danger",
 };
 
@@ -74,7 +74,7 @@ export function LoadingState({
       )}
     >
       <Icon
-        className={cn("size-6", toneIconClassName[tone], icon === "spinner" && "animate-spin")}
+        className={cn("size-6", toneIconClassName[tone], icon === "spinner" && "motion-safe:animate-spin")}
         name={icon}
       />
       <p className="text-sm font-medium">{title}</p>

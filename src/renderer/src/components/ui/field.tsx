@@ -16,7 +16,7 @@ export function FieldGroup({ children, className, title }: { children: ReactNode
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <Title as="h2">{title}</Title>
-      <div className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface">
+      <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
         {children}
       </div>
     </div>
@@ -81,7 +81,7 @@ export function FieldRow({
       className={cn(
         "relative flex flex-nowrap items-center justify-between gap-6 px-4 py-3",
         dropBefore &&
-          "before:absolute before:inset-x-0 before:-top-px before:h-0.5 before:rounded-full before:bg-primary",
+          "before:absolute before:inset-x-0 before:-top-px before:h-0.5 before:rounded-full before:bg-accent",
       )}
       role="group"
     >

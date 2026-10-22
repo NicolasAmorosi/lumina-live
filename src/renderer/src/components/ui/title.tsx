@@ -3,10 +3,14 @@ import { cn } from "@renderer/lib/utils";
 
 type TitleProps = HTMLAttributes<HTMLHeadingElement> & { as?: "h1" | "h2" | "h3" };
 
+// h1 and h2 are set in Noto Sans ExtraCondensed, the identity's display cut;
+// h3 names a dialog or a group in running UI and stays in the text cut. A
+// condensed face reads smaller than its size, hence the step up from the text
+// scale (h2: 15px where a text label would be 14).
 const sizes: Record<NonNullable<TitleProps["as"]>, string> = {
-  h1: "text-xl font-semibold",
-  h2: "text-sm font-semibold uppercase tracking-wide text-subtle",
-  h3: "text-sm font-medium",
+  h1: "font-stretch-extra-condensed text-2xl font-extrabold tracking-tight",
+  h2: "font-stretch-extra-condensed text-[0.9375rem] font-bold uppercase tracking-wider text-muted-foreground",
+  h3: "text-sm font-semibold",
 };
 
 export function Title({ as = "h2", className, ...props }: TitleProps) {
