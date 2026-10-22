@@ -7,6 +7,12 @@ import { pinDecks } from "../../slides/deck-service";
 
 let currentProgramId: number | null = null;
 
+/** How long `projection:open` waits for the new window to mount: a renderer
+ *  that never pulls its snapshot must not leave EN VIVO hanging. */
+const PROJECTOR_MOUNT_TIMEOUT_MS = 5_000;
+/** `webContents.id` → settles that window's `projection:open`. */
+const mountWaiters = new Map<number, () => void>();
+
 export function setCurrentProgramId(id: number | null): void {
   currentProgramId = id;
 }
@@ -49,6 +55,22 @@ export const projectionHandlers: Pick<
       // control window does not need to be told what it just did.
       if (projectionState.clearWindowIf(win)) broadcast("projection-closed", undefined);
     });
+    // Answered once the page has mounted (its own `projection:getSnapshot`),
+    // not once the window exists. The control commits EN VIVO when this
+    // resolves, and a deck's auto-advance arms slide 1's timer at that commit:
+    // answered earlier, slide 1 ran its clock while the page was still loading
+    // — 0.2 s normally, up to 3 s with main busy — and a short one never showed.
+    const id = win.webContents.id;
+    return new Promise<void>((resolve) => {
+      const settle = () => {
+        clearTimeout(timeout);
+        mountWaiters.delete(id);
+        resolve();
+      };
+      const timeout = setTimeout(settle, PROJECTOR_MOUNT_TIMEOUT_MS);
+      mountWaiters.set(id, settle);
+      win.once("closed", settle);
+    });
   },
 
   "projection:close": () => {
@@ -79,7 +101,10 @@ export const projectionHandlers: Pick<
     }
   },
 
-  "projection:getSnapshot": () => projectionState.getSnapshot(),
+  "projection:getSnapshot": (_req, ev) => {
+    mountWaiters.get(ev.sender.id)?.();
+    return projectionState.getSnapshot();
+  },
 
   "projection:mediaCommand": (command) => {
     const win = projectionState.getWindow();

@@ -119,6 +119,40 @@ test("a .pptx with timings advances by itself", async ({ app }) => {
   await expect.poll(() => projectedSlide(projector), { timeout: 8_000 }).toBe(3);
 });
 
+test("the EN VIVO that opens the projector still gives slide 1 its whole time", async ({ app }) => {
+  test.skip(!hasHymn(), "LibreOffice is not installed, so there is no .pptx fixture");
+  await app.addMedia("ppt", "hymn.pptx");
+  await app.previewFile("Presentaciones", "hymn");
+  await expect(slideTile(app, 3)).toBeVisible({ timeout: 90_000 });
+  // A slow machine, made deterministic: the projector's page takes 3 s to
+  // load, longer than the 2 s slide 1 is timed for. Its clock used to start
+  // at the press, so slide 1 was gone before the projector could show it.
+  await app.electron.evaluate(({ session }) => {
+    session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
+      if (details.url.includes("projection.html")) setTimeout(() => callback({}), 3000);
+      else callback({});
+    });
+  });
+  await app.goLive();
+  const projector = await app.projector();
+  // When each slide's image was first painted, in the projector's own clock.
+  const shown = await projector.evaluate(async () => {
+    const at: Record<number, number> = {};
+    const start = performance.now();
+    while (at[2] === undefined && performance.now() - start < 8000) {
+      const image = [...document.querySelectorAll<HTMLImageElement>('img[src^="worship://deck/"]')]
+        .filter((img) => img.complete && img.naturalWidth > 0)
+        .at(-1);
+      const slide = Number(/\/(\d+)$/.exec(image?.src ?? "")?.[1]);
+      if (slide && at[slide] === undefined) at[slide] = performance.now();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    return at;
+  });
+  expect(shown[1], "slide 1 was never shown").toBeDefined();
+  expect(shown[2]! - shown[1]!).toBeGreaterThan(1700);
+});
+
 test("a WMV embedded in a .pptx slide is converted and plays on its slide", async ({ app }) => {
   test.skip(!fs.existsSync(fixture("clipdeck.pptx")), "LibreOffice is not installed, so there is no .pptx fixture");
   await app.addMedia("ppt", "clipdeck.pptx");

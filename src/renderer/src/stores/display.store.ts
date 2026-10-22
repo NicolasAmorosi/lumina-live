@@ -14,6 +14,11 @@ import type { DisplayInfo } from "@shared/types/display";
  *  two would list the screens twice and race to write the same resolution. */
 let loadInFlight: Promise<void> | null = null;
 
+/** Dedupes `openIfNeeded()`. `projection:open` answers only once the new page
+ *  has mounted, and a second EN VIVO pressed in that wait would otherwise open
+ *  the projector again — closing the window that was about to show. */
+let openInFlight: Promise<void> | null = null;
+
 /** There is no screen to project on: `displays.list()` came back empty.
  *  Giving up in silence is the one thing this must not do — `goLive()` carries
  *  on regardless, the monitors fill with content and nothing ever reaches a
@@ -121,17 +126,24 @@ export const useDisplayStore = create<DisplayStoreState>((set, get) => ({
 
   openIfNeeded: async () => {
     if (useProjectionStore.getState().presentationOpen) return;
-    // The operator's first EN VIVO/NEGRO/LOGO can land before the boot's
-    // `load()` has resolved, and "not listed yet" used to be indistinguishable
-    // from "no screen at all" — both gave up here without a word.
-    if (!get().loaded) await get().load();
-    const { displayId } = get();
-    if (displayId === null) {
-      warnNoScreen();
-      return;
-    }
-    await api.projection.open(displayId);
-    useProjectionStore.getState().setPresentationOpen(true);
+    openInFlight ??= (async () => {
+      try {
+        // The operator's first EN VIVO/NEGRO/LOGO can land before the boot's
+        // `load()` has resolved, and "not listed yet" used to be indistinguishable
+        // from "no screen at all" — both gave up here without a word.
+        if (!get().loaded) await get().load();
+        const { displayId } = get();
+        if (displayId === null) {
+          warnNoScreen();
+          return;
+        }
+        await api.projection.open(displayId);
+        useProjectionStore.getState().setPresentationOpen(true);
+      } finally {
+        openInFlight = null;
+      }
+    })();
+    await openInFlight;
   },
 
   close: async () => {

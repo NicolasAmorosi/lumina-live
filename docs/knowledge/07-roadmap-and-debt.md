@@ -92,12 +92,6 @@ críticos, altos y medios. Quedó abierto esto, cada cosa con su motivo:
   `0`. No se investigó si es el test (leyó antes de que aterrice el seek de montaje) o el producto
   (el video arranca un instante desde 0:00): pollear hasta `> 1,8` taparía justamente el segundo caso,
   porque desde 0 también llega a 1,8 en dos segundos.
-- **La primera diapositiva de un deck con auto-avance pierde el tiempo que tarda en abrir el
-  proyector**, si ese EN VIVO es el que lo abre: el temporizador arranca en el commit, no cuando el
-  proyector la pinta. Normalmente son 0,2 s; con main ocupado tras una conversión, hasta 3 s. Con
-  diapositivas de 2 s (el deck de `decks.spec.ts`) la primera no se ve nunca, y es el fallo
-  intermitente de «advances by itself». Igual en 2.2.0-beta.2. Ver
-  [el hallazgo](../../.claude/knowledge/auto-advance-starts-at-the-commit-so-a-cold-projector-eats-the-first-slide.md).
 - **Cuatro E2E fallaron una vez en la corrida completa del 2026-10-22 y pasaron solos al
   repetirlos**: `bible.spec` «after clicking EN VIVO…» y «a file that is not a Bible…» (el tab de
   Ajustes se desmontaba bajo el click), `keyboard.spec` «↓ after clicking a library tile…» y
