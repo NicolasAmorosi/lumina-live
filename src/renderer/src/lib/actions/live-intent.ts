@@ -30,8 +30,7 @@
  * claim an intent without `playback.ts` ↔ `bible.ts` ↔ `display.store.ts`
  * forming an import cycle. A writer that cannot reach the counter is a writer
  * that silently opts out of the guard — which is exactly how `advanceVerse`
- * and `display.store.open()` were left outside it (`H3` in
- * `auditorias/reports/AUDIT-black-logo-2026-09-13.md`).
+ * and `display.store.open()` were left outside it.
  */
 let liveIntent = 0;
 

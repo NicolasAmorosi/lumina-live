@@ -1,46 +1,60 @@
 # Lumina Live
 
-(Repositorio `WorshipApp`.) Aplicación de proyección para iglesias — Electron + TypeScript + React + Vite + Tailwind, con
-SQLite embebido. Ver `CLAUDE.md` para la guía técnica completa y `docs/knowledge/` para el
-detalle de cada capa.
+**Software libre de proyección para iglesias.** Diapositivas, video, imágenes, audio, la Biblia y
+temporizadores en una segunda pantalla, con el mismo flujo de dos pasos que EasyWorship: elegís,
+mirás la vista previa y recién ahí lo mandás EN VIVO.
 
-## Funcionalidades
-- Presentación de PowerPoint (.ppt, .pptx) con vista previa de diapositivas (Windows, vía COM)
-- Reproducción de video e imagen en segunda pantalla
-- Reproducción de audio (con audio vinculado a PowerPoint)
-- Biblia integrada (RV1960) con búsqueda por texto sin acentos (FTS5) y proyección de versículos
-- Playlists guardadas como programas reutilizables (abrir/duplicar/editar un culto anterior)
-- Biblioteca de medios persistente (videos, imágenes, audios) con detección de archivos movidos/borrados
-- Controles de negro/logo con toggle
-- Tema claro/oscuro
-- Sincronización minimizar/restaurar con pantalla de proyección
+> *Free and open-source church presentation software for Windows, macOS and Linux. The interface is
+> Spanish-only for now; translations are welcome.*
 
-## Requisitos
-- Node.js 22+
-- Microsoft PowerPoint en Windows (para presentaciones — el resto de la app es multiplataforma
-  para desarrollo, aunque el target de distribución es Windows)
+## Qué hace
 
-## Instalación y desarrollo
+- **Presentaciones** `.ppt`, `.pptx`, `.pps`, `.ppsx`, `.odp` y `.pdf`, incluidos los himnarios
+  `.pps` con auto-avance y música: respeta los tiempos de cada diapositiva y el audio embebido.
+- **Cualquier video o audio.** Lo que el reproductor no puede decodificar (AVI, WMV, ProRes, AC3…) se
+  convierte solo en segundo plano con FFmpeg, que viene incluido. El original no se toca.
+- **Biblia** con búsqueda por texto (sin importar acentos). Trae la Reina-Valera 1909 y podés
+  importar otras versiones en JSON, Zefania, USFX, OSIS o módulos MyBible/MySword.
+- **Temporizadores** (cuenta regresiva, reloj, cronómetro) y **placas** sobre lo que se proyecta
+  (nombre del predicador, logo).
+- **NEGRO y LOGO** que pausan lo que se está reproduciendo y lo retoman donde estaba.
+- **Pensada para un culto en vivo:** si se desconecta el proyector, la imagen vuelve sola cuando
+  se reconecta; el orden de culto se guarda solo; cerrar la app por accidente pregunta antes.
+- Programas guardados, biblioteca de medios, tema claro y oscuro.
+
+## Descargar
+
+Los instaladores están en [Releases](https://github.com/NicolasAmorosi/lumina-live/releases/latest):
+Windows (instalador), macOS con Apple Silicon (`.dmg`) y Linux (`AppImage`).
+
+- **LibreOffice** hace falta para las presentaciones de PowerPoint (los PDF no lo necesitan). Si no
+  está instalado, la app lo detecta y explica cómo instalarlo.
+- Los instaladores **todavía no están firmados**. En Windows: «Más información» → «Ejecutar de todas
+  formas». En macOS: Ajustes del Sistema → Privacidad y seguridad → «Abrir igualmente».
+
+## Desarrollo
+
+Requiere Node.js 22 o superior.
+
 ```bash
-npm install         # better-sqlite3 trae binarios precompilados, no compila nada
-npm run dev          # electron-vite dev
-npm run typecheck     # verificación de tipos
-npm run test           # Vitest: capa de datos, zip reader, audio vinculado y estado del renderer
+npm install          # también baja Electron y el FFmpeg de tu plataforma
+npm run dev          # la app con recarga en caliente
+npm run typecheck && npm run lint && npm run test   # lo mínimo antes de un PR
+npm run test:e2e     # recorridos de la app real con Playwright
+npm run package:win  # o package:mac / package:linux
 ```
 
-## Empaquetado
-```bash
-npm run package:win    # instalador NSIS
-npm run package:mac     # dmg
-npm run package:linux    # AppImage
-```
+Antes de tocar código, leé [`CLAUDE.md`](CLAUDE.md): es la guía de arquitectura y de convenciones
+del proyecto, y [`docs/knowledge/`](docs/knowledge/) tiene el detalle de cada capa. Para contribuir,
+mirá [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-## Identidad visual
-La de Lumina Live: navy, acento teal y la llama del logo, con Noto Sans (y su corte
-ExtraCondensed para títulos). Tema oscuro por defecto (pensado para operarse en una cabina a
-oscuras) y tema claro alternativo. Detalle en `docs/knowledge/06-ui-and-theme.md`.
+Stack: Electron, TypeScript, React, Vite, Tailwind, Zustand y SQLite (`better-sqlite3` + Drizzle).
 
-## `legacy/`
-Contiene la versión previa de la app (Electron vanilla JS, sin bundler). Se conserva solo como
-referencia hasta validar la paridad funcional en Windows con PowerPoint real — ver
-`docs/knowledge/07-roadmap-and-debt.md`.
+## Licencia
+
+[GPL-3.0-or-later](LICENSE). Podés usarla, estudiarla, modificarla y compartirla; si distribuís una
+versión modificada, tiene que seguir siendo libre bajo la misma licencia.
+
+FFmpeg se distribuye junto a la app como un programa aparte, bajo su propia licencia GPL-3.0 (ver
+[`resources/ffmpeg-NOTICE.txt`](resources/ffmpeg-NOTICE.txt)). El texto de la Reina-Valera 1909 es
+de dominio público.

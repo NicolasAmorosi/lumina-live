@@ -1,18 +1,19 @@
-# CLAUDE.md — WorshipApp
+# CLAUDE.md — Lumina Live (WorshipApp)
 
 Guía de trabajo para Claude Code en este repositorio. Léela antes de tocar código.
 
-WorshipApp —el producto se llama **Lumina Live** desde el 2026-10-22; el repo, los paquetes y los
-identificadores internos siguen como `worship*`— es una aplicación de proyección de escritorio para iglesias, desarrollada en
-**Electron + TypeScript + React + Vite + Tailwind**, con **SQLite embebido** como backend,
-pensada como reemplazo de EasyWorship. Controla dos ventanas — control y proyección — para
-mostrar diapositivas de PowerPoint (convertidas con LibreOffice headless), video, imagen, audio y
-versículos bíblicos (RV1960) durante un culto. Identidad visual: la de Lumina Live (navy + acento
-teal + la llama, hoja de identidad del 2026-10-22), con tema claro/oscuro conmutable (oscuro por
-defecto, pensado para operarse en una cabina a oscuras).
+WorshipApp —el producto se llama **Lumina Live** desde el 2026-10-22 y es código abierto
+(GPL-3.0-or-later) en el repo `lumina-live`; los paquetes y los identificadores internos siguen como
+`worship*`— es una aplicación de proyección de escritorio para iglesias, desarrollada en **Electron
++ TypeScript + React + Vite + Tailwind**, con **SQLite embebido** como backend, pensada como
+reemplazo de EasyWorship. Controla dos ventanas — control y proyección — para mostrar diapositivas
+de PowerPoint (convertidas con LibreOffice headless), video, imagen, audio y versículos bíblicos
+(trae la RV1909, de dominio público; cualquier otra versión se importa) durante un culto. Identidad
+visual: la de Lumina Live (navy + acento teal + la llama, hoja de identidad del 2026-10-22), con
+tema claro/oscuro conmutable (oscuro por defecto, pensado para operarse en una cabina a oscuras).
 
-Es el sucesor directo de la versión vanilla JS de este mismo repo (conservada temporalmente en
-`legacy/`, ver la sección **Legacy** al final) y, más atrás, de `church-presenter`
+Es el sucesor directo de la versión vanilla JS de este mismo repo (retirada el
+2026-10-22, ver la sección **Legacy** al final) y, más atrás, de `church-presenter`
 (`Projects/CLAUDE.md`, archivado).
 
 ---
@@ -289,7 +290,7 @@ Dos automatismos sostienen esto (`.claude/settings.json` → `.claude/hooks/`):
 
 | Ruta | Qué es |
 |---|---|
-| `.claude/settings.json` | versionado: allowlist de comandos de verificación/solo-lectura, `deny` de `legacy/**` y de `rm -rf`, y los dos hooks del ciclo |
+| `.claude/settings.json` | versionado: allowlist de comandos de verificación/solo-lectura, `deny` de `rm -rf`, y los dos hooks del ciclo |
 | `.claude/settings.local.json` | preferencias personales, no versionado |
 | `.claude/hooks/` | los scripts que ejecutan los hooks (probables a mano: `echo '{}' \| ./.claude/hooks/<script>.sh`) |
 | `.claude/skills/` | `/add-ipc`, `/audit-page`, `/commit`, `/learn` |
@@ -311,7 +312,7 @@ npm install              # instala deps — better-sqlite3 trae binarios precomp
 npm run dev               # electron-vite dev (HMR en renderer, restart de main en watch)
 npm run typecheck          # tsc --noEmit sobre node (main+preload+shared) y web (renderer+shared)
 npm run lint                # eslint .
-npm run test                 # vitest run — 396 casos en dos proyectos: `main` (Node: migraciones, seed,
+npm run test                 # vitest run — 398 casos en dos proyectos: `main` (Node: migraciones, seed,
                               #   FTS5, repos y el barrido de la biblioteca, borrador, validadores de settings y de escena, respaldo WAL,
                               #   zip reader, audio vinculado, urls, prune del historial, funciones de tiempo,
                               #   arrastre de una cuenta regresiva, escenas de tiempo como ítem del orden de culto,
@@ -596,20 +597,11 @@ npm run package:win|mac|linux  # build + electron-builder para esa plataforma
 
 ## Legacy
 
-`legacy/` contiene la versión vanilla JS completa (Electron sin bundler, `main.js`/`preload.js`/
-`src/js/app.js`) que esta migración reemplaza. **No se toca ni se usa como dependencia de
-runtime** — es solo referencia mientras se valida la paridad funcional. Se elimina por completo
-una vez que:
-
-1. ~~Validación en Windows con PowerPoint real.~~ **Ya no aplica**: el COM se eliminó y el
-   pipeline de LibreOffice se verificó en macOS contra decks reales (incluido un `.ppt` binario
-   de 52 diapositivas) más un fixture con auto-avance y audio embebido.
-2. Se confirmó que los datos de `settings.json`/`media_library.json` (si existían) migraron
-   correctamente a SQLite — esto ya corre automáticamente al primer arranque
-   (`src/main/services/migrate-legacy-data.ts`).
-
-Hasta ese momento, tratá cualquier duda sobre "cómo se comportaba antes" consultando `legacy/`,
-no reimplementando desde cero.
+La versión vanilla JS (Electron sin bundler, `main.js`/`preload.js`/`src/js/app.js`) vivió en
+`legacy/` hasta el 2026-10-22, cuando se retiró del repo antes de publicarlo: las dos condiciones
+para borrarla ya se cumplían (LibreOffice reemplazó al COM, y
+`src/main/services/migrate-legacy-data.ts` migra sus datos solo al primer arranque). Para ver cómo
+se comportaba algo antes: `git show 90d3821:legacy/src/js/app.js`.
 
 ## Notas operativas
 
@@ -619,6 +611,8 @@ no reimplementando desde cero.
 - Requiere **LibreOffice instalado** para convertir presentaciones (`brew install --cask libreoffice`).
   No se empaqueta; la app lo detecta y guía la instalación si falta.
 - `git` está activo; commitea/pushea solo si el usuario lo pide.
+- Los planes, las auditorías y las fuentes de la marca son notas del mantenedor y **no se publican**:
+  viven en su workspace, fuera de este repo (`../docs/plans/`, `../docs/auditorias/`).
 - No hay CI configurado — es una decisión del usuario, no un pendiente.
   `npm run typecheck && npm run lint && npm run test` es la barra mínima antes de dar por buena
   una tarea, y corre a mano. Antes de un release, además `npm run test:e2e` y la misma suite contra

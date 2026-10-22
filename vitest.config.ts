@@ -13,7 +13,7 @@ const alias = {
  * zip reader, the slide pipeline's pure parts. `renderer` is jsdom, which the
  * stores need only because a couple of them touch `document` on a path a test
  * may reach — no component is mounted here (that is a deliberate scope
- * decision, see `auditorias/reports/2026-09-13-transversal-general.md` §I3).
+ * decision).
  *
  * Electron itself is never imported by anything under test: a module that
  * needs `electron` is a module this suite does not cover, and that boundary is

@@ -1,10 +1,18 @@
 {
   "name": "worship-app",
   "version": "2.2.0-beta.3",
-  "description": "Aplicación de proyección para iglesias - Reemplazo de EasyWorship",
+  "description": "Free and open-source church presentation software: slides, video, Bible and timers on a second screen.",
   "main": "./out/main/index.js",
-  "author": "Lumina Live",
-  "license": "MIT",
+  "author": "Nicolas Amorosi",
+  "license": "GPL-3.0-or-later",
+  "homepage": "https://github.com/NicolasAmorosi/lumina-live#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NicolasAmorosi/lumina-live.git"
+  },
+  "bugs": {
+    "url": "https://github.com/NicolasAmorosi/lumina-live/issues"
+  },
   "type": "module",
   "scripts": {
     "postinstall": "install-electron && tsx scripts/fetch-ffmpeg.ts",

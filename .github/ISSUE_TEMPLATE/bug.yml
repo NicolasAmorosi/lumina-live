@@ -1,0 +1,36 @@
+name: Reportar un error
+description: Algo no funciona como debería.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: Qué pasó
+      description: Qué hiciste, qué esperabas y qué pasó en cambio.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Versión
+      description: Configuración › Acerca de.
+      placeholder: 2.2.0
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Sistema operativo
+      options: [Windows, macOS, Linux]
+    validations:
+      required: true
+  - type: textarea
+    id: file
+    attributes:
+      label: Archivo
+      description: Si el problema es con una presentación, un video o una Biblia, adjuntalo o contá su formato y de dónde salió.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Registros
+      description: Configuración › Acerca de › Abrir carpeta de registros. Adjuntá `main.log` (y `crash.log` si existe).

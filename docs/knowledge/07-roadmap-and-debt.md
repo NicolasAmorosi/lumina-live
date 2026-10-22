@@ -6,8 +6,8 @@ Se completó: andamiaje `electron-vite` + TS estricto, el design system (`compon
 `shared`), la capa de datos completa (SQLite + Drizzle + FTS5, con smoke test verificado), el
 contrato IPC tipado end-to-end, el protocolo `worship://`, el pipeline de diapositivas con
 LibreOffice headless (multiplataforma, ver `03-slides-libreoffice.md`), la
-ventana de proyección declarativa, y una UI de control funcional para las 6 áreas de
-`auditorias/README.md` (playlist, biblioteca, biblia, PPT, negro/logo, display) más el módulo
+ventana de proyección declarativa, y una UI de control funcional para las 6 áreas auditadas
+(playlist, biblioteca, biblia, PPT, negro/logo, display) más el módulo
 nuevo de servicios guardados.
 
 **No se implementó** (fuera de alcance explícito de esta tarea, acordado con el usuario):
@@ -106,8 +106,8 @@ se empaqueta**: la app lo detecta en el sistema (con override manual en `slides.
 si falta, la UI explica cómo instalarlo.
 
 Verificado en macOS contra decks reales de iglesia, incluyendo un `.ppt` binario de 52
-diapositivas y un fixture con auto-avance + audio embebido. `legacy/` ya **no** está bloqueado por
-una validación en Windows.
+diapositivas y un fixture con auto-avance + audio embebido. `legacy/` se retiró del repo el
+2026-10-22; sigue en la historia de git.
 
 ## Objetivo: más idiomas
 

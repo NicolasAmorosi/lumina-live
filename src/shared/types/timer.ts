@@ -2,9 +2,8 @@
  * Time, split into the two things it actually is: what the PROJECTOR has to
  * draw, and what the OPERATOR configures.
  *
- * See `plans/2026-09-17-panel-funciones/utilidades.md` for the reasoning; the
- * short version is that the projection window knows nothing about "a countdown
- * to the start of the service". It knows how to subtract against an instant,
+ * The projection window knows nothing about "a countdown to the start of the
+ * service". It knows how to subtract against an instant,
  * add from an instant, or read the wall clock — and that is deliberately all,
  * because every alternative either sends a tick per second over IPC or sends a
  * value that is stale the moment the window is rebuilt (the `startAtSeconds`
