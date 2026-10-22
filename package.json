@@ -135,7 +135,14 @@
       ]
     },
     "linux": {
-      "target": "AppImage",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "extraResources": [
         {
           "from": "resources/ffmpeg/linux-${arch}",
