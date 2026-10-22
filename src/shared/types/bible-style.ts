@@ -56,7 +56,7 @@ export type TextCase = (typeof TEXT_CASES)[number];
  * Where the version's own label goes, if anywhere.
  *
  * "inline" puts it on the reference line after a separator («Juan 3:16 ·
- * RV1960»); "line" gives it a line of its own underneath. Both draw it with
+ * RV1909»); "line" gives it a line of its own underneath. Both draw it with
  * the REFERENCE's style rather than a third `SceneTextStyle`: it is the same
  * piece of metadata read at the same moment from the same seats, and a third
  * set of four knobs to configure a label nobody looks at twice is exactly the

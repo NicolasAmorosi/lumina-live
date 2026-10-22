@@ -65,7 +65,7 @@ export class BibleRepo {
    *  `ProgramsRepo.topSortOrder`, and deliberately so — a saved program is
    *  created because it is about to be used, while an imported bible is one
    *  more option beside the one the church actually reads from. Putting it on
-   *  top would push RV1960 down the picker without anybody asking. */
+   *  top would push RV1909 down the picker without anybody asking. */
   nextSortOrder(): number {
     const highest = this.db.select({ value: max(bibleVersions.sortOrder) }).from(bibleVersions).get()?.value ?? null;
     return highest === null ? 0 : highest + 1;
@@ -103,7 +103,7 @@ export class BibleRepo {
    *
    * The only editable field a version has, and it earns its place: the name is
    * what the projector prints when `BibleStyle.versionDisplay` asks for it,
-   * and «Reina-Valera 1960» under a verse on a three-metre screen is not what
+   * and «Reina-Valera 1909» under a verse on a three-metre screen is not what
    * anybody wants there. It is also what an import gets from a file NAME,
    * which for a downloaded module is regularly something like
    * `spaRV1909_vpl`.

@@ -3,7 +3,7 @@ import { canonByAbbrev, testamentOf } from "./canon";
 import { BibleFormatError, type ParsedBible, type ParsedBook, type ParsedVerse } from "./types";
 
 /**
- * The shape the bundled `rv1960.json` uses, and the several near-misses a
+ * The shape the bundled `rv1909.json` uses, and the several near-misses a
  * hand-assembled file arrives in.
  *
  * Unchanged in substance from the `bible-source.ts` this replaces — it is
@@ -38,7 +38,7 @@ function extractBooks(raw: unknown): BibleSourceBook[] {
  * Which testament a book belongs to.
  *
  * This used to be a set of 39 abbreviations kept in this file, and the set did
- * not match the bible in the box: it spelled Samuel `1s` where `rv1960.json`
+ * not match the bible in the box: it spelled Samuel `1s` where `rv1909.json`
  * spells it `1sm`, Psalms `sal` where the file says `ps`, and so on for 23 of
  * the 39 Old Testament books — every one of which has been stored as `"NT"`
  * since the seed was written. Nothing reads the column yet, which is the only

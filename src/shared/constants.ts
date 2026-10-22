@@ -147,4 +147,8 @@ export const SLIDES_RASTER_PAGE_TIMEOUT_MS = 30_000;
 
 export const DEFAULT_MEDIA_VOLUME = 0.5;
 
+/** The bundled bible's identity, NOT its edition: the text has always been the Reina-Valera
+ *  1909 (public domain), shipped as «Reina-Valera 1960» through 2.2.0-beta.3. `bible_favorites`
+ *  rows point at this code and the seed re-imports against it, so it never changes — same rule as
+ *  the `worship-app` package name. The file and the name are what say 1909. */
 export const BUILTIN_BIBLE_CODE = "rv1960";

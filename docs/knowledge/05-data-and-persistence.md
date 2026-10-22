@@ -202,7 +202,7 @@ arranque.
 
 ## Seed de la Biblia — nunca se escribe dentro del bundle
 
-`resources/bibles/rv1960.json` se empaqueta con `extraResources` (`build/electron-builder`) y se
+`resources/bibles/rv1909.json` se empaqueta con `extraResources` (`build/electron-builder`) y se
 importa a las tablas en el **primer arranque**, no en build time — así una actualización de la
 app nunca pisa la DB del usuario. `bible:import` hace exactamente lo mismo: parsea el archivo en
 memoria e inserta filas. **Nunca escribe un archivo dentro del directorio de la app** — el bug
@@ -212,17 +212,23 @@ permisos) no existe en este diseño.
 Idempotencia por `sourceHash` (sha256 del archivo) en `bible_versions` — reimportar el mismo
 archivo no vuelve a sembrar nada. Un reseed **conserva el nombre que la fila ya tiene**: la
 versión se puede renombrar desde Ajustes (es lo que el proyector escribe debajo del versículo), y
-un `rv1960.json` corregido en un build posterior no puede deshacer ese renombre.
+un `rv1909.json` corregido en un build posterior no puede deshacer ese renombre.
+
+El texto incluido es la **Reina-Valera 1909** (dominio público), aunque hasta 2.2.0-beta.3 se llamó
+«Reina-Valera 1960» y el archivo `rv1960.json`. Su `code` sigue siendo `rv1960` porque es la
+identidad a la que apuntan `bible_favorites` y el reseed; lo que dice 1909 es el archivo y el
+nombre. La migración `0017` renombra la fila solo si conserva el nombre viejo: un nombre que puso
+el operador es suyo. Una RV1960 real no se puede incluir (tiene derechos de autor): se importa.
 
 ### La bandera `bible.builtinSeeded` — y por qué se consulta solo si la fila NO está
 
-`seedBuiltinBibles()` corre en cada arranque, así que sin bandera la RV1960 volvía al siguiente
+`seedBuiltinBibles()` corre en cada arranque, así que sin bandera la RV1909 volvía al siguiente
 inicio y «borrar» no significaba borrar. Pero la bandera **no** puede apagar la siembra sin más,
 porque la siembra es también el camino de actualización. Las tres reglas, en orden:
 
 | Estado | Qué hace |
 |---|---|
-| la fila existe | siembra igual — el corto-circuito por hash la vuelve un digest por arranque, y es así como un `rv1960.json` corregido llega a una instalación ya hecha |
+| la fila existe | siembra igual — el corto-circuito por hash la vuelve un digest por arranque, y es así como un `rv1909.json` corregido llega a una instalación ya hecha |
 | no existe y la bandera está puesta | el operador la borró: se respeta |
 | no existe y la bandera no está | base nueva: siembra y pone la bandera |
 
@@ -313,6 +319,6 @@ tamaño, todas posteriores a la última migración.
 `src/main/db/seed/bible-formats/json.ts` tolera las mismas variantes que la versión legacy: contenedor
 array-de-libros / `{books:[...]}` / objeto-por-nombre; libro con `name` o `nombre`; capítulos
 array u objeto `{"1":...}`; versículos string[]/`{text}`[]/`{verse}`[]/objeto. Verificado contra
-`rv1960.json` real: **sí tiene `name`** en los 66 libros — el bug "se muestra 'Libro' 66 veces"
+`rv1909.json` real: **sí tiene `name`** en los 66 libros — el bug "se muestra 'Libro' 66 veces"
 que documentaba la versión legacy de este archivo (`.claude/knowledge/`) no se reprodujo con los
 datos actuales; no se portó ningún fix para él.

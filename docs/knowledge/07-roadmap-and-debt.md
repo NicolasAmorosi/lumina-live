@@ -66,7 +66,7 @@ críticos, altos y medios. Quedó abierto esto, cada cosa con su motivo:
 - **El paquete de Windows lleva los prebuilds de better-sqlite3 de otras plataformas** y sus fuentes
   de SQLite (~24 MB). Excluirlos por plataforma es posible, pero se tocaría la carga del módulo nativo
   justo antes del lanzamiento.
-- **Volver a sembrar RV1960 con un JSON distinto borraría la versión de los versículos guardados**
+- **Volver a sembrar RV1909 con un JSON distinto borraría la versión de los versículos guardados**
   (`seed-bible.ts`). No ocurre: el archivo no cambió desde el primer commit.
 - **Sin firma de código** (SmartScreen avisa «Windows protegió su PC») — `I1`, cuesta dinero.
 - **A comprobar a mano en la PC de la iglesia**: Win+P en «Extender»; escalas distintas por monitor;

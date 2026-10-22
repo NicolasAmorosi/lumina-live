@@ -87,13 +87,13 @@ export type SettingsMap = {
    *  deleted, by the delete itself: a dangling id would silently fall back
    *  and look like the setting was never saved. */
   "bible.defaultVersionId": number | null;
-  /** Whether this database has ever been offered the bundled RV1960.
+  /** Whether this database has ever been offered the bundled RV1909.
    *
    *  Exists for exactly the reason `utility.seeded` does, with one extra
    *  wrinkle. `seedBuiltinBibles()` runs on every launch, so without a flag a
-   *  deleted RV1960 would reappear at the next one and «borrar» would not
+   *  deleted RV1909 would reappear at the next one and «borrar» would not
    *  mean borrar. But the flag must NOT disable seeding outright: the seed is
-   *  also the upgrade path — it re-imports when `resources/bibles/rv1960.json`
+   *  also the upgrade path — it re-imports when `resources/bibles/rv1909.json`
    *  changes hash, which is how a corrected bundle reaches an existing
    *  install. So the flag is only consulted when the version row is GONE (see
    *  `seedBuiltinBibles`), which is the only case that means the operator

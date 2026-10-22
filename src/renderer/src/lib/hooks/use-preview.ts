@@ -110,7 +110,7 @@ export function usePreviewContent(): PreviewContent | null {
         reference: scheduleItem.reference,
         text: scheduleItem.text,
         // The row's own version rather than whatever the Bible tab happens to
-        // be browsing: a program written against RV1960 previews as RV1960
+        // be browsing: a program written against RV1909 previews as RV1909
         // even while the operator is looking at another one.
         versionLabel: bibleVersionLabel(versions, scheduleItem.bibleVersionId),
         verseIndex: null,

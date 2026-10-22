@@ -1098,7 +1098,7 @@ describe("Installed bibles keep the order the operator gave them", () => {
   test("a re-seed of the bundled bible keeps its place", () => {
     const before = bibleRepo.listVersions().findIndex((version) => version.id === versionId);
     assert(before > 0, "this case only proves anything with the bundled bible off the top");
-    // Clearing the hash is what a corrected `rv1960.json` shipping in a later
+    // Clearing the hash is what a corrected `rv1909.json` shipping in a later
     // build looks like from here: the seed stops short-circuiting and takes the
     // delete-and-reinsert path (that is how the verses cascade), which without
     // `existing?.sortOrder` brings the row back at the bottom.
@@ -1106,5 +1106,32 @@ describe("Installed bibles keep the order the operator gave them", () => {
     seedBuiltinBibles(db, sqlite, biblesDir, settingsRepo);
     const after = bibleRepo.listVersions().findIndex((version) => version.code === BUILTIN_BIBLE_CODE);
     assert(after === before, `expected the bundled bible to stay at ${before}, found it at ${after}`);
+  });
+  test("0017 renames the bundled bible only while it still has its old default name", () => {
+    // The migrations stopped at 0016 are a database from before the bundled text was relabelled.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "worship-rv1909-"));
+    const before0017 = path.join(dir, "drizzle");
+    fs.cpSync(drizzleDir, before0017, { recursive: true });
+    const journalPath = path.join(before0017, "meta/_journal.json");
+    const journal = JSON.parse(fs.readFileSync(journalPath, "utf8")) as { entries: { tag: string }[] };
+    journal.entries = journal.entries.filter((entry) => entry.tag !== "0017_builtin_bible_rv1909");
+    fs.writeFileSync(journalPath, JSON.stringify(journal));
+
+    let dbIndex = 0;
+    const nameAfterUpgrade = (code: string, name: string): string => {
+      const opened = openDatabase(path.join(dir, `${dbIndex++}.db`));
+      runMigrations(opened.db, before0017);
+      opened.sqlite.prepare("INSERT INTO bible_versions (code, name, installed_at) VALUES (?, ?, 0)").run(code, name);
+      runMigrations(opened.db, drizzleDir);
+      const row = opened.sqlite.prepare("SELECT name FROM bible_versions").get() as { name: string };
+      opened.sqlite.close();
+      return row.name;
+    };
+
+    expect(nameAfterUpgrade(BUILTIN_BIBLE_CODE, "Reina-Valera 1960")).toBe("Reina-Valera 1909");
+    // The operator's own rename, and a real RV1960 they imported, are theirs.
+    expect(nameAfterUpgrade(BUILTIN_BIBLE_CODE, "RV60")).toBe("RV60");
+    expect(nameAfterUpgrade("imported", "Reina-Valera 1960")).toBe("Reina-Valera 1960");
+    fs.rmSync(dir, { recursive: true, force: true });
   });
 });

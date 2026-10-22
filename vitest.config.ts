@@ -29,7 +29,7 @@ export default defineConfig({
           environment: "node",
           include: ["tests/main/**/*.test.ts"],
           // The data-layer suite runs the real migrations and seeds the real
-          // RV1960 (31 102 verses, ~600 ms) once for the whole file.
+          // RV1909 (31 102 verses, ~600 ms) once for the whole file.
           testTimeout: 30_000,
           hookTimeout: 30_000,
         },

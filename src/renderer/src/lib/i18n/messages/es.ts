@@ -701,7 +701,7 @@ const es = {
       setDefaultDone: "La pestaña Biblia va a abrir en {name}",
       rename: "Renombrar",
       renameLabel: "Nombre de la versión",
-      renameHint: "Es lo que el proyector escribe cuando el estilo muestra la versión, así que conviene corto: «RV1960».",
+      renameHint: "Es lo que el proyector escribe cuando el estilo muestra la versión, así que conviene corto: «RV1909».",
       renameDone: "Ahora se llama «{name}»",
       renameFailed: "No se pudo renombrar la versión",
       deleteTitle: "¿Eliminar esta versión?",

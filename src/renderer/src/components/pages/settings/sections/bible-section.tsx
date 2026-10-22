@@ -40,12 +40,12 @@ type Pending = { version: BibleVersionDTO; usages: BibleVersionUsage[] };
  *
  * - **rename** because the name is what the projector prints under a verse
  *   when the style asks for the version, and an imported module arrives named
- *   after its file (`spaRV1909_vpl`). «RV1960» is a decision only the operator
+ *   after its file (`spaRV1909_vpl`). «RV1909» is a decision only the operator
  *   can make.
  * - **default** because the Bible tab used to open on `versions[0]`, an
  *   insertion order nobody chose.
  * - **delete** because until now a version could only ever be added — and the
- *   bundled RV1960 could not even be that, since the seed put it back on every
+ *   bundled RV1909 could not even be that, since the seed put it back on every
  *   launch (see `seedBuiltinBibles` for the flag that now makes «borrar» mean
  *   borrar).
  *
@@ -71,7 +71,7 @@ type Pending = { version: BibleVersionDTO; usages: BibleVersionUsage[] };
  *   `versions[0]`, an insertion order nobody chose.
  * - **The order is the operator's, and it is not cosmetic.** The list is the
  *   same array the version picker offers (`bible.store`), so dragging a row
- *   here is what puts RV1960 first there. The drag is handle-only — the row
+ *   here is what puts RV1909 first there. The drag is handle-only — the row
  *   carries a rename field and three buttons, and a row that starts moving
  *   when you press its name is a row you cannot use.
  */
@@ -100,7 +100,7 @@ export function BibleSection() {
 
   /**
    * Importing is seconds of work with nothing on screen to say so: measured at
-   * ~590 ms for the RV1960 bundle (31 102 verses), and it is all synchronous
+   * ~590 ms for the RV1909 bundle (31 102 verses), and it is all synchronous
    * work in main — 457 ms of INSERTs, 47 ms rebuilding the FTS5 index, 11 ms
    * of JSON. That is long enough for a second click to start a second import,
    * and long enough that silence reads as a broken button.
