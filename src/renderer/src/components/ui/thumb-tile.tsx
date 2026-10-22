@@ -16,6 +16,11 @@ import { ProgressBar } from "./progress-bar";
  */
 const decodedSrcs = createBoundedSet(2_000);
 
+/** The corner number's box. A text-only tile reserves this same box at the
+ *  start of its first line, so a long verse flows around the number instead
+ *  of running underneath it. */
+const INDEX_BADGE = "rounded px-1 text-[0.625rem] leading-4 font-semibold";
+
 type ThumbTileProps = {
   className?: string;
   draggable?: boolean;
@@ -158,14 +163,24 @@ export function ThumbTile({
               src={src}
             />
           ) : text !== undefined ? (
-            <span className="line-clamp-5 px-1.5 py-1 text-[0.6875rem] leading-tight text-white/90">
+            // Top-aligned, so the reserved box sits exactly under the corner
+            // number: `-ml-1` lands it on `left-0.5`, `pt-0.5` on `top-0.5`, and
+            // `-mb-1` keeps it shorter than one line so only the first line
+            // wraps around it. No bottom padding: `line-clamp` clips at the
+            // padding box, so any padding there shows half of the sixth line.
+            <span className="line-clamp-5 w-full self-start px-1.5 pt-0.5 text-[0.6875rem] leading-tight text-white/90">
+              {index !== undefined ? (
+                <span aria-hidden="true" className={cn(INDEX_BADGE, "invisible float-left -mb-1 -ml-1 mr-1")}>
+                  {index}
+                </span>
+              ) : null}
               {text}
             </span>
           ) : (
             <Icon className="size-6 text-subtle" name={icon} />
           ))}
         {index !== undefined ? (
-          <span className="absolute top-0.5 left-0.5 rounded bg-background/80 px-1 text-[0.625rem] leading-4 font-semibold text-foreground">
+          <span className={cn(INDEX_BADGE, "absolute top-0.5 left-0.5 bg-background/80 text-foreground")}>
             {index}
           </span>
         ) : null}
