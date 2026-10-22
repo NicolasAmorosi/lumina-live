@@ -109,8 +109,14 @@ Verificado en macOS contra decks reales de iglesia, incluyendo un `.ppt` binario
 diapositivas y un fixture con auto-avance + audio embebido. `legacy/` se retiró del repo el
 2026-10-22; sigue en la historia de git.
 
-## Objetivo: más idiomas
+## Idiomas
 
-La infraestructura de i18n (`lib/i18n/`) ya soporta agregar diccionarios — hoy solo existe
-`es`. Sumar `it`/`en` es agregar un archivo en `lib/i18n/messages/` y una entrada en
-`dictionaries` (`i18n-provider.tsx`), sin tocar componentes.
+Desde el 2026-10-22 la app habla `es`, `en`, `it` y `pt` (portugués de Brasil). Sumar otro es:
+el código en `LOCALES` (`shared/types/settings.ts`), un archivo en `lib/i18n/messages/` y otro en
+`main/i18n/messages/` (los dos tipados contra su `es`), sus nombres de libros bíblicos en
+`main/db/seed/bible-formats/book-names.ts` y su endónimo en `settings.locales`. Sin tocar
+componentes: los mapas de diccionarios están tipados sobre `Locale`, así que olvidarse de uno no
+compila.
+
+Pendiente: las capturas (`npm run screenshots`) y la landing muestran la interfaz en español en
+todos los idiomas.

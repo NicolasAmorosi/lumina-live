@@ -16,6 +16,7 @@ import type { BibleVersionUsage } from "@shared/types/bible";
 import type { MediaAssetUsage } from "@shared/types/media";
 import type { UtilitySceneUsage } from "@shared/types/utility";
 import type { PlateUsage } from "@shared/types/overlay";
+import { mt } from "../../i18n";
 
 function toItemDTO(row: typeof programItems.$inferSelect): ProgramItemDTO {
   const base = { id: row.id, position: row.position, title: row.title };
@@ -120,7 +121,7 @@ export class ProgramsRepo {
     const run = this.sqlite.transaction(() => {
       let programId = input.id;
       if (programId && !this.db.select({ id: programs.id }).from(programs).where(eq(programs.id, programId)).get()) {
-        throw new IpcError({ code: "PROGRAM_NOT_FOUND", message: "El programa ya no existe." });
+        throw new IpcError({ code: "PROGRAM_NOT_FOUND", message: mt("programs.notFound") });
       }
       if (programId) {
         this.db

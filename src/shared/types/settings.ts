@@ -12,7 +12,7 @@ import { TRANSITION_MAX_DURATION_MS, TRANSITION_STYLES, type TransitionStyle } f
 export const THEMES = ["dark", "light"] as const;
 export type Theme = (typeof THEMES)[number];
 
-export const LOCALES = ["es", "it", "en"] as const;
+export const LOCALES = ["es", "en", "it", "pt"] as const;
 export type Locale = (typeof LOCALES)[number];
 
 export const SLIDE_IMAGE_FORMATS = ["webp", "png"] as const;
@@ -71,7 +71,7 @@ export type SettingsMap = {
    *  date, and the operator should not have to re-pick on every switch. */
   "library.sort": Record<AssetKind, MediaSortOrder>;
   /** Whether this database has ever been given the four built-in time scenes
-   *  (`DEFAULT_UTILITY_SCENES`). A flag and not a row count, deliberately:
+   *  (`defaultUtilityScenes`). A flag and not a row count, deliberately:
    *  re-seeding whenever `utility_scenes` happens to be empty would mean an
    *  operator can never be rid of a scene they deleted — the four would come
    *  back on the next launch. Seeding once is what makes "borrar" mean

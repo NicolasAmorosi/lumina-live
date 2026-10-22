@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useT } from "@renderer/lib/i18n/i18n-provider";
+import { useI18n } from "@renderer/lib/i18n/i18n-provider";
 import { Button, Callout, FieldGroup, FieldRow, ProgressBar, Select } from "@renderer/components/ui";
 import { ConfirmModal } from "@renderer/components/shared/modal";
 import { useSettingsStore } from "@renderer/stores/settings.store";
@@ -31,7 +31,7 @@ const RENDER_WIDTH_OPTIONS = [1280, 1600, 1920, 2560, 3840] as const;
  * Hence the callout: the cost is real, it is silent, and it is paid later.
  */
 export function SlidesSection({ active }: { active: boolean }) {
-  const t = useT();
+  const { t, locale } = useI18n();
   const cacheMaxMb = useSettingsStore((s) => s.settings["slides.cacheMaxMb"]);
   const renderWidth = useSettingsStore((s) => s.settings["slides.maxRenderWidth"]);
   const imageFormat = useSettingsStore((s) => s.settings["slides.imageFormat"]);
@@ -87,8 +87,8 @@ export function SlidesSection({ active }: { active: boolean }) {
             <span className="text-sm font-medium tabular-nums text-foreground">
               {stats
                 ? t("settings.slidesCacheOf", {
-                    used: formatBytes(stats.bytesOnDisk),
-                    max: formatBytes(stats.maxBytes),
+                    used: formatBytes(stats.bytesOnDisk, locale),
+                    max: formatBytes(stats.maxBytes, locale),
                   })
                 : "—"}
             </span>
@@ -111,7 +111,7 @@ export function SlidesSection({ active }: { active: boolean }) {
             className="min-w-40"
             onChange={(value) => void change({ "slides.cacheMaxMb": Number(value) })}
             options={CACHE_MB_OPTIONS.map((mb) => ({
-              label: formatBytes(mb * 1024 * 1024),
+              label: formatBytes(mb * 1024 * 1024, locale),
               value: String(mb),
             }))}
             size="md"

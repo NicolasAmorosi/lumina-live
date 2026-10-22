@@ -15,6 +15,7 @@ import {
 import { cancelPrewarmBatch, deckStatuses, startPrewarmBatch } from "../../services/prewarm-service";
 import { invalidateSofficeCache, locateSoffice, type SofficeStatus } from "../../slides/libreoffice";
 import { showOpenDialogFor } from "../open-dialog";
+import { mt } from "../../i18n";
 
 function toEnvironment(status: SofficeStatus): DeckEnvironment {
   return status.available
@@ -65,7 +66,7 @@ export const slidesHandlers: Pick<
 
   "deck:locateSoffice": async (_req, ev) => {
     const result = await showOpenDialogFor(ev.sender, {
-      title: "Seleccioná el ejecutable de LibreOffice (soffice)",
+      title: mt("dialogs.chooseSoffice"),
       properties: ["openFile"],
       ...(process.platform === "darwin" ? { defaultPath: "/Applications" } : {}),
     });

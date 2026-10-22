@@ -105,10 +105,10 @@ test("a file used in a saved program is only removed after a warning naming it",
   await panel(app, "Imágenes").getByRole("button", { name: "photo" }).click();
   await panel(app, "Imágenes").getByRole("button", { name: "Quitar", exact: true }).click();
   // Refused, with a way through.
-  await toast(app, "No se puede quitar: se usa en un programa guardado.").getByRole("button", { name: "Eliminar igualmente" }).click();
-  const confirm = control.getByRole("dialog", { name: "¿Eliminar igualmente?" });
+  await toast(app, "No se puede quitar: se usa en un programa guardado.").getByRole("button", { name: "Quitar igualmente" }).click();
+  const confirm = control.getByRole("dialog", { name: "¿Quitar igualmente?" });
   await expect(confirm).toContainText("Culto del sábado");
-  await confirm.getByRole("button", { name: "Eliminar igualmente" }).click();
+  await confirm.getByRole("button", { name: "Quitar igualmente" }).click();
 
   await expect(panel(app, "Imágenes").getByRole("button", { name: "photo" })).toHaveCount(0);
   await expect(control.getByText("Programa vacío")).toBeVisible();

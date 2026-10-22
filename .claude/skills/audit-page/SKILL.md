@@ -124,7 +124,7 @@ For each user-facing action in the feature, confirm:
   — if a genuinely new primitive is needed, confirm it was added to `components/ui/` (not
   inlined in the feature) and exported from `components/ui/index.ts`.
 - All UI copy goes through `useT()` against `lib/i18n/messages/es.ts` — flag any hardcoded
-  Spanish string in a `.tsx` file. Spanish copy is consistent in tone/casing with the rest of the
+  string in a `.tsx` file, and any key added to `es.ts` without its `en`/`it`/`pt` counterpart. Spanish copy is consistent in tone/casing with the rest of the
   UI (e.g. `EN VIVO`, `NEGRO`, `LOGO` are all-caps action verbs; labels are sentence case).
 - Both themes render correctly — spot-check the feature with `data-theme="light"` and
   `data-theme="dark"` on `<html>` (devtools), since a semantic-token violation often only shows

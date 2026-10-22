@@ -7,6 +7,7 @@ import { parseOsis } from "./osis";
 import { parseUsfx } from "./usfx";
 import { parseZefania } from "./zefania";
 import { BibleFormatError, type ParsedBible } from "./types";
+import { mt } from "../../../i18n";
 
 export { BibleFormatError };
 export type { ParsedBible, ParsedBook, ParsedVerse } from "./types";
@@ -14,22 +15,21 @@ export type { ParsedBible, ParsedBook, ParsedVerse } from "./types";
 export type BibleFormat = "json" | "zefania" | "usfx" | "osis" | "sqlite";
 
 /**
- * The file picker's filters.
- *
- * Spanish literals, like every other dialog main opens: main has no `i18n`
- * dictionary, for the same reason the seeded scene names are Spanish data
- * rather than message keys. Electron matches on the LAST extension, so
+ * The file picker's filters — a function because their names are in the
+ * interface language of the moment. Electron matches on the LAST extension, so
  * `mybible` covers the `.bbl.mybible` that MySword actually writes.
  */
-export const BIBLE_IMPORT_FILTERS: { name: string; extensions: string[] }[] = [
-  {
-    name: "Biblias",
-    extensions: ["json", "xml", "zip", "sqlite3", "sqlite", "mybible", "bbl", "db", "usfx", "osis"],
-  },
-  { name: "JSON", extensions: ["json"] },
-  { name: "XML (Zefania, USFX, OSIS)", extensions: ["xml", "usfx", "osis", "zip"] },
-  { name: "Módulos SQLite (MyBible, MySword)", extensions: ["sqlite3", "sqlite", "mybible", "bbl", "db"] },
-];
+export function bibleImportFilters(): { name: string; extensions: string[] }[] {
+  return [
+    {
+      name: mt("filters.bibles"),
+      extensions: ["json", "xml", "zip", "sqlite3", "sqlite", "mybible", "bbl", "db", "usfx", "osis"],
+    },
+    { name: "JSON", extensions: ["json"] },
+    { name: "XML (Zefania, USFX, OSIS)", extensions: ["xml", "usfx", "osis", "zip"] },
+    { name: mt("filters.sqliteModules"), extensions: ["sqlite3", "sqlite", "mybible", "bbl", "db"] },
+  ];
+}
 
 /** `SQLite format 3\0`. */
 const SQLITE_MAGIC = Buffer.from("53514c69746520666f726d6174203300", "hex");
@@ -79,9 +79,7 @@ function detectTextFormat(head: string, filePath: string): BibleFormat {
   if (/<\s*XMLBIBLE/i.test(text)) return "zefania";
   if (/<\s*usfx/i.test(text)) return "usfx";
   if (/<\s*osis(Text)?[\s>]/i.test(text)) return "osis";
-  throw new BibleFormatError(
-    `No se reconoce el formato de «${path.basename(filePath)}». Se aceptan JSON, Zefania/USFX/OSIS XML y módulos SQLite (MyBible, MySword).`,
-  );
+  throw new BibleFormatError(mt("bible.unknownFormat", { file: path.basename(filePath) }));
 }
 
 /**
@@ -97,13 +95,13 @@ function extractFromZip(filePath: string): Buffer {
   try {
     entries = readZipEntries(filePath, (name) => /\.(xml|json|usfx|osis)$/i.test(name));
   } catch (error) {
-    if (error instanceof ZipFormatError) throw new BibleFormatError(`El archivo .zip no se pudo leer: ${error.message}`);
+    if (error instanceof ZipFormatError) throw new BibleFormatError(mt("bible.zipUnreadable", { detail: error.message }));
     throw error;
   }
   // Largest wins: a module zip regularly carries a readme or a licence
   // alongside the bible, and the bible is never the smaller of the two.
   const best = Object.values(entries).sort((a, b) => b.length - a.length)[0];
-  if (!best) throw new BibleFormatError("El .zip no contiene ningún archivo XML o JSON.");
+  if (!best) throw new BibleFormatError(mt("bible.zipEmpty"));
   return Buffer.from(best);
 }
 

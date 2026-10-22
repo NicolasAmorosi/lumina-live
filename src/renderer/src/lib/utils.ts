@@ -77,8 +77,8 @@ export function formatClock(totalSeconds: number): string {
 
 /** Disk sizes for the operator, not for a log: one decimal, binary units, and
  *  the unit picked from the magnitude — a slide cache is quoted in GB, one
- *  deck in MB. Locale-formatted, so the decimal separator is the comma the
- *  rest of the Spanish UI uses. */
+ *  deck in MB. Locale-formatted: the decimal separator is the interface
+ *  language's (a comma in Spanish, a point in English). */
 export function formatBytes(bytes: number, locale = "es"): string {
   const units = ["B", "kB", "MB", "GB", "TB"] as const;
   let value = Math.max(0, bytes);

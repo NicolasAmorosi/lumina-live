@@ -22,9 +22,14 @@ Es el sucesor directo de la versión vanilla JS de este mismo repo (retirada el
 
 - **Responde al usuario en ESPAÑOL.** El usuario trabaja en español.
 - **Todo el código, comentarios y nombres en INGLÉS.** Sin excepciones.
-- **La UI tiene i18n desde el arranque**, con `es` como único diccionario e idioma por defecto
-  (`src/renderer/src/lib/i18n/`). Los textos de UI van siempre a través de `useT()` — nunca
-  hardcodeados en un componente — aunque hoy solo exista el diccionario español.
+- **La UI está en español, inglés, italiano y portugués de Brasil** (2026-10-22). `es` es la
+  referencia: los diccionarios `en`/`it`/`pt` tienen su tipo (`Messages`), así que una clave que
+  falta o sobra en cualquiera no compila. Los textos de UI van siempre a través de `useT()`
+  (`src/renderer/src/lib/i18n/`), nunca hardcodeados; **un texto nuevo va en los cuatro
+  diccionarios en el mismo cambio**. Lo que dice main (menú, diálogos, errores que llegan a un
+  toast) va por `mt()` y su propio diccionario (`src/main/i18n/`), que sigue al idioma elegido.
+  Una instalación nueva arranca en el idioma del sistema operativo (`--lang` manda, así la suite
+  E2E fija español); una existente conserva el suyo.
 - **No crees archivos de documentación (`.md`, README, docs) salvo que se pidan explícitamente.**
 - Sé conciso. Da código directo, sin relleno.
 
@@ -312,7 +317,7 @@ npm install              # instala deps — better-sqlite3 trae binarios precomp
 npm run dev               # electron-vite dev (HMR en renderer, restart de main en watch)
 npm run typecheck          # tsc --noEmit sobre node (main+preload+shared) y web (renderer+shared)
 npm run lint                # eslint .
-npm run test                 # vitest run — 398 casos en dos proyectos: `main` (Node: migraciones, seed,
+npm run test                 # vitest run — 402 casos en dos proyectos: `main` (Node: migraciones, seed,
                               #   FTS5, repos y el barrido de la biblioteca, borrador, validadores de settings y de escena, respaldo WAL,
                               #   zip reader, audio vinculado, urls, prune del historial, funciones de tiempo,
                               #   arrastre de una cuenta regresiva, escenas de tiempo como ítem del orden de culto,
@@ -326,7 +331,7 @@ npm run test                 # vitest run — 398 casos en dos proyectos: `main`
                               #   fotograma congelado, store de toasts, utils). Nada importa `electron`: ese es
                               #   el límite del suite
 npm run test:watch            # el mismo suite en watch, mientras se toca un módulo
-npm run test:e2e              # build + Playwright: 100 recorridos de la app real (~6 min) con un perfil
+npm run test:e2e              # build + Playwright: 101 recorridos de la app real (~6 min) con un perfil
                               #   descartable y medios generados al vuelo con el FFmpeg empaquetado (videos, AVI,
                               #   WMA, PDF, y .pptx con auto-avance y con un WMV embebido si hay LibreOffice): en
                               #   vivo, biblioteca, LOGO, decks, Biblia, Funciones, programas, teclado, Ajustes,

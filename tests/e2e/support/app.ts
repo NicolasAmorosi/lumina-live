@@ -24,6 +24,10 @@ const FLAGS = [
   "--disable-backgrounding-occluded-windows",
   "--disable-renderer-backgrounding",
   "--disable-background-timer-throttling",
+  // Every test starts a new profile, and a new profile starts in the OS's
+  // language (`main/i18n/system-locale.ts`): pinned, so the suite reads the
+  // same Spanish on any machine.
+  "--lang=es",
 ];
 
 /** What the renderer's global handlers log before showing the "error

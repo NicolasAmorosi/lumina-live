@@ -9,6 +9,7 @@ import { importPaths } from "../../services/library-import";
 import { broadcast } from "../../services/broadcast";
 import { notifyMediaChanged } from "../../media/conversion-service";
 import { showOpenDialogFor } from "../open-dialog";
+import { mt } from "../../i18n";
 
 /** What a deck's linked soundtrack may be. Narrower than `ASSET_EXTENSIONS.audio`
  *  on purpose: `worship://linked-audio/<id>` serves the file itself, so only the
@@ -75,11 +76,11 @@ export const libraryHandlers: Pick<
     if (!ASSET_EXTENSIONS[asset.kind].includes(ext)) {
       throw new IpcError({
         code: "INVALID_ASSET_FILE",
-        message: "El archivo elegido no es del mismo tipo que el original.",
+        message: mt("library.relocateKindMismatch"),
       });
     }
     if (!fs.existsSync(chosen)) {
-      throw new IpcError({ code: "SOURCE_MISSING", message: "El archivo elegido ya no existe." });
+      throw new IpcError({ code: "SOURCE_MISSING", message: mt("library.relocateMissing") });
     }
 
     const relocated = getMediaRepo().relocate(id, chosen);
@@ -95,13 +96,13 @@ export const libraryHandlers: Pick<
   "library:setLinkedAudio": ({ id, path: audioPath }) => {
     if (audioPath !== null) {
       if (!fs.existsSync(audioPath)) {
-        throw new IpcError({ code: "SOURCE_MISSING", message: "El archivo de audio no existe." });
+        throw new IpcError({ code: "SOURCE_MISSING", message: mt("library.audioMissing") });
       }
       const ext = path.extname(audioPath).replace(/^\./, "").toLowerCase();
       if (!LINKABLE_AUDIO_EXTENSIONS.has(ext)) {
         throw new IpcError({
           code: "INVALID_AUDIO_FILE",
-          message: "El archivo elegido no es un audio soportado.",
+          message: mt("library.audioUnsupported"),
         });
       }
     }
@@ -120,7 +121,7 @@ export const libraryHandlers: Pick<
       // Not `[]`: an unplugged USB stick, or one that came back as F: instead
       // of E:, looked exactly like an empty folder, with nothing to say the
       // folder itself was gone.
-      throw new IpcError({ code: "FOLDER_MISSING", message: "La carpeta no está disponible." });
+      throw new IpcError({ code: "FOLDER_MISSING", message: mt("library.folderMissing") });
     }
     const extensions = new Set<string>(ASSET_EXTENSIONS[kind]);
     const matched = entries

@@ -2,6 +2,8 @@ import type { Handlers } from "../register";
 import { getSettingsRepo } from "../../services/repos";
 import { IpcError } from "@shared/ipc/result";
 import { SETTINGS_VALIDATORS, isSettingsKey, type SettingsMap } from "@shared/types/settings";
+import { setMainLocale } from "../../i18n";
+import { installApplicationMenu } from "../../windows/app-menu";
 
 /**
  * The IPC contract is a compile-time guarantee, and this is the one channel
@@ -35,5 +37,10 @@ export const settingsHandlers: Pick<Handlers, "settings:get" | "settings:set"> =
   "settings:set": (partial) => {
     assertValidSettings(partial);
     getSettingsRepo().setMany(partial);
+    // Main speaks the interface language too: its menu, dialogs and errors.
+    if (partial["ui.locale"]) {
+      setMainLocale(partial["ui.locale"]);
+      installApplicationMenu();
+    }
   },
 };

@@ -20,7 +20,8 @@ Abrir carpeta de registros).
 
 - Código, comentarios, nombres y mensajes de commit en **inglés**; documentación en español.
 - Ningún texto de la interfaz va escrito en un componente: todo pasa por `useT()` y
-  `src/renderer/src/lib/i18n/`.
+  `src/renderer/src/lib/i18n/`. Un texto nuevo va en los cuatro diccionarios (`es`, `en`, `it`,
+  `pt`); si no hablás alguno de esos idiomas, decilo en el PR.
 - Ningún color, sombra o radio a mano: se usan las primitivas de `components/ui/` y los tokens de
   `styles/globals.css`.
 - Commits con [Conventional Commits](https://www.conventionalcommits.org/) (`fix(bible): …`).

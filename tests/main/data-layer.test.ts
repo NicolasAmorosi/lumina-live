@@ -37,7 +37,8 @@ import { backfillDeckTimings } from "../../src/main/slides/backfill-timings";
 import { SNIPPET_MARK_END, SNIPPET_MARK_START, parseSnippet } from "../../src/shared/types/bible";
 import { DEFAULT_SETTINGS, SETTINGS_VALIDATORS, isSettingsKey } from "../../src/shared/types/settings";
 import { BUILTIN_BIBLE_CODE, SLIDES_CONVERTER_VERSION } from "../../src/shared/constants";
-import { DEFAULT_UTILITY_SCENES } from "../../src/shared/types/utility";
+import { defaultUtilityScenes } from "../../src/shared/types/utility";
+import mainEs from "../../src/main/i18n/messages/es";
 import { removeUtilityScene } from "../../src/main/services/utility-scene-removal";
 import { removeOverlayPlate } from "../../src/main/services/overlay-plate-removal";
 import { DEFAULT_PLATE_STYLE, type Plate } from "../../src/shared/types/overlay";
@@ -46,6 +47,8 @@ import type { UtilityScene } from "../../src/shared/types/utility";
 import { buildLegacyPpt } from "../fixtures/legacy-ppt";
 import type { ProgramSummary } from "../../src/shared/types/program";
 import type { MediaAsset } from "../../src/shared/types/media";
+
+const DEFAULT_UTILITY_SCENES = defaultUtilityScenes(mainEs.seed);
 
 /** Keeps the original script's one-line diagnostics: every message below says
  *  what the invariant is, which is worth more on a failure than a diff. */

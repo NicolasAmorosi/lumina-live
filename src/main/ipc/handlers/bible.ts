@@ -3,12 +3,13 @@ import path from "node:path";
 import type { Handlers } from "../register";
 import { getBibleRepo, getProgramsRepo, getSettingsRepo } from "../../services/repos";
 import { seedBibleFromFile } from "../../db/seed/seed-bible";
-import { BIBLE_IMPORT_FILTERS } from "../../db/seed/bible-formats";
+import { bibleImportFilters } from "../../db/seed/bible-formats";
 import { IpcError } from "@shared/ipc/result";
 import { isBibleVersionName } from "@shared/types/bible";
 import type { Db } from "../../db/client";
 import type Database from "better-sqlite3";
 import { showOpenDialogFor } from "../open-dialog";
+import { mt } from "../../i18n";
 
 let dbRef: { db: Db; sqlite: Database.Database } | null = null;
 export function setBibleDb(db: Db, sqlite: Database.Database): void {
@@ -35,7 +36,7 @@ export const bibleHandlers: Pick<
   "bible:import": async (_req, ev) => {
     const result = await showOpenDialogFor(ev.sender, {
       properties: ["openFile"],
-      filters: BIBLE_IMPORT_FILTERS,
+      filters: bibleImportFilters(),
     });
     if (result.canceled || result.filePaths.length === 0 || !dbRef) return null;
 
@@ -52,7 +53,7 @@ export const bibleHandlers: Pick<
 
   "bible:rename": ({ id, name }) => {
     if (!isBibleVersionName(name)) {
-      throw new IpcError({ code: "INVALID_BIBLE_VERSION_NAME", message: "El nombre de la versión no es válido." });
+      throw new IpcError({ code: "INVALID_BIBLE_VERSION_NAME", message: mt("bible.invalidName") });
     }
     const renamed = getBibleRepo().renameVersion(id, name.trim());
     if (!renamed) throw new IpcError({ code: "BIBLE_VERSION_NOT_FOUND", message: `Bible version ${id} not found` });

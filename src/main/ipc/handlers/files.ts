@@ -6,12 +6,22 @@ import { systemMediaFolder } from "../../paths";
 import { getSettingsRepo } from "../../services/repos";
 import { showOpenDialogFor } from "../open-dialog";
 import { canDecodeImage } from "../../media/thumbnail-service";
+import { mt, type MainMessageKey } from "../../i18n";
+
+const FILTER_NAME_KEYS = {
+  all: "filters.all",
+  video: "filters.video",
+  image: "filters.image",
+  audio: "filters.audio",
+  ppt: "filters.ppt",
+} as const satisfies Record<AssetKind | "all", MainMessageKey>;
 
 function filtersFor(kind: AssetKind | "all") {
+  const name = mt(FILTER_NAME_KEYS[kind]);
   if (kind === "all") {
-    return [{ name: "all", extensions: ASSET_KINDS.flatMap((k) => [...ASSET_EXTENSIONS[k]]) }];
+    return [{ name, extensions: ASSET_KINDS.flatMap((k) => [...ASSET_EXTENSIONS[k]]) }];
   }
-  return [{ name: kind, extensions: [...ASSET_EXTENSIONS[kind]] }];
+  return [{ name, extensions: [...ASSET_EXTENSIONS[kind]] }];
 }
 
 function isDirectory(candidate: string): boolean {
@@ -85,7 +95,7 @@ export const filesHandlers: Pick<
     const defaultPath = defaultFolderFor("image");
     const result = await showOpenDialogFor(ev.sender, {
       properties: ["openFile"],
-      filters: [{ name: "Imagen", extensions: [...ASSET_EXTENSIONS.image] }],
+      filters: [{ name: mt("filters.image"), extensions: [...ASSET_EXTENSIONS.image] }],
       ...(defaultPath ? { defaultPath } : {}),
     });
     if (result.canceled || result.filePaths.length === 0) return getSettingsRepo().get("logo.path");

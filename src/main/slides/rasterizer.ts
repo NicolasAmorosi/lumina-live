@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { SLIDES_RASTER_PAGE_TIMEOUT_MS, SLIDES_THUMB_WIDTH } from "@shared/constants";
 import { SlideError } from "./errors";
 import { trustWindow } from "../ipc/trusted-senders";
+import { mt } from "../i18n";
 
 const PRELOAD = path.join(__dirname, "../preload/index.js");
 const IDLE_SHUTDOWN_MS = 60_000;
@@ -218,7 +219,7 @@ export async function rasterizePdf(request: RasterRequest): Promise<RasterPage[]
       if (!win.isDestroyed()) win.destroy();
       finish(() =>
         reject(
-          new SlideError("RASTER_FAILED", "El proceso de rasterizado se cerró inesperadamente."),
+          new SlideError("RASTER_FAILED", mt("slides.rasterCrashed")),
         ),
       );
     };
@@ -256,12 +257,12 @@ export async function rasterizePdf(request: RasterRequest): Promise<RasterPage[]
     const armPageTimer = () => {
       if (pageTimer) clearTimeout(pageTimer);
       pageTimer = setTimeout(
-        () => abandon(new SlideError("RASTER_FAILED", "El rasterizado de una página se colgó.")),
+        () => abandon(new SlideError("RASTER_FAILED", mt("slides.rasterHung"))),
         SLIDES_RASTER_PAGE_TIMEOUT_MS,
       );
     };
 
-    const onAbort = () => abandon(new SlideError("CANCELED", "Conversión cancelada."));
+    const onAbort = () => abandon(new SlideError("CANCELED", mt("slides.canceled")));
 
     jobs.set(jobId, {
       onPage: (payload) => {
@@ -299,7 +300,7 @@ export async function rasterizePdf(request: RasterRequest): Promise<RasterPage[]
             payload.kind === "password"
               ? new SlideError(
                   "PDF_PASSWORD",
-                  "El PDF está protegido con contraseña y no se puede convertir.",
+                  mt("slides.pdfPassword"),
                 )
               : new SlideError("RASTER_FAILED", payload.message),
           ),

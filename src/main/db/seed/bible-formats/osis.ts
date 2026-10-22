@@ -2,6 +2,7 @@ import { canonByStandardCode, type CanonBook } from "./canon";
 import { normalizeLanguage } from "./language";
 import { BibleFormatError, BookCollector, type ParsedBible } from "./types";
 import { leadingNumber, walkXml } from "./xml-ordered";
+import { mt } from "../../../i18n";
 
 /**
  * OSIS — the CrossWire/SWORD standard, and the format most public-domain
@@ -152,6 +153,6 @@ export function parseOsis(xml: string): ParsedBible {
     },
   });
 
-  if (!sawOsis) throw new BibleFormatError("El XML no es una Biblia OSIS: falta el elemento <osis>.");
-  return { name: null, language, books: collector.finish() };
+  if (!sawOsis) throw new BibleFormatError(mt("bible.notOsis"));
+  return { name: null, language, books: collector.finish(language) };
 }

@@ -1,58 +1,24 @@
 import { createContext, useContext, useMemo, type ReactNode } from "react";
 import type { Locale } from "@shared/types/settings";
+import { interpolate, resolveKey, type MessagePaths, type TParams } from "@shared/i18n";
 import { useSettingsStore } from "@renderer/stores/settings.store";
 import es from "./messages/es";
+import en from "./messages/en";
+import it from "./messages/it";
+import pt from "./messages/pt";
 import type { Messages } from "./messages/es";
 
-const dictionaries: Partial<Record<Locale, Messages>> = { es };
+/** Typed over every `Locale`: a locale added to `LOCALES` without its
+ *  dictionary is a compile error here, not a silent fallback to Spanish. */
+const dictionaries: Record<Locale, Messages> = { es, en, it, pt };
 
-/** Locales that actually have a dictionary — what the language picker offers.
- *  Dropping in `it.ts`/`en.ts` here (and adding it to `dictionaries` above)
- *  is the whole change needed for a new option to appear. */
+/** What the language picker offers. */
 export const availableLocales = Object.keys(dictionaries) as Locale[];
 
-/**
- * Every dotted path in the dictionary, as a union.
- *
- * `t()` used to take any `string`: a typo rendered the raw key on screen —
- * "settings.logoDesc" in the middle of a panel — and nothing failed until an
- * operator saw it. With this, a key that does not exist is a compile error.
- *
- * It follows that a key can never be built from a runtime value: the four
- * places that used to interpolate one (`settings.transitionDurationOptions`,
- * `settings.slidesImageFormats` and `library.${kind}s` twice) hold explicit
- * `Record`s at their call sites instead, which is what makes their targets
- * reachable for this type — and for the unused-key sweep.
- */
+/** Every key of the dictionary — see `MessagePaths`. */
 export type MessageKey = MessagePaths<Messages>;
 
-type MessagePaths<T> = {
-  [K in keyof T & string]: T[K] extends string ? K : `${K}.${MessagePaths<T[K]>}`;
-}[keyof T & string];
-
-function resolveKey(messages: Messages, key: string): string {
-  const parts = key.split(".");
-  let node: unknown = messages;
-  for (const part of parts) {
-    if (node && typeof node === "object" && part in node) {
-      node = (node as Record<string, unknown>)[part];
-    } else {
-      return key;
-    }
-  }
-  return typeof node === "string" ? node : key;
-}
-
-export type TParams = Record<string, string | number>;
-
-/** `{name}` placeholders, filled only when params are passed — the ~40
- *  existing call sites that pass none are unaffected. */
-function interpolate(template: string, params?: TParams): string {
-  if (!params) return template;
-  return template.replace(/\{(\w+)\}/g, (match, key: string) =>
-    key in params ? String(params[key]) : match,
-  );
-}
+export type { TParams };
 
 export type Translate = (key: MessageKey, params?: TParams) => string;
 
@@ -61,10 +27,10 @@ const I18nContext = createContext<I18nContextValue | null>(null);
 
 export function I18nProvider({ children, locale }: { children: ReactNode; locale: Locale }) {
   const value = useMemo<I18nContextValue>(() => {
-    const messages = dictionaries[locale] ?? es;
+    const messages = dictionaries[locale];
     return {
       locale,
-      t: (key: MessageKey, params?: TParams) => interpolate(resolveKey(messages, key), params),
+      t: (key: MessageKey, params?: TParams) => interpolate(resolveKey(messages, key), params, locale),
     };
   }, [locale]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
@@ -86,6 +52,5 @@ export function useT(): Translate {
  *  from context, since there's no component tree to read it from. */
 export function t(key: MessageKey, params?: TParams): string {
   const locale = useSettingsStore.getState().settings["ui.locale"];
-  const messages = dictionaries[locale] ?? es;
-  return interpolate(resolveKey(messages, key), params);
+  return interpolate(resolveKey(dictionaries[locale], key), params, locale);
 }

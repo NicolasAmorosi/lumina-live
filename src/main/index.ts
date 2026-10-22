@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog } from "electron";
+import fs from "node:fs";
 import path from "node:path";
 import { registerWorshipScheme, registerWorshipProtocolHandler } from "./protocol/worship-protocol";
 import { openDatabase } from "./db/client";
@@ -25,7 +26,17 @@ import { installApplicationMenu } from "./windows/app-menu";
 import { holdQuitUntilAnswered, installCloseGuard } from "./windows/close-guard";
 import { watchDisplays } from "./windows/projector-screen";
 import { projectionState } from "./services/projection-state";
-import { dbBackupDir, dbPath, biblesDir, migrationsDir, userDataDir } from "./paths";
+import {
+  dbBackupDir,
+  dbPath,
+  biblesDir,
+  legacyMediaLibraryPath,
+  legacySettingsPath,
+  migrationsDir,
+  userDataDir,
+} from "./paths";
+import { mt, setMainLocale } from "./i18n";
+import { systemLocale } from "./i18n/system-locale";
 import { initSlidesSubsystem, shutdownSlides } from "./slides/deck-service";
 import { cancelAllPrewarmBatches } from "./services/prewarm-service";
 import { isRasterizerWindow } from "./slides/rasterizer";
@@ -71,6 +82,13 @@ if (!gotSingleInstanceLock) {
 }
 
 function initDatabase(): void {
+  // Asked before `openDatabase` creates the file. A profile holding the legacy
+  // app's data is not new either: that church has always run in Spanish.
+  const isNewProfile = ![dbPath, legacySettingsPath, legacyMediaLibraryPath].some((file) => fs.existsSync(file));
+  // Until the settings can be read, main speaks the OS's language — the
+  // migration-failure dialog below is said before they can.
+  setMainLocale(systemLocale());
+
   // Kept and reported rather than assumed: the error box below used to promise
   // a backup unconditionally, which on the one morning it matters sends the
   // operator looking for a file that may not be there.
@@ -83,12 +101,12 @@ function initDatabase(): void {
     runMigrations(db, migrationsDir);
   } catch (error) {
     dialog.showErrorBox(
-      "Error al iniciar la base de datos",
+      mt("dialogs.dbErrorTitle"),
       [
-        "No se pudieron aplicar las migraciones.",
+        mt("dialogs.dbErrorMigrations"),
         backup.status === "ok"
-          ? `Se conservó una copia de seguridad verificada en\n${backup.path}`
-          : "No hay una copia de seguridad previa a esta migración.",
+          ? mt("dialogs.dbErrorBackup", { path: backup.path })
+          : mt("dialogs.dbErrorNoBackup"),
         String(error),
       ].join("\n\n"),
     );
@@ -98,6 +116,11 @@ function initDatabase(): void {
   }
 
   initRepos(db, sqlite);
+  // A new install starts in the OS's language; every other one keeps its own,
+  // which is Spanish unless the operator changed it. Before the seeds: the
+  // example time scenes are written in it.
+  if (isNewProfile) getSettingsRepo().setMany({ "ui.locale": systemLocale() });
+  setMainLocale(getSettingsRepo().get("ui.locale"));
   setBibleDb(db, sqlite);
   // After `initRepos` now, and for the same reason the utility seed below is:
   // it reads `bible.builtinSeeded`, which is what keeps a deleted RV1909
@@ -309,7 +332,7 @@ function reportCrash(label: string, error: unknown): void {
     return;
   }
   crashDialogShown = true;
-  dialog.showErrorBox("Error inesperado", detail);
+  dialog.showErrorBox(mt("dialogs.crashTitle"), detail);
 }
 
 // Surface crashes as a dialog instead of a silent blank window — the health

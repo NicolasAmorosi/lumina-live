@@ -65,7 +65,7 @@ test("emptying the slide cache warns about a deck on air, and a deck reconverts 
   await app.goLive();
 
   let settings = await openSettings(app, "Diapositivas");
-  await expect(settings.getByText("1 presentaciones convertidas y guardadas en disco")).toBeVisible();
+  await expect(settings.getByText("1 presentación convertida y guardada en disco")).toBeVisible();
   await settings.getByRole("button", { name: "Vaciar caché" }).click();
   const confirm = app.control.getByRole("dialog", { name: "¿Vaciar la caché de diapositivas?" });
   await expect(confirm).toContainText("Hay una presentación EN VIVO");

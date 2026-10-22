@@ -6,8 +6,8 @@ mirás la vista previa y recién ahí lo mandás EN VIVO.
 
 ![La ventana de control de Lumina Live: el programa del culto a la izquierda, la vista previa en el centro y lo que está en el proyector a la derecha](docs/screenshots/control-dark.webp)
 
-> *Free and open-source church presentation software for Windows, macOS and Linux. The interface is
-> Spanish-only for now; translations are welcome.*
+> *Free and open-source church presentation software for Windows, macOS and Linux, in English,
+> Spanish, Italian and Portuguese.*
 
 ## Qué hace
 
@@ -23,6 +23,8 @@ mirás la vista previa y recién ahí lo mandás EN VIVO.
 - **Pensada para un culto en vivo:** si se desconecta el proyector, la imagen vuelve sola cuando
   se reconecta; el orden de culto se guarda solo; cerrar la app por accidente pregunta antes.
 - Programas guardados, biblioteca de medios, tema claro y oscuro.
+- **En español, inglés, italiano y portugués.** La primera vez arranca en el idioma de la
+  computadora; se cambia en Configuración › Sistema.
 
 ## Descargar
 

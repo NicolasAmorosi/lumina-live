@@ -2,6 +2,7 @@ import { canonByStandardCode, type CanonBook } from "./canon";
 import { normalizeLanguage } from "./language";
 import { BibleFormatError, BookCollector, type ParsedBible } from "./types";
 import { leadingNumber, walkXml } from "./xml-ordered";
+import { mt } from "../../../i18n";
 
 /**
  * USFX — the single-file XML that eBible.org publishes its whole catalogue in
@@ -144,6 +145,6 @@ export function parseUsfx(xml: string): ParsedBible {
     },
   });
 
-  if (!sawUsfx) throw new BibleFormatError("El XML no es una Biblia USFX: falta el elemento <usfx>.");
-  return { name: null, language, books: collector.finish() };
+  if (!sawUsfx) throw new BibleFormatError(mt("bible.notUsfx"));
+  return { name: null, language, books: collector.finish(language) };
 }

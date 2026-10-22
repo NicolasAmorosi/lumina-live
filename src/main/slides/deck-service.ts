@@ -39,6 +39,7 @@ import { rasterizePdf, shutdownRasterizer } from "./rasterizer";
 import { hashFile } from "../media/content-hash";
 import { healDeckClips } from "../media/deck-clips";
 import { removeQuietly, renameWithRetry } from "../fs-retry";
+import { mt } from "../i18n";
 
 // ---------------------------------------------------------------------------
 // Render target
@@ -90,7 +91,7 @@ function assertFreeSpace(sourceSize: number): void {
     if (free < required) {
       throw new SlideError(
         "DISK_FULL",
-        "No hay suficiente espacio en disco para convertir la presentación.",
+        mt("slides.diskFull"),
       );
     }
   } catch (error) {
@@ -410,7 +411,7 @@ async function pump(): Promise<void> {
  *  interactive queue if still waiting, or left running but now immune to
  *  preemption if it already started. */
 export function prepareDeck(assetId: number, opts: PrepareOptions = {}): Promise<DeckDTO> {
-  if (shuttingDown) return Promise.reject(new SlideError("CANCELED", "La aplicación se está cerrando."));
+  if (shuttingDown) return Promise.reject(new SlideError("CANCELED", mt("slides.shuttingDown")));
   const priority = opts.priority ?? "interactive";
 
   // Checked before anything else, even before `inFlight`: a deck that's
@@ -529,7 +530,7 @@ export function setVisiblePrewarm(assetIds: readonly number[]): void {
     const job = lane[i]!;
     if (wanted.has(job.assetId)) continue;
     lane.splice(i, 1);
-    settleCanceledJob(job, "Ya no está visible.");
+    settleCanceledJob(job, mt("slides.noLongerVisible"));
   }
   const statuses = getSlidesRepo().statusesByAsset(assetIds);
   for (const assetId of assetIds) {
@@ -551,7 +552,7 @@ export function cancelBackgroundJobs(prewarmJobId?: string): void {
     if (!matches(job)) continue;
     removeFromBackground(job);
     job.controller.abort();
-    settleCanceledJob(job, "Preparación cancelada.");
+    settleCanceledJob(job, mt("slides.prewarmCanceled"));
   }
   if (runningJob && matches(runningJob)) {
     runningJob.preempted = false;
@@ -595,7 +596,7 @@ export function cancel(assetId: number): void {
   const wasQueued = interactiveIndex >= 0;
   if (wasQueued) interactiveQueue.splice(interactiveIndex, 1);
   if (wasQueued || removeFromBackground(job)) {
-    settleCanceledJob(job, "Conversión cancelada.");
+    settleCanceledJob(job, mt("slides.canceled"));
   }
 }
 
@@ -612,7 +613,7 @@ export function cancelAll(): void {
   batchWarmController?.abort();
   // The running job (if any) settles through `pump`; everything that never
   // started has to be settled here or its awaiter hangs forever.
-  for (const job of queued) settleCanceledJob(job, "Conversión cancelada.");
+  for (const job of queued) settleCanceledJob(job, mt("slides.canceled"));
 }
 
 // ---------------------------------------------------------------------------
@@ -874,11 +875,11 @@ async function runConversion(job: Job): Promise<DeckDTO> {
   const sourcePath = mediaRepo.getPathById(assetId);
   if (!sourcePath) {
     releaseBatchDirFor(assetId);
-    throw new SlideError("SOURCE_MISSING", "No se encontró el archivo en la biblioteca.");
+    throw new SlideError("SOURCE_MISSING", mt("slides.notInLibrary"));
   }
   if (!fs.existsSync(sourcePath)) {
     releaseBatchDirFor(assetId);
-    throw new SlideError("SOURCE_MISSING", `El archivo ya no está disponible: ${sourcePath}`);
+    throw new SlideError("SOURCE_MISSING", mt("slides.sourceGone", { path: sourcePath }));
   }
 
   const cacheHit = tryCacheHit(assetId, sourcePath, force);
@@ -994,7 +995,7 @@ async function runConversion(job: Job): Promise<DeckDTO> {
     });
 
     if (pages.length === 0) {
-      throw new SlideError("RASTER_FAILED", "La presentación no produjo ninguna diapositiva.");
+      throw new SlideError("RASTER_FAILED", mt("slides.noSlides"));
     }
 
     // LibreOffice does NOT export hidden slides to the PDF (verified against a
@@ -1165,7 +1166,7 @@ async function runConversion(job: Job): Promise<DeckDTO> {
     );
 
     const row = getSlidesRepo().getDeckById(deckId);
-    if (!row) throw new SlideError("RASTER_FAILED", "No se pudo leer el deck recién creado.");
+    if (!row) throw new SlideError("RASTER_FAILED", mt("slides.deckUnreadable"));
 
     const dto = toDeckDTO(row, assetId);
     emitProgress({ assetId, status: "ready", done: dto.slideCount, total: dto.slideCount, error: null });

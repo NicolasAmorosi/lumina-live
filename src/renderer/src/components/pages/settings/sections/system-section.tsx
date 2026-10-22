@@ -9,8 +9,9 @@ import { PerformanceDiagnostics } from "./performance-diagnostics";
 
 const LOCALE_LABEL_KEYS: Record<Locale, MessageKey> = {
   es: "settings.locales.es",
-  it: "settings.locales.it",
   en: "settings.locales.en",
+  it: "settings.locales.it",
+  pt: "settings.locales.pt",
 };
 
 const KIND_LABEL_KEYS: Record<AssetKind, MessageKey> = {

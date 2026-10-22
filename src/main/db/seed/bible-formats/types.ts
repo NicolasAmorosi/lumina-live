@@ -1,4 +1,5 @@
 import { testamentOf, type CanonBook } from "./canon";
+import { fallbackBookName } from "./book-names";
 
 export type ParsedVerse = { chapter: number; verse: number; text: string };
 
@@ -67,13 +68,15 @@ export class BookCollector {
   /** `index -> chapter -> verse -> text`. Nested Maps rather than a flat key
    *  so `chapterCount` is a `Math.max` over keys we already have instead of a
    *  second pass over every verse. */
-  private readonly books = new Map<number, { book: CanonBook; name: string; chapters: Map<number, Map<number, string>> }>();
+  private readonly books = new Map<
+    number,
+    { book: CanonBook; name: string | null; chapters: Map<number, Map<number, string>> }
+  >();
 
   /**
    * @param name The name this file gives the book, when it gives one. The
-   *   file's own wins over the canon's Spanish default: a module IS a
-   *   translation, and «Génesis» from the app's table inside an English bible
-   *   would be the app overriding the very thing the operator imported.
+   *   file's own always wins: a module IS a translation. A book left unnamed
+   *   gets the app's name for it in `finish`, once the file's language is known.
    */
   add(book: CanonBook, chapter: number, verse: number, text: string, name?: string | null): void {
     const clean = text.trim();
@@ -86,9 +89,9 @@ export class BookCollector {
 
     let entry = this.books.get(book.index);
     if (!entry) {
-      entry = { book, name: name?.trim() || book.name, chapters: new Map() };
+      entry = { book, name: name?.trim() || null, chapters: new Map() };
       this.books.set(book.index, entry);
-    } else if (entry.name === book.name && name?.trim()) {
+    } else if (entry.name === null && name?.trim()) {
       // A file that names the book somewhere after its first verse (USFX's
       // `<h>` can follow the `<c>`) still gets to name it.
       entry.name = name.trim();
@@ -113,7 +116,9 @@ export class BookCollector {
     return total;
   }
 
-  finish(): ParsedBook[] {
+  /** @param language The file's own, normalized (`ParsedBible.language`): it
+   *   picks the language of the names a book left unnamed falls back to. */
+  finish(language: string | null): ParsedBook[] {
     return [...this.books.values()]
       .sort((a, b) => a.book.index - b.book.index)
       .map(({ book, chapters, name }) => {
@@ -127,7 +132,7 @@ export class BookCollector {
         }
         return {
           abbrev: book.abbrev,
-          name,
+          name: name ?? fallbackBookName(book, language),
           testament: testamentOf(book.index),
           // The HIGHEST chapter number seen, not how many distinct ones there
           // were: a module missing a chapter in the middle must not renumber

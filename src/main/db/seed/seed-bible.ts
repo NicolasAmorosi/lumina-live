@@ -8,6 +8,7 @@ import type { SettingsRepo } from "../repositories/settings.repo";
 import { bibleBooks, bibleVersions } from "../schema";
 import { BibleFormatError, parseBibleFile } from "./bible-formats";
 import { BUILTIN_BIBLE_CODE } from "@shared/constants";
+import { mt } from "../../i18n";
 
 const BUILTIN_BIBLE_NAME = "Reina-Valera 1909";
 const BUILTIN_BIBLE_FILE = "rv1909.json";
@@ -72,9 +73,7 @@ export function seedBibleFromFile(
     // deuterocanonical books, an XML whose verses are all empty elements.
     // Refused rather than stored: a version with no verses in the list is a
     // bug report waiting to happen, and the operator can still act on this.
-    throw new BibleFormatError(
-      `«${path.basename(filePath)}» se leyó correctamente pero no contiene ningún versículo.`,
-    );
+    throw new BibleFormatError(mt("bible.noVerses", { file: path.basename(filePath) }));
   }
 
   // A re-seed KEEPS the name the row already has. The bundled bible can be
