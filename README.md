@@ -4,6 +4,8 @@
 temporizadores en una segunda pantalla, con el mismo flujo de dos pasos que EasyWorship: elegís,
 mirás la vista previa y recién ahí lo mandás EN VIVO.
 
+![La ventana de control de Lumina Live: el programa del culto a la izquierda, la vista previa en el centro y lo que está en el proyector a la derecha](docs/screenshots/control-dark.webp)
+
 > *Free and open-source church presentation software for Windows, macOS and Linux. The interface is
 > Spanish-only for now; translations are welcome.*
 

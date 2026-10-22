@@ -23,6 +23,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build && playwright test",
+    "screenshots": "npm run build && playwright test -c playwright.screenshots.config.ts",
     "db:generate": "drizzle-kit generate",
     "slides:smoke": "TSX_TSCONFIG_PATH=tsconfig.node.json tsx scripts/convert-smoke.ts",
     "fetch:ffmpeg": "tsx scripts/fetch-ffmpeg.ts",
