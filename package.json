@@ -123,6 +123,8 @@
     },
     "mac": {
       "target": "dmg",
+      "identity": "-",
+      "hardenedRuntime": false,
       "extraResources": [
         {
           "from": "resources/ffmpeg/darwin-${arch}",
