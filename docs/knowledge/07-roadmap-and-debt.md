@@ -86,11 +86,15 @@ críticos, altos y medios. Quedó abierto esto, cada cosa con su motivo:
   `#84adfc`, la cuenta regresiva en `#cd4900`/`#d0021b`): los defaults de Lumina Live solo visten lo
   que se crea desde el 2026-10-22, y las cuatro escenas de ejemplo se siembran una sola vez. Es a
   propósito —son contenido del operador—; pasarlas a la paleta nueva es editarlas a mano.
-- **Cuatro E2E fallaron una vez en la corrida completa del 2026-10-22 y pasaron solos al
+- **Cuatro E2E fallaron una vez en una corrida completa del 2026-10-22 y pasaron solos al
   repetirlos**: `bible.spec` «after clicking EN VIVO…» y «a file that is not a Bible…» (el tab de
   Ajustes se desmontaba bajo el click), `keyboard.spec` «↓ after clicking a library tile…» y
-  `logo.spec` «L covers what is live…». Corrida contra `out/`, con el i18n y el aviso de LibreOffice
-  sin commitear; no se investigó si alguno es del producto.
+  `logo.spec` «L covers what is live…». En la corrida completa siguiente (ese mismo día, todo ya
+  commiteado) pasaron los cuatro; no se investigó si alguno es del producto.
+- **El EN VIVO que abre el proyector espera a que su ventana cargue** (desde el arreglo de la
+  diapositiva 1, 2026-10-22): 0,2 s normalmente, hasta 3 s con la máquina ocupada. Una tecla pulsada
+  en ese lapso no mueve nada, porque todavía no hay nada en vivo. Antes avanzaba un deck que el
+  proyector aún no había mostrado. Si en un culto molesta, se puede encolar.
 - **Lo que la suite E2E no puede ejercitar**: soltar archivos desde Finder/Explorer
   (`getPathForFile` exige un `File` nativo), dos pantallas reales, y los diálogos nativos — esos se
   contestan reemplazando `dialog.showOpenDialog` en main (`answerOpenDialog`), así que el botón y todo
@@ -108,8 +112,13 @@ se empaqueta**: la app lo detecta en el sistema (con override manual en `slides.
 si falta, avisa y traba solo convertir PowerPoint; los PDF, los decks ya convertidos y todo lo
 demás siguen andando — ver «Sin LibreOffice» en `03-slides-libreoffice.md`.
 
-**Linux nunca se empaquetó ni se probó**: `release/` solo tiene el `.exe` y el `.dmg`, aunque el
-README y la landing ofrecen un AppImage.
+**Linux se empaquetó y probó por primera vez el 2026-10-22**, en Docker (Ubuntu 24.04 x86_64
+emulado): arranca, convierte con el LibreOffice del sistema y pasa `startup.spec` y `decks.spec`;
+el resto de la suite no se corrió ahí. Abierto: sin espacios de nombres de usuario el sandbox de
+Chromium aborta («The SUID sandbox helper binary was found, but is not configured correctly»), y
+Ubuntu 23.10+ los restringe por AppArmor, así que un doble click en el AppImage probablemente falle
+en un Ubuntu de escritorio. Las salidas son un `.deb` (instala `chrome-sandbox` con permisos de
+root) o documentar `--no-sandbox`; es decisión del dueño.
 
 Verificado en macOS contra decks reales de iglesia, incluyendo un `.ppt` binario de 52
 diapositivas y un fixture con auto-avance + audio embebido. `legacy/` se retiró del repo el
