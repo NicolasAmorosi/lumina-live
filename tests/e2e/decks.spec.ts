@@ -320,14 +320,28 @@ test("without LibreOffice: warned at launch, a PowerPoint is gated, a PDF still 
   await again.goLive();
   await expect.poll(async () => projectedSlide(await again.projector())).toBe(1);
 
-  // Silenced from the strip, and it stays silenced.
+  // Silenced from the strip — the launch toast saying the same goes with it —
+  // and it stays silenced.
   await tab.getByRole("button", { name: "No volver a mostrar" }).click();
   await expect(tab.getByText("Los PowerPoint sin convertir no se pueden abrir")).toHaveCount(0);
+  await expect(toast(again, "no se pueden convertir presentaciones de PowerPoint")).toHaveCount(0);
   await again.quit();
   const third = await relaunch(again);
   await third.openResources("Media", "Presentaciones");
   await expect(third.control.getByText("Los PowerPoint sin convertir no se pueden abrir")).toHaveCount(0);
   await expect(toast(third, "no se pueden convertir presentaciones de PowerPoint")).toHaveCount(0);
+
+  // Installed while the app is open (here: the bad override goes away), found
+  // by «Comprobar de nuevo» without a restart. Only where there is one to find.
+  if (!hasHymn()) return;
+  await third.invoke("settings:set", { "slides.sofficePath": null });
+  await third.control.getByRole("button", { name: "Configuración" }).click();
+  const settings = third.control.getByRole("dialog", { name: "Configuración" });
+  await settings.getByRole("tab", { name: "Diapositivas" }).click();
+  await expect(settings.getByText("No disponible", { exact: true })).toBeVisible();
+  await settings.getByRole("button", { name: "Comprobar de nuevo" }).click();
+  await expect(toast(third, "está listo")).toBeVisible();
+  await expect(settings.getByText(/^Versión \d/)).toBeVisible();
 });
 
 test("a deck edited on disk is converted again the next time it is opened", async ({ app }) => {

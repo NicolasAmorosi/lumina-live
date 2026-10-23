@@ -10,17 +10,30 @@ import { useSettingsStore } from "@renderer/stores/settings.store";
 export async function recheckSoffice(): Promise<void> {
   await useDeckStore.getState().loadEnvironment(true);
   const environment = useDeckStore.getState().environment;
-  if (environment?.available) toast.success(t("deck.noLibreOffice.found", { version: environment.version ?? "" }));
-  else toast.warning(environment?.message ?? t("deck.noLibreOffice.title"));
+  if (environment?.available) {
+    retireStartupToast();
+    toast.success(t("deck.noLibreOffice.found", { version: environment.version ?? "" }));
+  } else toast.warning(environment?.message ?? t("deck.noLibreOffice.title"));
 }
 
 export function silenceSofficeWarning(): Promise<void> {
+  retireStartupToast();
   return useSettingsStore.getState().update({ "slides.warnMissingSoffice": false });
 }
 
 /** Once per process: StrictMode runs the boot effect twice in development,
  *  which is how the draft-restored toast came out doubled (see `App`). */
 let announced = false;
+/** The launch warning while it may still be on screen. */
+let startupToastId: string | null = null;
+
+/** It carries an action, so it never leaves on its own: it stayed up saying
+ *  «no está disponible» beside «está listo», and after «No volver a mostrar»
+ *  was pressed on the PPT tab's strip. */
+function retireStartupToast(): void {
+  if (startupToastId) toast.dismiss(startupToastId);
+  startupToastId = null;
+}
 
 /** The launch-time warning, which also loads the answer every deck gate reads.
  *  Run after the settings are loaded: it reads the operator's choice to
@@ -30,7 +43,7 @@ export async function announceMissingSoffice(): Promise<void> {
   if (announced || useDeckStore.getState().environment?.available !== false) return;
   announced = true;
   if (!useSettingsStore.getState().settings["slides.warnMissingSoffice"]) return;
-  toast.warning(t("deck.noLibreOffice.startup"), {
+  startupToastId = toast.warning(t("deck.noLibreOffice.startup"), {
     action: { label: t("deck.noLibreOffice.dontWarn"), onClick: () => void silenceSofficeWarning() },
   });
 }
