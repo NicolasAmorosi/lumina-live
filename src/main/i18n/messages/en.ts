@@ -1,6 +1,7 @@
 import type { MainMessages } from "./es";
 
 const en: MainMessages = {
+  window: { projectionTitle: "Lumina Live — Projection" },
   menu: {
     about: "About {app}",
     services: "Services",

@@ -1,5 +1,6 @@
 import { app, BrowserWindow, screen } from "electron";
 import path from "node:path";
+import { mt } from "../i18n";
 import { trustWindow } from "../ipc/trusted-senders";
 import { attachProjector } from "./projector-screen";
 
@@ -32,6 +33,7 @@ export function createProjectionWindow(displayId?: number): BrowserWindow {
     alwaysOnTop: !singleMonitor,
     skipTaskbar: !singleMonitor,
     backgroundColor: "#000000",
+    title: mt("window.projectionTitle"),
     show: false,
     webPreferences: {
       preload: PRELOAD,
@@ -44,6 +46,8 @@ export function createProjectionWindow(displayId?: number): BrowserWindow {
 
   trustWindow(win);
   attachProjector(win, target.id);
+  // The page's <title> would replace the localized one on every load.
+  win.on("page-title-updated", (event) => event.preventDefault());
 
   const devServerUrl = process.env["ELECTRON_RENDERER_URL"];
   // See `control-window.ts` for why these are `void` and not `.catch`.
