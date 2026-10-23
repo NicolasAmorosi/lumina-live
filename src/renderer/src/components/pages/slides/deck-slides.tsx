@@ -19,7 +19,7 @@ import { PreviewMissingState } from "@renderer/components/shared/preview-missing
 import { DeckConversionStatus } from "@renderer/components/shared/deck-conversion-status";
 import { SofficeActions } from "@renderer/components/shared/soffice-missing";
 import { useDeck } from "@renderer/lib/hooks/use-deck";
-import { sofficeBlocks } from "@renderer/stores/deck.store";
+import { sofficeBlocks, useDeckStore } from "@renderer/stores/deck.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { usePreviewStore } from "@renderer/stores/preview.store";
 import { clearPreview, setPreviewSlide } from "@renderer/lib/actions/preview";
@@ -62,13 +62,15 @@ function DeckAudioStrip({ assetId, deck }: { assetId: number; deck: DeckDTO }) {
          * (already derived from the slides themselves) is the fact this badge
          * claims to show. */}
         {deck.autoAdvance ? <Badge variant="blue">{t("deck.audio.autoAdvance")}</Badge> : null}
+        {/* `h-6` like the `IconButton`s beside them, so this row is exactly as
+            tall as `DeckTransport` across from it. */}
         {deck.soundtrack?.origin === "linked" ? (
-          <Button onClick={() => void remove()} size="xs" variant="ghost">
+          <Button className="h-6" onClick={() => void remove()} size="xs" variant="ghost">
             {t("deck.audio.remove")}
           </Button>
         ) : null}
         {deck.soundtrack?.origin !== "embedded" && deck.soundtrack?.origin !== "transition" ? (
-          <Button onClick={() => void assign()} size="xs" variant="ghost">
+          <Button className="h-6" onClick={() => void assign()} size="xs" variant="ghost">
             {deck.soundtrack ? t("deck.audio.change") : t("deck.audio.assign")}
           </Button>
         ) : null}
@@ -83,6 +85,21 @@ function DeckAudioStrip({ assetId, deck }: { assetId: number; deck: DeckDTO }) {
       </div>
     </MediaPanel>
   );
+}
+
+/**
+ * The deck's row under the PREVIEW monitor, once it is converted: its
+ * soundtrack and the X that clears the preview. A sibling of the monitor in
+ * `SlidesPanel` like every other kind's row — inside the grid's padded body it
+ * sat 6px lower and narrower than `DeckTransport` under LIVE.
+ */
+export function DeckPreviewBar({ assetId, missingSince }: { assetId: number; missingSince: number | null }) {
+  const deck = useDeckStore((s) => {
+    const entry = s.byAssetId[assetId];
+    return entry?.status === "ready" ? entry.deck : null;
+  });
+  if (missingSince !== null || !deck) return null;
+  return <DeckAudioStrip assetId={assetId} deck={deck} />;
 }
 
 export function DeckSlides({
@@ -191,9 +208,6 @@ export function DeckSlides({
           <p>{entry.error ?? t("deck.failed")}</p>
           {reconvertAction(t("deck.retry"))}
         </Callout>
-      ) : null}
-      {entry?.status === "ready" && entry.deck ? (
-        <DeckAudioStrip assetId={assetId} deck={entry.deck} />
       ) : null}
       <VirtualGrid
         aria-label={t("deck.title")}

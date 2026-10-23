@@ -10,3 +10,31 @@
 - The stage's border (added the same day so a projected picture the colour of the app doesn't melt into the panel) goes on an OUTER box, with `aspect-video` on the inner one. On the `aspect-video` box itself, `border-box` sizing would leave a (W−2)×(H−2) picture that is no longer 16:9 — slightly off from the projector it mirrors. Measured after the fix: stage 484.67×273.5, picture 482.67×271.5 = 16:9 exactly.
 
 **Last updated:** 2026-10-22
+
+### Drifted apart again by 2026-10-23 — three ways a row stops matching its twin
+
+The operator saw the PREVIEW and LIVE rows under the monitors at different heights for every kind
+of content but a verse. Measured at 1280 px (row top / left in its column / width / bar top):
+
+```
+video   PREVIEW 360.5 / 12 / 442 / 415.5    LIVE 366.5 / 18 / 424 / 401.5
+deck    PREVIEW 366.5 / 18 / 424 / —        LIVE 360.5 / 12 / 442 / —
+```
+
+- `LiveMediaPanel` had moved INSIDE the live `PanelBody` (`p-1.5` + `scrollbar-gutter: stable`) —
+  6 px lower, 18 px narrower — and the deck's soundtrack strip (`DeckAudioStrip`) lived inside
+  PREVIEW's, the same mistake mirrored. Both are siblings of the monitor again; the media panel
+  bounds itself (`max-h-[40%] overflow-y-auto`) instead of relying on the scroll area. The live
+  column is a flex column like PREVIEW's: its old `grid-rows-[auto_auto_auto_minmax(0,1fr)]` put
+  the body in an `auto` track whenever a transport rendered `null`, and kept the empty tracks' gaps.
+- PREVIEW's video/audio row carries a hint («Sin sonido…») its LIVE twin doesn't: above the bar it
+  put that bar 20 px lower. Hints and errors are a row's LAST line now.
+- An `xs` `Button` is `h-7`, an `xs` `IconButton` `size-6`: a row with a text button (a plate's GO
+  LIVE, the deck strip's «Asignar») was 4 px taller than its twin. Those buttons carry `h-6`.
+
+`Monitor` gained `shrink-0` with the flex column: `overflow-hidden` makes a flex item's automatic
+minimum height 0, so the column with more rows would squeeze its stage first. Guarded by
+`media.spec.ts` › «the row under PREVIEW and the row under LIVE line up» (verified failing on the
+old code: `dy 6, dx -12, dBar -14`).
+
+**Last updated:** 2026-10-23

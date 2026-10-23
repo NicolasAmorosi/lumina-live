@@ -94,6 +94,11 @@
   from { opacity: 1; }
   to   { opacity: 0; }
 }
+/* Not a no-op: it is what fires `animationend` on the leaving layer of a
+ * crossfade, which is how `OutputView` knows to drop it (see `HOLD_KEYFRAME`). */
+@keyframes wa-scene-hold {
+  from, to { opacity: 1; }
+}
 @keyframes wa-scene-black-then-in {
   0%, 50% { opacity: 0; }
   100%    { opacity: 1; }

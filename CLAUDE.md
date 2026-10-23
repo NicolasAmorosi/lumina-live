@@ -329,7 +329,7 @@ npm run test                 # vitest run — 403 cases in two projects: `main` 
                               #   frozen frame, toast store, utils). Nothing imports `electron`: that's
                               #   the suite's boundary
 npm run test:watch            # the same suite in watch mode, while working on a module
-npm run test:e2e              # build + Playwright: 104 walkthroughs of the real app (~6 min) with a
+npm run test:e2e              # build + Playwright: 106 walkthroughs of the real app (~6 min) with a
                               #   throwaway profile and media generated on the fly with the bundled FFmpeg (videos, AVI,
                               #   WMA, PDF, and .pptx with auto-advance and with an embedded WMV if LibreOffice is there):
                               #   live, library, LOGO, decks, Bible, Functions, programs, keyboard, Settings,

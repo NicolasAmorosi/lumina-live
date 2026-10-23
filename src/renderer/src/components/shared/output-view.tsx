@@ -70,6 +70,9 @@ type LiveVideoProps = {
   /** The transition this video is entering on is held at its first keyframe
    *  until `onFirstFrame` — see the video hold in `OutputView`. */
   held: boolean;
+  /** See `transitionStyle`: what enters paints the whole stage, so this video
+   *  stays at full opacity under it while it leaves. */
+  incomingCovers: boolean;
   /** This video's identity for its whole mount — see the drift-correction
    *  effect below, which must ignore a `liveVideoStatus` still describing the
    *  previous epoch's video during the instant it takes the projector to
@@ -145,6 +148,7 @@ function LiveVideo({
   covered,
   epoch,
   held,
+  incomingCovers,
   liveVideoStatus,
   mode,
   onError,
@@ -266,7 +270,10 @@ function LiveVideo({
   return (
     <video
       autoPlay={shouldPlay}
-      className="absolute inset-0 size-full object-contain"
+      // Black, not transparent, around a picture that does not fill the stage:
+      // fading in over a scene that holds at full opacity (`incomingCovers`),
+      // a 4:3 video's bars would show that scene and then snap to black.
+      className="absolute inset-0 size-full bg-black object-contain"
       // Whitelist, not a check against "monitor": any future mode is muted
       // by default and only the real projector ever gets sound.
       muted={mode !== "live"}
@@ -279,7 +286,7 @@ function LiveVideo({
       preload={mode === "preview" ? "metadata" : "auto"}
       ref={attach}
       src={url}
-      style={transitionStyle(role, transition, covered ? 0 : 1, held)}
+      style={transitionStyle(role, transition, covered ? 0 : 1, held, incomingCovers)}
     />
   );
 }
@@ -289,6 +296,7 @@ type SlideVideoLayerProps = {
    *  live. Hides and pauses; never unmounts. */
   covered: boolean;
   held: boolean;
+  incomingCovers: boolean;
   mode: OutputViewMode;
   onError: (code: number | null) => void;
   role: LayerRole;
@@ -332,6 +340,7 @@ type SlideVideoLayerProps = {
 function SlideVideoLayer({
   covered,
   held,
+  incomingCovers,
   mode,
   onError,
   role,
@@ -407,7 +416,7 @@ function SlideVideoLayer({
   return (
     <div
       className="absolute inset-0 flex items-center justify-center"
-      style={{ ...transitionStyle(role, transition, covered ? 0 : 1, held), containerType: "size" }}
+      style={{ ...transitionStyle(role, transition, covered ? 0 : 1, held, incomingCovers), containerType: "size" }}
     >
       <div
         className="relative"
@@ -536,6 +545,7 @@ function OutputScene({ frozenFrame, mode, onImageError, output, posterUrl }: Out
 type SceneLayerProps = {
   frozenFrame?: HTMLCanvasElement | null | undefined;
   held: boolean;
+  incomingCovers: boolean;
   mode: OutputViewMode;
   onImageError?: ((url: string) => void) | undefined;
   onLeaveComplete?: (() => void) | undefined;
@@ -555,6 +565,7 @@ type SceneLayerProps = {
 function SceneLayer({
   frozenFrame,
   held,
+  incomingCovers,
   mode,
   onImageError,
   onLeaveComplete,
@@ -575,7 +586,7 @@ function SceneLayer({
       onAnimationEnd={(e) => {
         if (e.target === e.currentTarget && role === "leaving") onLeaveComplete?.();
       }}
-      style={transitionStyle(role, transition, 1, held)}
+      style={transitionStyle(role, transition, 1, held, incomingCovers)}
     >
       <OutputScene
         frozenFrame={frozenFrame}
@@ -953,7 +964,14 @@ export function OutputView({
     if (holdRef.current?.epoch === epoch) releaseHold();
   }
 
-  useEffect(() => {
+  // A LAYOUT effect, so the layers change in the same frame as the push. The
+  // videos below read `output` straight from props: on the render that
+  // delivers a new scene, the old `<video>` is already gone (or the new one
+  // already mounted at full opacity) while `layers` still holds only the old
+  // scene, with no frozen frame yet. A passive effect left that render on
+  // screen whenever the browser painted before it ran — a black frame leaving
+  // a video in 10 of 12 measured transitions.
+  useLayoutEffect(() => {
     const sameEpoch = lastEpochRef.current === output.transition.epoch;
     lastEpochRef.current = output.transition.epoch;
     const sameContent = sceneContentKey(topRef.current.output) === sceneContentKey(output);
@@ -1192,6 +1210,18 @@ export function OutputView({
   const slideVideoRole: LayerRole =
     layers.length < 2 ? "steady" : layers[1]?.output.kind === "slide" ? "entering" : "leaving";
 
+  const posterFor = (layer: Layer) =>
+    still && layer.output.kind === "video" && layer.output.url === still.videoUrl ? still.posterUrl : null;
+
+  /** Whether the scene arriving paints every pixel of the stage, so what it
+   *  replaces can hold still under it — see `transitionStyle`. Every scene
+   *  layer is opaque but a video one, whose pixels are the `<video>` (opaque
+   *  too, see its `bg-black`) or, with no video mounted, a poster that may not
+   *  exist. */
+  const incoming = layers[1];
+  const incomingCovers =
+    incoming !== undefined && (incoming.output.kind !== "video" || videoMounted || posterFor(incoming) !== null);
+
   return (
     <div
       className={cn(
@@ -1211,11 +1241,8 @@ export function OutputView({
           output={layer.output}
           frozenFrame={layer.frozenFrame}
           held={held}
-          posterUrl={
-            still && layer.output.kind === "video" && layer.output.url === still.videoUrl
-              ? still.posterUrl
-              : null
-          }
+          incomingCovers={incomingCovers}
+          posterUrl={posterFor(layer)}
           role={layers.length < 2 ? "steady" : i === 0 ? "leaving" : "entering"}
           transition={transition}
         />
@@ -1229,6 +1256,7 @@ export function OutputView({
           covered={output.kind !== "video"}
           epoch={output.videoUnderlay.epoch}
           held={held}
+          incomingCovers={incomingCovers}
           key={output.videoUnderlay.epoch}
           liveVideoStatus={liveVideoStatus}
           mode={mode}
@@ -1252,6 +1280,7 @@ export function OutputView({
         <SlideVideoLayer
           covered={output.kind !== "slide"}
           held={held}
+          incomingCovers={incomingCovers}
           key={output.slideVideo.epoch}
           mode={mode}
           onError={handleSlideVideoError}

@@ -82,21 +82,22 @@ export function MonitorsColumn() {
           </span>
         }
       />
-      <div className="grid min-h-0 flex-1 grid-rows-[auto_auto_auto_minmax(0,1fr)] gap-3 p-3">
+      {/* The same column as PREVIEW's (`SlidesPanel`), on purpose: whatever
+          row sits right under each monitor has to land on the same pixel as
+          its twin across, for every kind of content. Each row below is a
+          sibling of the monitor, never its footer, so none can shrink the
+          stage itself — see `Monitor` — and each renders `null` when it has
+          nothing to show (deck and verse are mutually exclusive, since
+          `base` can't be both kinds at once). The media panel was inside the
+          scrolling body for a while, which put it 6px lower and 18px narrower
+          than the PREVIEW row; it caps its own height instead, so any number
+          of tracks only ever takes part of the live grid's room. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 p-3">
         <LiveMonitor />
-        {/* The deck and verse transports are the only other rows sized
-            `auto` — a service with neither a deck nor a verse live looks
-            exactly like it did before either existed (each renders `null`,
-            and they're mutually exclusive since `base` can't be both kinds
-            at once). They're siblings of the monitor, never its footer, so
-            neither can shrink the stage itself — see `Monitor`. The media
-            panel lives below, inside the scrolling body, not as its own
-            `auto` row: an unbounded number of audio tracks must never
-            compete with the monitor for height, only grow the scroll area. */}
         <DeckTransport />
         <VerseTransport />
-        <PanelBody className="flex flex-col gap-3 p-1.5">
-          <LiveMediaPanel />
+        <LiveMediaPanel />
+        <PanelBody className="p-1.5">
           <div className={cn("flex flex-1 flex-col", base === null && "items-center justify-center")}>
             <LiveContentGrid />
           </div>

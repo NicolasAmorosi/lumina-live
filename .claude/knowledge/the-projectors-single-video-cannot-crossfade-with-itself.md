@@ -134,3 +134,46 @@ It also fixes **video → image**, which this entry's table listed as a document
 side now has real pixels to fade out too.
 
 **Last updated:** 2026-09-14
+
+---
+
+### Still a black frame until 2026-10-23 — the measurement above started 27 ms too late
+
+A field report after launch: «se pierde un frame o se ve un frame negro», mostly with videos. The
+2026-09-14 table's first sample is at 27 ms, and the frame was before it.
+
+**How it was seen.** Per-frame truth is the compositor, not the DOM: a CDP screencast of the
+projection window (`Page.startScreencast`, 240×135 JPEG, ack every frame) piped through the bundled
+FFmpeg as MJPEG with `scale=1:1:flags=area` gives one mean-luma byte per painted frame
+(`brightnessDuring` in `tests/e2e/media.spec.ts`). Leaving a video, before the fix:
+
+```
+video → image   131 | 0 (20 ms) | 115 … 87 … 116      black frame in 10 of 12 runs
+image → video   116 … 95 … 131                         the dip, every crossfade
+```
+
+A rAF DOM probe running at the same time made the black frame **disappear** (0 of 8) — it shifted
+the timing of the race it was meant to observe. Never trust a per-frame probe that runs inside the
+page it measures.
+
+**Cause 1, the black frame.** `LiveVideo` reads `output.videoUnderlay` straight from props, while
+the scene layers only change in `OutputView`'s layer effect. On the render that delivers the new
+scene the old `<video>` is already unmounted and `layers` still holds only the old, transparent
+video layer with no frozen frame. That effect was a `useEffect`, and a projector push arrives over
+IPC — not a discrete event — so React runs it after the browser may already have painted that
+render. Now a `useLayoutEffect`: its `setState` re-renders synchronously before paint (0 black
+frames in 24 runs). The frame capture still works, because the `<video>`'s layout cleanup runs in
+the mutation phase of the same commit, before the parent's layout effects.
+
+**Cause 2, the dip.** «Crossfade» faded the incoming layer in AND the outgoing one out, so the
+black behind both showed through: `αB + (1−α)²A`, 75% brightness at the midpoint for two equal
+pictures. Between opaque scenes the leaving side now holds (`wa-scene-hold`, `incomingCovers` in
+`transitionStyle`), and the `<video>` got `bg-black` so a letterboxed one also covers the stage. A
+time scene's text blocks are transparent and still fade both ways.
+
+**Left as is:** the frozen frame of an **untagged SD** video draws darker than the video itself
+(the test clip: 131 live, 116 as a `drawImage` copy — the canvas and the compositor pick different
+YUV matrices for an untagged stream). A BT.709-tagged 1080p clip matched (117 vs 116). It only
+shows during the 300 ms the frame fades out.
+
+**Last updated:** 2026-10-23

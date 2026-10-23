@@ -178,5 +178,7 @@ export function LiveMediaPanel() {
 
   if (rows.length === 0) return null;
 
-  return <MediaPanel className="shrink-0">{rows}</MediaPanel>;
+  // Capped and scrolling on its own: it sits right under the monitor, so it
+  // must never push the live grid out of the column — see `MonitorsColumn`.
+  return <MediaPanel className="max-h-[40%] shrink-0 overflow-y-auto">{rows}</MediaPanel>;
 }

@@ -22,7 +22,7 @@ import { useProjectionStore } from "@renderer/stores/projection.store";
 import { usePreviewContent } from "@renderer/lib/hooks/use-preview";
 import { clearPreview, previewVerse } from "@renderer/lib/actions/preview";
 import { goLive } from "@renderer/lib/actions/playback";
-import { DeckSlides } from "./deck-slides";
+import { DeckPreviewBar, DeckSlides } from "./deck-slides";
 import { PreviewMediaBar } from "./preview-media-bar";
 
 /**
@@ -103,15 +103,17 @@ export function SlidesPanel() {
   // Every previewed item gets a closable row below the monitor — the "x"
   // clears the preview back to empty (`clearPreview`), so an operator can back
   // out of a wrong pick without touching the schedule/library selection by
-  // hand. Video/audio keep their own richer bar (scrubber, preview playback);
-  // everything else is a plain `MediaTrackRow` with nothing but the close
-  // button. A deck's dismiss control lives inside `DeckSlides` itself
-  // (`DeckAudioStrip`), since that row already exists there.
-  // Rendered as a sibling of the monitor, never inside `PanelBody`, so its
-  // margins match `LiveMediaPanel`'s exactly instead of picking up an extra
-  // layer of padding — see `MonitorsColumn`.
+  // hand. Video/audio keep their own richer bar (scrubber, preview playback),
+  // a deck its soundtrack strip; everything else is a plain `MediaTrackRow`
+  // with nothing but the close button.
+  // Rendered as a sibling of the monitor, never inside `PanelBody`, so it lands
+  // on the same pixel as the first row under LIVE instead of picking up an
+  // extra layer of padding — see `MonitorsColumn`.
   const mediaBar = (() => {
     if (!content) return null;
+    if (content.kind === "deck") {
+      return <DeckPreviewBar assetId={content.assetId} missingSince={content.missingSince} />;
+    }
     if (content.kind === "media") {
       if (content.asset.kind === "image") {
         return (
