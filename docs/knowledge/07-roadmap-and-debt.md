@@ -126,6 +126,15 @@ no arrancaba, y la suite E2E no lo ve porque Playwright agrega `--no-sandbox` en
 `.claude/knowledge/a-space-in-the-linux-install-path-breaks-the-suid-sandbox-and-playwright-never-tests-it.md`.
 Sin probar todavía en un Ubuntu de escritorio real (Docker no tiene AppArmor).
 
+**Linux es experimental en la 2.2.0-beta.4** (decisión del dueño, 2026-10-23; lo dicen el README y
+la landing). En x86_64 nativo bajo Xvfb, los renderers del proyector y del control se caen con un
+deck en el aire (`service.spec`, `settings.spec:60`, a veces `decks.spec:93`): `render-process-gone`
+con `reason: crashed`, `exitCode: 133` (SIGTRAP, un `CHECK` de Chromium sin mensaje en los builds
+oficiales). Igual con `--disable-gpu`, con y sin sandbox. Y `media.spec:69` (EN VIVO no reabre un
+proyector cerrado desde afuera) falla ahí, quizá por la única pantalla y la falta de gestor de
+ventanas de Xvfb. Lo siguiente: un minidump con los símbolos de Electron, y probar en un Linux de
+escritorio con GPU y dos monitores.
+
 Verificado en macOS contra decks reales de iglesia, incluyendo un `.ppt` binario de 52
 diapositivas y un fixture con auto-avance + audio embebido. `legacy/` se retiró del repo el
 2026-10-22; sigue en la historia de git.

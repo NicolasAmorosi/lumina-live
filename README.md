@@ -33,6 +33,10 @@ Windows (instalador), macOS con Apple Silicon (`.dmg`) y Linux: `.deb` para Ubun
 Mint, y `AppImage` para las demás distribuciones. En Ubuntu 24.04 o posterior usá el `.deb`: AppArmor
 no deja arrancar el AppImage salvo con `--no-sandbox`, que desactiva una protección de seguridad.
 
+**En Linux, Lumina Live todavía es experimental.** En las pruebas automáticas, la ventana de
+proyección y la de control se cerraron solas con una presentación en pantalla, algo que no pasa en
+Windows ni en macOS. Probala a fondo antes de usarla en un culto.
+
 - **LibreOffice** hace falta para las presentaciones de PowerPoint (los PDF no lo necesitan). Si no
   está instalado, la app lo detecta y explica cómo instalarlo.
 - Los instaladores **todavía no están firmados**. En Windows: «Más información» → «Ejecutar de todas

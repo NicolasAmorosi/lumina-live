@@ -32,7 +32,11 @@ opens.
 - **Docker's own limits, so they aren't mistaken for the app's:** without `--privileged` neither mode
   works (`Failed to move to new namespace: … errno = Operation not permitted`: no `CAP_SYS_ADMIN`, not
   even for a setuid helper), and there is no AppArmor, so the Ubuntu 24.04 desktop path (namespaces +
-  the installed profile) is the one thing only a real Ubuntu can confirm. The AppImage has no root-owned
+  the installed profile) is the one thing only a real Ubuntu can confirm. Measured natively the same
+  day on an Ubuntu host with `kernel.apparmor_restrict_unprivileged_userns=1`: `unshare --user true`
+  still succeeds there (creating the namespace is allowed, its capabilities are not), so the postinst
+  leaves `chrome-sandbox` at 0755 and everything rests on the AppArmor profile loading — in a
+  container it can't, and the app aborts with the SUID helper message. The AppImage has no root-owned
   helper and no profile, so on Ubuntu 24.04+ it needs `--no-sandbox` — that is why the .deb exists.
 
 **Last updated:** 2026-10-23
