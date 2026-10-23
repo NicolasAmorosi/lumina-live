@@ -60,16 +60,20 @@ export const projectionHandlers: Pick<
     // resolves, and a deck's auto-advance arms slide 1's timer at that commit:
     // answered earlier, slide 1 ran its clock while the page was still loading
     // — 0.2 s normally, up to 3 s with main busy — and a short one never showed.
+    // A window that closes during that wait (closed from outside, a renderer
+    // crash) answers `false`: its `projection-closed` reached the control
+    // first, and answering as if it had mounted made `openIfNeeded` mark the
+    // projector open again — after which no EN VIVO ever reopened it.
     const id = win.webContents.id;
-    return new Promise<void>((resolve) => {
-      const settle = () => {
+    return new Promise<boolean>((resolve) => {
+      const settle = (mounted: boolean) => {
         clearTimeout(timeout);
         mountWaiters.delete(id);
-        resolve();
+        resolve(mounted);
       };
-      const timeout = setTimeout(settle, PROJECTOR_MOUNT_TIMEOUT_MS);
-      mountWaiters.set(id, settle);
-      win.once("closed", settle);
+      const timeout = setTimeout(() => settle(true), PROJECTOR_MOUNT_TIMEOUT_MS);
+      mountWaiters.set(id, () => settle(true));
+      win.once("closed", () => settle(false));
     });
   },
 

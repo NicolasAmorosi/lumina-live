@@ -115,7 +115,7 @@ export const useDisplayStore = create<DisplayStoreState>((set, get) => ({
       warnNoScreen();
       return;
     }
-    await api.projection.open(displayId);
+    if (!(await api.projection.open(displayId))) return;
     // Opening onto NEGRO changes what the projector shows, so it claims an
     // intent like every other such action — otherwise a deck still converting
     // would lift the black the moment it finished. See `live-intent.ts`.
@@ -137,8 +137,9 @@ export const useDisplayStore = create<DisplayStoreState>((set, get) => ({
           warnNoScreen();
           return;
         }
-        await api.projection.open(displayId);
-        useProjectionStore.getState().setPresentationOpen(true);
+        // `false`: the window closed while it was still loading, and
+        // `projection-closed` has already marked the projector closed.
+        if (await api.projection.open(displayId)) useProjectionStore.getState().setPresentationOpen(true);
       } finally {
         openInFlight = null;
       }

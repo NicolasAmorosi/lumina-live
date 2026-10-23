@@ -52,7 +52,9 @@ import type { CloseDecision } from "../types/window";
 export type IpcContract = {
   "displays:list": { req: void; res: DisplayInfo[] };
 
-  "projection:open": { req: { displayId: number }; res: void };
+  /** `false` when the window closed before its page mounted: `projection-closed`
+   *  has already told the control, which must not then mark the projector open. */
+  "projection:open": { req: { displayId: number }; res: boolean };
   "projection:close": { req: void; res: void };
   "projection:show": { req: ProjectionOutput; res: void };
   "projection:mediaCommand": { req: MediaCommand; res: void };
