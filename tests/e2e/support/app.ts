@@ -196,11 +196,18 @@ export class WorshipApp {
       () => false,
     );
     if (await Promise.race([exited.then(() => false), asked])) {
-      await dialog.getByRole("button", { name: answer === "close" ? "Cerrar igualmente" : "Cancelar" }).click();
       if (answer === "cancel") {
+        await dialog.getByRole("button", { name: "Cancelar" }).click();
         await expect(dialog).toBeHidden();
         return;
       }
+      // The answer ends the process, which can take the page down before the
+      // click returns («Target page, context or browser has been closed», seen
+      // on Linux). A click that failed for any other reason never exits, below.
+      await dialog
+        .getByRole("button", { name: "Cerrar igualmente" })
+        .click()
+        .catch(() => undefined);
     }
     await exited;
   }
