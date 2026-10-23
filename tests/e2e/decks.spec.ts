@@ -96,6 +96,10 @@ test("NEGRO over a deck, and the slide is still there underneath", async ({ app 
   await expect(slideTile(app, 3)).toBeVisible({ timeout: 60_000 });
   await app.goLive();
   const projector = await app.projector();
+  // On screen first, as the operator sees it: EN VIVO commits once the
+  // projector it opens has mounted, and a key pressed before that has no live
+  // deck to step yet (on a slow machine, a lost press).
+  await expect.poll(() => projectedSlide(projector)).toBe(1);
   await app.control.keyboard.press("ArrowRight");
   await expect.poll(() => projectedSlide(projector)).toBe(2);
 
