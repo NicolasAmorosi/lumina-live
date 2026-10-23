@@ -1,4 +1,5 @@
-import { DEFAULT_UTILITY_SCENES } from "@shared/types/utility";
+import { defaultUtilityScenes } from "@shared/types/utility";
+import { mainMessages } from "../../i18n";
 import type { SettingsRepo } from "../repositories/settings.repo";
 import type { UtilityRepo } from "../repositories/utility.repo";
 
@@ -22,7 +23,7 @@ export function seedUtilityScenes(repo: UtilityRepo, settings: SettingsRepo): vo
     // one upgraded from a build that seeded differently, or one whose flag was
     // lost — writing rows on top of it would duplicate what is already there,
     // and asking again on every launch would keep paying for the question.
-    if (repo.isEmpty()) repo.insertMany(DEFAULT_UTILITY_SCENES);
+    if (repo.isEmpty()) repo.insertMany(defaultUtilityScenes(mainMessages().seed));
     settings.setMany({ "utility.seeded": true });
   } catch (error) {
     console.warn("[utility] seeding the default scenes failed", error);

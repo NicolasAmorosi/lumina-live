@@ -1,270 +1,314 @@
-# 03 — Pipeline de diapositivas (LibreOffice headless)
+# 03 — Slide pipeline (headless LibreOffice)
 
-Reemplaza por completo la integración COM/PowerShell con PowerPoint. Ya **no** hay nada
-Windows-only: la app corre y se valida igual en macOS, Windows y Linux.
+Completely replaces the COM/PowerShell integration with PowerPoint. There is **no** longer anything
+Windows-only: the app runs and is validated the same way on macOS, Windows and Linux.
 
-## El cambio de modelo
+## The model change
 
-Antes: *control remoto de un slideshow vivo de PowerPoint* — main sostenía un cursor de
-diapositiva, PowerShell lo movía, y los PNG eran un subproducto efímero en `os.tmpdir()`.
+Before: *remote control of a live PowerPoint slideshow* — main held a slide cursor, PowerShell
+moved it, and the PNGs were an ephemeral byproduct in `os.tmpdir()`.
 
-Ahora: **un deck es contenido**. Se convierte una sola vez y se cachea; main ya no tiene un cursor
-de diapositiva, tiene un **cache**. Ese solo replanteo es lo que borra `ppt:next/prev/goto/
-currentSlide/close` — el cursor vive en el store del renderer y es la única copia.
+Now: **a deck is content**. It is converted once and cached; main no longer has a slide cursor, it
+has a **cache**. That reframing alone is what deletes `ppt:next/prev/goto/
+currentSlide/close` — the cursor lives in the renderer's store and it is the only copy.
 
-## El pipeline
+## The pipeline
 
 ```
-.pptx ──soffice --convert-to pdf──► PDF ──pdfjs en ventana oculta──► WebP por slide
+.pptx ──soffice --convert-to pdf──► PDF ──pdfjs in a hidden window──► WebP per slide
    │                                                                      │
-   └──parseo OOXML (fflate + fast-xml-parser)──► timings + audio ─────────┴──► SQLite + disco
+   └──OOXML parsing (fflate + fast-xml-parser)──► timings + audio ────────┴──► SQLite + disk
 ```
 
-`soffice --convert-to png` **solo exporta la primera diapositiva** — de ahí el paso por PDF.
+`soffice --convert-to png` **only exports the first slide** — hence the detour through PDF.
 
-## Un PDF entra por el medio del pipeline
+## A PDF enters through the middle of the pipeline
 
-Un `.pdf` es un deck más (`ASSET_EXTENSIONS.ppt`, `kind = "ppt"`, `ProgramItemKind` `"ppt"`) —
-no un `AssetKind` propio. En todo el renderer `kind === "ppt"` ya significa "esto es un deck",
-así que sumar la extensión alcanza para heredar el filtro del diálogo, el drag & drop, el import
-de carpeta, el cache direccionado por contenido, el prewarm, "Preparar carpeta", los thumbs y los
-badges sin una sola rama nueva.
+A `.pdf` is just another deck (`ASSET_EXTENSIONS.ppt`, `kind = "ppt"`, `ProgramItemKind` `"ppt"`) —
+not an `AssetKind` of its own. Throughout the renderer `kind === "ppt"` already means "this is a
+deck", so adding the extension is enough to inherit the dialog filter, drag & drop, folder import,
+the content-addressed cache, prewarm, "Prepare folder", thumbs and badges without a single new
+branch.
 
-Lo que sí cambia es que **el PDF ya ES el formato intermedio**: `runConversion` lo manda directo
-al rasterizador y `warmBatchPdfCache` lo saca del lote. Pasarlo por `soffice` no es "más lento",
-es peor: LibreOffice lo importa a **Draw** y lo vuelve a dibujar glifo por glifo
-(`convert … as a Draw document … using filter: draw_pdf_Export`; medido, 157 KB → 1,76 MB).
+What does change is that **the PDF already IS the intermediate format**: `runConversion` sends it
+straight to the rasterizer and `warmBatchPdfCache` takes it out of the batch. Running it through
+`soffice` isn't "slower", it's worse: LibreOffice imports it into **Draw** and redraws it glyph by
+glyph (`convert … as a Draw document … using filter: draw_pdf_Export`; measured, 157 KB → 1.76 MB).
 
-Dos consecuencias que la UI tiene que respetar:
+Two consequences the UI has to respect:
 
-- **Un PDF no necesita LibreOffice.** `deckRequiresSoffice(ext)` (`shared/constants.ts`) es la
-  única fuente de esa pregunta, y el cartel "instalá LibreOffice" (`deck-slides.tsx`) y el botón
-  "Preparar carpeta" (`media-browser.tsx`) la hacen **por deck**, nunca por entorno.
-- **Un PDF no tiene metadata de presentación**: ni transiciones (⇒ `timings_source = "none"`, sin
-  auto-avance) ni partes de media (⇒ sin banda sonora embebida). El `.mp3` hermano *vinculado* sí
-  se resuelve, como en cualquier otro deck.
+- **A PDF doesn't need LibreOffice.** `deckRequiresSoffice(ext)` (`shared/constants.ts`) is the
+  single source for that question, and every LibreOffice block is decided **per deck**, never per
+  environment — see *Without LibreOffice* below.
+- **A PDF has no presentation metadata**: no transitions (⇒ `timings_source = "none"`, no
+  auto-advance) and no media parts (⇒ no embedded soundtrack). The sibling *linked* `.mp3` is still
+  resolved, as for any other deck.
 
-El rasterizado escala para entrar en un cuadrado de `targetWidth`, no solo por ancho: toda
-diapositiva de Impress/PowerPoint es apaisada y el ancho siempre mandaba, pero una página de PDF
-puede ser vertical. Diagnóstico y mediciones —incluido por qué esto **no** obliga a bumpear
-`SLIDES_CONVERTER_VERSION`— en
+Rasterizing scales to fit a `targetWidth` square, not just by width: every Impress/PowerPoint slide
+is landscape and width always won, but a PDF page can be portrait. Diagnosis and measurements
+—including why this does **not** force a bump of `SLIDES_CONVERTER_VERSION`— in
 [`.claude/knowledge/a-pdf-source-breaks-two-assumptions-the-pipeline-made-about-its-own-output.md`](../../.claude/knowledge/a-pdf-source-breaks-two-assumptions-the-pipeline-made-about-its-own-output.md),
-que además explica el caso de las fuentes no embebidas y el nuevo error `PDF_PASSWORD`.
+which also explains the case of non-embedded fonts and the new `PDF_PASSWORD` error.
 
-## Por qué el rasterizado va en una `BrowserWindow` oculta
+## Without LibreOffice
 
-Rasterizar necesita un Canvas2D real. La alternativa (`@napi-rs/canvas` en un `utilityProcess`)
-publica su binario nativo como `optionalDependency` **por plataforma**: a diferencia de
-`better-sqlite3` (8 binarios en un tarball), `npm install` en macOS nunca baja el de Windows, así
-que cross-compilar el instalador de Windows desde una Mac — cosa que este proyecto hace — shippearía
-una app rota. Una ventana oculta ya es su propio proceso del SO, así que el aislamiento ante un
-crash es el mismo, sin ese riesgo.
+LibreOffice isn't bundled, so a machine without it is a normal case, not an error: the app starts,
+warns, and blocks **only** what truly needs it — converting a PowerPoint that isn't cached yet. A
+PDF, an already-converted deck (projecting it is serving images) and everything that isn't a deck
+keep working the same.
 
-Se usa el build **legacy** de pdf.js (`pdfjs-dist/legacy/build/pdf.mjs`): el bundle moderno usa
-built-ins que el Chromium de Electron 36 todavía no tiene y falla con
-`n.toHex is not a function`.
+**The question, on each side:**
 
-**Esa ventana se reutiliza entre decks** (una sola, con apagado por inactividad a los 60 s — que
-durante un batch nunca llega). Consecuencia para cualquier cambio en `slides/rasterizer.ts`: todo
-lo que se registre *por job* sobre su `webContents` hay que desregistrarlo al terminar el job. Un
-`once("render-process-gone")` no alcanza: `once` sólo se saca a sí mismo si el evento dispara, así
-que acumulaba un listener por deck convertido — con su closure y el `pages`/`request` de ese job
-colgados — hasta que Node avisaba
-`MaxListenersExceededWarning: 11 render-process-gone listeners added to [WebContents]` a mitad de
-preparar una carpeta. El `finish()` del job es el único lugar correcto para esa limpieza.
+- **Main** remembers the last answer from the scan (`locateSoffice`, cached).
+  `cachedSofficeError()` returns it without searching again, and `prepareDeck` uses it so that
+  **background** work (visible tiles, schedule, freshly imported files, «Prepare folder») on a
+  non-PDF deck is rejected on the spot: no queue, no file hash, no progress bar on the tile. The
+  **interactive** path (the operator opened the deck) always goes through `requireSoffice`, which
+  scans again — that's how a LibreOffice installed while the app is open gets found. `runConversion`
+  asks for it right before step 3 (the actual conversion): not before the content hit, which
+  projects a duplicate without LibreOffice, and inside the `try`, so the failure is announced like
+  any other.
+- **Renderer**: `deck.store.environment` (`deck:environment`, with `force` for «Check again») and
+  `sofficeBlocks(environment, ext)` is the only question. It never says anything about an
+  already-converted deck, so every block also asks whether there are slides to show. It corrects
+  itself: a conversion that succeeded with the environment at «missing», or that failed with the
+  environment at «present», reads it again — main just scanned on that path.
 
-## Identidad por hash de contenido
+**The blocks and the warnings:**
 
-`slide_decks` se identifica por `(content_hash, render_width, image_format)`, **no** por
-`media_asset_id`. Dos entradas de biblioteca que apuntan a copias del mismo archivo comparten una
-conversión, y mover el archivo es un hit de cache en vez de reconvertir. Hay un fast-path previo
-por `(size, mtime)` que ni siquiera hashea.
+| Where | What it does |
+|---|---|
+| Startup (`announceMissingSoffice`) | toast with «Don't show again», once per process |
+| PPT tab (`media-browser.tsx`) | short strip with «Download LibreOffice» and «Don't show again» |
+| Center panel (`deck-slides.tsx`) | the notice with main's reason and the three ways out (`SofficeActions`), **only** if the deck has no slides; on a converted one, «Convert again» is replaced by the why |
+| PREVIEW monitor | «LibreOffice isn't available» instead of «Getting ready to convert…», which stayed there forever |
+| GO LIVE | changes nothing on the projector and warns with a toast — decided **after** the failure (`explainSofficeRefusal`), because only main knows whether the deck is cached, and a prior check rejected a converted deck on double-click before its `peek` came back |
+| «Prepare folder» | prepares only the PDFs in the view |
+| Settings → Slides → LibreOffice | status, version and path (or the reason), the three ways out, and the `slides.warnMissingSoffice` switch |
 
-El hash sí lee el archivo entero, pero por `fs/promises` y de a 1 MB: las lecturas van al thread
-pool y el `hash.update` queda acotado al chunk, no al tamaño del deck. Sincrónico, un `.pps` de
-60 MB congelaba el hilo que atiende al proyector durante toda la lectura.
+`slides.warnMissingSoffice` turns off the toast and the strip, which are the «just in case»
+warnings. The deck notice and Settings can't be turned off: they are where something actually got
+blocked.
 
-### La contracara: la fila tiene un solo dueño
+## Why rasterizing runs in a hidden `BrowserWindow`
 
-`media_asset_id` sí existe en la fila, y `relinkDeck` lo **mueve** cuando otro asset resuelve al
-mismo contenido. O sea: la conversión se comparte, pero la *pertenencia* es exclusiva. Todo lo que
-pregunta "¿este asset está convertido?" mirando `media_asset_id` —`statusesByAsset`, y con él la
-cuenta de "Preparar carpeta", los badges de los tiles y los pins de desalojo de `adoptProgram`—
-está haciendo una pregunta de pertenencia sobre un caché de contenido, y se equivoca en cuanto hay
-dos archivos idénticos: uno figura convertido y el otro no, para siempre.
+Rasterizing needs a real Canvas2D. The alternative (`@napi-rs/canvas` in a `utilityProcess`)
+publishes its native binary as a **per-platform** `optionalDependency`: unlike `better-sqlite3`
+(8 binaries in one tarball), `npm install` on macOS never downloads the Windows one, so
+cross-compiling the Windows installer from a Mac — something this project does — would ship a
+broken app. A hidden window is already its own OS process, so crash isolation is the same, without
+that risk.
 
-**Es un defecto abierto, no una sutileza teórica:** `N3` en
-la auditoría interna `2026-09-11-cadena-de-media`
-§5.2, medido en 555 falsos pendientes sobre 1235 assets con 0 trabajo real. No cuentes filas por
-asset para saber qué falta convertir.
+The **legacy** build of pdf.js is used (`pdfjs-dist/legacy/build/pdf.mjs`): the modern bundle uses
+built-ins that Electron 36's Chromium didn't have yet and failed with
+`n.toHex is not a function` (Electron 44's Chromium 152 does have `Uint8Array.prototype.toHex`;
+the legacy build is still the one imported).
 
-## Alineación de timings — el detalle que importa
+**That window is reused across decks** (a single one, with an idle shutdown at 60 s — which never
+comes during a batch). Consequence for any change in `slides/rasterizer.ts`: everything registered
+*per job* on its `webContents` must be unregistered when the job ends. A
+`once("render-process-gone")` is not enough: `once` only removes itself if the event fires, so it
+piled up one listener per converted deck — with its closure and that job's `pages`/`request`
+hanging off it — until Node warned
+`MaxListenersExceededWarning: 11 render-process-gone listeners added to [WebContents]` halfway
+through preparing a folder. The job's `finish()` is the only correct place for that cleanup.
 
-**LibreOffice NO exporta las diapositivas ocultas al PDF** (verificado contra un deck real). Por
-eso los timings se alinean contra las diapositivas **visibles** (`!hidden`), no contra la lista
-completa del OOXML: hacerlo mal corre cada timing una posición por cada slide oculta. Si los
-conteos igual no coinciden (una animación que LibreOffice parte en varias páginas), se descartan
-**todos** los timings (`timings_source = 'none'`) — un auto-avance desalineado en silencio es peor
-que no tener auto-avance.
+## Identity by content hash
 
-## Parseo OOXML
+`slide_decks` is identified by `(content_hash, render_width, image_format)`, **not** by
+`media_asset_id`. Two library entries pointing to copies of the same file share one conversion, and
+moving the file is a cache hit instead of a reconversion. There is an earlier fast path by
+`(size, mtime)` that doesn't even hash.
 
-Las partes se leen con `readZipEntries` (`src/main/slides/zip-reader.ts`), **nunca** cargando el
-archivo entero. Un `.pptx` es un zip y un zip es de acceso aleatorio: se ubica el
-end-of-central-directory (con zip64), se parsea el directorio central y se leen solo los rangos de
-bytes pedidos — unos KB, sin importar cuántos MB de media haya alrededor. `unzipSync` con `filter`
-**no** sirve para esto: recibe un buffer, así que evita el inflate pero no el `readFileSync`.
+The hash does read the whole file, but through `fs/promises` and 1 MB at a time: the reads go to
+the thread pool and `hash.update` is bounded by the chunk, not by the deck's size. Synchronously, a
+60 MB `.pps` froze the thread that serves the projector for the whole read.
 
-Dos detalles que no son obvios y están medidos en
+### The flip side: the row has a single owner
+
+`media_asset_id` does exist on the row, and `relinkDeck` **moves** it when another asset resolves to
+the same content. In other words: the conversion is shared, but *ownership* is exclusive. Everything
+that asks "is this asset converted?" by looking at `media_asset_id` —as `statusesByAsset` did, and
+with it the "Prepare folder" count, the tile badges and `adoptProgram`'s eviction pins— is asking an
+ownership question about a content cache, and gets it wrong as soon as there are two identical
+files: one shows as converted and the other doesn't, forever.
+
+**It was a real defect, not a theoretical subtlety:** `N3` in
+the internal audit `2026-09-11-cadena-de-media`
+§5.2, measured at 555 false pendings over 1235 assets with 0 real work. Fixed on 2026-09-13:
+`statusesByAsset` now JOINs by the asset's `content_hash` and falls back to ownership only for an
+asset not stamped yet (see `05-data-and-persistence.md`). Don't count rows per asset to find out
+what's left to convert.
+
+## Timing alignment — the detail that matters
+
+**LibreOffice does NOT export hidden slides to the PDF** (verified against a real deck). That's why
+timings are aligned against the **visible** slides (`!hidden`), not against the full OOXML list:
+getting this wrong shifts every timing one position per hidden slide. If the counts still don't
+match (an animation that LibreOffice splits across several pages), **all** timings are discarded
+(`timings_source = 'none'`) — a silently misaligned auto-advance is worse than no auto-advance.
+
+## OOXML parsing
+
+Parts are read with `readZipEntries` (`src/main/slides/zip-reader.ts`), **never** by loading the
+whole file. A `.pptx` is a zip and a zip is random-access: it locates the end-of-central-directory
+(with zip64), parses the central directory and reads only the requested byte ranges — a few KB, no
+matter how many MB of media surround them. `unzipSync` with `filter` does **not** work for this: it
+takes a buffer, so it avoids the inflate but not the `readFileSync`.
+
+Two non-obvious details, measured in
 [`.claude/knowledge/a-pptx-is-random-access-and-inflatesync-needs-its-out-buffer.md`](../../.claude/knowledge/a-pptx-is-random-access-and-inflatesync-needs-its-out-buffer.md):
-el lector es **síncrono a propósito** (lecturas de KB, así que nada de la cadena de llamadores —
-hasta `MediaRepo.ensureLinkedAudio` y `toDeckDTO` — tuvo que volverse `async`), y a `inflateSync`
-hay que pasarle el buffer `out` con el tamaño que ya trae el directorio central: sin eso, el
-crecimiento de su propio buffer de salida cuesta ~16 µs por entrada y hace que la versión "rápida"
-sea 3× más lenta que leer el archivo completo.
+the reader is **synchronous on purpose** (KB-sized reads, so nothing in the caller chain — up to
+`MediaRepo.ensureLinkedAudio` and `toDeckDTO` — had to become `async`), and `inflateSync` must be
+given the `out` buffer with the size the central directory already provides: without it, growing
+its own output buffer costs ~16 µs per entry and makes the "fast" version 3× slower than reading
+the whole file.
 
-- `ppt/presentation.xml` → `<p:sldIdLst>` da el **orden real**. `slide1.xml, slide2.xml…` es el
-  orden de creación y diverge apenas alguien reordena.
-- El `<p:transition>` casi nunca está en la raíz del slide en decks modernos: vive en
-  `mc:AlternateContent/mc:Choice[@Requires="p14"]`, con copia en `mc:Fallback`. Se revisan las tres
-  formas. Mirar solo la suelta es la forma más común de leer cero timings sin darse cuenta.
-- `@advTm` (ms de auto-avance), `@advClick`, `p:sld/@show="0"` (oculta).
-- Audio: `p:pic` con `a:audioFile` + los `_rels` del slide; `p:cMediaNode` da loop/volumen.
-  OOXML no tiene un booleano de "suena en todo el deck" — es una heurística documentada
-  (`loop` o `repeatCount="indefinite"` ⇒ `scope: "deck"`).
-- Video: `p:pic` con `a:videoFile` (o el `p14:media` del `p:extLst`), con la misma resolución por
-  `_rels`. Tres diferencias con el audio, y las tres importan:
-  1. **La geometría es obligatoria.** El rect sale de `p:spPr/a:xfrm` (EMU) contra `p:sldSz` y se
-     guarda como fracciones 0..1. Un `p:pic` **sin** `a:xfrm` propio hereda el del placeholder del
-     layout, que este parser no resuelve: se descarta y se anota en `skippedVideoParts`. Un default
-     sería un clip pegado en el lugar equivocado en pleno culto, y la diapositiva rasterizada ya
-     muestra el fotograma de portada en su sitio.
-  2. **`p:cMediaNode` se busca por `spid`**, no en agregado. Una diapositiva con narración *y* clip
-     tiene dos nodos, y darle al video el volumen de la narración es un clip mudo sin explicación.
-     Se cae al agregado de toda la diapositiva sólo cuando ningún nodo declara un `p:tgtEl`.
-  3. **Un rel `TargetMode="External"` no es una parte.** `parseRels` lo descarta: unir un
-     `C:\clips\intro.mp4` a `ppt/slides/` produce un nombre de parte verosímil que no nombra
-     nada. Era inofensivo mientras el valor sólo se logueaba.
-- `.ppt`/`.pps` binarios (OLE2, no zip): se convierten **también** a `.pptx` con una segunda pasada
-  de LibreOffice para recuperar estructura y audio embebido (`timings_source = 'ooxml-converted'`).
-  El **video no sobrevive** ese round-trip, y PowerPoint 97-2003 casi nunca lo incrustaba (lo
-  enlazaba por ruta absoluta), así que la reproducción de video embebido es de `.pptx`/`.ppsx`.
+- `ppt/presentation.xml` → `<p:sldIdLst>` gives the **real order**. `slide1.xml, slide2.xml…` is
+  creation order and diverges as soon as someone reorders.
+- The `<p:transition>` is almost never at the slide root in modern decks: it lives in
+  `mc:AlternateContent/mc:Choice[@Requires="p14"]`, with a copy in `mc:Fallback`. All three forms
+  are checked. Looking only at the bare one is the most common way to read zero timings without
+  noticing.
+- `@advTm` (auto-advance ms), `@advClick`, `p:sld/@show="0"` (hidden).
+- Audio: `p:pic` with `a:audioFile` + the slide's `_rels`; `p:cMediaNode` gives loop/volume.
+  OOXML has no "plays across the whole deck" boolean — it's a documented heuristic
+  (`loop` or `repeatCount="indefinite"` ⇒ `scope: "deck"`).
+- Video: `p:pic` with `a:videoFile` (or the `p14:media` in `p:extLst`), with the same resolution
+  through `_rels`. Three differences from audio, and all three matter:
+  1. **Geometry is mandatory.** The rect comes from `p:spPr/a:xfrm` (EMU) against `p:sldSz` and is
+     stored as 0..1 fractions. A `p:pic` **without** its own `a:xfrm` inherits the layout
+     placeholder's, which this parser doesn't resolve: it is dropped and noted in
+     `skippedVideoParts`. A default would be a clip stuck in the wrong place mid-service, and the
+     rasterized slide already shows the poster frame in its place.
+  2. **`p:cMediaNode` is looked up by `spid`**, not in aggregate. A slide with narration *and* a
+     clip has two nodes, and giving the video the narration's volume is a muted clip with no
+     explanation. It falls back to the whole-slide aggregate only when no node declares a
+     `p:tgtEl`.
+  3. **A `TargetMode="External"` rel is not a part.** `parseRels` drops it: joining a
+     `C:\clips\intro.mp4` to `ppt/slides/` produces a plausible part name that names nothing. It
+     was harmless while the value was only logged.
+- Binary `.ppt`/`.pps` (OLE2, not zip): they are **also** converted to `.pptx` with a second
+  LibreOffice pass to recover structure and embedded audio (`timings_source = 'ooxml-converted'`).
+  **Video doesn't survive** that round-trip, and PowerPoint 97-2003 almost never embedded it (it
+  linked it by absolute path), so embedded video playback is `.pptx`/`.ppsx`-only.
 
-### Del OOXML a la diapositiva: el índice cambia de espacio
+### From OOXML to the slide: the index changes space
 
-Los índices del OOXML cuentan las diapositivas **ocultas**; `deck_slides.slide_index` cuenta
-**páginas** del PDF, que no las incluyen. El video se guarda ya traducido al espacio de páginas
-(mapa construido con la misma lista `visibleSlides` que alinea los timings), y si los conteos no
-coinciden se abandonan **todos** los videos del deck en vez de aproximar — la misma disciplina que
-`mergeBinaryTimings`, por la misma razón elevada al cubo: un timing corrido adelanta una
-diapositiva, un video corrido reproduce un clip sobre la diapositiva equivocada.
+OOXML indices count **hidden** slides; `deck_slides.slide_index` counts PDF **pages**, which don't
+include them. The video is stored already translated into page space (a map built with the same
+`visibleSlides` list that aligns the timings), and if the counts don't match **all** of the deck's
+videos are dropped instead of approximated — the same discipline as `mergeBinaryTimings`, for the
+same reason cubed: a shifted timing advances a slide early, a shifted video plays a clip over the
+wrong slide.
 
-## Los timings de un binario legacy NO salen del `.pptx` convertido
+## A legacy binary's timings do NOT come from the converted `.pptx`
 
-El round-trip a `.pptx` **pierde el auto-avance** de toda diapositiva que no tenga un efecto visual
-de transición: el filtro de exportación de LibreOffice solo escribe el elemento `<p:transition>`
-cuando hay un efecto, y `advTm` es un atributo de ese elemento. Medido sobre el himnario real del
-usuario: los 1226 archivos tienen auto-avance en el origen y **222 lo pierden** en la conversión.
-La importación de LibreOffice está bien — el mismo archivo exportado a `.odp` conserva cada
-`presentation:duration`; es solo su exportador de PPTX.
+The round-trip to `.pptx` **loses the auto-advance** of every slide that has no visual transition
+effect: LibreOffice's export filter only writes the `<p:transition>` element when there is an
+effect, and `advTm` is an attribute of that element. Measured on the user's real hymnal: all 1226
+files have auto-advance in the source and **222 lose it** in the conversion. LibreOffice's import is
+fine — the same file exported to `.odp` keeps every `presentation:duration`; it's only its PPTX
+exporter.
 
-Por eso los tiempos se leen del **binario de origen**, no del convertido:
+That's why the timings are read from the **source binary**, not from the converted one:
 
-- `src/main/slides/ppt-binary-timings.ts` lee `SlideShowSlideInfoAtom` del stream
-  `PowerPoint Document` del OLE2, en orden de presentación (`Current User` → `UserEditAtom` →
-  directorio de persistencia → `SlideListWithText` de instancia 0 → `SlidePersistAtom`). Nunca lee
-  el archivo entero: las imágenes viven en el stream `Pictures`, así que son ~45 KB de un archivo
-  de 1,4 MB, leídos por sectores bajo demanda.
-- `mergeBinaryTimings` (en `deck-service.ts`) **solo rellena huecos** y se autoverifica: compara
-  las dos lecturas donde ambas tienen número y, ante una sola discrepancia, abandona el merge
-  entero. Un deck que avanza con el tiempo de otra diapositiva en pleno culto es peor que uno que
-  no avanza.
-- `src/main/slides/backfill-timings.ts` aplica lo mismo hacia atrás, a los decks ya convertidos,
-  **sin reconvertir nada** — los tiempos están en el origen, así que es releer y `UPDATE`.
+- `src/main/slides/ppt-binary-timings.ts` reads `SlideShowSlideInfoAtom` from the OLE2's
+  `PowerPoint Document` stream, in presentation order (`Current User` → `UserEditAtom` →
+  persist directory → instance-0 `SlideListWithText` → `SlidePersistAtom`). It never reads the whole
+  file: images live in the `Pictures` stream, so it's ~45 KB of a 1.4 MB file, read sector by
+  sector on demand.
+- `mergeBinaryTimings` (in `deck-service.ts`) **only fills gaps** and checks itself: it compares the
+  two reads wherever both have a number and, on a single discrepancy, abandons the whole merge. A
+  deck that advances on another slide's time mid-service is worse than one that doesn't advance.
+- `src/main/slides/backfill-timings.ts` applies the same thing retroactively, to already-converted
+  decks, **without reconverting anything** — the times are in the source, so it's a re-read and an
+  `UPDATE`.
 
-Diagnóstico completo y las trampas del formato (los bits de `fFlags` no son consecutivos;
-`PP97_DUALSTORAGE`) en
+Full diagnosis and the format's traps (the `fFlags` bits aren't consecutive; `PP97_DUALSTORAGE`) in
 [`.claude/knowledge/libreoffice-pptx-export-drops-advtm-without-a-transition-effect.md`](../../.claude/knowledge/libreoffice-pptx-export-drops-advtm-without-a-transition-effect.md).
 
-## Aislamiento de LibreOffice
+## LibreOffice isolation
 
-`-env:UserInstallation=file://<userData>/soffice-profile` es **obligatorio**: un perfil propio
-significa un lock y un named pipe propios, así que una copia de LibreOffice abierta por el usuario
-como app normal ni roba nuestro comando ni nos bloquea. El perfil se calienta una vez por versión
-al arrancar (`slides.profileWarmedVersion`).
+`-env:UserInstallation=file://<userData>/soffice-profile` is **mandatory**: a dedicated profile
+means a dedicated lock and named pipe, so a copy of LibreOffice the user opened as a normal app
+neither steals our command nor blocks us. The profile is warmed once per version at startup
+(`slides.profileWarmedVersion`).
 
-En Windows se prefiere **`soffice.com` antes que `soffice.exe`**: el `.exe` se desacopla y devuelve
-antes de que el PDF exista; el `.com` bloquea hasta terminar.
+On Windows **`soffice.com` is preferred over `soffice.exe`**: the `.exe` detaches and returns
+before the PDF exists; the `.com` blocks until it's done.
 
-Los argumentos van siempre como array de `argv`, nunca como string de shell — y el nombre del
-filtro va **sin comillas** (`pptx:Impress MS PowerPoint 2007 XML`), porque unas comillas literales
-pasan a ser parte del nombre del filtro y LibreOffice lo rechaza.
+Arguments always go as an `argv` array, never as a shell string — and the filter name goes
+**without quotes** (`pptx:Impress MS PowerPoint 2007 XML`), because literal quotes become part of
+the filter name and LibreOffice rejects it.
 
-Dos reglas más de la invocación, aprendidas en la auditoría del 2026-09-11:
+Two more invocation rules, learned in the 2026-09-11 audit:
 
-- **`stdout` va a `ignore`, no a `pipe`.** Un pipe que nadie lee se llena (~64 KB) y **bloquea al
-  hijo** hasta que el timeout lo mata — indistinguible de "LibreOffice se colgó". `--convert-to`
-  imprime una línea por archivo convertido, así que un lote suficientemente grande llega solo.
-  Nadie lee stdout: las salidas se descubren listando `--outdir`. `stderr` sí se lee, acotado.
-- **Una invocación de lote necesita su propio `AbortController`.** No pertenece a ningún `Job`, así
-  que ninguna señal por job la detiene, y `sofficeChain` serializa todo contra el perfil
-  compartido: sin ese controller, un `deck:ensure` interactivo esperaba detrás del chunk entero
-  (hasta 30 minutos de `convertTimeoutForBatch`). `tryPreemptForInteractive` lo aborta.
+- **`stdout` goes to `ignore`, not `pipe`.** A pipe nobody reads fills up (~64 KB) and **blocks the
+  child** until the timeout kills it — indistinguishable from "LibreOffice hung". `--convert-to`
+  prints one line per converted file, so a large enough batch gets there on its own. Nobody reads
+  stdout: the outputs are discovered by listing `--outdir`. `stderr` is read, bounded.
+- **A batch invocation needs its own `AbortController`.** It doesn't belong to any `Job`, so no
+  per-job signal stops it, and `sofficeChain` serializes everything against the shared profile:
+  without that controller, an interactive `deck:ensure` waited behind the whole chunk (up to 30
+  minutes of `convertTimeoutForBatch`). `tryPreemptForInteractive` aborts it.
 
-### Matarlo de verdad
+### Killing it for real
 
-`soffice` se lanza `detached` (grupo propio, para que `killTree` alcance a `soffice.bin` detrás de
-`soffice`), y eso significa que **sobrevive a main**. Un `soffice` vivo retiene el lock y el named
-pipe del perfil compartido, y ahí todas las conversiones del arranque siguiente fallan en silencio
-— justo lo que el perfil propio existe para evitar. Dos defensas, porque una sola no alcanza:
+`soffice` is launched `detached` (its own group, so `killTree` reaches `soffice.bin` behind
+`soffice`), and that means it **outlives main**. A live `soffice` holds the shared profile's lock
+and named pipe, and then every conversion on the next startup fails silently — exactly what the
+dedicated profile exists to prevent. Two defenses, because one alone isn't enough:
 
-- **Al salir:** SIGTERM y SIGKILL en la **misma llamada sincrónica** (`killTree(child, immediate)`;
-  `execFileSync` en Windows). En `before-quit` no corre nada asíncrono — el `setTimeout` de respaldo
-  que había antes no se ejecutó nunca.
-- **Al arrancar:** `reapOrphanedSoffice()` mata lo que haya quedado de un crash (que se saltea
-  `before-quit` entero), filtrando por **nuestro propio** `-env:UserInstallation`, así que una copia
-  de LibreOffice del usuario nunca se toca. No hay equivalente en Windows sin PowerShell/WMI: ahí el
-  huérfano lo sigue limpiando `resetSofficeProfile` después de los timeouts.
+- **On quit:** SIGTERM and SIGKILL in the **same synchronous call** (`killTree(child, immediate)`;
+  `execFileSync` on Windows). Nothing asynchronous runs in `before-quit` — the fallback
+  `setTimeout` that was there before never ran.
+- **On startup:** `reapOrphanedSoffice()` kills whatever was left over from a crash (which skips
+  `before-quit` entirely), filtering by **our own** `-env:UserInstallation`, so a user's copy of
+  LibreOffice is never touched. There's no Windows equivalent without PowerShell/WMI: there the
+  orphan is still cleaned up by `resetSofficeProfile` after the timeouts.
 
-Detalle completo en
+Full detail in
 [`.claude/knowledge/nothing-asynchronous-survives-before-quit.md`](../../.claude/knowledge/nothing-asynchronous-survives-before-quit.md).
 
-## Progreso: por página sólo para lo interactivo
+## Progress: per page only for interactive work
 
-`deck-progress` se emite **por página rasterizada únicamente para jobs `interactive`**
-(`emitPageProgress`). Para trabajo de fondo salen sólo las transiciones de estado; el progreso
-agregado del lote viaja por `prewarm-progress`. Emitir el por-página también en fondo convertía una
-carpeta de 600 decks en ~18.000 mensajes IPC, cada uno clonando en el renderer un `Record` que
-crece con cada deck — ver
+`deck-progress` is emitted **per rasterized page only for `interactive` jobs**
+(`emitPageProgress`). For background work only the state transitions go out; the batch's aggregate
+progress travels over `prewarm-progress`. Emitting the per-page progress in the background too
+turned a 600-deck folder into ~18,000 IPC messages, each one cloning in the renderer a `Record`
+that grows with every deck — see
 [`.claude/knowledge/an-aggregate-progress-channel-only-helps-if-the-per-item-one-goes-quiet.md`](../../.claude/knowledge/an-aggregate-progress-channel-only-helps-if-the-per-item-one-goes-quiet.md).
 
-## Se acabó la danza del overlay
+## The overlay dance is over
 
-Como una diapositiva ahora es un `<img>`, la ventana de proyección **nunca se esconde**. NEGRO y
-LOGO son resultados normales de `selectOutput`, y el canal `projection:setOverlayVisible`
-desapareció. El audio del deck sigue sonando durante NEGRO — verificado.
+Since a slide is now an `<img>`, the projection window **never hides**. BLACK and LOGO are normal
+`selectOutput` results, and the `projection:setOverlayVisible` channel is gone. Since 2026-09-09
+the deck's audio pauses under BLACK/LOGO (and auto-advance freezes), resuming where it was — see
+[`.claude/knowledge/deck-soundtrack-negro-logo-pause-and-autoplay-freeze.md`](../../.claude/knowledge/deck-soundtrack-negro-logo-pause-and-autoplay-freeze.md).
 
-## Servido
+## Serving
 
-`worship://deck/<deckId>/<n>[/thumb]` resuelve contra `deck_slides` y se sirve con
-`Cache-Control: public, max-age=31536000, immutable` — el par `(deckId, slideIndex)` es inmutable
-por construcción (otro contenido ⇒ otro hash ⇒ otro deckId). Sin ese header Chromium releería cada
-imagen en cada cambio de diapositiva, en vivo. El audio (`worship://deck-audio/<id>`) va sin ese
-header porque se recorre con seek, no se reemplaza.
+`worship://deck/<deckId>/<n>[/thumb]` resolves against `deck_slides` and is served with
+`Cache-Control: public, max-age=31536000, immutable` — the `(deckId, slideIndex)` pair is immutable
+by construction (different content ⇒ different hash ⇒ different deckId). Without that header
+Chromium would re-read every image on every slide change, live. The audio
+(`worship://deck-audio/<id>`) goes without that header because it's traversed with seeks, not
+replaced.
 
-Todo lo que sirve `worship://` pasa por `serveFile()`, que implementa **semántica real de
-`Range`** (206 + `Content-Range`, `Accept-Ranges: bytes`, 416, streaming con
-`fs.createReadStream({start,end})`). Antes delegaba en `net.fetch(file://…)` sin reenviar los
-headers, lo que dejaba a todo video/audio **sin seek** y rompía la reproducción con
-`PIPELINE_ERROR_DECODE (-12909)` por datos desalineados — ver
+Everything `worship://` serves goes through `serveFile()`, which implements **real `Range`
+semantics** (206 + `Content-Range`, `Accept-Ranges: bytes`, 416, streaming with
+`fs.createReadStream({start,end})`). It used to delegate to `net.fetch(file://…)` without
+forwarding the headers, which left all video/audio **without seek** and broke playback with
+`PIPELINE_ERROR_DECODE (-12909)` from misaligned data — see
 [`.claude/knowledge/worship-protocol-range-and-video-lifecycle.md`](../../.claude/knowledge/worship-protocol-range-and-video-lifecycle.md).
 
-## Verificación sin levantar la app
+## Verification without launching the app
 
 ```bash
-npm run slides:smoke -- "ruta/al/archivo.pptx"
+npm run slides:smoke -- "path/to/file.pptx"
 ```
 
-Cubre discovery de soffice, conversión a PDF, el round-trip de `.ppt` legacy, orden de
-diapositivas, timings, slides ocultas y extracción de audio. El rasterizado no entra ahí porque
-necesita el canvas de Chromium — eso solo corre dentro de la app.
+Covers soffice discovery, conversion to PDF, the legacy `.ppt` round-trip, slide order, timings,
+hidden slides and audio extraction. Rasterizing isn't covered there because it needs Chromium's
+canvas — that only runs inside the app.

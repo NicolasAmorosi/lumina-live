@@ -61,7 +61,7 @@ type ProgramSidePanelProps = {
    *  cancel — and it's the caller, not the panel, that closes on success, so
    *  the unsaved-changes guard never fires on a save that just succeeded. */
   onDone: (mode: PanelMode, opened?: boolean) => void;
-  /** "Abrir" in `preview` mode goes through the same unsaved-changes guard as
+  /** "Open" in `preview` mode goes through the same unsaved-changes guard as
    *  double-clicking a row — the caller may swap this panel to `discard`
    *  instead of opening right away. */
   onRequestOpen: (id: number, name: string) => void;
@@ -114,7 +114,7 @@ export function ProgramSidePanel({ mode, onClose, onDirtyChange, onDone, onReque
   const [previewProgram, setPreviewProgram] = useState<ProgramDTO | null>(null);
   // Effects run after the first paint. Starting a preview as "not loading"
   // briefly selected the real empty-state branch while `previewProgram` was
-  // still null, so switching programs flashed "Programa vacío" before the
+  // still null, so switching programs flashed "Empty schedule" before the
   // skeleton appeared. This component is keyed by panel mode/target, so the
   // initializer is evaluated for every new preview target.
   const [previewLoading, setPreviewLoading] = useState(mode.kind === "preview");

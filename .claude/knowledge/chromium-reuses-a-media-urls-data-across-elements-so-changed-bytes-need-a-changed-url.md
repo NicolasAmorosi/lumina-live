@@ -29,9 +29,9 @@ a relocate); touching `playableAssetUrl` in `stores/conversion.store.ts`.
   to every request for the id and ignored the query. Then an element that started on the original
   (a native-looking `.mkv` with AC3, projected before its probe finished) got the copy's bytes on its
   next Range request when the copy landed, and playback died mid-song (found in the review of the
-  same day). A video's url is resolved once at EN VIVO and travels in `BaseContent` (`url`), because
+  same day). A video's url is resolved once at GO LIVE and travels in `BaseContent` (`url`), because
   `selectOutput` must stay pure. Reading the store there would also have swapped the file on the
-  next recompute, e.g. a NEGRO toggle.
+  next recompute, e.g. a BLACK toggle.
 - **The same rule for slide clips:** `deckVideoUrl`/`deckAudioUrl` carry the clip's file name
   (`?f=`), which changes when `media/deck-clips.ts` replaces it, and the protocol serves the file
   named.

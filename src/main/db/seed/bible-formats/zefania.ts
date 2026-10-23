@@ -2,6 +2,7 @@ import { XMLParser } from "fast-xml-parser";
 import { canonByIndex, canonByLooseCode } from "./canon";
 import { asPlainText, BibleFormatError, BookCollector, type ParsedBible } from "./types";
 import { normalizeLanguage } from "./language";
+import { mt } from "../../../i18n";
 
 /**
  * Zefania XML — the most widely mirrored free bible format (the Zefania Sharp
@@ -82,7 +83,7 @@ function firstChildText(node: unknown, name: string): string | null {
 export function parseZefania(xml: string): ParsedBible {
   const root = parser.parse(xml) as Record<string, unknown>;
   const bible = root["XMLBIBLE"] ?? root["xmlbible"] ?? root["X"];
-  if (bible === undefined) throw new BibleFormatError("El XML no es una Biblia Zefania: falta el elemento <XMLBIBLE>.");
+  if (bible === undefined) throw new BibleFormatError(mt("bible.notZefania"));
 
   const information = (bible as Record<string, unknown>)["INFORMATION"];
   const name = firstChildText(information, "title") ?? attr(bible, "biblename");
@@ -114,5 +115,5 @@ export function parseZefania(xml: string): ParsedBible {
     }
   }
 
-  return { name, language, books: collector.finish() };
+  return { name, language, books: collector.finish(language) };
 }

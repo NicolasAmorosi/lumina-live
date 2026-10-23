@@ -78,11 +78,11 @@ const VERSION_DISPLAY_LABEL: Record<VersionDisplay, MessageKey> = {
 };
 
 /**
- * «Versículos»: how a verse is dressed on the projector.
+ * «Verses»: how a verse is dressed on the projector.
  *
- * Its own category of Ajustes, beside «Biblia» rather than inside it. The two
+ * Its own category of Settings, beside «Bible» rather than inside it. The two
  * were one section with two tabs, and the pairing was an accident of the word
- * «Biblia»: nothing here knows which bibles are installed, and nothing there
+ * «Bible»: nothing here knows which bibles are installed, and nothing there
  * knows what a verse looks like.
  *
  * Saving is IMMEDIATE, unlike the time-scene editor, and that is a decision
@@ -92,7 +92,7 @@ const VERSION_DISPLAY_LABEL: Record<VersionDisplay, MessageKey> = {
  * congregation. Nothing here is the verse's TEXT — every control is a look —
  * so the worst an immediate write can do is restyle what is already on screen,
  * which is precisely what the operator is asking for while they watch the
- * preview above. It also makes this behave like the rest of Ajustes, where
+ * preview above. It also makes this behave like the rest of Settings, where
  * every toggle is already immediate.
  *
  * And because it is immediate, it reaches the projector with no scene
@@ -148,7 +148,7 @@ export function VerseSection() {
   }
 
   return (
-    // This section owns its own scrolling, unlike the other four in Ajustes —
+    // This section owns its own scrolling, unlike the other four in Settings —
     // see the note in `SettingsModal`.
     <div className="flex min-h-0 flex-1 flex-col">
       {/* A FIXED band above the controls, the same shape and the same classes

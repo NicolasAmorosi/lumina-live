@@ -4,6 +4,7 @@ import { removeUtilityScene } from "../../services/utility-scene-removal";
 import { IpcError } from "@shared/ipc/result";
 import { isSceneName, isUtilitySceneUpsert } from "@shared/scene-validators";
 import type { UtilityScene } from "@shared/types/utility";
+import { mt } from "../../i18n";
 
 /**
  * Saved time scenes. CRUD and nothing else — main deliberately knows nothing
@@ -19,7 +20,7 @@ import type { UtilityScene } from "@shared/types/utility";
  */
 function assertValid(input: unknown): Omit<UtilityScene, "id"> {
   if (!isUtilitySceneUpsert(input)) {
-    throw new IpcError({ code: "INVALID_UTILITY_SCENE", message: "La escena tiene campos inválidos." });
+    throw new IpcError({ code: "INVALID_UTILITY_SCENE", message: mt("scenes.invalid") });
   }
   const { id: _id, ...scene } = input;
   return scene;
@@ -40,7 +41,7 @@ export const utilityHandlers: Pick<
   "utility:update": (input) => getUtilityRepo().update(input.id, assertValid(input)),
   "utility:duplicate": ({ id, name }) => {
     if (!isSceneName(name)) {
-      throw new IpcError({ code: "INVALID_UTILITY_SCENE", message: "El nombre de la escena no es válido." });
+      throw new IpcError({ code: "INVALID_UTILITY_SCENE", message: mt("scenes.invalidName") });
     }
     return getUtilityRepo().duplicate(id, name.trim());
   },

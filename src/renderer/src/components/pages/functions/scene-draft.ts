@@ -4,7 +4,7 @@ import { DEFAULT_TIMER_FORMAT } from "@shared/types/timer";
 import type { UtilityScene, UtilitySceneUpsert } from "@shared/types/utility";
 
 /**
- * The scene being edited in the «Escenas» modal.
+ * The scene being edited in the «Scenes» modal.
  *
  * Structurally a scene minus its id — which is deliberately NOT part of the
  * draft: the modal knows which row it is editing (or that it is creating one),
@@ -40,7 +40,7 @@ export function toDraft(scene: UtilityScene): SceneDraft {
  * Whether this draft is one main would accept.
  *
  * The very same predicate the handler runs, rather than a second, looser set
- * of rules in the UI: a Guardar button that is enabled for something main will
+ * of rules in the UI: a Save button that is enabled for something main will
  * reject is a button that lies. The form's own fields already refuse to commit
  * an unparseable duration, so in practice this catches the two things a field
  * cannot: an empty name, and an image background with no image chosen yet.

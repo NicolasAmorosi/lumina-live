@@ -9,7 +9,6 @@ export type DeckState = {
   /** Force a re-conversion (retry / stale file). Refused, with a toast, while
    *  that very deck is on the projector — see `reconvertDeck`. */
   reconvert: () => void;
-  locateSoffice: () => void;
   markStale: () => void;
   /** Cache-only re-fetch of the DTO — for after a change that never touches
    *  the deck cache, like setting the linked-audio override. */
@@ -18,7 +17,7 @@ export type DeckState = {
 
 /**
  * Loads the deck for `assetId`, converting it on selection so it is warm
- * before anyone hits EN VIVO. The cache-only `peek` first keeps an
+ * before anyone hits GO LIVE. The cache-only `peek` first keeps an
  * already-converted deck from re-entering the queue on every click.
  *
  * Extracted from the old DeckPreview so the slide grid and the preview monitor
@@ -37,13 +36,12 @@ export function useDeck(assetId: number | null, requiresSoffice = true): DeckSta
   const environment = useDeckStore((s) => s.environment);
   const ensure = useDeckStore((s) => s.ensure);
   const peek = useDeckStore((s) => s.peek);
-  const locateSoffice = useDeckStore((s) => s.locateSoffice);
   const markStale = useDeckStore((s) => s.markStale);
   const refreshDeck = useDeckStore((s) => s.peek);
   // Asked again whenever this deck's entry DISAPPEARS: the store drops one
   // that turns `ready` with no DTO and nobody awaiting it — a deck the
   // operator cancelled and a background prewarm finished later — and the
-  // panel then sat on «Preparando la conversión…» over a ready deck.
+  // panel then sat on «Getting ready to convert…» over a ready deck.
   const missing = entry === undefined;
 
   useEffect(() => {
@@ -70,7 +68,6 @@ export function useDeck(assetId: number | null, requiresSoffice = true): DeckSta
     reconvert: () => {
       if (assetId !== null) reconvertDeck(assetId);
     },
-    locateSoffice: () => void locateSoffice(),
     markStale: () => {
       if (assetId !== null) markStale(assetId);
     },

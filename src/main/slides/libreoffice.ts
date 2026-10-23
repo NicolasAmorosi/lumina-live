@@ -7,6 +7,7 @@ import { SOFFICE_PROBE_TIMEOUT_MS } from "@shared/constants";
 import { sofficeProfileDir } from "../paths";
 import { getSettingsRepo } from "../services/repos";
 import { SlideError, isSlideError } from "./errors";
+import { mt } from "../i18n";
 
 export type SofficeFlavor = "native" | "flatpak" | "snap";
 
@@ -165,8 +166,7 @@ async function buildStatus(exe: string, source: SofficeInfo["source"]): Promise<
     return {
       available: false,
       reason: "unsupported-flavor",
-      message:
-        "La versión de LibreOffice instalada (flatpak/snap) está aislada del sistema de archivos y no puede convertir presentaciones. Instalá el paquete nativo (.deb/.rpm).",
+      message: mt("slides.sofficeSandboxed"),
       checkedPaths: [exe],
       overridePath: null,
     };
@@ -176,7 +176,7 @@ async function buildStatus(exe: string, source: SofficeInfo["source"]): Promise<
     return {
       available: false,
       reason: "probe-failed",
-      message: `Se encontró LibreOffice en ${exe} pero no respondió a --version.`,
+      message: mt("slides.sofficeNoVersion", { path: exe }),
       checkedPaths: [exe],
       overridePath: null,
     };
@@ -233,7 +233,7 @@ async function runLocateSoffice(): Promise<SofficeStatus> {
       : {
           available: false,
           reason: "not-executable",
-          message: `La ruta configurada para LibreOffice no es ejecutable: ${override}`,
+          message: mt("slides.sofficeNotExecutable", { path: override }),
           checkedPaths: [override],
           overridePath: override,
         };
@@ -277,11 +277,29 @@ async function runLocateSoffice(): Promise<SofficeStatus> {
     : {
         available: false,
         reason: "not-found",
-        message: "No se encontró LibreOffice en este sistema.",
+        message: mt("slides.sofficeNotFound"),
         checkedPaths: checked,
         overridePath: null,
       };
   return cached;
+}
+
+function unavailableError(status: Extract<SofficeStatus, { available: false }>): SlideError {
+  const code =
+    status.reason === "not-executable"
+      ? "SOFFICE_NOT_EXECUTABLE"
+      : status.reason === "unsupported-flavor"
+        ? "SOFFICE_UNSUPPORTED_FLAVOR"
+        : "SOFFICE_NOT_FOUND";
+  return new SlideError(code, status.message);
+}
+
+/** The error a conversion would fail with right now, by the last sweep's
+ *  answer and without looking again — `null` while LibreOffice is available or
+ *  before any sweep has answered. For work nobody is waiting on: unlike
+ *  `requireSoffice`, it never pays for a new sweep. */
+export function cachedSofficeError(): SlideError | null {
+  return cached && !cached.available ? unavailableError(cached) : null;
 }
 
 export async function requireSoffice(): Promise<SofficeInfo> {
@@ -290,15 +308,7 @@ export async function requireSoffice(): Promise<SofficeInfo> {
   // a conversion about to fail on it looks again: the startup probe can time
   // out on a cold machine, and that must not mean "no presentations today".
   if (!status.available && status.reason !== "unsupported-flavor") status = await locateSoffice({ force: true });
-  if (!status.available) {
-    const code =
-      status.reason === "not-executable"
-        ? "SOFFICE_NOT_EXECUTABLE"
-        : status.reason === "unsupported-flavor"
-          ? "SOFFICE_UNSUPPORTED_FLAVOR"
-          : "SOFFICE_NOT_FOUND";
-    throw new SlideError(code, status.message);
-  }
+  if (!status.available) throw unavailableError(status);
   return status.info;
 }
 
@@ -394,7 +404,7 @@ function escapeForRegex(value: string): string {
  * Best-effort and non-blocking: `pkill` exits 1 when nothing matched, which is
  * the normal case. On Windows there is no `pkill`, and no built-in that can
  * filter processes by command line except WMI, so it goes through PowerShell.
- * That case matters MORE there: a «Finalizar tarea» on a frozen app leaves
+ * That case matters MORE there: a «End task» on a frozen app leaves
  * `soffice.bin` holding the profile, `resetSofficeProfile` cannot delete a
  * locked folder, and every conversion kept failing until a reboot.
  */
@@ -451,7 +461,7 @@ function runSoffice(options: RunOptions): Promise<void> {
   // once, but the killed instance keeps the shared profile's lock and pipe
   // until it exits — and on Windows `taskkill` is itself asynchronous — so a
   // conversion started in that window exited 1 with nothing to show: the
-  // interactive EN VIVO that had just preempted a «Preparar carpeta» batch.
+  // interactive GO LIVE that had just preempted a «Prepare folder» batch.
   // Rejections are swallowed here so one failure never wedges the chain;
   // callers still get their own through `done`.
   sofficeChain = started.then((run) => run.exited).catch(() => undefined);
@@ -489,7 +499,7 @@ function runSofficeExclusive(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
-      reject(new SlideError("CANCELED", "Conversión cancelada."));
+      reject(new SlideError("CANCELED", mt("slides.canceled")));
       return;
     }
 
@@ -538,7 +548,7 @@ function runSofficeExclusive(
         reject(
           new SlideError(
             "SOFFICE_TIMEOUT",
-            `LibreOffice no respondió en ${Math.round(timeoutMs / 1000)}s. Si lo tenés abierto, cerralo y probá de nuevo.`,
+            mt("slides.sofficeTimeout", { seconds: Math.round(timeoutMs / 1000) }),
           ),
         ),
       );
@@ -546,7 +556,7 @@ function runSofficeExclusive(
 
     const onAbort = () => {
       killTree(child);
-      finish(() => reject(new SlideError("CANCELED", "Conversión cancelada.")));
+      finish(() => reject(new SlideError("CANCELED", mt("slides.canceled"))));
     };
     signal?.addEventListener("abort", onAbort, { once: true });
 
@@ -561,7 +571,7 @@ function runSofficeExclusive(
           reject(
             new SlideError(
               "SOFFICE_FAILED",
-              `LibreOffice terminó con código ${code}. ${stderr.trim()}`.trim(),
+              mt("slides.sofficeExit", { code: String(code), detail: stderr.trim() }).trim(),
             ),
           );
       });
@@ -587,7 +597,7 @@ function profileArgs(): string[] {
 function assertSafeSourcePath(sourcePath: string): string {
   const abs = path.resolve(sourcePath);
   if (!path.isAbsolute(abs)) {
-    throw new SlideError("SOURCE_MISSING", `Ruta de origen inválida: ${sourcePath}`);
+    throw new SlideError("SOURCE_MISSING", mt("slides.invalidSource", { path: sourcePath }));
   }
   return abs;
 }
@@ -759,7 +769,7 @@ export async function convertToPdf(options: ConvertOptions): Promise<string> {
     // soffice frequently exits 0 having produced nothing at all.
     throw new SlideError(
       "PDF_MISSING",
-      "LibreOffice terminó sin generar un PDF. El archivo puede estar dañado o protegido.",
+      mt("slides.sofficeNoPdf"),
     );
   }
   return pdf;
@@ -791,7 +801,7 @@ export async function convertToPptx(options: ConvertOptions): Promise<string> {
   });
 
   const pptx = findOutput(options.outDir, ".pptx");
-  if (!pptx) throw new SlideError("PDF_MISSING", "No se pudo convertir el .ppt a .pptx.");
+  if (!pptx) throw new SlideError("PDF_MISSING", mt("slides.pptUpgradeFailed"));
   return pptx;
 }
 

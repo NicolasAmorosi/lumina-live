@@ -37,7 +37,8 @@ export type CanonBook = {
   index: number;
   /** The app's own identity for the book — `rv1909.json`'s spelling. */
   abbrev: string;
-  /** Spanish name, used when a file carries no name of its own. */
+  /** Spanish name, used when a Spanish file carries no name of its own (other
+   *  languages: `book-names.ts`). */
   name: string;
   /** USFX / Paratext three-letter id (`<book id="GEN">`), uppercase. */
   usfx: string;

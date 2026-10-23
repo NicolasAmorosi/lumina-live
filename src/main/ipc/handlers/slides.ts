@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { shell } from "electron";
 import type { Handlers } from "../register";
 import type { DeckEnvironment } from "@shared/types/deck";
 import { getSettingsRepo } from "../../services/repos";
@@ -15,11 +16,15 @@ import {
 import { cancelPrewarmBatch, deckStatuses, startPrewarmBatch } from "../../services/prewarm-service";
 import { invalidateSofficeCache, locateSoffice, type SofficeStatus } from "../../slides/libreoffice";
 import { showOpenDialogFor } from "../open-dialog";
+import { mt } from "../../i18n";
+
+/** The page that picks the right installer for the visitor's OS by itself. */
+const SOFFICE_DOWNLOAD_URL = "https://www.libreoffice.org/download/download-libreoffice/";
 
 function toEnvironment(status: SofficeStatus): DeckEnvironment {
   return status.available
-    ? { available: true, sofficePath: status.info.path, version: status.info.version }
-    : { available: false, sofficePath: null, version: null };
+    ? { available: true, sofficePath: status.info.path, version: status.info.version, message: null }
+    : { available: false, sofficePath: null, version: null, message: status.message };
 }
 
 export const slidesHandlers: Pick<
@@ -29,6 +34,7 @@ export const slidesHandlers: Pick<
   | "deck:cancel"
   | "deck:environment"
   | "deck:locateSoffice"
+  | "deck:openSofficeDownload"
   | "deck:prewarm"
   | "deck:prewarmBatch"
   | "deck:cancelPrewarmBatch"
@@ -61,11 +67,13 @@ export const slidesHandlers: Pick<
   "deck:cacheStats": () => cacheStats(),
   "deck:clearCache": () => clearCache(),
 
-  "deck:environment": async () => toEnvironment(await locateSoffice()),
+  "deck:environment": async ({ force }) => toEnvironment(await locateSoffice({ force })),
+
+  "deck:openSofficeDownload": () => shell.openExternal(SOFFICE_DOWNLOAD_URL),
 
   "deck:locateSoffice": async (_req, ev) => {
     const result = await showOpenDialogFor(ev.sender, {
-      title: "Seleccioná el ejecutable de LibreOffice (soffice)",
+      title: mt("dialogs.chooseSoffice"),
       properties: ["openFile"],
       ...(process.platform === "darwin" ? { defaultPath: "/Applications" } : {}),
     });

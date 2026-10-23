@@ -43,7 +43,7 @@ type Pending =
  * The scene editor: the list on the left, one scene's fields on the right,
  * and the projector's own renderer at the top of it.
  *
- * Saving is EXPLICIT, unlike Ajustes, and that is a decision rather than an
+ * Saving is EXPLICIT, unlike Settings, and that is a decision rather than an
  * inconsistency: a scene can be on the projector while it is being edited, and
  * writing on every keystroke would spell a new end message out letter by
  * letter in front of the congregation. The 16:9 preview is what makes the
@@ -73,7 +73,7 @@ export function ScenesModal({ onOpenChange, open }: { onOpenChange: (open: boole
    *  the wrong gate for it: creating one and saving it untouched is a perfectly
    *  ordinary thing to do, and comparing a fresh draft against its own copy
    *  left the button dead. `dirty` keeps its own meaning — it is what the
-   *  discard guard and «Deshacer cambios» ask. */
+   *  discard guard and «Revert changes» ask. */
   const canSave = editing !== null && isDraftSavable(editing.draft) && (editing.sceneId === null || dirty);
 
   // The image library, for an image background's picker. Read on open rather

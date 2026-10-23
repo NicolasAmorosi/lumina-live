@@ -20,7 +20,7 @@ import type { SceneDraft } from "./scene-draft";
  * The clock is the scene's RESTING value, not the armed timer's: this is the
  * editor, and a countdown here should read as its full duration rather than as
  * whatever is running elsewhere. `editorRestingClock` and not `initialClock`,
- * because «comenzamos a una hora» rests at zero for the rest of the day once
+ * because «countdown to time» rests at zero for the rest of the day once
  * its hour has gone by — and a preview that falls into the end state on its
  * own is a preview that answers a question the operator did not ask.
  * `INSTANT_TRANSITION` keeps `epoch` fixed, so `OutputView`'s `sameEpoch`
@@ -31,8 +31,8 @@ import type { SceneDraft } from "./scene-draft";
  * `atEnd` swaps that resting clock for a countdown HELD AT ZERO — which is not
  * a preview mode but the very state the projector rests in when the count runs
  * out, so the end message, its own type and the two hides are drawn by exactly
- * the code that will draw them on the night. Without it the whole «Al terminar
- * la cuenta» group would be configured blind.
+ * the code that will draw them on the night. Without it the whole «When the countdown
+ * ends» group would be configured blind.
  */
 export function ScenePreview({ atEnd, draft }: { atEnd: boolean; draft: SceneDraft }) {
   const output = useMemo(() => {

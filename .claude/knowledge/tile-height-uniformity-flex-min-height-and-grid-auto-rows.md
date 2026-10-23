@@ -56,9 +56,9 @@
 
 ### The width half of the same bug, found the next day (2026-09-11, later)
 
-The height fixes above shipped and the grid still looked wrong: the user reported that "todas
-las miniaturas tienen formatos incorrectos", videos and images "más anchas", unconverted decks
-"como una sola línea".
+The height fixes above shipped and the grid still looked wrong: the user reported that "all
+the thumbnails have the wrong formats", videos and images "wider", unconverted decks
+"like a single line".
 
 - **Believed:** a `<button className="flex h-full w-…">` fills the box its container gives it,
   so `h-full` was the only thing missing when `ThumbTile` stopped being laid out directly by a

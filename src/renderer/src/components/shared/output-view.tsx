@@ -65,7 +65,7 @@ function sceneContentKey(output: ProjectionOutput): string {
 }
 
 type LiveVideoProps = {
-  /** NEGRO/LOGO is over the video right now. */
+  /** BLACK/LOGO is over the video right now. */
   covered: boolean;
   /** The transition this video is entering on is held at its first keyframe
    *  until `onFirstFrame` — see the video hold in `OutputView`. */
@@ -93,13 +93,13 @@ type LiveVideoProps = {
   onFreezeFrame?: ((video: HTMLVideoElement) => void) | undefined;
   /** Declarative, operator-controlled pause from the media panel — distinct
    *  from `covered`, and deliberately takes priority: an explicit pause must
-   *  survive a NEGRO/LOGO round-trip instead of being silently overridden by
+   *  survive a BLACK/LOGO round-trip instead of being silently overridden by
    *  it when the overlay comes back off. */
   paused: boolean;
   /** This element's part in whatever transition is currently in flight (or
    *  "steady" when there isn't one) — see `OutputView`'s `videoRole`. */
   role: LayerRole;
-  /** Point the operator chose on the preview scrubber before EN VIVO. Applied
+  /** Point the operator chose on the preview scrubber before GO LIVE. Applied
    *  once, right when this element mounts — never re-applied later, so a
    *  scrub from the media panel afterwards isn't fought on the next render. */
   startAtSeconds: number;
@@ -114,12 +114,12 @@ type LiveVideoProps = {
 
 /**
  * The projector's video element. Kept mounted for as long as the *base* content
- * is this video — NEGRO/LOGO only covers it — because tearing the element down
+ * is this video — BLACK/LOGO only covers it — because tearing the element down
  * and rebuilding it on every overlay toggle churns Chromium's media pipeline
  * for nothing.
  *
  * Covering it pauses it and holds its position, rather than letting it run on
- * unseen: the operator expects NEGRO to stop the video. A deck's own
+ * unseen: the operator expects BLACK to stop the video. A deck's own
  * soundtrack (`ProjectionApp`) now follows the same rule; only a standalone
  * audio asset sent live is meant to keep playing through an overlay.
  *
@@ -212,7 +212,7 @@ function LiveVideo({
   }
 
   // `autoPlay` only applies to a freshly loaded element, so every transition —
-  // NEGRO/LOGO, and an operator pause/resume from the media panel — has to be
+  // BLACK/LOGO, and an operator pause/resume from the media panel — has to be
   // driven imperatively.
   useEffect(() => {
     const element = elementRef.current;
@@ -285,7 +285,7 @@ function LiveVideo({
 }
 
 type SlideVideoLayerProps = {
-  /** NEGRO/LOGO is over the slide right now, or something else entirely went
+  /** BLACK/LOGO is over the slide right now, or something else entirely went
    *  live. Hides and pauses; never unmounts. */
   covered: boolean;
   held: boolean;
@@ -324,7 +324,7 @@ type SlideVideoLayerProps = {
  *
  * It never unmounts on an overlay. Covering is opacity + pause, the same
  * bargain `LiveVideo` makes and for the same reason — a `<video>` torn down
- * and rebuilt on every NEGRO is the documented road to
+ * and rebuilt on every BLACK is the documented road to
  * `PIPELINE_ERROR_DECODE`. And it captures no frozen frame on the way out:
  * the still slide underneath already shows this video's poster frame, drawn
  * there by LibreOffice, so there is nothing to preserve.
@@ -356,7 +356,7 @@ function SlideVideoLayer({
   // `autoPlay` only applies to a freshly loaded element, so every later
   // transition — an overlay, an operator pause — is driven imperatively.
   //
-  // Except one: lifting NEGRO/LOGO off a clip that had already ended. Unlike
+  // Except one: lifting BLACK/LOGO off a clip that had already ended. Unlike
   // `LiveVideo`, whose ended video leaves the air on its own
   // (`end-of-playback.ts`), this one stays on its slide, and `play()` on an
   // ended element restarts it from 0 by spec — the whole clip again, sound
@@ -695,8 +695,8 @@ type OutputViewProps = {
   slideVideoRef?: Ref<HTMLVideoElement>;
   videoRef?: Ref<HTMLVideoElement>;
   /**
-   * The LIVE monitor with its moving video turned off (Ajustes → Sistema →
-   * Rendimiento): no `<video>` is mounted at all — neither the full-screen one
+   * The LIVE monitor with its moving video turned off (Settings → System →
+   * Performance): no `<video>` is mounted at all — neither the full-screen one
    * nor a slide's — so the control window decodes nothing. A full-screen video
    * is shown as `posterUrl` instead; a slide's video needs nothing, its slide
    * image already carries its cover frame. `videoUrl` names the video the
@@ -805,7 +805,7 @@ function withoutOutgoing(layers: Layer[], seq: number): Layer[] {
  *
  * The persistent `<video>` (kept mounted independent of any layer — see
  * `LiveVideo`) participates in the same fade: covering/uncovering it with
- * NEGRO/LOGO is a real transition between "the video" and "an opaque scene",
+ * BLACK/LOGO is a real transition between "the video" and "an opaque scene",
  * so it needs to know which side of the current transition (if any) it's on
  * — see `videoRole` below. It is always the side that is ENTERING, because
  * the element that exists during a transition is by construction the one
@@ -1134,7 +1134,7 @@ export function OutputView({
     );
   }
 
-  // The video wins when both could apply: with NEGRO/LOGO over a broken
+  // The video wins when both could apply: with BLACK/LOGO over a broken
   // video, "the video won't play" is the fact the operator needs — the
   // overlay itself is fine and is about to come off.
   const videoUnderlayUrl = output.videoUnderlay?.url ?? null;
@@ -1174,7 +1174,7 @@ export function OutputView({
    *
    * Decided by the INCOMING layer, never the outgoing one. The element that
    * exists during a transition is always the one belonging to the output that
-   * just arrived — `videoEpoch` advances on every EN VIVO of a video
+   * just arrived — `videoEpoch` advances on every GO LIVE of a video
    * (`lib/actions/playback.ts`), so a video->video swap re-keys it and the
    * mounted element is the new video. Asking about `layers[0]` first meant
    * that in exactly that case both branches matched, the outgoing one won, and

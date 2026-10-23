@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { api } from "@renderer/lib/api";
 import { IpcError } from "@shared/ipc/result";
+import { deckRequiresSoffice } from "@shared/constants";
 import type { DeckDTO, DeckEnvironment, DeckProgress, DeckStatus, PrewarmProgress } from "@shared/types/deck";
 
 export type DeckEntry = {
@@ -10,7 +11,7 @@ export type DeckEntry = {
   error: string | null;
 };
 
-/** One tracked "Preparar carpeta/vista" batch — `null` when none is running.
+/** One tracked "Prepare folder/view" batch — `null` when none is running.
  *  Mirrors `PrewarmProgress` from main; the terminal statuses stay in this
  *  store just long enough for the UI to render the wrap-up before the caller
  *  clears it (`clearPrewarmBatch`). */
@@ -28,7 +29,8 @@ type DeckStoreState = {
    *  entries. */
   readyEpoch: number;
 
-  loadEnvironment: () => Promise<void>;
+  /** `force` sweeps the disk again instead of reading main's last answer. */
+  loadEnvironment: (force?: boolean) => Promise<void>;
   locateSoffice: () => Promise<void>;
   /** Cache-only peek — never starts a conversion, so listing a playlist can't
    *  kick off work by accident. */
@@ -56,7 +58,7 @@ type DeckStoreState = {
   clearPrewarmBatch: () => void;
 };
 
-/** In-flight ensure() calls, so the preview effect and "EN VIVO" firing within
+/** In-flight ensure() calls, so the preview effect and "GO LIVE" firing within
  *  milliseconds of each other share one request (main dedupes too, but this
  *  keeps the store from thrashing). */
 const pending = new Map<number, Promise<DeckDTO | null>>();
@@ -83,6 +85,17 @@ function isCurrent(assetId: number, gen: number): boolean {
   return (generation.get(assetId) ?? 0) === gen;
 }
 
+/**
+ * Whether a deck with this extension cannot be converted right now: LibreOffice
+ * is known to be missing and the deck is not a PDF (`deckRequiresSoffice`).
+ * Says nothing about a deck that is already converted — that one projects
+ * without LibreOffice, so every gate built on this also asks whether there are
+ * slides to show. An environment not asked for yet is not "missing".
+ */
+export function sofficeBlocks(environment: DeckEnvironment | null, ext: string): boolean {
+  return environment?.available === false && deckRequiresSoffice(ext);
+}
+
 function entryFor(deck: DeckDTO): DeckEntry {
   return {
     status: deck.status,
@@ -98,8 +111,8 @@ export const useDeckStore = create<DeckStoreState>((set, get) => ({
   prewarmBatch: null,
   readyEpoch: 0,
 
-  loadEnvironment: async () => {
-    set({ environment: await api.deck.environment() });
+  loadEnvironment: async (force = false) => {
+    set({ environment: await api.deck.environment(force) });
   },
 
   locateSoffice: async () => {
@@ -129,7 +142,7 @@ export const useDeckStore = create<DeckStoreState>((set, get) => ({
     // milliseconds and never actually does any work. Skipping the flip (and
     // still firing the IPC call below, for the `touchDeck`/relink side
     // effects) is what stops an already-prepared deck from flashing
-    // "Convirtiendo diapositivas… N de N" on its way to EN VIVO. A genuine
+    // "Converting slides… N of N" on its way to GO LIVE. A genuine
     // reconversion (`force`) always shows it.
     if (!force && current?.status === "ready" && current.deck) {
       // fall through to the request below without touching byAssetId
@@ -142,7 +155,7 @@ export const useDeckStore = create<DeckStoreState>((set, get) => ({
             // Never inherit a previous run's numbers — a real conversion
             // starts at 0/0 ("preparing") and grows from there; carrying
             // over an old deck's slide count is what produced the false
-            // "8 de 8" for work that hadn't started.
+            // "8 of 8" for work that hadn't started.
             progress: { done: 0, total: 0 },
             deck: s.byAssetId[assetId]?.deck ?? null,
             error: null,
@@ -155,18 +168,24 @@ export const useDeckStore = create<DeckStoreState>((set, get) => ({
     const request: Promise<DeckDTO | null> = api.deck
       .ensure(assetId, force)
       .then((deck) => {
+        // A conversion asks main for LibreOffice again (`requireSoffice`), so
+        // one that worked may have found it installed since the app opened —
+        // re-read, or every other deck would stay behind the gate.
+        if (get().environment?.available === false) void get().loadEnvironment();
         if (!isCurrent(assetId, gen)) return null;
         set((s) => ({ byAssetId: { ...s.byAssetId, [assetId]: entryFor(deck) } }));
         return deck;
       })
       .catch((error: unknown) => {
+        // And the reverse: one that failed may have found it gone.
+        if (get().environment?.available) void get().loadEnvironment();
         if (!isCurrent(assetId, gen)) return null;
         const message = error instanceof Error ? error.message : String(error);
         // A cancellation is not a failure — it is what the operator asked for.
         // It only became reachable at all once main started settling a job it
         // pulls out of the queue (before that, cancelling a queued deck left
-        // this promise pending forever), so surfacing it as "no se pudo
-        // convertir" would be a new, wrong error message rather than an old one.
+        // this promise pending forever), so surfacing it as "couldn't
+        // convert" would be a new, wrong error message rather than an old one.
         const canceled = error instanceof IpcError && error.code === "CANCELED";
         set((s) => ({
           byAssetId: {
@@ -216,7 +235,7 @@ export const useDeckStore = create<DeckStoreState>((set, get) => ({
    *   `peek`/`ensure`, i.e. for decks the operator actually opened. The one
    *   exception is an `ensure` still in flight for that same asset: main
    *   pushes `ready` a moment BEFORE the call resolves, and dropping the entry
-   *   in that window would flash `DeckConversionStatus`'s "Preparando…" over a
+   *   in that window would flash `DeckConversionStatus`'s "Getting ready…" over a
    *   deck that is in fact finished (`!entry` reads as "queued" there).
    */
   markStatusesChanged: () => {
@@ -271,7 +290,7 @@ export const useDeckStore = create<DeckStoreState>((set, get) => ({
     // Marked here as well: a cancel pressed before the request reached main
     // finds nothing there to cancel and gets no push back, so the click was
     // lost and the conversion started anyway. `useDeck` leaves a cancelled
-    // deck alone until «Reintentar».
+    // deck alone until «Retry».
     set((s) => ({
       byAssetId: {
         ...s.byAssetId,

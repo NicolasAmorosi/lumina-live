@@ -33,7 +33,7 @@ type PreviewStoreState = {
   slideIndex: number;
   target: PreviewTarget | null;
   /** For a video/audio target: where the preview currently is. Doubles as
-   *  where EN VIVO should start it — the same value whether the preview is
+   *  where GO LIVE should start it — the same value whether the preview is
    *  paused (the old "pick a start point" flow) or was actually playing.
    *  Kept updated live by `use-preview-media-status.ts` while a video plays;
    *  for audio it only ever moves via the scrubber, exactly as before. */

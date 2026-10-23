@@ -14,7 +14,7 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const variants: Record<ButtonVariant, string> = {
-  // The border is the dark theme's: its primario is 1.31:1 from the fondo,
+  // The border is the dark theme's: its primary is 1.31:1 from the background,
   // and without an edge the button is a label floating on nothing. On the
   // light theme `primary-border` IS the fill, so it adds nothing there.
   primary: "border border-primary-border bg-primary text-primary-foreground hover:bg-primary-hover active:bg-primary-hover/80",
@@ -23,8 +23,8 @@ const variants: Record<ButtonVariant, string> = {
   ghost: "text-foreground hover:bg-muted active:bg-muted/80",
   danger: "bg-danger text-danger-foreground hover:bg-danger/90 active:bg-danger/75",
   live: "bg-success text-success-foreground hover:bg-success/90 active:bg-success/75",
-  // Text that acts, inside a sentence: a toast's "Deshacer", a callout's
-  // "Reintentar", the deck transport's "Resincronizar". It had been written by
+  // Text that acts, inside a sentence: a toast's "Undo", a callout's
+  // "Retry", the deck transport's "Resync". It had been written by
   // hand in three features before it became a variant. No box of its own — it
   // drops the height, padding and background every other variant carries, so
   // it sits on the line of the text around it.

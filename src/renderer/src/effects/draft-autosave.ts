@@ -55,7 +55,7 @@ export function flushDraft(): void {
 /** Something the congregation is looking at: closing the app takes the
  *  projector down with it, so an accidental ⌘Q mid-service has to ask even
  *  with nothing left to save. An open projector showing only the resting logo
- *  does not count. NEGRO or LOGO put up on purpose does. */
+ *  does not count. BLACK or LOGO put up on purpose does. */
 function isOnAir(): boolean {
   const { presentationOpen, base, overlay, livePlates } = useProjectionStore.getState();
   return presentationOpen && (base !== null || overlay !== "none" || livePlates.length > 0);
@@ -81,7 +81,7 @@ export function startDraftAutosave(): () => void {
   });
 
   const stopCloseListener = onIpc("close-requested", () => {
-    // Whatever is still debounced goes to disk first, so "cerrar igualmente"
+    // Whatever is still debounced goes to disk first, so "close anyway"
     // really does mean "it will be there next time".
     flushDraft();
     const unsaved = hasUnsavedChanges();

@@ -57,7 +57,7 @@ function touch(id: number): void {
  * re-runs when `id` changes, so a component already showing asset 7 kept
  * showing the stale copy until it happened to remount. That is exactly the
  * case a relocate creates — the operator repairs a missing file from the very
- * panel that is displaying "no se encuentra el archivo", and the panel has to
+ * panel that is displaying "file not found", and the panel has to
  * stop saying it.
  */
 let generation = 0;
@@ -170,7 +170,7 @@ export function forgetMediaAsset(id: number): void {
  * Without this the cache was a second, stale copy of the library that nothing
  * ever refreshed: a file that went missing mid-session stayed cached as
  * present, so the preview of a schedule row kept offering content whose file
- * was gone, and the "no se encuentra el archivo" panel (with its Relocalizar…
+ * was gone, and the "file not found" panel (with its Locate…
  * button) never appeared until the row happened to remount. Refetching is
  * lazy and per-id, so the cost is one `library:get` for each row actually on
  * screen, on an event that fires on an import, a sweep that found a change,

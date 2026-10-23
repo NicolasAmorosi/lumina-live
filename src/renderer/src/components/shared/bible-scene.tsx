@@ -80,7 +80,7 @@ function availableHeight(stage: HTMLElement): number {
  * — which a `line-height` below the font's content area (≈1.36 for Noto Sans,
  * and the operator can pick 0.8) makes permanently true AT EVERY SIZE. That is
  * what collapsed a verse to `minSizeCqw` and made all four sliders in
- * «Versículos» look dead: measured at 0.8 leading, the block reported 20 px of
+ * «Verses» look dead: measured at 0.8 leading, the block reported 20 px of
  * content in an 18 px box at 1.5 cqw and 58 in 56 at 12 cqw, so the search
  * never found a size that fit and always returned its floor.
  *

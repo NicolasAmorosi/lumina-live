@@ -10,15 +10,20 @@ import { toast } from "@renderer/lib/toast";
 import type { DisplayInfo } from "@shared/types/display";
 
 /** Dedupes concurrent `load()` calls. The app boots one at startup and
- *  `openIfNeeded()` needs one whenever the operator's first EN VIVO beats it —
+ *  `openIfNeeded()` needs one whenever the operator's first GO LIVE beats it —
  *  two would list the screens twice and race to write the same resolution. */
 let loadInFlight: Promise<void> | null = null;
+
+/** Dedupes `openIfNeeded()`. `projection:open` answers only once the new page
+ *  has mounted, and a second GO LIVE pressed in that wait would otherwise open
+ *  the projector again — closing the window that was about to show. */
+let openInFlight: Promise<void> | null = null;
 
 /** There is no screen to project on: `displays.list()` came back empty.
  *  Giving up in silence is the one thing this must not do — `goLive()` carries
  *  on regardless, the monitors fill with content and nothing ever reaches a
  *  projector. Nothing is on air, so the app isn't lying (the LIVE header still
- *  reads "Sin pantalla"); what was missing was the nudge to go and pick one,
+ *  reads "Projector off"); what was missing was the nudge to go and pick one,
  *  which is why the toast carries the action rather than just the diagnosis. */
 function warnNoScreen(): void {
   toast.warning(t("projector.noScreen"), {
@@ -41,19 +46,19 @@ type DisplayStoreState = {
   load: () => Promise<void>;
   setDisplayId: (id: number) => Promise<void>;
   /** Opens the projection window on the resolved display and immediately
-   *  cuts it to NEGRO — a projector that just connected mid-service must
+   *  cuts it to BLACK — a projector that just connected mid-service must
    *  never flash whatever was last on screen. Used only for the explicit
-   *  "Abrir Pantalla" control in Settings. */
+   *  "Open projector" control in Settings. */
   open: () => Promise<void>;
   /** Opens the projection window on demand, on whatever is about to be shown
-   *  (NEGRO/LOGO/EN VIVO), without forcing NEGRO first — a no-op once it's
+   *  (BLACK/LOGO/GO LIVE), without forcing BLACK first — a no-op once it's
    *  already open. This is what lets the app start with nothing projected at
-   *  all: no window opens on launch, the operator's first tap on NEGRO, LOGO
-   *  or EN VIVO is what turns the projector on. */
+   *  all: no window opens on launch, the operator's first tap on BLACK, LOGO
+   *  or GO LIVE is what turns the projector on. */
   openIfNeeded: () => Promise<void>;
   close: () => Promise<void>;
-  /** A screen came or went (`displays-changed`): re-lists them, so Ajustes
-   *  shows a projector turned on after launch and the next EN VIVO targets it.
+  /** A screen came or went (`displays-changed`): re-lists them, so Settings
+   *  shows a projector turned on after launch and the next GO LIVE targets it.
    *  It never moves the window — main already did, without rebuilding it
    *  (`windows/projector-screen.ts`). */
   refresh: () => Promise<void>;
@@ -110,8 +115,8 @@ export const useDisplayStore = create<DisplayStoreState>((set, get) => ({
       warnNoScreen();
       return;
     }
-    await api.projection.open(displayId);
-    // Opening onto NEGRO changes what the projector shows, so it claims an
+    if (!(await api.projection.open(displayId))) return;
+    // Opening onto BLACK changes what the projector shows, so it claims an
     // intent like every other such action — otherwise a deck still converting
     // would lift the black the moment it finished. See `live-intent.ts`.
     claimLiveIntent();
@@ -121,17 +126,25 @@ export const useDisplayStore = create<DisplayStoreState>((set, get) => ({
 
   openIfNeeded: async () => {
     if (useProjectionStore.getState().presentationOpen) return;
-    // The operator's first EN VIVO/NEGRO/LOGO can land before the boot's
-    // `load()` has resolved, and "not listed yet" used to be indistinguishable
-    // from "no screen at all" — both gave up here without a word.
-    if (!get().loaded) await get().load();
-    const { displayId } = get();
-    if (displayId === null) {
-      warnNoScreen();
-      return;
-    }
-    await api.projection.open(displayId);
-    useProjectionStore.getState().setPresentationOpen(true);
+    openInFlight ??= (async () => {
+      try {
+        // The operator's first GO LIVE/BLACK/LOGO can land before the boot's
+        // `load()` has resolved, and "not listed yet" used to be indistinguishable
+        // from "no screen at all" — both gave up here without a word.
+        if (!get().loaded) await get().load();
+        const { displayId } = get();
+        if (displayId === null) {
+          warnNoScreen();
+          return;
+        }
+        // `false`: the window closed while it was still loading, and
+        // `projection-closed` has already marked the projector closed.
+        if (await api.projection.open(displayId)) useProjectionStore.getState().setPresentationOpen(true);
+      } finally {
+        openInFlight = null;
+      }
+    })();
+    await openInFlight;
   },
 
   close: async () => {

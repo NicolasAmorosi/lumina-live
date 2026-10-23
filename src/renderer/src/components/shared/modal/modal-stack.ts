@@ -8,7 +8,7 @@ const listeners = new Set<() => void>();
  *
  * Without this, Tab walked straight out of the dialog and on through the
  * TopBar, the three panels and the virtualized grid behind the backdrop — the
- * operator could end up pressing Enter on EN VIVO believing they were
+ * operator could end up pressing Enter on GO LIVE believing they were
  * confirming a dialog. `inert` is the platform's own answer and covers focus,
  * pointer events and the accessibility tree in one attribute.
  *

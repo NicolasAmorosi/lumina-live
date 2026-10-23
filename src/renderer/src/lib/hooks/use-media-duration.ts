@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
  * Reads a video/audio file's duration without playing it — a detached element
  * (never mounted, never appended to the DOM) loaded with `preload="metadata"`
  * only. Used by the preview media bar, which must stay silent: the operator
- * hasn't gone EN VIVO yet.
+ * hasn't gone live yet.
  *
  * Returns `null` while unknown (no url, or metadata not loaded yet).
  */

@@ -17,7 +17,7 @@ type MediaScrubberProps = {
    *  Must be identity-stable (a `useState` setter, a `useCallback`): it is an
    *  effect dependency. */
   onPositionChange?: ((seconds: number | null) => void) | undefined;
-  /** What this bar seeks — the track's name, not "barra de progreso". It is
+  /** What this bar seeks — the track's name, not "progress bar". It is
    *  the slider's accessible name, and a panel can hold several of them
    *  (a video, a deck soundtrack, a stray audio), so without it a screen
    *  reader announces three identical unnamed sliders. Required for that

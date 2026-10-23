@@ -46,8 +46,9 @@ export const api = {
     ensure: (assetId: number, force?: boolean) =>
       invoke("deck:ensure", { assetId, ...(force !== undefined ? { force } : {}) }),
     cancel: (assetId: number) => invoke("deck:cancel", { assetId }),
-    environment: () => invoke("deck:environment", undefined),
+    environment: (force = false) => invoke("deck:environment", { force }),
     locateSoffice: () => invoke("deck:locateSoffice", undefined),
+    openSofficeDownload: () => invoke("deck:openSofficeDownload", undefined),
     prewarm: (assetIds: number[], scope: "program" | "explicit" | "visible") =>
       invoke("deck:prewarm", { assetIds, scope }),
     prewarmBatch: (assetIds: number[], label: string) => invoke("deck:prewarmBatch", { assetIds, label }),
@@ -111,7 +112,7 @@ export const api = {
     closeDecision: (decision: CloseDecision) => invoke("window:closeDecision", { decision }),
   },
   /** Saved time scenes — the countdowns, the clock and the stopwatch of
-   *  Funciones ▸ Utilidades. `remove` rather than `delete` for the same reason
+   *  Functions ▸ Timers. `remove` rather than `delete` for the same reason
    *  `library` uses it: a reserved word reads badly as a method. */
   utility: {
     list: () => invoke("utility:list", undefined),

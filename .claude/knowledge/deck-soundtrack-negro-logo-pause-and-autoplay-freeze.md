@@ -1,19 +1,19 @@
-## Pausing a deck's soundtrack under NEGRO/LOGO also requires freezing slide auto-advance, or it desyncs
+## Pausing a deck's soundtrack under BLACK/LOGO also requires freezing slide auto-advance, or it desyncs
 
 **Area:** renderer (`effects/projection-sync.ts`, `effects/deck-autoplay.ts`, `stores/audio.store.ts`)
-**Trigger:** Any request to change how NEGRO/LOGO interacts with a deck's linked audio or its
-auto-advance; any report of a PPT's slide being "ahead of" its music after leaving NEGRO/LOGO.
+**Trigger:** Any request to change how BLACK/LOGO interacts with a deck's linked audio or its
+auto-advance; any report of a PPT's slide being "ahead of" its music after leaving BLACK/LOGO.
 
-Until 2026-09-09, a deck's own soundtrack was deliberately exempt from NEGRO/LOGO — it kept
+Until 2026-09-09, a deck's own soundtrack was deliberately exempt from BLACK/LOGO — it kept
 playing through the overlay, unlike the video underlay (`LiveVideo` in `output-view.tsx`), which
 pauses and holds position. The product decision changed: the deck's soundtrack must now
-pause/resume through NEGRO/LOGO exactly like a video. Two non-obvious traps appeared doing this.
+pause/resume through BLACK/LOGO exactly like a video. Two non-obvious traps appeared doing this.
 
 ### Trap 1 — don't mutate the store's `paused`, combine it at the wire boundary
 
 `useAudioStore`'s `LiveAudioTrack.paused` is the operator's own explicit pause (set by
 `pauseAutoplay`/`resumeAutoplay` in `deck-autoplay.ts`) and, like `VideoUnderlay.paused`, must
-survive an overlay round-trip unchanged — otherwise clearing NEGRO would silently un-pause audio
+survive an overlay round-trip unchanged — otherwise clearing BLACK would silently un-pause audio
 the operator paused on purpose. The fix computes an *effective* paused only where
 `AudioTrackPush` is built for IPC, in `projection-sync.ts`'s `toAudioTrackPush(track, covered)`:
 

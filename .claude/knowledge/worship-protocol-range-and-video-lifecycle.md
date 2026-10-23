@@ -4,7 +4,7 @@
 `stores/projection.store.ts`, `shared/types/projection.ts`)
 **Trigger:** Any report of "the video plays for a second and freezes", a video that won't play
 after a few tries, broken/impossible seeking, a video progress bar that can't scrub, or before
-touching `serveFile`, the `<video>` element, or the NEGRO/LOGO overlay path.
+touching `serveFile`, the `<video>` element, or the BLACK/LOGO overlay path.
 
 Found in the 2026-09-08 session. **Read this before blaming Electron, the GPU or the codec** —
 the first two hypotheses in that session (hardware-decoder session churn; a React remount race)
@@ -79,16 +79,16 @@ away the fact that a video is the *base* content. `ProjectionOutput` therefore c
 `videoUnderlay: {url, epoch} | null` field on **every** variant, computed straight from
 `state.base` and independent of the overlay (`ProjectionOutputKind` is the union; the exported
 `ProjectionOutput` intersects it with that field). It exists so the element can stay mounted
-under an overlay instead of being destroyed and rebuilt on every NEGRO/VIVO toggle.
+under an overlay instead of being destroyed and rebuilt on every BLACK/LIVE toggle.
 
 The `LiveVideo` component owns the resulting rules:
 
 - **Mounted while `videoUnderlay` is non-null**, hidden with `hidden` (not unmounted) when
   covered. It unmounts only when the base genuinely stops being that video (a deck, an image,
-  LIMPIAR).
-- **Keyed by `epoch`**, so pressing EN VIVO again on the same video restarts it from the
+  CLEAR).
+- **Keyed by `epoch`**, so pressing GO LIVE again on the same video restarts it from the
   beginning — but an overlay toggle never changes the key.
-- **NEGRO/LOGO pauses it and holds its position; uncovering resumes from there.** This is
+- **BLACK/LOGO pauses it and holds its position; uncovering resumes from there.** This is
   product-decided operator behaviour (asked for explicitly). `autoPlay` only applies to a
   freshly loaded element, so the transitions are driven imperatively in an effect.
   **Update (2026-09-09):** a deck's own soundtrack now follows the same rule too (see
@@ -104,9 +104,9 @@ root `HANDOFF.md` for the technique). The scenarios that must stay green:
 
 | Scenario | Was |
 |---|---|
-| 4 consecutive EN VIVO on the same video | died on the 3rd |
+| 4 consecutive GO LIVE presses on the same video | died on the 3rd |
 | 4 rounds of video ↔ PowerPoint | died on the 1st |
-| NEGRO/LOGO pause → hold position → resume | ran on unseen behind the overlay |
+| BLACK/LOGO pause → hold position → resume | ran on unseen behind the overlay |
 | 8 rounds mixing overlays, replays and the PPT | — |
 | seek to mid-file and keep playing | impossible (`seekable: [0,0]`) |
 | PPT slides still decode (WebP, 1920×1080) | — |

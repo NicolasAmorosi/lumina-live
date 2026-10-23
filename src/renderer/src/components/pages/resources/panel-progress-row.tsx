@@ -14,7 +14,7 @@ type PanelProgressRowProps = {
 
 /** One row of "something is happening in the background, here's how far
  *  along it is" — shared by the chunked library import (no cancel) and the
- *  "Preparar vista/carpeta" batch (cancelable), both of which live in this
+ *  "Prepare view/folder" batch (cancelable), both of which live in this
  *  same footer. */
 export function PanelProgressRow({ cancelLabel, label, onCancel, value }: PanelProgressRowProps) {
   // The caption names the `progressbar`, it does not label a form control —

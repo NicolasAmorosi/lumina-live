@@ -37,7 +37,8 @@ import { backfillDeckTimings } from "../../src/main/slides/backfill-timings";
 import { SNIPPET_MARK_END, SNIPPET_MARK_START, parseSnippet } from "../../src/shared/types/bible";
 import { DEFAULT_SETTINGS, SETTINGS_VALIDATORS, isSettingsKey } from "../../src/shared/types/settings";
 import { BUILTIN_BIBLE_CODE, SLIDES_CONVERTER_VERSION } from "../../src/shared/constants";
-import { DEFAULT_UTILITY_SCENES } from "../../src/shared/types/utility";
+import { defaultUtilityScenes } from "../../src/shared/types/utility";
+import mainEs from "../../src/main/i18n/messages/es";
 import { removeUtilityScene } from "../../src/main/services/utility-scene-removal";
 import { removeOverlayPlate } from "../../src/main/services/overlay-plate-removal";
 import { DEFAULT_PLATE_STYLE, type Plate } from "../../src/shared/types/overlay";
@@ -46,6 +47,8 @@ import type { UtilityScene } from "../../src/shared/types/utility";
 import { buildLegacyPpt } from "../fixtures/legacy-ppt";
 import type { ProgramSummary } from "../../src/shared/types/program";
 import type { MediaAsset } from "../../src/shared/types/media";
+
+const DEFAULT_UTILITY_SCENES = defaultUtilityScenes(mainEs.seed);
 
 /** Keeps the original script's one-line diagnostics: every message below says
  *  what the invariant is, which is worth more on a failure than a diff. */
@@ -1035,7 +1038,7 @@ describe("An overlay plate as an order-of-service item", () => {
  * The order the version picker offers is the operator's, and it survives a
  * re-seed.
  *
- * Both halves matter and only one of them is visible in Ajustes: `sort_order`
+ * Both halves matter and only one of them is visible in Settings: `sort_order`
  * also drives `bible.store`'s `versions`, which is the list the Bible tab's
  * picker is built from — so a reorder that did not persist would read as a
  * settings screen that forgets, and a re-seed that reset it would send the

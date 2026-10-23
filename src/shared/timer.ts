@@ -74,7 +74,7 @@ export function initialClock(tool: TimerTool, config: TimerConfig, now: number):
   }
 }
 
-/** What a «comenzamos a una hora» scene rests at in the EDITOR once today's
+/** What a «countdown to time» scene rests at in the EDITOR once today's
  *  target has gone by: ten minutes, held. A plausible number to dress a scene
  *  against, and the same ten minutes the feature exists for. */
 export const EDITOR_SAMPLE_REMAINING_MS = 10 * 60_000;
@@ -83,12 +83,12 @@ export const EDITOR_SAMPLE_REMAINING_MS = 10 * 60_000;
  * The clock the scene editor's preview rests at — `initialClock` with exactly
  * one exception.
  *
- * «Comenzamos a una hora» resolves against TODAY's occurrence even when it has
+ * «Countdown to time» resolves against TODAY's occurrence even when it has
  * already gone by, on purpose (see `resolveTargetMs`). Live that is right; in
  * the editor it means every scene of that kind reads as FINISHED for the rest
  * of the day — the end message replacing the line below and both `SceneEnd`
  * hides applying — with the operator never having asked to see the end state.
- * The preview must show the end state only when the «Ver como termina» switch
+ * The preview must show the end state only when the «Preview the end» switch
  * says so.
  *
  * So a target that has gone by rests at an illustrative value instead, and

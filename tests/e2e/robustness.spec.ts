@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { expect, relaunch, test, videoStates, type WorshipApp } from "./support/app";
 
 /** What goes wrong during a real service — a window closed by accident, the
@@ -23,6 +25,19 @@ async function verseLive(app: WorshipApp) {
   return projector;
 }
 
+test("a projector whose renderer dies leaves its reason in crash.log", async ({ app }) => {
+  await verseLive(app);
+  await app.electron.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()
+      .find((win) => win.webContents.getURL().endsWith("/projection.html"))
+      ?.webContents.forcefullyCrashRenderer(),
+  );
+  const crashLog = path.join(app.profile, "crash.log");
+  await expect
+    .poll(() => (fs.existsSync(crashLog) ? fs.readFileSync(crashLog, "utf8") : ""))
+    .toMatch(/\[render-process-gone\] \S+\/projection\.html \{"reason":"(crashed|killed)"/);
+});
+
 test("a projector closed from outside is announced, and «Reabrir» brings back what was live where it was", async ({ app }) => {
   await app.addMedia("video", "clip.mp4");
   await app.previewFile("Videos", "clip");
@@ -36,9 +51,10 @@ test("a projector closed from outside is announced, and «Reabrir» brings back 
   await notice.getByRole("button", { name: "Reabrir" }).click();
 
   const second = await app.projector();
-  // Not on NEGRO, not back at 0:00: the same video, from where it was.
-  await expect.poll(async () => (await videoStates(second))[0]?.paused).toBe(false);
-  expect((await videoStates(second))[0]?.currentTime).toBeGreaterThan(1.8);
+  // Not on NEGRO, not back at 0:00: the same video, from where it was —
+  // read from where its playback began, which a frame from 0:00 would show.
+  await expect.poll(async () => (await videoStates(second))[0]?.playedFrom ?? null).not.toBeNull();
+  expect((await videoStates(second))[0]?.playedFrom).toBeGreaterThan(1.8);
   expect((await videoStates(second))[0]?.opacity).toBe(1);
   await expect(notice).toHaveCount(0);
 });

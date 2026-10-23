@@ -25,7 +25,7 @@ export type DeckSoundtrack = {
    *  cache; `linked` is an external file resolved per media asset (an old
    *  hymnal's sibling .mp3) and served by reference — see `linked-audio.ts`. */
   origin: "embedded" | "transition" | "linked";
-  /** File name, for the "Asignar audio" control to show what's playing. */
+  /** File name, for the "Add audio" control to show what's playing. */
   name: string;
 };
 
@@ -126,6 +126,10 @@ export type DeckEnvironment = {
   available: boolean;
   sofficePath: string | null;
   version: string | null;
+  /** Why it is not available, in the operator's language — «not found» is not
+   *  the only answer: a sandboxed flatpak, or a path picked by hand that is not
+   *  LibreOffice, are installed and still unusable. `null` when available. */
+  message: string | null;
 };
 
 export type DeckProgress = {
@@ -136,7 +140,7 @@ export type DeckProgress = {
   error: string | null;
 };
 
-/** Aggregate progress of one "Preparar carpeta/vista" batch — a single event
+/** Aggregate progress of one "Prepare folder/view" batch — a single event
  *  stream so pre-warming hundreds of decks in the background doesn't turn
  *  into hundreds of per-asset store entries and re-renders. Per-tile progress
  *  still comes from `DeckProgress`/`deck-progress` for whichever one is

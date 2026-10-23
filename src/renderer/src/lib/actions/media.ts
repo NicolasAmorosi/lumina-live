@@ -28,7 +28,7 @@ export function setMediaVolume(target: MediaTarget, volume: number): void {
 }
 
 /** Pauses/resumes the live video. Declarative — see `VideoUnderlay.paused` —
- *  so it survives a NEGRO/LOGO round-trip instead of NEGRO silently
+ *  so it survives a BLACK/LOGO round-trip instead of BLACK silently
  *  overriding an operator's explicit pause. */
 export function toggleVideoPause(): void {
   const { videoPaused, setVideoPaused } = useProjectionStore.getState();
@@ -58,7 +58,7 @@ export function toggleAudioTrackPause(trackId: string): void {
   // Only a deck that advances by itself shares a clock with its music. A
   // manual deck's autoplay stays "off" for good, so routing its music here too
   // made the pause button on that row a no-op: the only ways left to silence
-  // it were NEGRO/LOGO or taking the deck off the air.
+  // it were BLACK/LOGO or taking the deck off the air.
   if (trackId === DECK_SOUNDTRACK_TRACK_ID && useProjectionStore.getState().liveDeck?.autoAdvance) {
     toggleAutoplay();
     return;

@@ -1,7 +1,5 @@
-/** Spanish is the default and, for now, only shipped locale — Lumina Live's
- *  audience is a Spanish-speaking church. The dictionary + provider exist so
- *  adding `it`/`en` later means dropping in another file here, not touching
- *  ~40 components again. */
+/** Spanish is the reference locale: `Messages` is this file's type, so every
+ *  other dictionary (`en`, `it`, `pt`) has to have exactly these keys. */
 const es = {
   app: {
     crashed: "Algo falló en la interfaz",
@@ -18,13 +16,13 @@ const es = {
     title: "Programa",
     empty: "Programa vacío",
     emptyHint: "Agregá elementos o arrastrá archivos",
-    itemCount: "{count} elementos",
+    itemCount: "{count, plural, one {# elemento} other {# elementos}}",
     addError: "No se pudieron agregar los archivos al programa",
     saved: "Guardado",
     notSaved: "No guardado",
     savedHint: "El programa coincide con la última versión guardada.",
     notSavedHint:
-      "Hay cambios en el programa (agregados, quitados o reordenados) que todavía no se guardaron. Usá el botón de guardar o \"Programas guardados\" para guardarlos.",
+      "Hay cambios en el programa (agregados, quitados o reordenados) que todavía no se guardaron. Usá el botón Guardar o «Administrar programas» para guardarlos.",
     moveUp: "Mover arriba",
     moveUpHint: "Mover el elemento seleccionado una posición arriba",
     moveDown: "Mover abajo",
@@ -39,7 +37,7 @@ const es = {
     draftRestored: "Se recuperó el programa que estabas armando",
     closeConfirmTitle: "¿Cerrar sin guardar?",
     closeConfirmBody:
-      "El programa tiene cambios sin guardar. Se va a recuperar solo la próxima vez que abras la app, pero no va a quedar en \"Programas guardados\".",
+      "El programa tiene cambios sin guardar. Se va a recuperar solo la próxima vez que abras la app, pero no va a quedar entre tus programas guardados.",
     closeAnyway: "Cerrar igualmente",
     closeOnAirTitle: "¿Cerrar la app?",
     closeOnAirBody: "Hay contenido en el proyector. Al cerrar, la pantalla de proyección se apaga.",
@@ -97,8 +95,8 @@ const es = {
     relocateFailed: "No se pudo relocalizar el archivo",
     removeUndo: "Se quitó «{name}» de la biblioteca.",
     removeUndoGeneric: "Se quitó el recurso de la biblioteca.",
-    removeAnyway: "Eliminar igualmente",
-    removeConfirmTitle: "¿Eliminar igualmente?",
+    removeAnyway: "Quitar igualmente",
+    removeConfirmTitle: "¿Quitar igualmente?",
     removeConfirmIntro: "Este elemento se usa en:",
     removeConfirmWarning: "Se va a quitar también de esos programas guardados.",
     removeMissingNote: "El archivo original ya no está disponible en el disco.",
@@ -278,10 +276,10 @@ const es = {
     hideTitle: "Ocultar la línea de arriba",
     hideTitleHint: "Pasado el cero, el texto de arriba desaparece de la pantalla.",
     endTransition: "Transición",
-    endTransitionHint: "Cómo pasa de cómo se ve contando a cómo queda al terminar. Son las mismas de Ajustes → Proyección.",
+    endTransitionHint: "Cómo pasa de cómo se ve contando a cómo queda al terminar. Son las mismas de Configuración › Proyección.",
     endTransitionDuration: "Duración de la transición",
     endTransitionDurationHint: "Se ignora con el estilo Instantáneo.",
-    endPreview: "Ver como termina",
+    endPreview: "Ver cómo termina",
     endPreviewHint: "Dibuja la escena como queda al llegar a cero.",
     titleText: "Línea de arriba",
     titleHint: "Vacío la oculta.",
@@ -438,9 +436,19 @@ const es = {
       "No se puede volver a convertir la presentación que está EN VIVO. Sacala del proyector primero.",
     noSlides: "La presentación no tiene diapositivas",
     noLibreOffice: {
-      title: "LibreOffice no está instalado",
-      body: "Lumina Live usa LibreOffice para convertir las presentaciones a imágenes. Instalalo, o indicá dónde está el ejecutable soffice.",
+      title: "LibreOffice no está disponible",
+      body: "Lumina Live usa LibreOffice para convertir las presentaciones de PowerPoint a imágenes. Instalalo, o indicá dónde está el ejecutable soffice.",
       locate: "Buscar soffice…",
+      download: "Descargar LibreOffice",
+      recheck: "Comprobar de nuevo",
+      checking: "Buscando LibreOffice…",
+      found: "LibreOffice {version} está listo",
+      strip: "Los PowerPoint sin convertir no se pueden abrir. Los PDF y los ya convertidos funcionan normal.",
+      startup: "LibreOffice no está disponible: no se pueden convertir presentaciones de PowerPoint. Todo lo demás funciona normal.",
+      dontWarn: "No volver a mostrar",
+      liveRefused: "«{name}» no se puede proyectar: hace falta LibreOffice para convertirla.",
+      stageHint: "Hace falta LibreOffice para convertir esta presentación",
+      reconvertHint: "Hace falta LibreOffice para volver a convertirla.",
     },
     audio: {
       none: "Sin audio",
@@ -448,15 +456,16 @@ const es = {
       change: "Cambiar",
       remove: "Quitar",
       autoAdvance: "Auto-avance",
-      help: "Esta franja muestra el audio de esta presentación. Si el archivo trae audio incrustado o de transición, se puede reemplazar acá. Si no trae uno, podés asignar un archivo de audio externo y después cambiarlo o quitarlo. \"Auto-avance\" indica que las diapositivas tienen sus propios tiempos y avanzan solas.",
+      help: "Esta franja muestra el audio de esta presentación. Si el archivo trae audio incrustado o de transición, suena ese y no se puede cambiar. Si no trae, podés asignarle un archivo de audio externo y después cambiarlo o quitarlo. «Auto-avance» indica que las diapositivas tienen sus propios tiempos y avanzan solas.",
     },
   },
   prewarm: {
     action: "Preparar carpeta",
     actionHint: "Convertir de antemano las presentaciones de esta vista",
     title: "Preparar las presentaciones",
-    warnTitle: "Hay {count} presentaciones sin convertir",
-    warnBody: "Puede tardar unos {minutes} minutos. Se convierte una por vez, en segundo plano.",
+    warnTitle: "{count, plural, one {Hay # presentación sin convertir} other {Hay # presentaciones sin convertir}}",
+    warnBody:
+      "{minutes, plural, one {Puede tardar alrededor de un minuto.} other {Puede tardar unos # minutos.}} Se convierte una por vez, en segundo plano.",
     body: "Podés seguir usando la app mientras tanto: lo que abras se convierte primero y la preparación se reanuda después.",
     bodyHint: "Cada presentación se convierte una sola vez; después queda en caché.",
     start: "Preparar",
@@ -569,7 +578,7 @@ const es = {
     discardWarning: "Hay cambios sin guardar en el programa actual. Si continuás, se pierden.",
     discardConfirm: "Descartar y abrir",
     discardAndNew: "Descartar y empezar",
-    itemCount: "{count} elementos",
+    itemCount: "{count, plural, one {# elemento} other {# elementos}}",
     panelDirtyWarning: "Hay cambios sin guardar en el panel. Si seguís, se pierden.",
     reorderError: "No se pudo guardar el orden de los programas",
   },
@@ -577,13 +586,14 @@ const es = {
     title: "Configuración",
     close: "Cerrar",
     slidesCacheUsage: "Espacio usado",
-    slidesCacheUsageDesc: "{decks} presentaciones convertidas y guardadas en disco",
+    slidesCacheUsageDesc:
+      "{decks, plural, one {# presentación convertida y guardada en disco} other {# presentaciones convertidas y guardadas en disco}}",
     slidesCacheLoading: "Calculando…",
     slidesCacheOf: "{used} de {max}",
     slidesCacheClear: "Vaciar caché",
     slidesCacheClearTitle: "¿Vaciar la caché de diapositivas?",
     slidesCacheClearBody:
-      "Se borran las {decks} presentaciones ya convertidas. No se borra ningún archivo de tu biblioteca: cada una se vuelve a convertir sola la próxima vez que la abras, y esa primera vez tarda.",
+      "{decks, plural, one {Se borra la presentación ya convertida.} other {Se borran las # presentaciones ya convertidas.}} No se borra ningún archivo de tu biblioteca: cada una se vuelve a convertir sola la próxima vez que la abras, y esa primera vez tarda.",
     slidesCacheClearLiveBody:
       "Hay una presentación EN VIVO en el proyector ahora mismo. Vaciar la caché borra también sus diapositivas y la pantalla se queda sin imagen hasta que se reconvierta. Esperá a que termine el culto.",
     slidesCacheCleared: "Se vació la caché de diapositivas",
@@ -600,6 +610,12 @@ const es = {
     slidesQualityWarnTitle: "Cambiar estos dos obliga a reconvertir todo",
     slidesQualityWarnBody:
       "Cada presentación se guarda en caché bajo su contenido MÁS el ancho y el formato. Al cambiar cualquiera de los dos, ninguna de las ya convertidas se vuelve a encontrar: se reconvierten de a una, la primera vez que abrís cada una. No lo toques el mismo día del culto.",
+    sofficeFound: "Versión {version}",
+    sofficeMissing: "No disponible",
+    sofficeChecking: "Buscando…",
+    sofficeWarn: "Avisar si falta",
+    sofficeWarnDesc:
+      "Al abrir la app y arriba de la pestaña de presentaciones. Apagado, una presentación que no se puede convertir lo sigue diciendo.",
     sections: {
       projection: "Proyección",
       slides: "Diapositivas",
@@ -618,6 +634,7 @@ const es = {
       versionsInstalled: "Versiones instaladas",
       slidesCache: "Caché de diapositivas",
       slidesQuality: "Calidad de conversión",
+      libreoffice: "LibreOffice",
       appearance: "Apariencia",
       language: "Idioma",
       folders: "Carpetas de archivos",
@@ -708,7 +725,7 @@ const es = {
       deleteBody:
         "Se borran sus libros y sus versículos de esta computadora. No se toca el archivo del que salió: podés volver a importarlo cuando quieras.",
       deleteInUseIntro: "Esta versión se cita en:",
-        deleteInUseWarning:
+      deleteInUseWarning:
         "Esos programas conservan el texto y la cita de cada versículo; lo único que pierden es el vínculo con la versión, y con él el nombre que el proyector escribe debajo.",
       deleteAnyway: "Eliminar igualmente",
       deleteDone: "Se eliminó «{name}»",
@@ -794,13 +811,12 @@ const es = {
     foldersBody:
       "Al agregar archivos con el botón + de una pestaña de recursos, el selector abre siempre la carpeta de ese tipo. Sin tocar nada, es la carpeta del sistema operativo (Música, Videos, Imágenes y Documentos): Lumina Live la resuelve en cada equipo, así que funciona igual en Windows, macOS y Linux y no depende del idioma del sistema. Si tus archivos están en otro lado, fijá acá la carpeta de cada tipo.",
     // Endonyms: a language is named in itself, so the option is readable to
-    // whoever is looking for it. The three cover `Locale` in full — the
-    // picker only offers the ones with a dictionary (`availableLocales`),
-    // but the label map is typed over every `Locale`.
+    // whoever is looking for it — and the same four words in every dictionary.
     locales: {
       es: "Español",
-      it: "Italiano",
       en: "English",
+      it: "Italiano",
+      pt: "Português",
     },
   },
   /** The transition vocabulary itself, shared by Ajustes → Proyección and by
@@ -835,7 +851,7 @@ const es = {
     undo: "Deshacer",
     search: "Buscar…",
     noResults: "Sin resultados",
-    itemCount: "{count} elementos",
+    itemCount: "{count, plural, one {# elemento} other {# elementos}}",
   },
 };
 

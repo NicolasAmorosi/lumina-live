@@ -28,12 +28,12 @@
   test one**. Drive the real path instead: `osascript -e 'tell application "System Events" to
   keystroke "q" using command down'` after making the app frontmost (`set frontmost of (first
   process whose name is "Electron") to true`). The same tool reads the menu back, which is how
-  "Ventana has no Cerrar" was verified: `get name of menu items of menu 1 of menu bar item
+  "Ventana has no Cerrar" (the Window menu has no Close item) was verified: `get name of menu items of menu 1 of menu bar item
   "Ventana" of menu bar 1` → `Minimizar, Zoom, missing value, Traer todo al frente`.
 
 - **Consequence.** Quit-time cleanup belongs in `will-quit`, never `before-quit`, now that a close
   can be vetoed: `before-quit` fires while the operator is still reading the dialog and is free to
-  answer "Cancelar", so closing the database there would leave a perfectly alive app with no
+  answer "Cancel", so closing the database there would leave a perfectly alive app with no
   database. And whoever releases a vetoed close must resume the quit rather than close the window.
   Both halves are synchronous-only, for the reason in
   [nothing-asynchronous-survives-before-quit.md](nothing-asynchronous-survives-before-quit.md).
@@ -43,8 +43,8 @@
 - **Believed:** vetoing the control window's `close` holds the quit until the operator answers.
   **True for the control window only.** By the time Electron delivers that `close`, it has already
   closed the projection window, which has no guard. Measured in the 2026-10-14 two-screen rehearsal:
-  ⌘Q with an unsaved change, the dialog appeared, «Cancelar» was clicked, and the app stayed alive
-  with the toast «Se cerró la ventana de proyección». The congregation's screen had gone dark behind
+  ⌘Q with an unsaved change, the dialog appeared, «Cancel» was clicked, and the app stayed alive
+  with the toast «The projector window closed». The congregation's screen had gone dark behind
   a question whose answer was "don't". `shutdownSlides()` in `before-quit` had also already run,
   aborting the conversion in flight and the prewarm batch.
 - **Fix:** `holdQuitUntilAnswered(event)` (`windows/close-guard.ts`), called first in `before-quit`.
@@ -53,7 +53,7 @@
   answer. "close" resumes with `app.quit()`; the second `before-quit` finds the window cleared and
   proceeds.
 - **The renderer asks for two reasons now:** unsaved work, or something on air (an open projector
-  with content, plates, NEGRO or LOGO).
+  with content, plates, BLACK or LOGO).
 - **Known gap, left open on purpose:** once the renderer answers `hold`, the grace timer is gone.
   If the renderer dies while its dialog is up, main waits forever and only a force quit ends it.
   The 2026-10-14 driver produced it by `pkill`ing the renderer helpers. A real crash at that exact

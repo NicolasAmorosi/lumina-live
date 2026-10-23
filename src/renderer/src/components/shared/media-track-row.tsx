@@ -20,11 +20,11 @@ type MediaTrackRowProps = {
   error?: string | undefined;
   kind: MediaTrackKind;
   label: string;
-  /** Compact second line under the label — e.g. "no suena hasta EN VIVO".
+  /** Compact second line under the label — e.g. "Silent until GO LIVE".
    *  Part of the row itself (not a sibling paragraph) so every caller gets
    *  it inside the same bordered container for free. */
   hint?: string | undefined;
-  /** The row's own EN VIVO — for content that goes up WITHOUT replacing what
+  /** The row's own GO LIVE — for content that goes up WITHOUT replacing what
    *  is projected (a plate), so the operator sends it from beside its picture
    *  instead of reaching for the top bar. Calls `goLive()`, never a second
    *  path to the projector. */
@@ -46,7 +46,7 @@ type MediaTrackRowProps = {
   /** Present only for a row that actually controls playback (the live panel).
    *  Absent in the preview bar, which only picks a start point. */
   onTogglePause?: (() => void) | undefined;
-  /** Accessible names for that button. A timer is never «reproducido»: it is
+  /** Accessible names for that button. A timer is never «played»: it is
    *  started, paused and resumed, and which of the two words a stopped one
    *  deserves is the caller's to know (see `UtilityTrackRow`). */
   pauseLabel?: string | undefined;
@@ -61,7 +61,7 @@ type MediaTrackRowProps = {
    *  negative). Sits between the label and the controls, always visible. */
   readout?: string | undefined;
   readoutTone?: MediaTrackReadoutTone;
-  /** A word beside the readout, in the danger ink — «Terminó». Ignored
+  /** A word beside the readout, in the danger ink — «Ended». Ignored
    *  without a `readout`. */
   readoutNote?: string | undefined;
   /** Omit the pair to render the row without a level control — an image or a
@@ -218,7 +218,7 @@ export function MediaTrackRow({
             {t("media.takeDown")}
           </Button>
         ) : onGoLive ? (
-          // The top bar's EN VIVO, same variant and wording: it does exactly
+          // The top bar's GO LIVE, same variant and wording: it does exactly
           // what that button does with this row's content in preview.
           <Button className="shrink-0" onClick={onGoLive} size="xs" variant="live">
             <Icon name="play" />

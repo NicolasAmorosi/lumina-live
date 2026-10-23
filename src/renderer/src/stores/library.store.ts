@@ -23,7 +23,7 @@ export function folderAssetsKey(kind: AssetKind, folderPath: string): string {
  *
  *  It exists because "no rows" and "no rows YET" are not the same thing and
  *  the grid was showing the empty state for both: a linked folder holding 600
- *  files rendered "no hay recursos" for as long as `library:listFolder` took
+ *  files rendered "no resources" for as long as `library:listFolder` took
  *  to answer, which on a network share is seconds. And a rejected read showed
  *  the same thing — an unhandled rejection with the UI claiming the folder was
  *  empty. */

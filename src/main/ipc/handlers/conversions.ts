@@ -8,7 +8,7 @@ import {
 } from "../../media/conversion-service";
 
 function assetId(req: { id: number }): number {
-  if (!Number.isInteger(req?.id)) throw new IpcError({ code: "INVALID_ARGUMENT", message: "Id inválido." });
+  if (!Number.isInteger(req?.id)) throw new IpcError({ code: "INVALID_ARGUMENT", message: "Invalid id." });
   return req.id;
 }
 
@@ -19,7 +19,7 @@ export const conversionsHandlers: Pick<
   "conversion:list": () => listConversions(),
   "conversion:reportDecoders": (req) => {
     if (typeof req?.hevc !== "boolean" || typeof req.hevcMain10 !== "boolean") {
-      throw new IpcError({ code: "INVALID_ARGUMENT", message: "Soporte de decodificadores inválido." });
+      throw new IpcError({ code: "INVALID_ARGUMENT", message: "Invalid decoder support." });
     }
     setDecoderSupport({ hevc: req.hevc, hevcMain10: req.hevcMain10 });
   },

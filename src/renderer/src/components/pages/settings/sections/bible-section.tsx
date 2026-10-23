@@ -28,10 +28,10 @@ import type { BibleVersionDTO, BibleVersionUsage } from "@shared/types/bible";
 type Pending = { version: BibleVersionDTO; usages: BibleVersionUsage[] };
 
 /**
- * «Biblia»: the installed versions, and nothing else — import, rename, choose
+ * «Bible»: the installed versions, and nothing else — import, rename, choose
  * a default, delete.
  *
- * How a verse LOOKS moved out to its own category of Ajustes
+ * How a verse LOOKS moved out to its own category of Settings
  * (`sections/verse/`). The two shared a section with two tabs and had nothing
  * to say to each other: this one is a table of bibles, that one is a single
  * `settings` key with a live 16:9 preview that wants the whole panel.
@@ -46,11 +46,11 @@ type Pending = { version: BibleVersionDTO; usages: BibleVersionUsage[] };
  *   insertion order nobody chose.
  * - **delete** because until now a version could only ever be added — and the
  *   bundled RV1909 could not even be that, since the seed put it back on every
- *   launch (see `seedBuiltinBibles` for the flag that now makes «borrar» mean
- *   borrar).
+ *   launch (see `seedBuiltinBibles` for the flag that now makes «delete» mean
+ *   delete).
  *
  * The rows are `FieldRow`s, not the denser `ListRow` the resource panels use:
- * a list inside Ajustes is still Ajustes, and a 32 px row wedged between 60 px
+ * a list inside Settings is still Settings, and a 32 px row wedged between 60 px
  * ones is what made this screen read as a different app. `FieldRow` also owns
  * the rename state cleanly — the name and the `<Input>` that replaces it are
  * the same slot, so the row does not change height while it is being edited.
@@ -61,8 +61,8 @@ type Pending = { version: BibleVersionDTO; usages: BibleVersionUsage[] };
  *
  * Two things about the row are deliberate and easy to undo by accident:
  *
- * - **The star is the LEADING control, and it is the only mark of «por
- *   defecto» there is.** It replaced both a decorative bible icon and a pair
+ * - **The star is the LEADING control, and it is the only mark of «default»
+ *   there is.** It replaced both a decorative bible icon and a pair
  *   of badges, and it is the same star `ProgramRow` uses — a filled
  *   `accent-ink` glyph, not a badge and not a filled button. One shape for
  *   "this is the one I keep coming back to" across the app. Clicking the one
@@ -230,7 +230,7 @@ export function BibleSection() {
       void commitRename(version);
     } else if (e.key === "Escape") {
       // Stopped, because `Modal` listens for Escape on `document`: without
-      // this, one press would abandon the rename AND close Ajustes.
+      // this, one press would abandon the rename AND close Settings.
       e.preventDefault();
       e.stopPropagation();
       setRenamingId(null);
@@ -430,7 +430,7 @@ function VersionRow({
           renaming ? (
             <Input
               aria-label={t("settings.bible.renameLabel")}
-              // eslint-disable-next-line jsx-a11y/no-autofocus -- the field does not exist until «Renombrar» is pressed and it replaces the name in place, so this is focus following the operator's own click, not focus stolen on arrival. A ref callback instead would re-fire on every keystroke and reset the caret.
+              // eslint-disable-next-line jsx-a11y/no-autofocus -- the field does not exist until «Rename» is pressed and it replaces the name in place, so this is focus following the operator's own click, not focus stolen on arrival. A ref callback instead would re-fire on every keystroke and reset the caret.
               autoFocus
               className="w-64"
               maxLength={BIBLE_VERSION_NAME_MAX_LENGTH}
@@ -445,7 +445,7 @@ function VersionRow({
         }
         leading={
           // The star IS the default marker — there is no badge saying so any
-          // more, and none saying «Incluida» either: neither was something the
+          // more, and none saying «Included» either: neither was something the
           // operator could act on, and between them they pushed the name off
           // its own column on exactly the rows that had them.
           <Tooltip content={defaultLabel} floating>
@@ -468,7 +468,7 @@ function VersionRow({
         onGripMouseUp={draggable ? () => setDragReady(false) : undefined}
       >
         {/* Nothing but the field while a name is being typed: the row's own
-            «Renombrar» button is what the operator just pressed, and a delete
+            «Rename» button is what the operator just pressed, and a delete
             one keystroke away from the caret is a trap. */}
         {renaming ? null : (
           <>

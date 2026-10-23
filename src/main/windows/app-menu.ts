@@ -1,4 +1,5 @@
 import { app, Menu, type MenuItemConstructorOptions } from "electron";
+import { mt } from "../i18n";
 
 /** NOT `app.name`: that is package.json's `name` ("worship-app" — electron-builder
  *  never ships `build.productName`), and it cannot be changed with
@@ -21,9 +22,9 @@ const PRODUCT_NAME = "Lumina Live";
  *     but an operator has no reason to reach it, so the whole development
  *     block is packaged-build-only.
  *
- * Labels are hardcoded Spanish, like every other user-facing string in main
- * (`dialog.showErrorBox` in `index.ts`): the i18n dictionary lives in the
- * renderer and a menu is built before any window exists.
+ * Labels come from main's own dictionary (`main/i18n/`): the renderer's
+ * cannot serve, a menu is built before any window exists. Changing the
+ * language calls this again (`ipc/handlers/settings.ts`).
  *
  * **No menu at all on Windows** (the operator's call, 2026-10-18). There it is
  * a bar inside the window, and a stray Alt gives it the keyboard: the next
@@ -44,9 +45,9 @@ export function installApplicationMenu(): void {
     ? []
     : [
         { type: "separator" },
-        { role: "reload", label: "Recargar" },
-        { role: "forceReload", label: "Forzar recarga" },
-        { role: "toggleDevTools", label: "Herramientas de desarrollo" },
+        { role: "reload", label: mt("menu.reload") },
+        { role: "forceReload", label: mt("menu.forceReload") },
+        { role: "toggleDevTools", label: mt("menu.devTools") },
       ];
 
   const template: MenuItemConstructorOptions[] = [
@@ -55,51 +56,51 @@ export function installApplicationMenu(): void {
           {
             label: PRODUCT_NAME,
             submenu: [
-              { role: "about", label: `Acerca de ${PRODUCT_NAME}` },
+              { role: "about", label: mt("menu.about", { app: PRODUCT_NAME }) },
               { type: "separator" },
-              { role: "services", label: "Servicios" },
+              { role: "services", label: mt("menu.services") },
               { type: "separator" },
-              { role: "hide", label: `Ocultar ${PRODUCT_NAME}` },
-              { role: "hideOthers", label: "Ocultar otros" },
-              { role: "unhide", label: "Mostrar todo" },
+              { role: "hide", label: mt("menu.hide", { app: PRODUCT_NAME }) },
+              { role: "hideOthers", label: mt("menu.hideOthers") },
+              { role: "unhide", label: mt("menu.showAll") },
               { type: "separator" },
-              { role: "quit", label: `Salir de ${PRODUCT_NAME}` },
+              { role: "quit", label: mt("menu.quitApp", { app: PRODUCT_NAME }) },
             ],
           },
         ] satisfies MenuItemConstructorOptions[])
       : []),
     {
-      label: "Edición",
+      label: mt("menu.edit"),
       submenu: [
-        { role: "undo", label: "Deshacer" },
-        { role: "redo", label: "Rehacer" },
+        { role: "undo", label: mt("menu.undo") },
+        { role: "redo", label: mt("menu.redo") },
         { type: "separator" },
-        { role: "cut", label: "Cortar" },
-        { role: "copy", label: "Copiar" },
-        { role: "paste", label: "Pegar" },
-        { role: "selectAll", label: "Seleccionar todo" },
+        { role: "cut", label: mt("menu.cut") },
+        { role: "copy", label: mt("menu.copy") },
+        { role: "paste", label: mt("menu.paste") },
+        { role: "selectAll", label: mt("menu.selectAll") },
       ],
     },
     {
-      label: "Ver",
+      label: mt("menu.view"),
       submenu: [
-        { role: "resetZoom", label: "Tamaño real" },
-        { role: "zoomIn", label: "Acercar" },
-        { role: "zoomOut", label: "Alejar" },
+        { role: "resetZoom", label: mt("menu.actualSize") },
+        { role: "zoomIn", label: mt("menu.zoomIn") },
+        { role: "zoomOut", label: mt("menu.zoomOut") },
         { type: "separator" },
-        { role: "togglefullscreen", label: "Pantalla completa" },
+        { role: "togglefullscreen", label: mt("menu.fullScreen") },
         ...developmentItems,
       ],
     },
     {
-      label: "Ventana",
+      label: mt("menu.window"),
       submenu: [
-        { role: "minimize", label: "Minimizar" },
+        { role: "minimize", label: mt("menu.minimize") },
         ...(isMac
           ? ([
-              { role: "zoom", label: "Zoom" },
+              { role: "zoom", label: mt("menu.zoom") },
               { type: "separator" },
-              { role: "front", label: "Traer todo al frente" },
+              { role: "front", label: mt("menu.bringAllToFront") },
             ] satisfies MenuItemConstructorOptions[])
           : []),
       ],
@@ -108,8 +109,8 @@ export function installApplicationMenu(): void {
       ? []
       : ([
           {
-            label: "Archivo",
-            submenu: [{ role: "quit", label: "Salir" }],
+            label: mt("menu.file"),
+            submenu: [{ role: "quit", label: mt("menu.quit") }],
           },
         ] satisfies MenuItemConstructorOptions[])),
   ];

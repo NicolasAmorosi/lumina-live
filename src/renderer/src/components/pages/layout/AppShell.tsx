@@ -14,7 +14,7 @@ type AppShellProps = {
  * The EasyWorship 2009 workspace, in one place:
  *
  *   ┌ top bar ─────────────────────────────────────┐
- *   │ schedule   │ PREVIEW monitor    │ EN VIVO    │
+ *   │ schedule   │ PREVIEW monitor    │ GO LIVE    │
  *   │ ───────────│ ────────────────── │ ────────── │
  *   │ resources  │ slides/verses of   │ LIVE       │
  *   │            │ the previewed item │ ────────── │

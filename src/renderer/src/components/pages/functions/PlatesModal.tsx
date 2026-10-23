@@ -32,7 +32,7 @@ type Pending =
 
 /**
  * The plate editor — the same layout and the same EXPLICIT save as the
- * «Escenas» modal, for the same reason: a plate can be on the air while it is
+ * «Scenes» modal, for the same reason: a plate can be on the air while it is
  * edited, and saving per keystroke would spell a name out letter by letter in
  * front of the congregation. Once saved, a plate that is up is re-dressed in
  * place (`setLivePlate`), without its entrance playing again.
@@ -50,7 +50,7 @@ export function PlatesModal({ onOpenChange, open }: { onOpenChange: (open: boole
   const dirty = editing !== null && JSON.stringify(editing.draft) !== JSON.stringify(editing.baseline);
   const savable = editing !== null && isPlateDraftSavable(editing.draft);
   // A plate that does not exist yet has nothing to differ from — the lesson
-  // of the scene editor's dead «Guardar» (HANDOFF B1).
+  // of the scene editor's dead «Save» (HANDOFF B1).
   const canSave = savable && (editing.plateId === null || dirty);
 
   useEffect(() => {
@@ -68,8 +68,8 @@ export function PlatesModal({ onOpenChange, open }: { onOpenChange: (open: boole
       return;
     }
     // With no plate yet, the only thing to do here is make one — and the
-    // empty Overlays panel opens this through a button that says «Nueva
-    // placa». Landing on an empty pane meant pressing it a second time.
+    // empty Overlays panel opens this through a button that says «New
+    // overlay». Landing on an empty pane meant pressing it a second time.
     setEditing((current) => {
       if (current !== null) return current;
       const first = plates[0];

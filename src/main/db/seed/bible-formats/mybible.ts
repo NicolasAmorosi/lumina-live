@@ -2,6 +2,7 @@ import Database from "better-sqlite3";
 import { canonByIndex, canonByMyBibleNumber, type CanonBook } from "./canon";
 import { normalizeLanguage } from "./language";
 import { asPlainText, BibleFormatError, BookCollector, type ParsedBible } from "./types";
+import { mt } from "../../../i18n";
 
 /**
  * MyBible.zone and MySword modules — which are SQLite databases.
@@ -127,10 +128,11 @@ function readMyBibleZone(db: Database.Database, tables: Set<string>): ParsedBibl
     );
   }
 
+  const language = normalizeLanguage(info.get("language"));
   return {
     name: info.get("description") ?? info.get("title") ?? null,
-    language: normalizeLanguage(info.get("language")),
-    books: collector.finish(),
+    language,
+    books: collector.finish(language),
   };
 }
 
@@ -148,10 +150,11 @@ function readMySword(db: Database.Database, tables: Set<string>): ParsedBible {
     collector.add(canon, Number(row.Chapter), Number(row.Verse), cleanModuleText(asPlainText(row.Scripture)));
   }
 
+  const language = normalizeLanguage(asString(details.Language));
   return {
     name: asString(details.Description) ?? asString(details.Title) ?? asString(details.Abbreviation),
-    language: normalizeLanguage(asString(details.Language)),
-    books: collector.finish(),
+    language,
+    books: collector.finish(language),
   };
 }
 
@@ -160,14 +163,14 @@ export function parseMyBibleModule(filePath: string): ParsedBible {
   try {
     db = new Database(filePath, { readonly: true, fileMustExist: true });
   } catch (error) {
-    throw new BibleFormatError(`No se pudo abrir el módulo SQLite: ${String(error)}`);
+    throw new BibleFormatError(mt("bible.sqliteUnreadable", { detail: String(error) }));
   }
 
   try {
     const tables = tableNames(db);
     if (tables.has("verses")) return readMyBibleZone(db, tables);
     if (tables.has("bible")) return readMySword(db, tables);
-    throw new BibleFormatError("El archivo SQLite no es un módulo de MyBible ni de MySword: no tiene versículos.");
+    throw new BibleFormatError(mt("bible.sqliteNoVerses"));
   } finally {
     db.close();
   }

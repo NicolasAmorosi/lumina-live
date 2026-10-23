@@ -284,7 +284,7 @@ describe("a time of day is resolved against the local calendar", () => {
 });
 
 describe("The editor's two text fields", () => {
-  test("a bare number is MINUTES, because every use of this field is «faltan N minutos»", () => {
+  test("a bare number is MINUTES, because every use of this field is «N minutes left»", () => {
     expect(parseDuration("10")).toBe(10 * 60_000);
     expect(parseDuration(" 5 ")).toBe(5 * 60_000);
   });

@@ -1,6 +1,7 @@
 import type { BibleSourceBook } from "@shared/types/bible";
 import { canonByAbbrev, testamentOf } from "./canon";
 import { BibleFormatError, type ParsedBible, type ParsedBook, type ParsedVerse } from "./types";
+import { mt } from "../../../i18n";
 
 /**
  * The shape the bundled `rv1909.json` uses, and the several near-misses a
@@ -31,7 +32,7 @@ function extractBooks(raw: unknown): BibleSourceBook[] {
       ...(value as object),
     })) as BibleSourceBook[];
   }
-  throw new BibleFormatError("El archivo JSON no tiene la forma de una Biblia: no se encontraron sus libros.");
+  throw new BibleFormatError(mt("bible.jsonNoBooks"));
 }
 
 /**
@@ -83,7 +84,7 @@ function normalizeChapters(raw: unknown): string[][] {
       .sort((a, b) => a - b)
       .map((n) => normalizeVerses((raw as Record<string, unknown>)[String(n)]));
   }
-  throw new BibleFormatError("El archivo JSON no tiene la forma de una Biblia: no se encontraron sus capítulos.");
+  throw new BibleFormatError(mt("bible.jsonNoChapters"));
 }
 
 /** A verse is text or it is nothing. `String()` on a shape we did not expect

@@ -8,6 +8,7 @@ import type { SettingsRepo } from "../repositories/settings.repo";
 import { bibleBooks, bibleVersions } from "../schema";
 import { BibleFormatError, parseBibleFile } from "./bible-formats";
 import { BUILTIN_BIBLE_CODE } from "@shared/constants";
+import { mt } from "../../i18n";
 
 const BUILTIN_BIBLE_NAME = "Reina-Valera 1909";
 const BUILTIN_BIBLE_FILE = "rv1909.json";
@@ -72,9 +73,7 @@ export function seedBibleFromFile(
     // deuterocanonical books, an XML whose verses are all empty elements.
     // Refused rather than stored: a version with no verses in the list is a
     // bug report waiting to happen, and the operator can still act on this.
-    throw new BibleFormatError(
-      `«${path.basename(filePath)}» se leyó correctamente pero no contiene ningún versículo.`,
-    );
+    throw new BibleFormatError(mt("bible.noVerses", { file: path.basename(filePath) }));
   }
 
   // A re-seed KEEPS the name the row already has. The bundled bible can be
@@ -154,7 +153,7 @@ export function seedBibleFromFile(
  *   a corrected `resources/bibles/rv1909.json` in a later build reaches an
  *   existing install.
  * - row gone, flag set → the operator deleted it. Leave it deleted; this is
- *   what makes «borrar» mean borrar, exactly like `utility.seeded`.
+ *   what makes «delete» mean delete, exactly like `utility.seeded`.
  * - row gone, flag unset → a fresh database. Seed, and set the flag.
  *
  * Checking only the flag would break the upgrade path; checking only the row

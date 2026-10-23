@@ -1,6 +1,6 @@
 {
   "name": "worship-app",
-  "version": "2.2.0-beta.3",
+  "version": "2.2.0-beta.4",
   "description": "Free and open-source church presentation software: slides, video, Bible and timers on a second screen.",
   "main": "./out/main/index.js",
   "author": "Nicolas Amorosi",
@@ -23,13 +23,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "npm run build && playwright test",
+    "screenshots": "npm run build && playwright test -c playwright.screenshots.config.ts",
     "db:generate": "drizzle-kit generate",
     "slides:smoke": "TSX_TSCONFIG_PATH=tsconfig.node.json tsx scripts/convert-smoke.ts",
     "fetch:ffmpeg": "tsx scripts/fetch-ffmpeg.ts",
     "package": "npm run build && tsx scripts/fetch-ffmpeg.ts && electron-builder",
     "package:win": "npm run build && tsx scripts/fetch-ffmpeg.ts win32-x64 && electron-builder --win",
     "package:mac": "npm run build && tsx scripts/fetch-ffmpeg.ts darwin-arm64 && electron-builder --mac",
-    "package:linux": "npm run build && tsx scripts/fetch-ffmpeg.ts linux-x64 && electron-builder --linux",
+    "package:linux": "npm run build && tsx scripts/fetch-ffmpeg.ts linux-x64 && electron-builder --linux -c.productName=lumina-live",
     "package:dir": "npm run build && tsx scripts/fetch-ffmpeg.ts && electron-builder --dir"
   },
   "dependencies": {
@@ -75,6 +76,7 @@
   "build": {
     "appId": "com.worshipapp.app",
     "productName": "Lumina Live",
+    "artifactName": "Lumina-Live-${os}-${arch}.${ext}",
     "asar": true,
     "asarUnpack": [
       "**/node_modules/better-sqlite3/**"
@@ -121,6 +123,8 @@
     },
     "mac": {
       "target": "dmg",
+      "identity": "-",
+      "hardenedRuntime": false,
       "extraResources": [
         {
           "from": "resources/ffmpeg/darwin-${arch}",
@@ -133,7 +137,27 @@
       ]
     },
     "linux": {
-      "target": "AppImage",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "maintainer": "Nicolas Amorosi <nicolasamorosi@gmail.com>",
+      "synopsis": "Church presentation software",
+      "desktop": {
+        "entry": {
+          "Name": "Lumina Live"
+        }
+      },
       "extraResources": [
         {
           "from": "resources/ffmpeg/linux-${arch}",

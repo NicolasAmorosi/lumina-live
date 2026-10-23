@@ -24,6 +24,10 @@ const FLAGS = [
   "--disable-backgrounding-occluded-windows",
   "--disable-renderer-backgrounding",
   "--disable-background-timer-throttling",
+  // Every test starts a new profile, and a new profile starts in the OS's
+  // language (`main/i18n/system-locale.ts`): pinned, so the suite reads the
+  // same Spanish on any machine.
+  "--lang=es",
 ];
 
 /** What the renderer's global handlers log before showing the "error
@@ -192,11 +196,18 @@ export class WorshipApp {
       () => false,
     );
     if (await Promise.race([exited.then(() => false), asked])) {
-      await dialog.getByRole("button", { name: answer === "close" ? "Cerrar igualmente" : "Cancelar" }).click();
       if (answer === "cancel") {
+        await dialog.getByRole("button", { name: "Cancelar" }).click();
         await expect(dialog).toBeHidden();
         return;
       }
+      // The answer ends the process, which can take the page down before the
+      // click returns («Target page, context or browser has been closed», seen
+      // on Linux). A click that failed for any other reason never exits, below.
+      await dialog
+        .getByRole("button", { name: "Cerrar igualmente" })
+        .click()
+        .catch(() => undefined);
     }
     await exited;
   }
@@ -241,6 +252,11 @@ export function videoStates(page: Page) {
     [...document.querySelectorAll("video")].map((video) => ({
       src: video.currentSrc || video.src,
       currentTime: video.currentTime,
+      /** Where playback actually began (`played`), or `null` before any frame
+       *  played. Not `currentTime`: `play()` flips `paused` at readyState 0,
+       *  when `currentTime` still reads 0 for a video whose mount-time seek
+       *  has not landed yet. */
+      playedFrom: video.played.length > 0 ? video.played.start(0) : null,
       paused: video.paused,
       videoWidth: video.videoWidth,
       readyState: video.readyState,

@@ -30,7 +30,7 @@ import { PreviewMediaBar } from "./preview-media-bar";
  * primitive the projector uses — see `Monitor`), and below it everything the
  * previewed item can put on screen, as a grid. A deck shows its slides, a
  * chapter shows its verses, a single media file shows itself. Clicking a
- * tile only moves the preview cursor — going live is always the EN VIVO
+ * tile only moves the preview cursor — going live is always the GO LIVE
  * button's job, never this column.
  */
 export function SlidesPanel() {

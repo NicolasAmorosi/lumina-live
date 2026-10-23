@@ -24,7 +24,7 @@ export class HistoryRepo {
 
     // An overlay plate going up or down re-pushes the very same content: that
     // is not something new being projected, and it must not cost a row. Nor is
-    // uncovering NEGRO: the push that follows differs only in its transition
+    // uncovering BLACK: the push that follows differs only in its transition
     // epoch and in the video being resumed. What IS content — the url, a
     // video's own epoch, a verse — still records as before.
     const key = JSON.stringify({ ...output, plates: undefined, transition: undefined, videoUnderlay: undefined });

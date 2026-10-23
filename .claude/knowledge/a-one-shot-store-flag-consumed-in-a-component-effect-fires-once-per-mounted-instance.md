@@ -7,8 +7,8 @@
 before storing a *one-shot event* (as opposed to durable state) in a Zustand store; or before
 changing a component from "one instance at a time" to "kept mounted".
 
-Found on 2026-09-13, diagnosing a field bug: pressing **Quitar** on a library asset used by a saved
-program raised the same "No se puede quitar" toast **four times**.
+Found on 2026-09-13, diagnosing a field bug: pressing **Remove** on a library asset used by a saved
+program raised the same "Can't remove it" toast **four times**.
 
 ### The mechanism
 

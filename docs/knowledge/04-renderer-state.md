@@ -1,155 +1,154 @@
-# 04 — Estado del renderer
+# 04 — Renderer state
 
-El objeto global `state` (20 campos) y el mapa `els` de ~45 IDs hardcodeados desaparecieron. En
-su lugar, **Zustand** en slices por dominio (`src/renderer/src/stores/`):
+The global `state` object (20 fields) and the `els` map of ~45 hardcoded IDs are gone. In
+their place, **Zustand** in per-domain slices (`src/renderer/src/stores/`):
 
-| Store | Qué guarda |
+| Store | What it holds |
 |---|---|
-| `program.store.ts` | programa actual (`items`, nombre, notas, fecha), `selectedIndex` (highlight), `activeIndex` (en vivo), `dirty` |
-| `preview.store.ts` | **qué se está mirando** (`target`: ítem del programa \| versículo \| asset de la biblioteca) + `slideIndex`, el cursor de preview independiente del de proyección |
-| `projection.store.ts` | `base` (qué se eligió proyectar) + `overlay` ('none'\|'black'\|'logo') + `logoUrl` + `presentationOpen` |
-| `bible.store.ts` | versión/libro/capítulo activos, versículos cargados, índice de versículo actual |
-| `library.store.ts` | biblioteca de medios por tipo, pestaña activa, selección |
-| `settings.store.ts` | espejo en memoria de la tabla `settings`, aplica `data-theme` al `<html>` |
-| `display.store.ts` | pantallas disponibles, cuál está elegida (persistida en `settings['projection.displayId']`), `open()/close()` de la ventana de proyección |
+| `program.store.ts` | current program (`items`, name, notes, date), `selectedIndex` (highlight), `activeIndex` (live), `dirty` |
+| `preview.store.ts` | **what is being looked at** (`target`: program item \| verse \| library asset) + `slideIndex`, the preview cursor, independent of the projection one |
+| `projection.store.ts` | `base` (what was chosen to project) + `overlay` ('none'\|'black'\|'logo') + `logoUrl` + `presentationOpen` |
+| `bible.store.ts` | active version/book/chapter, loaded verses, current verse index |
+| `library.store.ts` | media library by type, active tab, selection |
+| `settings.store.ts` | in-memory mirror of the `settings` table, applies `data-theme` to `<html>` |
+| `display.store.ts` | available screens, which one is chosen (persisted in `settings['projection.displayId']`), `open()/close()` of the projection window |
 
-Cada store toca solo lo que le corresponde — el polling de PPT (antes cada 800ms sobre el
-`state` global entero) ya no re-renderiza componentes que no leen ese slice.
+Each store touches only what belongs to it — the PPT polling (previously every 800ms over the
+whole global `state`) no longer re-renders components that don't read that slice.
 
-## `selectOutput` reemplaza `restorePrevious()`
+## `selectOutput` replaces `restorePrevious()`
 
-El árbitro legacy (`app.js:408-418`, prioridad hardcodeada PPT > video > imagen > biblia > logo)
-desaparece. `projection.store.ts` expone:
+The legacy arbiter (`app.js:408-418`, hardcoded priority PPT > video > image > bible > logo)
+is gone. `projection.store.ts` exposes:
 
 ```ts
 function selectOutput(state): ProjectionOutput {
   if (state.overlay === "black") return { kind: "black" };
   if (state.overlay === "logo") return { kind: "logo", url: ... };
   if (state.base === null) return { kind: "logo", url: ... };
-  switch (state.base.kind) { /* exhaustivo — TS obliga a manejar cada variante */ }
+  switch (state.base.kind) { /* exhaustive — TS forces you to handle every variant */ }
 }
 ```
 
-Salir de NEGRO/LOGO es `setOverlay('none')` — no hay nada que "restaurar", porque `base` ya *es*
-lo último elegido. Agregar un tipo de contenido nuevo a `BaseContent`
-(`shared/types/projection.ts`) sin manejarlo en el `switch` es un **error de compilación**, no un
-bug de "se quedó mostrando el logo" descubierto en producción.
+Leaving BLACK/LOGO is `setOverlay('none')` — there is nothing to "restore", because `base` already
+*is* the last thing chosen. Adding a new content type to `BaseContent`
+(`shared/types/projection.ts`) without handling it in the `switch` is a **compile error**, not a
+"it got stuck showing the logo" bug discovered in production.
 
-### `selectOutput` pierde información, y eso define qué puede decidir main
+### `selectOutput` loses information, and that defines what main can decide
 
-Mirando las tres primeras líneas de arriba: con un deck como `base`, NEGRO devuelve
-`{kind:"black"}` y LOGO devuelve `{kind:"logo"}` — el `deckAssetId` no viaja. Y `base === null`
-devuelve **también** `{kind:"logo"}`. Es decir: "hay un deck en vivo, tapado" y "no hay nada en
-vivo" llegan a main como el mismo valor.
+Look at the first three lines above: with a deck as `base`, BLACK returns `{kind:"black"}` and
+LOGO returns `{kind:"logo"}` — the `deckAssetId` doesn't travel. And `base === null` **also**
+returns `{kind:"logo"}`. In other words: "there is a deck live, covered" and "there is nothing
+live" reach main as the same value.
 
-`ProjectionOutput` es todo lo que main tiene (`services/projection-state.ts`), así que main **no
-puede** responder "qué está en vivo". La única excepción es `videoUnderlay`, y sobrevive al overlay
-porque el proyector mismo lo necesita para no desmontar el `<video>`, no porque main lo pidiera.
+`ProjectionOutput` is all main has (`services/projection-state.ts`), so main **cannot** answer
+"what is live". The only exception is `videoUnderlay`, and it survives the overlay because the
+projector itself needs it so as not to unmount the `<video>`, not because main asked for it.
 
-De ahí salen dos reglas:
+Two rules follow from that:
 
-- Una decisión de main sobre contenido en vivo solo es correcta si el dato viaja dentro del output
-  por una razón que la ventana de proyección necesita. Si no, la decisión es del control
-  (`lib/actions/*`), que lee `base` y `overlay` directamente — es el caso del guard que rechaza
-  reconvertir el deck que está en el proyector (`lib/actions/deck.ts`).
-- Lo que main sí puede hacer es **no soltar** lo que ya sabía: `projection:show` mantiene el pin de
-  desalojo del deck a través de NEGRO/LOGO y lo libera recién con un output que de verdad reemplaza
-  el contenido.
+- A main decision about live content is only correct if the data travels inside the output
+  for a reason the projection window needs. Otherwise, the decision belongs to the control
+  (`lib/actions/*`), which reads `base` and `overlay` directly — that is the case of the guard
+  that refuses to reconvert the deck that is on the projector (`lib/actions/deck.ts`).
+- What main *can* do is **not let go** of what it already knew: `projection:show` keeps the
+  deck's eviction pin across BLACK/LOGO and releases it only on an output that actually replaces
+  the content.
 
-Diagnóstico completo en
+Full diagnosis in
 [`.claude/knowledge/main-cannot-know-what-is-live-under-an-overlay.md`](../../.claude/knowledge/main-cannot-know-what-is-live-under-an-overlay.md).
 
-## La capa de efectos
+## The effects layer
 
-`src/renderer/src/effects/projection-sync.ts` conecta el store con main: se suscribe a
-`selectOutputMemo` y manda cada output por `projection:show`, y enchufa los eventos entrantes
-(`media-status`, `media-error`, `deck-progress`). La danza del overlay de PowerPoint que vivía acá
-**ya no existe** — las diapositivas son imágenes, la ventana de proyección nunca se esconde.
+`src/renderer/src/effects/projection-sync.ts` connects the store to main: it subscribes to
+`selectOutputMemo` and sends each output over `projection:show`, and wires up the incoming events
+(`media-status`, `media-error`, `deck-progress`). The PowerPoint overlay dance that used to live
+here **no longer exists** — slides are images, the projection window is never hidden.
 
-`selectOutput` devuelve un objeto nuevo en cada llamada y `preload` lo hace anidado, así que
-`selectOutputMemo` memoiza la identidad en **un solo lugar**; sin eso, cada consumidor necesitaba
-su propio parche para el mismo problema (un `equalityFn` con `JSON.stringify` acá, un `useShallow`
-en `LiveMonitorPanel` allá).
+`selectOutput` returns a new object on every call and `preload` makes it nested, so
+`selectOutputMemo` memoizes identity in **a single place**; without it, each consumer needed
+its own patch for the same problem (an `equalityFn` with `JSON.stringify` here, a `useShallow`
+in `LiveMonitorPanel` there).
 
-La memoización compara **por referencia los 8 campos que `selectOutput` lee**, no el resultado
-serializado. Es la diferencia entre O(1) y construir-más-serializar el output entero en cada
-notificación del store — y quien más notifica, de lejos, es `setMediaStatus` (~4 Hz por elemento
-sonando), que no afecta a ninguno de esos 8 campos. Como todos se reemplazan de forma inmutable,
-comparar referencias es correcto; y de paso dos estados que difieren solo en `mediaStatus` dan la
-misma tupla, así que dos suscriptores no pueden pelearse el slot único (el patrón que React
-documenta como causa de bucles con `useSyncExternalStore`).
+The memoization compares **by reference the 8 fields `selectOutput` reads**, not the serialized
+result. It is the difference between O(1) and building-plus-serializing the whole output on every
+store notification — and by far the most frequent notifier is `setMediaStatus` (~4 Hz per
+playing element), which affects none of those 8 fields. Since all of them are replaced
+immutably, comparing references is correct; and as a bonus, two states that differ only in
+`mediaStatus` yield the same tuple, so two subscribers cannot fight over the single slot (the
+pattern React documents as a cause of loops with `useSyncExternalStore`).
 
-### Errores del proyector
+### Projector errors
 
-`mediaErrors` (en `projection.store.ts`, indexado por `mediaErrorKey`: `"scene"`, `"video"`,
-`"audio:<id>"`) guarda lo que la ventana de proyección reportó que no pudo cargar o decodificar.
-Dos reglas que lo mantienen honesto sin ningún timer ni limpieza explícita:
+`mediaErrors` (in `projection.store.ts`, keyed by `mediaErrorKey`: `"scene"`, `"video"`,
+`"audio:<id>"`) holds what the projection window reported it couldn't load or decode.
+Two rules keep it honest without any timer or explicit cleanup:
 
-- **Una entrada solo se muestra mientras su `url` siga siendo lo que está en vivo.** Pasar a la
-  diapositiva siguiente o mandar otra cosa al aire la vuelve invisible sola.
-- **`beginScene()` borra las entradas de `scene` y `video`.** Es lo que hace que volver a mandar el
-  *mismo* archivo sea un reintento de verdad, en vez de arrastrar el aviso de un archivo que el
-  operador ya repuso. Las de audio no: esas pertenecen al ciclo de vida de la lista de pistas y las
-  retira `pruneMediaStatus`, en la misma pasada que los `mediaStatus` muertos.
+- **An entry is only shown while its `url` is still what is live.** Moving to the next slide
+  or sending something else to air makes it invisible on its own.
+- **`beginScene()` clears the `scene` and `video` entries.** That is what makes re-sending the
+  *same* file a real retry, instead of dragging along the warning about a file the operator
+  already replaced. Audio entries are not cleared: they belong to the lifecycle of the track
+  list and are removed by `pruneMediaStatus`, in the same pass as the dead `mediaStatus` entries.
 
-`src/renderer/src/effects/deck-autoplay.ts` es lo único con lógica temporal. Dos modos:
+`src/renderer/src/effects/deck-autoplay.ts` is the only thing with time-based logic. Two modes:
 
-- **synced**: mientras hay soundtrack y nadie tocó nada, el índice de diapositiva es una función
-  del tiempo del `<audio>`. Cada `media-status` re-deriva qué slide corresponde y re-arma un único
-  `setTimeout` — el timer es una optimización de latencia, no el reloj, así que una pista de diez
-  minutos no puede acumular deriva.
-- **detached**: apenas el operador navega a mano, la música **sigue donde estaba** (decisión de
-  producto) y el auto-avance continúa con una cadena de deadlines monotónica desde la diapositiva
-  elegida. Un `navEpoch` incremental descarta cualquier `media-status` en vuelo para que una
-  respuesta tardía no pise la diapositiva recién elegida.
+- **synced**: while there is a soundtrack and nobody has touched anything, the slide index is a
+  function of the `<audio>`'s time. Each `media-status` re-derives which slide applies and
+  re-arms a single `setTimeout` — the timer is a latency optimization, not the clock, so a
+  ten-minute track cannot accumulate drift.
+- **detached**: as soon as the operator navigates by hand, the music **keeps going where it was**
+  (product decision) and auto-advance continues with a monotonic chain of deadlines from the
+  chosen slide. An incrementing `navEpoch` discards any in-flight `media-status` so that a late
+  response cannot overwrite the slide that was just chosen.
 
-`src/renderer/src/effects/end-of-playback.ts` saca solo del aire un video o un deck con
-auto-avance que terminó de reproducirse por su cuenta, dejando la escena de logo
-(`clearBaseContent()`) — la congregación nunca se queda mirando el último frame o la última
-diapositiva porque el operador se olvidó de limpiar. Un deck se considera terminado cuando pasó a
-`autoplay: "finished"` **y**, si tiene soundtrack, esa pista también reportó `ended` — lo que
-termina último manda; una música más larga que la suma de los timings no se corta a mitad.
-Ningún deck manual (sin `advanceAfterMs`) se auto-limpia nunca.
+`src/renderer/src/effects/end-of-playback.ts` takes off the air, on its own, a video or an
+auto-advancing deck that finished playing by itself, leaving the logo scene
+(`clearBaseContent()`) — the congregation is never left staring at the last frame or the last
+slide because the operator forgot to clear. A deck counts as finished when it has reached
+`autoplay: "finished"` **and**, if it has a soundtrack, that track has also reported `ended` —
+whichever ends last wins; music longer than the sum of the timings is not cut off midway.
+No manual deck (without `advanceAfterMs`) ever clears itself.
 
-El punto que hay que respetar al tocar este archivo: `MediaStatus.ended` es *sticky* en el
-elemento del DOM y se re-emite al montar (`use-media-status-reporter.ts` llama a `report()` sin
-esperar un evento), y la pista del deck siempre reutiliza la misma clave
-(`audio:deck-soundtrack`, `audio.store.ts`). Sin comparar `status.epoch` contra el epoch vigente
-(`base.epoch` para el video, `soundtrackEpoch` para el deck), un `ended: true` de un video o deck
-anterior podría limpiar el que está sonando ahora. Cualquier consumidor nuevo de `mediaStatus`
-que mire `ended` tiene que hacer la misma comparación.
+The point to respect when touching this file: `MediaStatus.ended` is *sticky* on the DOM
+element and is re-emitted on mount (`use-media-status-reporter.ts` calls `report()` without
+waiting for an event), and the deck's track always reuses the same key
+(`audio:deck-soundtrack`, `audio.store.ts`). Without comparing `status.epoch` against the
+current epoch (`base.epoch` for the video, `soundtrackEpoch` for the deck), an `ended: true` from
+a previous video or deck could clear the one playing now. Any new consumer of `mediaStatus`
+that looks at `ended` has to do the same comparison.
 
-## Sincronización entre ventanas
+## Cross-window synchronization
 
-El control es la única fuente de verdad; la ventana de proyección no tiene estado propio (ver
-`01-architecture.md` sobre el replay en `did-finish-load`). No hay Context ni estado de React
-compartido entre ventanas — son dos procesos de renderer distintos, la única vía es IPC.
+The control is the single source of truth; the projection window has no state of its own (see
+`01-architecture.md` on the replay on `did-finish-load`). There is no Context or React state
+shared between windows — they are two separate renderer processes, and the only channel is IPC.
 
-## La capa de acciones
+## The actions layer
 
-`lib/actions/` es donde vive todo lo que cruza stores, y está partida según el flujo de dos
-etapas de EasyWorship:
+`lib/actions/` is where everything that crosses stores lives, and it is split along
+EasyWorship's two-stage flow:
 
-- `preview.ts` — selección y cursor de preview. **No toca `projection.store` nunca.** Un click en
-  el programa, en un versículo o en un asset termina siempre acá.
-- `playback.ts` — `goLive()` es el **único** camino de preview a proyector, compartido por el
-  botón EN VIVO, Enter, y el doble click en una fila, un tile o un versículo, así que los cuatro
-  no pueden divergir. También `clearLive()` (LIMPIAR), `advanceSlide`/`gotoSlide` y
-  `toggleOverlay`. Ordena las cosas para que un deck esté **listo antes** de cambiar `base`: darle
-  EN VIVO a un `.pptx` sin convertir deja el proyector como está en vez de cortar a negro durante
-  la conversión.
-- `bible.ts` — `projectVerse`/`advanceVerse` (en vivo), `previewSearchHit` y
+- `preview.ts` — selection and preview cursor. **It never touches `projection.store`.** A click
+  in the program, on a verse or on an asset always ends up here.
+- `playback.ts` — `goLive()` is the **only** path from preview to projector, shared by the
+  GO LIVE button, Enter, and double-clicking a row, a tile or a verse, so the four cannot
+  diverge. Also `clearLive()` (CLEAR), `advanceSlide`/`gotoSlide` and `toggleOverlay`. It orders
+  things so that a deck is **ready before** `base` changes: hitting GO LIVE on an unconverted
+  `.pptx` leaves the projector as it is instead of cutting to black during the conversion.
+- `bible.ts` — `projectVerse`/`advanceVerse` (live), `previewSearchHit` and
   `addVerseToSchedule`.
 
-## Teclado
+## Keyboard
 
-`use-global-shortcuts.ts`, con la división que hace que se puedan apretar sin mirar:
+`use-global-shortcuts.ts`, with the split that lets you press them without looking:
 
-| Tecla | Qué mueve |
+| Key | What it moves |
 |---|---|
-| ←/→ | **lo que está en vivo** — la diapositiva o el versículo en pantalla, derivado de `base` y no del panel enfocado |
-| ↑/↓ | **el cursor de preview** — nada llega al proyector |
-| Enter | manda el preview al proyector (`goLive()`) |
-| Espacio | pausa/reanuda un deck con auto-avance — el atajo que hace falta para frenar en seco un PPT que se pasa solo |
-| B / L | NEGRO / LOGO |
-| Delete/Backspace | quita el ítem seleccionado (biblioteca antes que programa) |
+| ←/→ | **what is live** — the slide or verse on screen, derived from `base` and not from the focused panel |
+| ↑/↓ | **the preview cursor** — nothing reaches the projector |
+| Enter | sends the preview to the projector (`goLive()`) |
+| Space | pauses/resumes an auto-advancing deck — the shortcut you need to stop dead a PPT that advances by itself |
+| B / L | BLACK / LOGO |
+| Delete/Backspace | removes the selected item (library before program) |

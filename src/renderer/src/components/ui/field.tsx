@@ -10,7 +10,7 @@ import { Title } from "./title";
  *  flat list of rows.
  *
  *  Lives here rather than in `pages/settings/` because two features use it now
- *  — Ajustes and the «Escenas» editor — which is exactly the second use the
+ *  — Settings and the «Scenes» editor — which is exactly the second use the
  *  reuse rule in `CLAUDE.md` promotes on. */
 export function FieldGroup({ children, className, title }: { children: ReactNode; className?: string; title: string }) {
   return (
@@ -27,7 +27,7 @@ export function FieldGroup({ children, className, title }: { children: ReactNode
  *  description) on the left, its control(s) on the right, never wrapping.
  *
  *  `label` and `description` are nodes rather than strings because this row is
- *  also what a LIST of things looks like in Ajustes — the installed bibles —
+ *  also what a LIST of things looks like in Settings — the installed bibles —
  *  and one of those rows swaps its name for an `<Input>` while it is being
  *  renamed. Keeping that inside the same primitive is what makes a list row
  *  and a settings row exactly the same height, which is the whole reason the
@@ -35,14 +35,14 @@ export function FieldGroup({ children, className, title }: { children: ReactNode
  *  panels use.
  *
  *  The grip and drop-indicator props are spelled exactly like `ListRow`'s, and
- *  mean exactly the same thing: a reorderable list in Ajustes and one in a
+ *  mean exactly the same thing: a reorderable list in Settings and one in a
  *  resource panel are the same interaction at two densities, and two spellings
  *  of it is how the two start behaving differently.
  *
  *  The row is a `group` named by its label and described by its description.
  *  The control inside comes from the caller, so this cannot name it directly,
  *  but a screen reader announces the group on the way in — which is what an
- *  unnamed `Select` that read out only «Centrado» was missing. */
+ *  unnamed `Select` that read out only «Centered» was missing. */
 export function FieldRow({
   children,
   description,

@@ -11,7 +11,7 @@ type PrewarmConfirmModalProps = {
 };
 
 /**
- * The "this can take a while" warning before a "Preparar carpeta/vista"
+ * The "this can take a while" warning before a "Prepare folder/view"
  * batch starts — the user explicitly asked for this before any bulk
  * conversion is allowed to run unattended.
  */

@@ -1,4 +1,4 @@
-/** What «Probar video» concludes about one file on this machine. */
+/** What «Test video» concludes about one file on this machine. */
 export type VideoProbeVerdict = "smooth" | "risky" | "unsuitable";
 
 /** Why — each one a line under the verdict. `decoderUnknown` never changes

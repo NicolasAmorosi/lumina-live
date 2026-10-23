@@ -96,7 +96,7 @@ export type SceneTriggers = {
  * instant zero passes (see `TimerScene`).
  *
  * `message` is its own `SceneTextStyle` rather than a reuse of the scene's:
- * the line that says "faltan 10 minutos" and the one that says "¡Bienvenidos!"
+ * the line that says "10 minutes to go" and the one that says "Welcome!"
  * are read at different moments, from the same seats, and almost never want
  * the same size. `hideValue`/`hideTitle` are opt-in and off by default — a
  * countdown that erases itself at zero is a deliberate look, never something
@@ -171,7 +171,7 @@ const DEFAULT_END_TRANSITION: TransitionSpec = { style: "none", durationMs: 300 
 
 export const DEFAULT_SCENE_STYLE: SceneStyle = {
   version: SCENE_STYLE_VERSION,
-  // The sheet's dark fondo — the same hue the dark theme uses for `bg-background`.
+  // The sheet's dark background — the same hue the dark theme uses for `bg-background`.
   background: { kind: "solid", color: "#162231" },
   fontFamily: null,
   verticalAlign: "middle",

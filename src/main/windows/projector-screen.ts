@@ -25,7 +25,7 @@ import { chooseProjectorDisplay } from "./projector-display-choice";
  *   was sitting on the laptop (the single-screen windowed mode).
  *
  * The operator's call, 2026-10-18. Every change in the list of screens is also
- * broadcast (`displays-changed`) so Ajustes and the next EN VIVO see it.
+ * broadcast (`displays-changed`) so Settings and the next GO LIVE see it.
  */
 
 type Attached = { win: BrowserWindow; displayId: number; blocker: number; hidden: boolean };

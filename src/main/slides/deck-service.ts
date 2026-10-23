@@ -15,6 +15,7 @@ import { broadcast } from "../services/broadcast";
 import type { DeckRow, NewAudio, NewSlide, NewVideo } from "../db/repositories/slides.repo";
 import { SlideError, isSlideError } from "./errors";
 import {
+  cachedSofficeError,
   convertBatchToPdf,
   convertBatchToPptx,
   convertTimeoutFor,
@@ -24,6 +25,7 @@ import {
   killRunningSoffice,
   locateSoffice,
   reapOrphanedSoffice,
+  requireSoffice,
   resetSofficeProfile,
   warmProfile,
 } from "./libreoffice";
@@ -39,6 +41,7 @@ import { rasterizePdf, shutdownRasterizer } from "./rasterizer";
 import { hashFile } from "../media/content-hash";
 import { healDeckClips } from "../media/deck-clips";
 import { removeQuietly, renameWithRetry } from "../fs-retry";
+import { mt } from "../i18n";
 
 // ---------------------------------------------------------------------------
 // Render target
@@ -90,7 +93,7 @@ function assertFreeSpace(sourceSize: number): void {
     if (free < required) {
       throw new SlideError(
         "DISK_FULL",
-        "No hay suficiente espacio en disco para convertir la presentación.",
+        mt("slides.diskFull"),
       );
     }
   } catch (error) {
@@ -133,8 +136,8 @@ function emitPageProgress(job: Job, next: DeckProgress): void {
 // ---------------------------------------------------------------------------
 
 /** `interactive` is anything the operator is waiting on right now (a preview,
- *  EN VIVO); `background` is a prewarm — an explicit add, a visible tile, or
- *  a "Preparar carpeta" batch. Exactly one conversion runs at a time either
+ *  GO LIVE); `background` is a prewarm — an explicit add, a visible tile, or
+ *  a "Prepare folder" batch. Exactly one conversion runs at a time either
  *  way (see the comment on `pump`), but an interactive job always jumps the
  *  queue ahead of background work, and can soft-preempt a background job
  *  already running. */
@@ -149,7 +152,7 @@ export type PrewarmScope = "program" | "explicit" | "visible" | "batch";
  *
  *  - `program`: a deck sitting in the order of service. The operator put it
  *    there, so it is the background work most likely to be needed next — it
- *    must not wait behind 600 decks of a "Preparar carpeta" batch.
+ *    must not wait behind 600 decks of a "Prepare folder" batch.
  *  - `explicit`: a file just added to the library (`+`, drag & drop).
  *  - `visible`: a tile currently on screen in the library grid.
  *  - `batch`: a whole folder/view being prepared on purpose.
@@ -163,7 +166,7 @@ export type PrepareOptions = {
   force?: boolean;
   priority?: JobPriority;
   scope?: PrewarmScope;
-  /** Tags a background job as belonging to one "Preparar carpeta/vista" batch,
+  /** Tags a background job as belonging to one "Prepare folder/view" batch,
    *  so `cancelBackgroundJobs(jobId)` can cancel just that batch. */
   prewarmJobId?: string;
 };
@@ -326,7 +329,7 @@ let lastPreemptAt = 0;
  *  reach here), and aborting one mid-`soffice` call is the only case that
  *  matters. Lowered from 1.5s once the cache-hit-before-queue change
  *  (`prepareDeck`) meant this only ever fires on a genuine conversion — the
- *  operator hitting EN VIVO on something that's actually still converting
+ *  operator hitting GO LIVE on something that's actually still converting
  *  shouldn't wait a full 1.5s of background work before being prioritized. */
 const PREEMPT_MIN_RUNTIME_MS = 600;
 /** Caps how often *any* preemption can happen — an operator clicking rapidly
@@ -410,13 +413,13 @@ async function pump(): Promise<void> {
  *  interactive queue if still waiting, or left running but now immune to
  *  preemption if it already started. */
 export function prepareDeck(assetId: number, opts: PrepareOptions = {}): Promise<DeckDTO> {
-  if (shuttingDown) return Promise.reject(new SlideError("CANCELED", "La aplicación se está cerrando."));
+  if (shuttingDown) return Promise.reject(new SlideError("CANCELED", mt("slides.shuttingDown")));
   const priority = opts.priority ?? "interactive";
 
   // Checked before anything else, even before `inFlight`: a deck that's
   // already ready must resolve immediately, with zero queueing and zero
   // "converting" state — never wait behind whatever background prewarm job
-  // happens to be running right now. This is what makes EN VIVO instant on
+  // happens to be running right now. This is what makes GO LIVE instant on
   // an already-prewarmed deck regardless of queue depth.
   if (!inFlight.has(assetId)) {
     const sourcePath = getMediaRepo().getPathById(assetId);
@@ -429,6 +432,18 @@ export function prepareDeck(assetId: number, opts: PrepareOptions = {}): Promise
         // cleaned up.
         releaseBatchDirFor(assetId);
         return Promise.resolve(cacheHit);
+      }
+      // Background work never queues for a LibreOffice the last sweep found
+      // missing. Every tile scrolled into view, every deck in the schedule and
+      // every file just imported used to enqueue a job that read the whole
+      // file to hash it, flashed a progress bar on its tile and swept the disk
+      // for `soffice` again, only to fail. The operator opening a deck still
+      // goes through `requireSoffice`, which looks again — that is how a
+      // LibreOffice installed mid-session is found.
+      const missing = priority === "background" ? cachedSofficeError() : null;
+      if (missing && containerKind(sourcePath) !== "pdf") {
+        releaseBatchDirFor(assetId);
+        return Promise.reject(missing);
       }
     }
   }
@@ -529,7 +544,7 @@ export function setVisiblePrewarm(assetIds: readonly number[]): void {
     const job = lane[i]!;
     if (wanted.has(job.assetId)) continue;
     lane.splice(i, 1);
-    settleCanceledJob(job, "Ya no está visible.");
+    settleCanceledJob(job, mt("slides.noLongerVisible"));
   }
   const statuses = getSlidesRepo().statusesByAsset(assetIds);
   for (const assetId of assetIds) {
@@ -540,7 +555,7 @@ export function setVisiblePrewarm(assetIds: readonly number[]): void {
 }
 
 /** Cancels background jobs — every one, or just those tagged with
- *  `prewarmJobId` (one "Preparar carpeta/vista" batch). A queued job is
+ *  `prewarmJobId` (one "Prepare folder/view" batch). A queued job is
  *  rejected immediately; a running one is aborted and resolves through the
  *  normal `pump` failure path. */
 export function cancelBackgroundJobs(prewarmJobId?: string): void {
@@ -551,7 +566,7 @@ export function cancelBackgroundJobs(prewarmJobId?: string): void {
     if (!matches(job)) continue;
     removeFromBackground(job);
     job.controller.abort();
-    settleCanceledJob(job, "Preparación cancelada.");
+    settleCanceledJob(job, mt("slides.prewarmCanceled"));
   }
   if (runningJob && matches(runningJob)) {
     runningJob.preempted = false;
@@ -580,7 +595,7 @@ function settleCanceledJob(job: Job, message: string): void {
   // The same push a RUNNING job's cancellation gets from `runConversion`. The
   // control window ignores this rejection on purpose and waits for main's
   // word, so without it a deck cancelled while still in line stayed on
-  // «Preparando la conversión…» forever.
+  // «Getting ready to convert…» forever.
   emitProgress({ assetId: job.assetId, status: "stale", done: 0, total: 0, error: message });
 }
 
@@ -595,7 +610,7 @@ export function cancel(assetId: number): void {
   const wasQueued = interactiveIndex >= 0;
   if (wasQueued) interactiveQueue.splice(interactiveIndex, 1);
   if (wasQueued || removeFromBackground(job)) {
-    settleCanceledJob(job, "Conversión cancelada.");
+    settleCanceledJob(job, mt("slides.canceled"));
   }
 }
 
@@ -612,7 +627,7 @@ export function cancelAll(): void {
   batchWarmController?.abort();
   // The running job (if any) settles through `pump`; everything that never
   // started has to be settled here or its awaiter hangs forever.
-  for (const job of queued) settleCanceledJob(job, "Conversión cancelada.");
+  for (const job of queued) settleCanceledJob(job, mt("slides.canceled"));
 }
 
 // ---------------------------------------------------------------------------
@@ -786,7 +801,7 @@ async function readMetadata(
  *  `existsSync`. Pulled out of `runConversion` so `prepareDeck` can call it
  *  BEFORE a job ever touches `inFlight`/the queues: a deck prewarmed a
  *  minute ago used to still queue behind whatever background conversion was
- *  running when the operator hit EN VIVO, because this check only ran once
+ *  running when the operator hit GO LIVE, because this check only ran once
  *  the job reached the front of the queue. Checking it up front means an
  *  already-ready deck never announces "converting" and never waits on
  *  anything. `runConversion` still calls this too, for the (normal, not a
@@ -811,7 +826,7 @@ function tryCacheHit(assetId: number, sourcePath: string, force: boolean): DeckD
 
   // No "converting" emission on either path — a cache hit must never announce
   // work that isn't happening (this used to fire unconditionally at the top of
-  // `runConversion`, which is what produced a false "converting… N de N" flash
+  // `runConversion`, which is what produced a false "converting… N of N" flash
   // for an already-ready deck).
   const hit = (row: DeckRow): DeckDTO => {
     slidesRepo.touchDeck(row.id);
@@ -874,11 +889,11 @@ async function runConversion(job: Job): Promise<DeckDTO> {
   const sourcePath = mediaRepo.getPathById(assetId);
   if (!sourcePath) {
     releaseBatchDirFor(assetId);
-    throw new SlideError("SOURCE_MISSING", "No se encontró el archivo en la biblioteca.");
+    throw new SlideError("SOURCE_MISSING", mt("slides.notInLibrary"));
   }
   if (!fs.existsSync(sourcePath)) {
     releaseBatchDirFor(assetId);
-    throw new SlideError("SOURCE_MISSING", `El archivo ya no está disponible: ${sourcePath}`);
+    throw new SlideError("SOURCE_MISSING", mt("slides.sourceGone", { path: sourcePath }));
   }
 
   const cacheHit = tryCacheHit(assetId, sourcePath, force);
@@ -934,6 +949,13 @@ async function runConversion(job: Job): Promise<DeckDTO> {
   fs.mkdirSync(jobDir, { recursive: true });
 
   try {
+    // Asked for first, and only here: a missing LibreOffice has to fail before
+    // the work rather than halfway through it (a legacy deck swept for it
+    // twice, once per pass), but not before the content-addressed hit above,
+    // which projects a duplicate without it. Inside the `try`, so the failure
+    // is announced like any other and never leaves a tile «converting».
+    if (containerKind(sourcePath) !== "pdf") await requireSoffice();
+
     const pdfDir = path.join(jobDir, "pdf");
     fs.mkdirSync(pdfDir, { recursive: true });
 
@@ -994,7 +1016,7 @@ async function runConversion(job: Job): Promise<DeckDTO> {
     });
 
     if (pages.length === 0) {
-      throw new SlideError("RASTER_FAILED", "La presentación no produjo ninguna diapositiva.");
+      throw new SlideError("RASTER_FAILED", mt("slides.noSlides"));
     }
 
     // LibreOffice does NOT export hidden slides to the PDF (verified against a
@@ -1165,7 +1187,7 @@ async function runConversion(job: Job): Promise<DeckDTO> {
     );
 
     const row = getSlidesRepo().getDeckById(deckId);
-    if (!row) throw new SlideError("RASTER_FAILED", "No se pudo leer el deck recién creado.");
+    if (!row) throw new SlideError("RASTER_FAILED", mt("slides.deckUnreadable"));
 
     const dto = toDeckDTO(row, assetId);
     emitProgress({ assetId, status: "ready", done: dto.slideCount, total: dto.slideCount, error: null });
@@ -1225,7 +1247,7 @@ async function runConversion(job: Job): Promise<DeckDTO> {
  *
  *  Deliberately skips warming while an interactive job is running or
  *  waiting: a batch `soffice` invocation is one process for every file in
- *  it, so soft-preempting it (the operator hitting EN VIVO mid-batch) would
+ *  it, so soft-preempting it (the operator hitting GO LIVE mid-batch) would
  *  throw away every file's progress, not just one — the opposite of what
  *  preemption is for. The caller (`prewarm-service.ts`) simply proceeds to
  *  convert this chunk's decks one at a time in that case, exactly as before
@@ -1435,6 +1457,13 @@ export function sweepCache(): void {
   fs.rmSync(slidesTempDir, { recursive: true, force: true });
   fs.mkdirSync(slidesTempDir, { recursive: true });
 
+  // First: everything below deletes decks by the folder their row names, and
+  // a copied profile's rows name the original profile's folders.
+  const adopted = repo.adoptCacheRoot(slidesCacheDir);
+  if (adopted.rebased + adopted.forgotten > 0) {
+    console.info(`[slides] adopted a copied profile's cache: ${adopted.rebased} deck(s) rebased, ${adopted.forgotten} forgotten`);
+  }
+
   repo.deleteUnfinished();
 
   // Children whose deck row is gone. Never expected (the FK cascades), found
@@ -1486,7 +1515,7 @@ export async function initSlidesSubsystem(): Promise<void> {
 }
 
 /** Set by `shutdownSlides`: from then on nothing may start a `soffice`. A
- *  «Preparar carpeta» batch counted the job `cancelAll` rejected as failed and
+ *  «Prepare folder» batch counted the job `cancelAll` rejected as failed and
  *  went on to the next asset, which could launch a new `soffice` that
  *  outlived the app and held the profile's lock into the next launch. */
 let shuttingDown = false;

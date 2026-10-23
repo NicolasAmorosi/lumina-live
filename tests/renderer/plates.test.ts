@@ -1,5 +1,5 @@
 /**
- * Overlay plates in `selectOutput`: one per kind and per edge, covered by NEGRO, LOGO and
+ * Overlay plates in `selectOutput`: one per kind and per edge, covered by BLACK, LOGO and
  * "nothing live", and never a new scene.
  */
 import { beforeEach, describe, expect, test } from "vitest";
@@ -73,7 +73,7 @@ describe("overlay plates", () => {
     expect(output().plates.map((p) => p.id)).toEqual([2]);
   });
 
-  test("NEGRO, LOGO and nothing live cover every plate, and uncovering brings them back", () => {
+  test("BLACK, LOGO and nothing live cover every plate, and uncovering brings them back", () => {
     const store = useProjectionStore.getState();
     store.showPlate(plate());
     store.setOverlay("black");

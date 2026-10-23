@@ -24,7 +24,7 @@ type TooltipProps = {
    *  viewport coordinates (clamped so it never crosses the screen edge)
    *  instead of the in-flow CSS bubble — see `computeMenuPosition` for
    *  the same pattern. Use it when an ancestor clips overflow (every `Panel`
-   *  does, and so does Ajustes' scrolling section), or when the content needs
+   *  does, and so does Settings' scrolling section), or when the content needs
    *  to render at its natural width in a narrow column. */
   floating?: boolean;
   /** Which side of the trigger the bubble opens toward — "bottom" (default)
@@ -119,7 +119,7 @@ function FloatingTooltip({ children, className, content, fit = "text" }: Tooltip
   function close(e: { relatedTarget?: EventTarget | null }) {
     // Not always a Node: when the pointer leaves straight out of the document
     // (into the title bar, onto the projector's screen) React reports the
-    // `window`, and `contains(window)` threw — an «error inesperado» toast.
+    // `window`, and `contains(window)` threw — an «unexpected error» toast.
     if (e.relatedTarget instanceof Node && triggerRef.current?.contains(e.relatedTarget)) return;
     setOpen(false);
     setPosition(null);

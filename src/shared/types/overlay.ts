@@ -4,7 +4,7 @@
  *
  * The operator builds «Pastor Juan Pérez» once and shows it every Sunday after
  * that. Several plates may be up at once, but at most ONE PER KIND AND ONE PER
- * EDGE (`platesCollide`), and NEGRO, LOGO and "nothing live" cover every plate.
+ * EDGE (`platesCollide`), and BLACK, LOGO and "nothing live" cover every plate.
  *
  * The style reuses the pieces `SceneStyle` was written to share (a
  * `SceneTextStyle` per line, a font family, a background), and adds what only
@@ -91,7 +91,7 @@ export type PlateStyle = {
   ticker: { enabled: boolean; speedCqw: number };
   /** Takes the plate down on its own `afterMs` after it went up, so a name
    *  nobody remembered to hide does not stay on the screen for the sermon.
-   *  Counted only while the room can SEE it: NEGRO, LOGO and "nothing live"
+   *  Counted only while the room can SEE it: BLACK, LOGO and "nothing live"
    *  pause the count (decided 2026-09-24). Behaviour rather than dressing,
    *  but it lives here for the reason `ticker` does — per plate, and a new
    *  field of `style_json` needs no migration. */
@@ -129,7 +129,7 @@ export type PlateUsage = {
  *  `DEFAULT_SCENE_STYLE`'s — see the note at the top of `scene-style.ts`. */
 export const DEFAULT_PLATE_STYLE: PlateStyle = {
   version: PLATE_STYLE_VERSION,
-  // The sheet's dark fondo.
+  // The sheet's dark background.
   background: { kind: "solid", color: "#162231" },
   backgroundOpacity: 0.85,
   fontFamily: null,

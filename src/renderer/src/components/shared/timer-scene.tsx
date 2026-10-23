@@ -94,7 +94,7 @@ export function TimerScene({
   const showsEndMessage = ended && endMessage !== null;
   // The two opt-in hides. Applied at zero whether or not there is an end
   // message: what the scene reads like when the count runs out is the
-  // operator's composition, and «solo el mensaje» and «nada más que el fondo»
+  // operator's composition, and «just the message» and «nothing but the background»
   // are both things they may have meant.
   const composition: Composition = {
     message: (showsEndMessage ? endMessage : output.message) ?? null,
@@ -156,7 +156,7 @@ type LeavingLayer = { composition: Composition; complete: () => void; seq: numbe
 /**
  * Turns "the count just crossed zero" into an outgoing layer that fades out.
  *
- * Crossing BOTH ways, deliberately: reiniciar on a countdown that had already
+ * Crossing BOTH ways, deliberately: restart on a countdown that had already
  * run out walks the scene back from its end state, and the operator who asked
  * for a fade into it asked for the same fade out of it.
  *

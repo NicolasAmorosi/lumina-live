@@ -16,7 +16,7 @@ import type { UtilityScene } from "@shared/types/utility";
  * starting value.
  *
  * Deliberately not a transport. The full controls live on the row of whichever
- * column the scene is in — `UtilityTrackRow`, in PREVIEW and in EN VIVO — and
+ * column the scene is in — `UtilityTrackRow`, in PREVIEW and in LIVE — and
  * duplicating them here would give the same timer three play buttons. What
  * this covers is the one case neither of those columns can: a stopwatch
  * started ten minutes ago while the operator went on browsing the library,

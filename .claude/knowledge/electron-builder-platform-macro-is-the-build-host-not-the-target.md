@@ -19,8 +19,15 @@ the `electron-builder` log; touching `scripts/fetch-ffmpeg.ts`.
 - **A second trap with the same symptom:** `electron-builder --win --dir` ignores the `arch: ["x64"]`
   of the NSIS target and packages the HOST arch (`win-arm64-unpacked`, looking for `win32-arm64`).
   Check a Windows package with `npm run package:win`, never `--dir`.
-- **The check that catches it:** `ls release/win-unpacked/resources/ffmpeg/` after `package:win`, and
+- **A third, the first Linux build (2026-10-22):** `build.linux.target` was the bare string
+  `"AppImage"`, with no `arch`, so `--linux` on this M3 packaged the HOST arch:
+  `Lumina-Live-linux-arm64.AppImage`, not the `linux-x86_64` file the README and the landing link to,
+  and with no FFmpeg — `fetch-ffmpeg.ts` only fetches `linux-x64`, so the per-platform entry looked
+  for `resources/ffmpeg/linux-arm64`, logged `file source doesn't exist` twice and exited 0. Fixed by
+  naming `arch: ["x64"]`, as the Windows target already did. Every target needs its arch spelled out.
+- **The check that catches it:** `ls release/win-unpacked/resources/ffmpeg/` after `package:win` (`release/linux-unpacked/…` after
+  `package:linux`, plus `file` on the binary), and
   for the Mac `WORSHIP_E2E_EXECUTABLE=…/WorshipApp.app/Contents/MacOS/WorshipApp npx playwright test`,
   which runs the E2E suite (conversion included) against the packaged app.
 
-**Last updated:** 2026-10-18
+**Last updated:** 2026-10-22

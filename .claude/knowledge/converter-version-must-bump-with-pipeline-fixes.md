@@ -21,7 +21,7 @@
 - Verified end-to-end with the real running app (Chrome DevTools Protocol against the control
   window's own `--remoteDebuggingPort`, no new dependency — Node's built-in `WebSocket`/`fetch`
   calling `window.worship.invoke("deck:ensure", {assetId})`, then actually loading the saved
-  service and firing EN VIVO through real DOM clicks): after bumping `SLIDES_CONVERTER_VERSION`,
+  service and firing GO LIVE through real DOM clicks): after bumping `SLIDES_CONVERTER_VERSION`,
   the very next `deck:ensure` call — no `force` flag needed — naturally reconverts a
   version-mismatched deck, since the version check alone routes past both cache-hit branches into
   a real reconversion. The live transport then showed slide 1→2 exactly at the 24s boundary,
@@ -37,7 +37,7 @@
   `getDeck` (`deck:get`, the renderer's `peek`) and `statusesByAsset` (`deck:statuses`, every
   prewarm's "skip what is ready") ignored `converterVersion`. In the real library 677 of 685 decks
   were v2: all of them showed as prepared, no prewarm ever upgraded them, and the upgrade ran at the
-  worst possible moment — EN VIVO.
+  worst possible moment — GO LIVE.
 - The sequence: `peek` hands the store a v2 deck as `ready` → `goLiveWithDeck` goes live with it at
   once and fires a background `ensure` (assuming a ready deck is a free cache hit) → `ensure`
   reconverts → `insertDeck` deletes the old row (same `contentHash + renderWidth + imageFormat`) and

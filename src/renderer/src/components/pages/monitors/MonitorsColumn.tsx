@@ -12,14 +12,14 @@ import { VerseTransport } from "./verse-transport";
 
 /**
  * EasyWorship's right-hand column: a header matching the other two columns'
- * (same height, "EN VIVO" plus a blinking dot exactly while something is
+ * (same height, "LIVE" plus a blinking dot exactly while something is
  * actually going out to the projector), the LIVE monitor, and below it the
  * live equivalent of the centre column's grid — a deck's slides or a
  * passage's verses, whichever is on air. The preview monitor used to live
  * here too; it is pinned in the centre column now, next to what it previews.
  *
  * The monitor itself is a bare stage (`components/ui/monitor.tsx`), so all
- * of its former status text (NEGRO/LOGO/desconectado) lives here in the
+ * of its former status text (BLACK/LOGO/disconnected) lives here in the
  * header instead — see `useLiveStatus`. The slide counter used to live here
  * too; it's redundant with `DeckTransport`'s own counter and the highlighted
  * tile in `LiveContentGrid`, so it was dropped rather than shown three times.
@@ -31,7 +31,7 @@ function useLiveStatus(): string {
   // `overlay`/`base`: this badge used to re-derive the precedence by hand and
   // got it wrong for the one case the two disagree on. With nothing selected
   // and no overlay, `selectOutputWithoutUnderlay` falls back to the logo — so
-  // the stage showed the logo while the badge beside it said "Sin señal".
+  // the stage showed the logo while the badge beside it said "No signal".
   // A badge that contradicts the stage it labels is the monitor lying to the
   // operator, which is the one thing this column may never do.
   // `.kind` and not the whole output: a string is comparable by `Object.is`,

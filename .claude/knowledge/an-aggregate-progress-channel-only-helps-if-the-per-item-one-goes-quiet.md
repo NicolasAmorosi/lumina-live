@@ -1,7 +1,7 @@
 ## An aggregate progress channel only helps if the per-item one goes quiet — otherwise a background batch is a quadratic IPC storm
 
 **Area:** slides (`src/main/slides/deck-service.ts`) | renderer (`src/renderer/src/stores/deck.store.ts`)
-**Trigger:** UI jank or growing renderer memory while "Preparar carpeta" runs; before adding any
+**Trigger:** UI jank or growing renderer memory while "Prepare folder" runs; before adding any
 per-item progress emission, or before deriving a value with `Object.values(store)` in a selector.
 
 Found on 2026-09-11 during the media-chain audit.
@@ -9,8 +9,8 @@ Found on 2026-09-11 during the media-chain audit.
 ### What the design said, and what the code did
 
 `prewarm-progress` was introduced *specifically* so a folder batch would not push per-deck events:
-the plan says reusing `deck-progress` (which is per `assetId`) would "meter 600 entradas en
-`deck.store.byAssetId` y una tormenta de re-renders durante trabajo de fondo". The aggregate
+the plan says reusing `deck-progress` (which is per `assetId`) would "put 600 entries into
+`deck.store.byAssetId` and a storm of re-renders during background work". The aggregate
 channel was built. **And `deck-progress` kept firing anyway**, once per rasterized page, for
 background jobs too — `emitProgress` never looked at `job.priority`. Adding the quiet channel did
 nothing because the loud one was never silenced.
@@ -40,7 +40,7 @@ The cost compounds three times over, which is why it is worth writing down:
   `converting`, and drops it on `ready` when it holds no DTO. The exception that has to stay: if
   an `ensure` is in flight for that asset, keep the entry — main pushes `ready` a moment *before*
   the call resolves, and deleting it in that window makes `DeckConversionStatus` flash
-  "Preparando…" over a deck that is already finished (`!entry` reads as "queued" there).
+  "Getting ready…" over a deck that is already finished (`!entry` reads as "queued" there).
 - **Never derive a "did something finish" trigger by counting a map.** A monotonic counter
   (`deck.store`'s `readyEpoch`, bumped on every `ready`) is O(1), is a primitive so it compares by
   value, and says exactly the same thing.

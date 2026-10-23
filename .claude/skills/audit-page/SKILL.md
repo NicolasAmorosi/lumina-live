@@ -1,6 +1,6 @@
 ---
 name: audit-page
-description: Full end-to-end auditor for one WorshipApp feature (IPC contract → main handlers → React/Zustand renderer → design-system usage). Checks correctness, unhandled states (loading/empty/error), projection-output coverage, slide-deck and NEGRO/LOGO overlay correctness, and style/token uniformity. Writes a severity-rated report to the maintainer workspace (../docs/auditorias/reports/) and updates the status index. Report-only — never fixes unless asked. Use when asked to audit, review in depth, or QA a complete feature (playlist, library, bible, ppt, black/logo controls, programs).
+description: Full end-to-end auditor for one WorshipApp feature (IPC contract → main handlers → React/Zustand renderer → design-system usage). Checks correctness, unhandled states (loading/empty/error), projection-output coverage, slide-deck and BLACK/LOGO overlay correctness, and style/token uniformity. Writes a severity-rated report to the maintainer workspace (../docs/auditorias/reports/) and updates the status index. Report-only — never fixes unless asked. Use when asked to audit, review in depth, or QA a complete feature (playlist, library, bible, ppt, black/logo controls, programs).
 user-invocable: true
 tools: Read, Write, Edit, Bash, Glob, Grep
 ---
@@ -84,7 +84,8 @@ For every handler this feature owns:
 - **Persistence correctness.** If the handler touches `media_assets`, confirm it never treats a
   missing file as a reason to delete the row (see `05-data-and-persistence.md` on
   `missing_since`). If it touches `program_items`, confirm the `CHECK` constraint's shape
-  (exactly one of media/bible/text fields populated per kind) is respected.
+  (exactly one of `media_asset_id`/`bible_text`/`utility_scene_id`/`overlay_plate_id` populated
+  per kind) is respected.
 
 ## Phase 3 — Renderer audit (stores, components/pages)
 
@@ -107,10 +108,10 @@ For every handler this feature owns:
 
 For each user-facing action in the feature, confirm:
 - **Loading:** slow operations (PPT export, PPT open, file dialogs) show *some* feedback
-  (`ppt-status` text, disabled button, etc.) rather than a frozen UI with no indication anything
-  is happening.
+  (`LoadingState`, `LinearLoader` or a progress row, disabled button, etc.) rather than a frozen
+  UI with no indication anything is happening.
 - **Empty:** lists (playlist, library, bible search results) render an explicit empty state
-  (`playlist-empty`, the `Sin archivos`/`No se encontraron versículos` messages) rather than a
+  (the `EmptyState` primitive, the «No files»/«No results» messages) rather than a
   blank area.
 - **Error:** a failed PPT open/export, a missing file, or a malformed Bible import degrades to a
   visible message, not a silently broken feature.
@@ -124,8 +125,10 @@ For each user-facing action in the feature, confirm:
   — if a genuinely new primitive is needed, confirm it was added to `components/ui/` (not
   inlined in the feature) and exported from `components/ui/index.ts`.
 - All UI copy goes through `useT()` against `lib/i18n/messages/es.ts` — flag any hardcoded
-  Spanish string in a `.tsx` file. Spanish copy is consistent in tone/casing with the rest of the
-  UI (e.g. `EN VIVO`, `NEGRO`, `LOGO` are all-caps action verbs; labels are sentence case).
+  string in a `.tsx` file, and any key added to `es.ts` without its `en`/`it`/`pt` counterpart.
+  Copy in all four locales (`es` is the reference) is consistent in tone/casing with the rest of
+  the UI (e.g. `EN VIVO`/`LIVE`, `NEGRO`/`BLACK`, `LOGO` are all-caps action verbs; labels are
+  sentence case).
 - Both themes render correctly — spot-check the feature with `data-theme="light"` and
   `data-theme="dark"` on `<html>` (devtools), since a semantic-token violation often only shows
   in one theme.
@@ -141,21 +144,22 @@ For each user-facing action in the feature, confirm:
 
 ---
 
-## Phase 7 — Manual verification checklist (no Playwright — Electron doesn't apply)
+## Phase 7 — Manual verification checklist
 
-There is no browser automation for this desktop app. Instead, hand the user (or run yourself if
-`npm start` is available and the platform allows it) a concrete manual checklist for the audited
-feature — concrete steps, not generic advice. Example shape for the `bible` feature:
+The Playwright E2E suite (`tests/e2e/`, `npm run test:e2e`) drives the built app through
+`_electron`: note which of the feature's paths its specs already cover. For the rest, hand the user
+(or run yourself with `npm run dev` if the platform allows it) a concrete manual checklist for the
+audited feature — concrete steps, not generic advice. Example shape for the `bible` feature:
 
-1. Open the app, go to the Biblia tab, pick a version — confirm the book dropdown shows real
-   names, not the literal `Libro` (known bug, see `docs/knowledge/07-roadmap-and-debt.md`).
+1. Open the app, go to the Bible tab, pick a version — confirm the book dropdown shows real
+   names.
 2. Search a chapter with 1 verse and one with 30+ — confirm both render without layout breakage.
 3. Double-click a verse with the projection window closed — confirm it auto-opens the screen.
-4. Toggle NEGRO then LOGO then click Detener — confirm the live preview panel matches what the
+4. Toggle BLACK then LOGO then click Stop — confirm the live preview panel matches what the
    projection window actually shows at each step.
 
-Mark this phase **"Not run"** in the report if you didn't actually execute it, with why (e.g. "PPT
-features require Windows; audited on macOS").
+Mark this phase **"Not run"** in the report if you didn't actually execute it, with why (e.g. "needs
+a second screen; audited with one").
 
 ---
 
@@ -209,7 +213,7 @@ features require Windows; audited on macOS").
 | Orphaned `window.worship.*` calls | n/a | … |
 | `selectOutput` exhaustiveness for this content type | n/a | … |
 | Two-stage flow honored (select ≠ project; only `goLive()`) | n/a | … |
-| NEGRO/LOGO over a live video (pause + resume, deck audio keeps playing) | … | … |
+| BLACK/LOGO over a live video (pause + resume; deck audio pauses too, standalone audio keeps playing) | … | … |
 | Loading / empty / error states | … | … |
 | `worship://` `Range` / 206 support | … | n/a |
 | LibreOffice absent → graceful degradation | … | … |
@@ -224,15 +228,16 @@ Severity rubric:
 - 🔴 **Critical** — crash, data loss (settings/library/bible overwritten badly), the projection
   window ends up out of sync with what the operator thinks is live.
 - 🟠 **High** — missing error/empty/loading feedback on a real path, a stale flag that breaks a
-  later action, an orphaned IPC method that should be wired, `restorePrevious()` missing a branch.
+  later action, an orphaned IPC method that should be wired, a `selectOutput` branch that
+  projects the wrong thing.
 - 🟡 **Medium** — hardcoded color duplicating a token, inconsistent copy/casing, minor UI drift.
 - 🔵 **Low** — naming, ordering, small inconsistencies.
 - ⚪ **Info** — suggestions, refactors that aren't bugs.
 
 ---
 
-## Output to the user (in Spanish)
+## Output to the user (in the user's language)
 
-After writing the file and updating the index, give a short Spanish summary: the verdict, the
+After writing the file and updating the index, give a short summary in the user's language: the verdict, the
 finding counts by severity, the 2–3 most important issues, and the report path. Do not paste the
 whole report into chat.

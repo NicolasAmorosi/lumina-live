@@ -71,8 +71,8 @@ function Toast({ item, onDismiss }: { item: ToastItem; onDismiss: () => void }) 
  *
  * Portaled to `document.body`, like the modals and for the same reason: a
  * modal marks `#root` `inert` (see `shared/modal/modal-stack.ts`), and a toast
- * rendered inside it would still be readable but its action — "Deshacer",
- * "Eliminar igualmente" — would silently stop being clickable.
+ * rendered inside it would still be readable but its action — "Undo",
+ * "Remove anyway" — would silently stop being clickable.
  *
  * The container is always mounted, empty or not: a screen reader generally
  * does not announce content inserted into a live region that was created in

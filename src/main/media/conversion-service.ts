@@ -47,7 +47,7 @@ import type { DecoderSupport, MediaConversionState, MediaConversionUpdate } from
 
 /** Extensions Chromium opens at all. A file with any other one is shown as
  *  queued the moment it is seen, before ffprobe has looked at it, and is
- *  probed first — an AVI dropped on the library says "Convirtiendo" at once
+ *  probed first — an AVI dropped on the library says "Converting" at once
  *  instead of after the rest of a 300-file folder has been probed. */
 const LIKELY_NATIVE_EXT = new Set([
   ...["mp4", "m4v", "mov", "3gp", "mkv", "webm", "ogv"],
@@ -171,7 +171,7 @@ function consider(c: ConversionCandidate, caps: DecoderSupport): void {
     update(c.id, { state: null, version: c.conversion.outputFile });
     return;
   }
-  // A failure waits for "Reintentar" or the next launch, never loops.
+  // A failure waits for "Retry" or the next launch, never loops.
   if (states.get(c.id)?.status === "failed") return;
   enqueue(c.id);
 }

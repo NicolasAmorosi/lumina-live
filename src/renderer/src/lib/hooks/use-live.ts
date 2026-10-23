@@ -10,7 +10,7 @@ function liveAssetId(base: BaseContent | null): number | null {
 }
 
 /**
- * The title shown next to "EN VIVO" in the third column's header — the same
+ * The title shown next to "LIVE" in the third column's header — the same
  * kind of heading the centre column shows for the preview, but resolved
  * against `base` (what's actually on the projector) instead of the preview
  * cursor. Schedule items already carry their own title/name; content sent

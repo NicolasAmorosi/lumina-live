@@ -3,7 +3,7 @@ import type { Handlers } from "../register";
 import type { DisplayInfo } from "@shared/types/display";
 
 /**
- * The label is what the operator picks a projector by in Ajustes → Pantalla,
+ * The label is what the operator picks a projector by in Settings → Screen,
  * so it has to survive the case this app is actually deployed into: a booth
  * with two identical screens. Resolution alone does not — two monitors of the
  * same model are literally the same string, and choosing the wrong one sends

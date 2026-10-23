@@ -36,7 +36,7 @@ import type { MediaAsset } from "@shared/types/media";
  * library is domain, not a primitive.
  *
  * The labels moved with them, from `scenes.*` to `style.*`. Two features
- * spelling «Tipo de fondo» from two dictionary entries is how the two
+ * spelling «Background type» from two dictionary entries is how the two
  * spellings start to differ.
  *
  * Every row here is a bare `FieldRow`: the caller owns the `FieldGroup`, so
@@ -52,7 +52,7 @@ const ALIGN_LABEL: Record<SceneVerticalAlign, MessageKey> = {
 
 /** Numeric weights named in words: the dictionary's keys are paths, and a
  *  numeric key is not one `MessageKey` can express. The operator reads
- *  "Negrita" either way — 700 is a CSS number, not a label. */
+ *  "Bold" either way — 700 is a CSS number, not a label. */
 const WEIGHT_LABEL: Record<SceneFontWeight, MessageKey> = {
   300: "style.weights.light",
   400: "style.weights.regular",

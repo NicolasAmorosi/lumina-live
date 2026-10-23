@@ -12,7 +12,7 @@ import { TRANSITION_MAX_DURATION_MS, TRANSITION_STYLES, type TransitionStyle } f
 export const THEMES = ["dark", "light"] as const;
 export type Theme = (typeof THEMES)[number];
 
-export const LOCALES = ["es", "it", "en"] as const;
+export const LOCALES = ["es", "en", "it", "pt"] as const;
 export type Locale = (typeof LOCALES)[number];
 
 export const SLIDE_IMAGE_FORMATS = ["webp", "png"] as const;
@@ -26,7 +26,7 @@ export type SettingsMap = {
    *  through the OS API, so it follows a moved home directory and is spelled
    *  in whatever language the machine is installed in. Storing the resolved
    *  path instead would freeze both. A non-null value is an explicit override
-   *  the operator chose in Ajustes. */
+   *  the operator chose in Settings. */
   "files.defaultFolders": Record<AssetKind, string | null>;
   "projection.displayId": number | null;
   "ui.theme": Theme;
@@ -48,6 +48,12 @@ export type SettingsMap = {
   "slides.sofficePathResolved": string | null;
   /** Guards the one-time LibreOffice profile warm-up per version. */
   "slides.profileWarmedVersion": string | null;
+  /** Whether a missing LibreOffice is announced on its own: the toast at
+   *  launch and the strip over the PPT tab. Off, the operator still meets it
+   *  where it actually stops something — a deck that cannot be converted, and
+   *  Settings — but a machine that never projects a PowerPoint stops being told
+   *  about it every morning. */
+  "slides.warnMissingSoffice": boolean;
   "slides.imageFormat": SlideImageFormat;
   "slides.cacheMaxMb": number;
   "slides.maxRenderWidth": number;
@@ -71,11 +77,11 @@ export type SettingsMap = {
    *  date, and the operator should not have to re-pick on every switch. */
   "library.sort": Record<AssetKind, MediaSortOrder>;
   /** Whether this database has ever been given the four built-in time scenes
-   *  (`DEFAULT_UTILITY_SCENES`). A flag and not a row count, deliberately:
+   *  (`defaultUtilityScenes`). A flag and not a row count, deliberately:
    *  re-seeding whenever `utility_scenes` happens to be empty would mean an
    *  operator can never be rid of a scene they deleted — the four would come
-   *  back on the next launch. Seeding once is what makes "borrar" mean
-   *  borrar. */
+   *  back on the next launch. Seeding once is what makes "delete" mean
+   *  delete. */
   "utility.seeded": boolean;
   /** How a scripture verse is drawn on the projector — see `BibleStyle`.
    *  A JSON column in all but name, so it is the one settings key with a
@@ -91,8 +97,8 @@ export type SettingsMap = {
    *
    *  Exists for exactly the reason `utility.seeded` does, with one extra
    *  wrinkle. `seedBuiltinBibles()` runs on every launch, so without a flag a
-   *  deleted RV1909 would reappear at the next one and «borrar» would not
-   *  mean borrar. But the flag must NOT disable seeding outright: the seed is
+   *  deleted RV1909 would reappear at the next one and «delete» would not
+   *  mean delete. But the flag must NOT disable seeding outright: the seed is
    *  also the upgrade path — it re-imports when `resources/bibles/rv1909.json`
    *  changes hash, which is how a corrected bundle reaches an existing
    *  install. So the flag is only consulted when the version row is GONE (see
@@ -110,13 +116,14 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   // Full. Anything sent live is meant to be heard, and a level the operator
   // never set is a level nobody can explain from the booth — halfway up just
   // looks like the file is quiet. Balancing down is one drag away, per track,
-  // in the En Vivo panel.
+  // in the Live panel.
   "media.volume": 1,
   "projection.transition.style": "crossfade",
   "projection.transition.durationMs": 300,
   "slides.sofficePath": null,
   "slides.sofficePathResolved": null,
   "slides.profileWarmedVersion": null,
+  "slides.warnMissingSoffice": true,
   "slides.imageFormat": "webp",
   "slides.cacheMaxMb": SLIDES_DEFAULT_CACHE_MB,
   "slides.maxRenderWidth": SLIDES_DEFAULT_RENDER_WIDTH,
@@ -197,6 +204,7 @@ export const SETTINGS_VALIDATORS: Record<keyof SettingsMap, (value: unknown) => 
   "slides.sofficePath": isNullOr(isString),
   "slides.sofficePathResolved": isNullOr(isString),
   "slides.profileWarmedVersion": isNullOr(isString),
+  "slides.warnMissingSoffice": isBoolean,
   "slides.imageFormat": isOneOf(SLIDE_IMAGE_FORMATS),
   "slides.cacheMaxMb": isNumberIn(1, 1_000_000),
   "slides.maxRenderWidth": isNumberIn(320, 16_384),

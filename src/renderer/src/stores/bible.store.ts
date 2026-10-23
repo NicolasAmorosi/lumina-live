@@ -77,7 +77,7 @@ export const useBibleStore = create<BibleStoreState>((set, get) => ({
   /**
    * Applies the operator's manual arrangement of the installed versions.
    *
-   * It lives here rather than in the Ajustes section that owns the drag
+   * It lives here rather than in the Settings section that owns the drag
    * because `versions` is also what the Bible tab's picker offers: a local
    * copy in the settings panel would leave the picker showing yesterday's
    * order until something else happened to reload the store.
@@ -127,11 +127,11 @@ export const useBibleStore = create<BibleStoreState>((set, get) => ({
  * three-metre screen, and the short form every church actually uses («RV1909»)
  * is a preference, not a fact the app can derive: a Spanish congregation
  * writes RV60 and an Italian one writes NR94. So there is no second `abbrev`
- * column and no formatting rule here — the name IS the label, and Ajustes ▸
- * Biblia is where it gets shortened.
+ * column and no formatting rule here — the name IS the label, and Settings ▸
+ * Bible is where it gets shortened.
  *
  * `null` for an unknown id rather than a placeholder: a saved program whose
- * version was deleted has a `set null` FK, and printing «(desconocida)» under
+ * version was deleted has a `set null` FK, and printing «(unknown)» under
  * a verse in front of the congregation would be worse than printing nothing.
  */
 export function bibleVersionLabel(

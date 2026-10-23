@@ -66,7 +66,7 @@ export function UtilityTrackRow({ onDelete, scene }: UtilityTrackRowProps) {
   const now = useTimerNow(clock, scene.config.format);
   const running = isTimerRunning(clock);
   const ended = hasReachedZero(clock, now);
-  // ARRANCAR or REANUDAR: the bit `TimerClock` does not carry. A live scene
+  // START or RESUME: the bit `TimerClock` does not carry. A live scene
   // was started on its way to the projector (`ensureStarted`), even after the
   // armed slot has moved on to another scene.
   const started = run?.sceneId === scene.id ? run.started : base?.kind === "utility" && base.sceneId === scene.id;

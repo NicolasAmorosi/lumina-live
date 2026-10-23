@@ -16,7 +16,7 @@ import type { AudioTrackPush, ProjectionMediaError, ProjectionOutput } from "@sh
 
 /**
  * `track.paused` is the operator's own declarative pause and must survive a
- * NEGRO/LOGO round-trip unchanged (same rule as `VideoUnderlay.paused` vs.
+ * BLACK/LOGO round-trip unchanged (same rule as `VideoUnderlay.paused` vs.
  * `LiveVideo`'s `covered`) — so covering is combined into the pushed value
  * here, never written back into `useAudioStore`. Only the deck's own
  * soundtrack reacts to the cover; a standalone audio asset sent live is
@@ -61,7 +61,7 @@ function describeMediaError(error: ProjectionMediaError): string | null {
  * Wires the control window to main. What used to live here — the PowerPoint
  * overlay dance, which hid the projection window so PowerPoint's own fullscreen
  * slideshow could show through — is gone: slides are images now, the projection
- * window is never hidden, and NEGRO/LOGO work through `selectOutput` like any
+ * window is never hidden, and BLACK/LOGO work through `selectOutput` like any
  * other content.
  *
  * `selectOutputMemo` gives the subscription stable identity, so the default
@@ -91,7 +91,7 @@ export function startProjectionEffects(): () => void {
   });
 
   // Coalesced the same way as the output above, and for the same reason: going
-  // live from NEGRO from deck A to deck B is `setOverlay("none")` and then
+  // live from BLACK from deck A to deck B is `setOverlay("none")` and then
   // `setDeckTrack(B)` in one synchronous action, and pushing each set on its
   // own sent A's soundtrack UNcovered for a moment before B replaced it.
   let audioFlushScheduled = false;
@@ -130,12 +130,12 @@ export function startProjectionEffects(): () => void {
     // reopen the window. See `live-positions.ts`.
     freezeLivePositions();
     useProjectionStore.getState().setPresentationOpen(false);
-    // The header quietly switching to "Sin pantalla" is not a signal an
+    // The header quietly switching to "Projector off" is not a signal an
     // operator sees: mid-service they are looking at the room, not at the
     // chrome. The toast never auto-dismisses (toast.store gives any toast with
     // an `action` a `durationMs` of null), and its action reopens onto
     // whatever was live, replayed from main's snapshot — routing it through
-    // `open()` instead would land on NEGRO and force a second EN VIVO, which
+    // `open()` instead would land on BLACK and force a second GO LIVE, which
     // re-sends the PREVIEW target rather than what the congregation was
     // watching.
     closedToastId = toast.danger(t("projector.closedUnexpectedly"), {
@@ -147,7 +147,7 @@ export function startProjectionEffects(): () => void {
   });
 
   // Retires that toast once the projector is back by any route — its own
-  // action, EN VIVO, NEGRO/LOGO or Ajustes. A permanent notice offering to
+  // action, GO LIVE, BLACK/LOGO or Settings. A permanent notice offering to
   // reopen something that is already open is pure noise in a dark booth.
   const unsubscribePresentationOpen = useProjectionStore.subscribe(
     (state) => state.presentationOpen,

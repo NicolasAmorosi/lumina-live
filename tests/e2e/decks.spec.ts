@@ -96,6 +96,10 @@ test("NEGRO over a deck, and the slide is still there underneath", async ({ app 
   await expect(slideTile(app, 3)).toBeVisible({ timeout: 60_000 });
   await app.goLive();
   const projector = await app.projector();
+  // On screen first, as the operator sees it: EN VIVO commits once the
+  // projector it opens has mounted, and a key pressed before that has no live
+  // deck to step yet (on a slow machine, a lost press).
+  await expect.poll(() => projectedSlide(projector)).toBe(1);
   await app.control.keyboard.press("ArrowRight");
   await expect.poll(() => projectedSlide(projector)).toBe(2);
 
@@ -117,6 +121,40 @@ test("a .pptx with timings advances by itself", async ({ app }) => {
   // Two seconds a slide, from the deck's own timings.
   await expect.poll(() => projectedSlide(projector), { timeout: 8_000 }).toBe(2);
   await expect.poll(() => projectedSlide(projector), { timeout: 8_000 }).toBe(3);
+});
+
+test("the EN VIVO that opens the projector still gives slide 1 its whole time", async ({ app }) => {
+  test.skip(!hasHymn(), "LibreOffice is not installed, so there is no .pptx fixture");
+  await app.addMedia("ppt", "hymn.pptx");
+  await app.previewFile("Presentaciones", "hymn");
+  await expect(slideTile(app, 3)).toBeVisible({ timeout: 90_000 });
+  // A slow machine, made deterministic: the projector's page takes 3 s to
+  // load, longer than the 2 s slide 1 is timed for. Its clock used to start
+  // at the press, so slide 1 was gone before the projector could show it.
+  await app.electron.evaluate(({ session }) => {
+    session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
+      if (details.url.includes("projection.html")) setTimeout(() => callback({}), 3000);
+      else callback({});
+    });
+  });
+  await app.goLive();
+  const projector = await app.projector();
+  // When each slide's image was first painted, in the projector's own clock.
+  const shown = await projector.evaluate(async () => {
+    const at: Record<number, number> = {};
+    const start = performance.now();
+    while (at[2] === undefined && performance.now() - start < 8000) {
+      const image = [...document.querySelectorAll<HTMLImageElement>('img[src^="worship://deck/"]')]
+        .filter((img) => img.complete && img.naturalWidth > 0)
+        .at(-1);
+      const slide = Number(/\/(\d+)$/.exec(image?.src ?? "")?.[1]);
+      if (slide && at[slide] === undefined) at[slide] = performance.now();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    return at;
+  });
+  expect(shown[1], "slide 1 was never shown").toBeDefined();
+  expect(shown[2]! - shown[1]!).toBeGreaterThan(1700);
 });
 
 test("a WMV embedded in a .pptx slide is converted and plays on its slide", async ({ app }) => {
@@ -246,6 +284,64 @@ test("a deck that cannot be converted says so and can be retried", async ({ app 
   }).toPass({ timeout: 60_000 });
   await app.goLive();
   await expect.poll(async () => projectedSlide(await app.projector())).toBe(1);
+});
+
+test("without LibreOffice: warned at launch, a PowerPoint is gated, a PDF still projects", async ({ app }) => {
+  // A machine with no LibreOffice, whatever this one has: an override is
+  // authoritative, and one that is not there is never swapped for autodetection.
+  await app.invoke("settings:set", { "slides.sofficePath": path.join(app.profile, "missing", "soffice") });
+  await app.invoke("deck:environment", { force: true });
+  // Never converted, so its bytes never matter: the gate stops it first.
+  const pptx = path.join(app.profile, "himno.pptx");
+  fs.writeFileSync(pptx, "PK not a presentation");
+  await app.invoke<MediaAsset[]>("library:add", { kind: "ppt", paths: [pptx] });
+  await app.addMedia("ppt", "deck.pdf");
+  await app.quit();
+
+  const again = await relaunch(app);
+  const toast = (on: WorshipApp, text: string) => on.control.getByRole("status").filter({ hasText: text });
+  await expect(toast(again, "no se pueden convertir presentaciones de PowerPoint")).toBeVisible();
+
+  await again.previewFile("Presentaciones", "himno");
+  const tab = again.control.getByRole("tabpanel", { name: "Presentaciones" });
+  await expect(tab.getByText("Los PowerPoint sin convertir no se pueden abrir")).toBeVisible();
+  await expect(again.previewColumn().getByText("Lumina Live usa LibreOffice para convertir")).toBeVisible();
+  // The stage says why — it used to say «Preparando la conversión…» forever.
+  await expect(again.previewColumn().getByText("Hace falta LibreOffice para convertir esta presentación")).toBeVisible();
+  await expect(again.previewColumn().getByText("Preparando la conversión")).toHaveCount(0);
+
+  await again.goLive();
+  await expect(toast(again, "«himno» no se puede proyectar")).toBeVisible({ timeout: 30_000 });
+  expect(await projectedSlide(await again.projector())).toBeNull();
+
+  // Everything that does not need LibreOffice is untouched.
+  await again.previewFile("Presentaciones", "deck");
+  await expect(slideTile(again, 3)).toBeVisible({ timeout: 60_000 });
+  await again.goLive();
+  await expect.poll(async () => projectedSlide(await again.projector())).toBe(1);
+
+  // Silenced from the strip — the launch toast saying the same goes with it —
+  // and it stays silenced.
+  await tab.getByRole("button", { name: "No volver a mostrar" }).click();
+  await expect(tab.getByText("Los PowerPoint sin convertir no se pueden abrir")).toHaveCount(0);
+  await expect(toast(again, "no se pueden convertir presentaciones de PowerPoint")).toHaveCount(0);
+  await again.quit();
+  const third = await relaunch(again);
+  await third.openResources("Media", "Presentaciones");
+  await expect(third.control.getByText("Los PowerPoint sin convertir no se pueden abrir")).toHaveCount(0);
+  await expect(toast(third, "no se pueden convertir presentaciones de PowerPoint")).toHaveCount(0);
+
+  // Installed while the app is open (here: the bad override goes away), found
+  // by «Comprobar de nuevo» without a restart. Only where there is one to find.
+  if (!hasHymn()) return;
+  await third.invoke("settings:set", { "slides.sofficePath": null });
+  await third.control.getByRole("button", { name: "Configuración" }).click();
+  const settings = third.control.getByRole("dialog", { name: "Configuración" });
+  await settings.getByRole("tab", { name: "Diapositivas" }).click();
+  await expect(settings.getByText("No disponible", { exact: true })).toBeVisible();
+  await settings.getByRole("button", { name: "Comprobar de nuevo" }).click();
+  await expect(toast(third, "está listo")).toBeVisible();
+  await expect(settings.getByText(/^Versión \d/)).toBeVisible();
 });
 
 test("a deck edited on disk is converted again the next time it is opened", async ({ app }) => {

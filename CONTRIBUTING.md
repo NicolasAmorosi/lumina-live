@@ -1,41 +1,48 @@
-# Contribuir a Lumina Live
+# Contributing to Lumina Live
 
-Gracias por querer ayudar. Lumina Live se usa en cultos en vivo, así que la prioridad es que nada
-falle delante de la congregación: preferimos un cambio chico y probado a uno grande y ambicioso.
+Thanks for wanting to help. Lumina Live runs in live services, so the priority is that nothing
+breaks in front of the congregation: we prefer a small, tested change over a big, ambitious one.
 
-## Reportar un error
+By taking part you agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
-Abrí un [issue](https://github.com/NicolasAmorosi/lumina-live/issues/new/choose) con la versión, el
-sistema operativo y, si podés, el archivo que falló y los registros (Configuración › Acerca de ›
-Abrir carpeta de registros).
+## Reporting a bug
 
-## Antes de escribir código
+Open an [issue](https://github.com/NicolasAmorosi/lumina-live/issues/new/choose) with the version,
+the operating system and, if you can, the file that failed and the logs (Settings › About › Open
+logs folder). Security problems go privately, see [`SECURITY.md`](SECURITY.md).
 
-- Para algo más grande que un arreglo puntual, abrí primero un issue y conversémoslo.
-- Leé [`CLAUDE.md`](CLAUDE.md). Aunque está escrito para Claude Code, es la guía del proyecto: la
-  arquitectura, las convenciones que no se negocian y el porqué de cada una. `docs/knowledge/` tiene
-  el detalle por capa, y `.claude/knowledge/` los hallazgos que costó descubrir.
+## Before writing code
 
-## Convenciones
+- For anything bigger than a targeted fix, open an issue first so we can talk it through.
+- Read [`CLAUDE.md`](CLAUDE.md). Although it is written for Claude Code, it is the project guide:
+  the architecture, the conventions that aren't negotiable and the reason behind each one.
+  [`docs/knowledge/`](docs/knowledge/) has the detail per layer, and
+  [`.claude/knowledge/`](.claude/knowledge/INDEX.md) the findings that were hard to discover.
 
-- Código, comentarios, nombres y mensajes de commit en **inglés**; documentación en español.
-- Ningún texto de la interfaz va escrito en un componente: todo pasa por `useT()` y
-  `src/renderer/src/lib/i18n/`.
-- Ningún color, sombra o radio a mano: se usan las primitivas de `components/ui/` y los tokens de
+## Conventions
+
+- Everything in the repo is in **English**: code, comments, names, documentation and commit
+  messages.
+- No interface text is written inside a component: it all goes through `useT()` and
+  `src/renderer/src/lib/i18n/`. A new string goes into the four dictionaries (`es`, `en`, `it`,
+  `pt`) in the same change; if you don't speak one of those languages, say so in the PR. `es` is the
+  reference dictionary: the other three are typed against it, so a missing key doesn't compile.
+- No hand-written color, shadow or radius: use the primitives in `components/ui/` and the tokens in
   `styles/globals.css`.
-- Commits con [Conventional Commits](https://www.conventionalcommits.org/) (`fix(bible): …`).
-- El proyecto no usa Prettier: respetá el formato del archivo que tocás.
+- Commits follow [Conventional Commits](https://www.conventionalcommits.org/) (`fix(bible): …`).
+- The project doesn't use Prettier: keep the formatting of the file you touch.
 
-## Antes de abrir el PR
+## Before opening the PR
 
 ```bash
 npm run typecheck && npm run lint && npm run test
 ```
 
-Si el cambio toca lo que se proyecta, el teclado o la reproducción, corré también
-`npm run test:e2e`. Contá en el PR cómo lo probaste.
+If the change touches what gets projected, the keyboard or playback, also run `npm run test:e2e`.
+The E2E suite starts the app in Spanish on purpose (`--lang=es`), so its locators are the Spanish
+UI strings from `es.ts`. Say in the PR how you tested it.
 
-## Licencia
+## License
 
-Al contribuir, aceptás que tu aporte se publique bajo la misma licencia del proyecto,
+By contributing, you agree that your work is published under the project's license,
 [GPL-3.0-or-later](LICENSE).

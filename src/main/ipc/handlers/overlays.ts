@@ -4,12 +4,13 @@ import { removeOverlayPlate } from "../../services/overlay-plate-removal";
 import { IpcError } from "@shared/ipc/result";
 import { isPlateName, isPlateUpsert } from "@shared/overlay-validators";
 import type { Plate } from "@shared/types/overlay";
+import { mt } from "../../i18n";
 
 /** Saved overlay plates. CRUD only, every write validated whole — the same
  *  reasoning as `handlers/utility.ts`. */
 function assertValid(input: unknown): Omit<Plate, "id"> {
   if (!isPlateUpsert(input)) {
-    throw new IpcError({ code: "INVALID_OVERLAY_PLATE", message: "La placa tiene campos inválidos." });
+    throw new IpcError({ code: "INVALID_OVERLAY_PLATE", message: mt("plates.invalid") });
   }
   const { id: _id, ...plate } = input;
   return plate;
@@ -30,7 +31,7 @@ export const overlaysHandlers: Pick<
   "overlay:update": (input) => getOverlaysRepo().update(input.id, assertValid(input)),
   "overlay:duplicate": ({ id, name }) => {
     if (!isPlateName(name)) {
-      throw new IpcError({ code: "INVALID_OVERLAY_PLATE", message: "El nombre de la placa no es válido." });
+      throw new IpcError({ code: "INVALID_OVERLAY_PLATE", message: mt("plates.invalidName") });
     }
     return getOverlaysRepo().duplicate(id, name.trim());
   },

@@ -465,12 +465,12 @@ export function readPresentationMeta(filePath: string): PresentationMeta {
           attr(videoFile, "@r:link") ?? attr(videoFile, "@r:embed") ?? p14MediaRelId(pic);
         const target = rid ? slideRels.get(rid) : undefined;
         if (!target) {
-          if (rid) skippedVideoParts.push(`${partName}#${rid} (externo)`);
+          if (rid) skippedVideoParts.push(`${partName}#${rid} (external)`);
           continue;
         }
         const rect = picRect(pic, slideSizeEmu);
         if (!rect) {
-          skippedVideoParts.push(`${target} (sin geometría propia)`);
+          skippedVideoParts.push(`${target} (no geometry of its own)`);
           continue;
         }
         const node = mediaNodeFor(attr(asNode(asNode(pic["p:nvPicPr"])?.["p:cNvPr"]), "@id"));

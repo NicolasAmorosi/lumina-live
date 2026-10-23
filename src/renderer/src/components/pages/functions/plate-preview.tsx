@@ -7,7 +7,7 @@ import { selectOutputMemo, useProjectionStore } from "@renderer/stores/projectio
 import { platesCollide, type PlateStyle } from "@shared/types/overlay";
 import type { PlateDraft } from "./plate-draft";
 
-/** How long the plate stays off after «Probar salida» before it comes back. */
+/** How long the plate stays off after «Test exit» before it comes back. */
 const EXIT_TEST_REST_MS = 1000;
 
 const NO_ANIMATION: PlateStyle["animation"] = { style: "none", durationMs: 0 };
@@ -45,7 +45,7 @@ export function PlatePreview({ draft, id }: { draft: PlateDraft; id: number | nu
   const [take, setTake] = useState(-1);
 
   // Layout effect, not effect: the one-commit stages must be replaced before
-  // the browser paints them, or «Probar entrada» flashes the plate at rest.
+  // the browser paints them, or «Test entrance» flashes the plate at rest.
   useLayoutEffect(() => {
     if (stage === "reentering") setTake((current) => current - 1);
     if (stage === "reentering" || stage === "returning") setStage("shown");

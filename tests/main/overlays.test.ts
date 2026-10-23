@@ -180,7 +180,7 @@ describe("the projection history", () => {
     expect(rows()).toBe(before + 1);
   });
 
-  test("uncovering NEGRO over the same video writes no second row", () => {
+  test("uncovering BLACK over the same video writes no second row", () => {
     const video: Extract<ProjectionOutput, { kind: "video" }> = {
       kind: "video",
       url: "worship://asset/3",
@@ -192,7 +192,7 @@ describe("the projection history", () => {
     };
     const before = rows();
     history.record(video, null);
-    // NEGRO itself is never recorded; the push that uncovers it bumps the
+    // BLACK itself is never recorded; the push that uncovers it bumps the
     // transition epoch and resumes the video, and is still the same content.
     history.record({ ...video, transition: { ...video.transition, epoch: 12 } }, null);
     expect(rows()).toBe(before + 1);

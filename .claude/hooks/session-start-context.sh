@@ -12,19 +12,20 @@ if [ -f "$INDEX" ]; then
 fi
 
 CONTEXT=$(printf '%s\n' \
-  "WorshipApp — protocolo obligatorio de esta sesion (ver CLAUDE.md para el detalle):" \
+  "Lumina Live — mandatory protocol for this session (see CLAUDE.md for the details):" \
   "" \
-  "1. CERTEZA ANTES DE CODIGO: antes de escribir codigo no trivial, enumera supuestos y usa" \
-  "   AskUserQuestion hasta llegar a ~99% de certeza sobre lo que el usuario quiere. Nunca" \
-  "   asumas alcance, UX ni comportamiento. Excepciones: typos, renombres obvios y pedidos" \
-  "   de solo lectura (explicar, buscar, auditar)." \
-  "2. CICLO DE AUTOMEJORA: al cerrar una tarea no trivial, decide si surgio un hallazgo" \
-  "   durable (algo no derivable del codigo, que costo descubrir y volvera a importar). Si si," \
-  "   registralo con la skill /learn en .claude/knowledge/ + una linea en INDEX.md." \
-  "3. BARRA MINIMA antes de dar una tarea por buena: npm run typecheck && npm run lint" \
+  "1. CERTAINTY BEFORE CODE: before writing non-trivial code, list your assumptions and use" \
+  "   AskUserQuestion until you reach ~99% certainty about what the user wants. Never" \
+  "   assume scope, UX or behavior. Exceptions: typos, obvious renames and read-only" \
+  "   requests (explain, search, audit)." \
+  "2. SELF-IMPROVEMENT CYCLE: when closing a non-trivial task, decide whether a durable" \
+  "   finding came up (something not derivable from the code, that was costly to discover and" \
+  "   will matter again). If so, record it with the /learn skill in .claude/knowledge/ + one" \
+  "   line in INDEX.md." \
+  "3. MINIMUM BAR before calling a task done: npm run typecheck && npm run lint" \
   "   && npm run test." \
   "" \
-  "Indice de hallazgos ya registrados en .claude/knowledge/ (leelo antes de tocar esas areas):" \
+  "Index of findings already recorded in .claude/knowledge/ (read it before touching those areas):" \
   "$INDEX_BODY")
 
 jq -n --arg ctx "$CONTEXT" \

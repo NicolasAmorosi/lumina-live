@@ -1,4 +1,4 @@
-/** What Ajustes → Sistema → Rendimiento reports about the machine's graphics.
+/** What Settings → System → Performance reports about the machine's graphics.
  *  The two feature values are Chromium's own strings (`app.getGPUFeatureStatus()`)
  *  — "enabled", "enabled_on", "disabled_software", "unavailable_off"… — passed
  *  through rather than mapped, so what the operator reads out over the phone

@@ -37,7 +37,7 @@ Two consequences, and the second is the one that hurts:
    in the cache can no longer be answered. That asset cannot be previewed or projected again
    until the app restarts.
 
-Reachable from the "Cancelar" button in `components/shared/deck-conversion-status.tsx` and from
+Reachable from the "Cancel" button in `components/shared/deck-conversion-status.tsx` and from
 force-deleting an asset (`services/media-asset-removal.ts` calls `cancel`).
 
 ### The rule
@@ -62,8 +62,8 @@ review — the correct pattern is right there, three functions up.
   prewarm left its shared batch temp dir (up to 20 PDFs) on disk until the next startup's
   `sweepCache`, plus stale entries in `precomputedPdfByAsset`/`batchDirByAsset`.
 - A cancellation now surfaces to the renderer as `IpcError.code === "CANCELED"`. It is not a
-  failure: `deck.store`'s `ensure` maps it to `stale`, not `failed`, or the operator gets a "no se
-  pudo convertir" for something they cancelled on purpose. That path only became reachable at all
+  failure: `deck.store`'s `ensure` maps it to `stale`, not `failed`, or the operator gets a "couldn't
+  convert" for something they cancelled on purpose. That path only became reachable at all
   once the job started settling.
 
 ### Settling is not telling: the queued path also has to PUSH `stale` (2026-10-18)
@@ -72,17 +72,17 @@ review — the correct pattern is right there, three functions up.
   superseding its own request (so a late resolution cannot overwrite main's word) and waiting for
   main's `deck-progress` push instead. Only the RUNNING path pushed: `runConversion`'s catch emits
   `stale`, `settleCanceledJob` emitted nothing. A deck cancelled while it waited in line — behind
-  another deck, or behind «Preparar carpeta» — left PREVIEW on «Preparando la conversión…» forever.
+  another deck, or behind «Prepare folder» — left PREVIEW on «Getting ready to convert…» forever.
   `settleCanceledJob` now emits the same `stale` push.
 - Two more holes in the same flow, all found by the E2E suite (`tests/e2e/decks.spec.ts`):
   - A cancel pressed before the request reached main (the first ~100 ms, while the panel already
-    shows «Preparando…») had nothing to cancel and got no push: the click was lost and the deck
+    shows «Getting ready…») had nothing to cancel and got no push: the click was lost and the deck
     converted anyway. `cancelConversion` marks the entry `stale` itself, and `useDeck` does not
     ensure a deck that is `stale` with no slides (the cancelled test `DeckConversionStatus` uses).
   - A cancelled deck that a background prewarm finished later: `applyProgress` drops an entry that
     turns `ready` with no DTO and nobody awaiting it (the memory rule above), and `!entry` reads as
-    "queued" — «Preparando…» over a ready deck. `useDeck` re-peeks when its entry disappears.
-  - «Reintentar» and «Cancelar» sit in the same slot of the same `LoadingState`, so React reused one
+    "queued" — «Getting ready…» over a ready deck. `useDeck` re-peeks when its entry disappears.
+  - «Retry» and «Cancel» sit in the same slot of the same `LoadingState`, so React reused one
     `<button>`: a conversion starting between press and release turned a retry into a cancel. Keyed.
 - Trap for tests: right after a cancel, main is still killing `soffice` (~400 ms) and the job is
   still in `inFlight`, so a new request for that deck JOINS the dying promise and dies with it. Wait

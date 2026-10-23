@@ -5,7 +5,7 @@
  * Main owns the projection window's place (`windows/projector-screen.ts`): it
  * hides it when its screen goes away and puts it back, or onto a projector
  * turned on after launch, without rebuilding it. So the control window only
- * re-lists the screens, for Ajustes and for the next EN VIVO — and it must
+ * re-lists the screens, for Settings and for the next GO LIVE — and it must
  * never open or move the window itself, or the two would fight over it and a
  * rebuild would restart everything that was playing.
  */

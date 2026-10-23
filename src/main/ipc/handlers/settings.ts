@@ -2,6 +2,8 @@ import type { Handlers } from "../register";
 import { getSettingsRepo } from "../../services/repos";
 import { IpcError } from "@shared/ipc/result";
 import { SETTINGS_VALIDATORS, isSettingsKey, type SettingsMap } from "@shared/types/settings";
+import { setMainLocale } from "../../i18n";
+import { installApplicationMenu } from "../../windows/app-menu";
 
 /**
  * The IPC contract is a compile-time guarantee, and this is the one channel
@@ -19,12 +21,12 @@ import { SETTINGS_VALIDATORS, isSettingsKey, type SettingsMap } from "@shared/ty
 function assertValidSettings(partial: Partial<SettingsMap>): void {
   for (const [key, value] of Object.entries(partial)) {
     if (!isSettingsKey(key)) {
-      throw new IpcError({ code: "INVALID_SETTING", message: `Clave de ajuste desconocida: ${key}` });
+      throw new IpcError({ code: "INVALID_SETTING", message: `Unknown setting key: ${key}` });
     }
     if (!SETTINGS_VALIDATORS[key](value)) {
       throw new IpcError({
         code: "INVALID_SETTING",
-        message: `Valor inválido para el ajuste ${key}: ${JSON.stringify(value)}`,
+        message: `Invalid value for setting ${key}: ${JSON.stringify(value)}`,
       });
     }
   }
@@ -35,5 +37,10 @@ export const settingsHandlers: Pick<Handlers, "settings:get" | "settings:set"> =
   "settings:set": (partial) => {
     assertValidSettings(partial);
     getSettingsRepo().setMany(partial);
+    // Main speaks the interface language too: its menu, dialogs and errors.
+    if (partial["ui.locale"]) {
+      setMainLocale(partial["ui.locale"]);
+      installApplicationMenu();
+    }
   },
 };

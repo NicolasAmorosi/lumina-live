@@ -60,7 +60,7 @@ function clearTimer(): void {
   }
 }
 
-/** NEGRO/LOGO pauses the deck's own soundtrack (`projection-sync.ts`), and,
+/** BLACK/LOGO pauses the deck's own soundtrack (`projection-sync.ts`), and,
  *  so the two can never drift apart, must freeze slide auto-advance right
  *  along with it — otherwise this module's wall-clock timers would keep
  *  firing while the audio sits paused behind the overlay, and uncovering
@@ -237,7 +237,7 @@ export function startDeckAutoplay(): () => void {
       const state = useProjectionStore.getState();
       if (state.autoplay !== "playing") {
         clearTimer();
-        // Every EN VIVO passes through "off" (`setLiveDeck`). Without this
+        // Every GO LIVE passes through "off" (`setLiveDeck`). Without this
         // the next deck inherited the previous one's chain — `scheduleDetached`
         // builds on `max(deadline, now)` — and its first slide stayed up for
         // whatever was left of the old one's, putting every later slide that
@@ -300,7 +300,7 @@ export function startDeckAutoplay(): () => void {
     },
   );
 
-  // Freezes/re-arms auto-advance in lockstep with NEGRO/LOGO covering the
+  // Freezes/re-arms auto-advance in lockstep with BLACK/LOGO covering the
   // deck's soundtrack (see `isFrozenByCover`). "synced" mode needs no explicit
   // re-arm here: resuming the `<audio>` element fires its own `play` event,
   // which reaches `unsubscribeStatus` above and reschedules from there.

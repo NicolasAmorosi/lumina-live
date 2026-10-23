@@ -29,9 +29,9 @@ export function DeckConversionStatus({
   const cancelConversion = useDeckStore((s) => s.cancelConversion);
 
   // Every state below puts its action in the same slot of the same
-  // `LoadingState`, so without keys React reused one `<button>` for «Cancelar»
-  // and «Reintentar»: a conversion starting between the press and the release
-  // turned a click on «Reintentar» into a cancel.
+  // `LoadingState`, so without keys React reused one `<button>` for «Cancel»
+  // and «Retry»: a conversion starting between the press and the release
+  // turned a click on «Retry» into a cancel.
   const cancelAction = (
     <Button key="cancel" onClick={() => void cancelConversion(assetId)} size="xs" variant="ghost">
       {t("deck.cancel")}
@@ -57,7 +57,7 @@ export function DeckConversionStatus({
   // other route to `stale` (`markStale`, for a source file that changed or a
   // cache directory that was evicted) always keeps the slides it already had,
   // and the caller shows its own banner over them. Without this branch the
-  // panel fell through to "La presentación no tiene diapositivas" — blaming the
+  // panel fell through to "The presentation has no slides" — blaming the
   // file for something the operator had just chosen to do, with no way back
   // other than selecting something else and returning.
   if (entry.status === "stale" && entry.deck === null) {

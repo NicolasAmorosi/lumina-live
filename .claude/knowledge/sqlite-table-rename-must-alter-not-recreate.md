@@ -62,7 +62,7 @@
 ### Adding a column: the third case, and the one that looks safest (2026-09-18)
 
 - A rename is safe, a drop is impossible — so `ADD COLUMN` reads like the easy one. It is not,
-  for this table. Adding `utility_scene_id` (F3 of the Funciones plan) had drizzle-kit emit
+  for this table. Adding `utility_scene_id` (F3 of the Functions plan) had drizzle-kit emit
   exactly one line:
 
   ```sql

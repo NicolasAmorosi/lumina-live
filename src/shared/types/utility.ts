@@ -1,7 +1,7 @@
 /**
  * A utility scene: one saved, reusable, projectable piece of time.
  *
- * The operator builds "Cuenta 10 minutos" once — with its background, its
+ * The operator builds "10-minute countdown" once — with its background, its
  * typeface, its colour and its message — and picks it off a list every Sunday
  * after that. From F2 on this is a row in `utility_scenes`; the shape is
  * identical either way, which is what lets F1 ship the whole feature against
@@ -43,10 +43,10 @@ const MINUTE_MS = 60_000;
  * The four scenes a fresh install starts with — one per tool, so the feature
  * is usable before anybody opens the editor.
  *
- * The Spanish literals here are SEED CONTENT, not UI text: they land in a row
- * the operator renames and edits like any program name, so they do not belong
- * in the `i18n` dictionary (main, which seeds them, has no dictionary either —
- * the same reason a seeded Bible's book names are data).
+ * Their texts are SEED CONTENT, not UI text: they land in a row the operator
+ * renames and edits like any program name, so they are written once, in the
+ * language of the first launch (main's dictionary, `seed.*`), and never follow
+ * a later change of language.
  *
  * No ids: these are an INPUT to the seed (`db/seed/seed-utility-scenes.ts`),
  * which runs once ever and hands out real row ids. Seeding again whenever the
@@ -54,57 +54,69 @@ const MINUTE_MS = 60_000;
  * they deleted — so "was this database seeded" is its own flag
  * (`utility.seeded`), not a row count.
  */
-export const DEFAULT_UTILITY_SCENES: readonly Omit<UtilityScene, "id">[] = [
-  {
-    name: "Cuenta 10 minutos",
-    tool: "countdown",
-    config: {
-      durationMs: 10 * MINUTE_MS,
-      targetMinuteOfDay: 10 * 60,
-      endMessage: "¡Bienvenidos!",
-      format: DEFAULT_TIMER_FORMAT,
+export type DefaultSceneTexts = {
+  countdownName: string;
+  countdownTitle: string;
+  countdownToTimeName: string;
+  countdownToTimeTitle: string;
+  clockName: string;
+  stopwatchName: string;
+  endMessage: string;
+};
+
+export function defaultUtilityScenes(text: DefaultSceneTexts): Omit<UtilityScene, "id">[] {
+  return [
+    {
+      name: text.countdownName,
+      tool: "countdown",
+      config: {
+        durationMs: 10 * MINUTE_MS,
+        targetMinuteOfDay: 10 * 60,
+        endMessage: text.endMessage,
+        format: DEFAULT_TIMER_FORMAT,
+      },
+      style: DEFAULT_SCENE_STYLE,
+      title: text.countdownTitle,
+      message: null,
     },
-    style: DEFAULT_SCENE_STYLE,
-    title: "El culto comienza en",
-    message: null,
-  },
-  {
-    name: "Comenzamos 10:00",
-    tool: "countdown-to-time",
-    config: {
-      durationMs: 10 * MINUTE_MS,
-      targetMinuteOfDay: 10 * 60,
-      endMessage: "¡Bienvenidos!",
-      format: DEFAULT_TIMER_FORMAT,
+    {
+      name: text.countdownToTimeName,
+      tool: "countdown-to-time",
+      config: {
+        durationMs: 10 * MINUTE_MS,
+        targetMinuteOfDay: 10 * 60,
+        endMessage: text.endMessage,
+        format: DEFAULT_TIMER_FORMAT,
+      },
+      style: DEFAULT_SCENE_STYLE,
+      title: text.countdownToTimeTitle,
+      message: null,
     },
-    style: DEFAULT_SCENE_STYLE,
-    title: "Comenzamos a las 10:00",
-    message: null,
-  },
-  {
-    name: "Reloj",
-    tool: "clock",
-    config: {
-      durationMs: 10 * MINUTE_MS,
-      targetMinuteOfDay: 10 * 60,
-      endMessage: null,
-      format: { ...DEFAULT_TIMER_FORMAT, showSeconds: false },
+    {
+      name: text.clockName,
+      tool: "clock",
+      config: {
+        durationMs: 10 * MINUTE_MS,
+        targetMinuteOfDay: 10 * 60,
+        endMessage: null,
+        format: { ...DEFAULT_TIMER_FORMAT, showSeconds: false },
+      },
+      style: DEFAULT_SCENE_STYLE,
+      title: null,
+      message: null,
     },
-    style: DEFAULT_SCENE_STYLE,
-    title: null,
-    message: null,
-  },
-  {
-    name: "Cronómetro",
-    tool: "stopwatch",
-    config: {
-      durationMs: 10 * MINUTE_MS,
-      targetMinuteOfDay: 10 * 60,
-      endMessage: null,
-      format: DEFAULT_TIMER_FORMAT,
+    {
+      name: text.stopwatchName,
+      tool: "stopwatch",
+      config: {
+        durationMs: 10 * MINUTE_MS,
+        targetMinuteOfDay: 10 * 60,
+        endMessage: null,
+        format: DEFAULT_TIMER_FORMAT,
+      },
+      style: DEFAULT_SCENE_STYLE,
+      title: null,
+      message: null,
     },
-    style: DEFAULT_SCENE_STYLE,
-    title: null,
-    message: null,
-  },
-];
+  ];
+}

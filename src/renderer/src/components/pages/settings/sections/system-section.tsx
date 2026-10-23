@@ -9,8 +9,9 @@ import { PerformanceDiagnostics } from "./performance-diagnostics";
 
 const LOCALE_LABEL_KEYS: Record<Locale, MessageKey> = {
   es: "settings.locales.es",
-  it: "settings.locales.it",
   en: "settings.locales.en",
+  it: "settings.locales.it",
+  pt: "settings.locales.pt",
 };
 
 const KIND_LABEL_KEYS: Record<AssetKind, MessageKey> = {
@@ -32,7 +33,7 @@ export function SystemSection() {
 
   /** What each kind falls back to when it has no override — resolved by the
    *  OS, so it can only be read from main. Fetched once: a machine does not
-   *  move its Music folder while Ajustes is open, and this section stays
+   *  move its Music folder while Settings is open, and this section stays
    *  mounted after the first visit (see `SettingsModal`). */
   const [systemFolders, setSystemFolders] = useState<Record<AssetKind, string> | null>(null);
   useEffect(() => {
@@ -57,7 +58,7 @@ export function SystemSection() {
 
   async function chooseFolder(kind: AssetKind) {
     // Opens on the folder being replaced — the override if there is one, the
-    // system folder otherwise — so "Cambiar" starts from what it is changing.
+    // system folder otherwise — so "Change" starts from what it is changing.
     const current = defaultFolders[kind] ?? systemFolders?.[kind];
     const chosen = await api.files.pickFolder(current);
     if (chosen !== null) await setFolder(kind, chosen);

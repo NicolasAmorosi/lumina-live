@@ -235,14 +235,14 @@ export const useProgramStore = create<ProgramStoreState>((set, get) => ({
       ),
     ),
 
-  /** The same thing for a time scene force-deleted from the «Escenas» editor.
+  /** The same thing for a time scene force-deleted from the «Scenes» editor.
    *  The unsaved schedule is the one place main's `ON DELETE restrict` cannot
    *  reach — it is not a row, it is a draft — so the renderer has to drop the
    *  items itself, exactly as it does for an asset. */
   removeByUtilityScene: (sceneId) =>
     set((state) => removeWhere(state, (item) => item.kind === "utility" && item.utilitySceneId === sceneId)),
 
-  /** And for a plate force-deleted from the «Placas» editor. */
+  /** And for a plate force-deleted from the «Overlays» editor. */
   removeByPlate: (plateId) =>
     set((state) => removeWhere(state, (item) => item.kind === "plate" && item.overlayPlateId === plateId)),
 

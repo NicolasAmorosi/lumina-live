@@ -16,14 +16,14 @@ Measured in the 2026-09-20 session against a purpose-built fixture — a real `.
 H.264/AAC `ppt/media/media1.mp4`, written with the exact structure PowerPoint 2010+ emits
 (`a:videoFile/@r:link` for the part, plus `p14:media/@r:embed` in a `p:extLst`, plus a
 `p:blipFill` poster and a `p:cMediaNode vol="80000"` under `p:timing`). Recorded because the
-roadmap's one-liner — *"se detecta y se loguea, pero no se extrae"* — badly understates how much
+roadmap's one-liner — *"it is detected and logged, but not extracted"* — badly understates how much
 of the hard part is already done, and overstates the part that is genuinely impossible.
 
 ### What already works, unchanged
 
 - **Detection.** `readPresentationMeta` finds the `p:pic`, resolves the relationship and files
   the part in `meta.skippedVideoParts`. `npm run slides:smoke` on the fixture prints
-  `video embebido (fuera de alcance): 1`.
+  `video embebido (fuera de alcance): 1` ("embedded video (out of scope)").
 - **Extraction is the audio code.** `extractAudioParts` already pulls a media part out of the zip
   into the deck cache under a *generated* filename (never the part name — a `.pptx` can carry
   `../` in one). Video is the same function with a different extension set.
@@ -91,11 +91,11 @@ inside the slide. That means a positioned overlay touches:
   `object-contain` letterboxes and the overlay must follow the *image* box, not the container;
 - `MediaTarget` (today only `{kind:"video"}` and `{kind:"audio",trackId}`) — without a third
   target, `mediaStatus`, the media panel and `MediaCommand` cannot address it;
-- the NEGRO/LOGO rule, which is a product decision, not a technical one: a deck video could
+- the BLACK/LOGO rule, which is a product decision, not a technical one: a deck video could
   follow the full-screen video (pause and hold position) or the deck soundtrack (keep going).
 
 A much cheaper first step existed and was rejected: if the rect covers ≳95 % of the slide, route
-it through the existing `videoUnderlay` and inherit NEGRO, pause, volume, seek, the confidence
+it through the existing `videoUnderlay` and inherit BLACK, pause, volume, seek, the confidence
 monitors and the freeze-frame for free. The user chose the positioned overlay instead, and the
 real deck this was verified against puts its clip at 81.9 % — the cheap path would have missed it.
 

@@ -36,7 +36,7 @@ export function appendLogLine(file: string, label: string, text: string): void {
  * A packaged Windows app has no console, so before this every warning main
  * writes — a file the projector could not read, a conversion that failed, a
  * deck LibreOffice choked on — vanished on the church PC, and `crash.log` only
- * ever held the crashes. «Abrir carpeta de registros» in Ajustes › Sistema is
+ * ever held the crashes. «Open logs folder» in Settings › System is
  * how an operator hands this over.
  */
 export function installMainLog(file: string): void {

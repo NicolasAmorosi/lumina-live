@@ -11,5 +11,5 @@ CODE_CHANGED=$(git -C "$DIR" status --porcelain -- src 2>/dev/null || true)
 KNOWLEDGE_TOUCHED=$(git -C "$DIR" status --porcelain -- .claude/knowledge 2>/dev/null || true)
 
 if [ -n "$CODE_CHANGED" ] && [ -z "$KNOWLEDGE_TOUCHED" ]; then
-  printf '%s\n' '{"systemMessage":"Ciclo de automejora: hay cambios en src/ y nada nuevo en .claude/knowledge/. Si algo costo descubrir en esta sesion, registralo con /learn."}'
+  printf '%s\n' '{"systemMessage":"Self-improvement cycle: there are changes in src/ and nothing new in .claude/knowledge/. If something was costly to discover in this session, record it with /learn."}'
 fi

@@ -5,7 +5,7 @@
  * not is `goLiveWithDeck` (`playback.ts`), which awaits a conversion — and a
  * conversion is not instant: a 400-slide deck, or an interactive job that
  * first had to preempt a running background one, takes seconds. The operator
- * is not frozen while it runs. They press NEGRO because nothing is happening,
+ * is not frozen while it runs. They press BLACK because nothing is happening,
  * or navigate the verse that is on air, or send something else live; the
  * conversion then finished and committed anyway, lifting the overlay they had
  * just put up and projecting a deck they had already abandoned, in the middle
@@ -51,7 +51,7 @@ export function claimLiveIntent(): number {
 /** The newest claim, WITHOUT making one — for an action that must yield to
  *  the operator's next one but never supersede the last: an audio track sent
  *  live changes nothing on screen, so a deck still converting toward the
- *  projector must still land, while LIMPIAR still silences the track. */
+ *  projector must still land, while CLEAR still silences the track. */
 export function currentLiveIntent(): number {
   return liveIntent;
 }

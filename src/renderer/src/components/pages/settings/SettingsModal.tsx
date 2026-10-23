@@ -32,7 +32,7 @@ export function SettingsModal({ onOpenChange, open }: { onOpenChange: (open: boo
   const sections: readonly TabItem<SettingsSection>[] = [
     { icon: "display", label: t("settings.sections.projection"), value: "projection" },
     { icon: "ppt", label: t("settings.sections.slides"), value: "slides" },
-    // «Versículos» is how a verse is DRESSED; «Biblia» is which bibles are
+    // «Verses» is how a verse is DRESSED; «Bible» is which bibles are
     // installed. They were one section with two tabs, and the tab row read as
     // a second, competing level of the category list right beside it.
     { icon: "text", label: t("settings.sections.verse"), value: "verse" },
@@ -93,7 +93,7 @@ export function SettingsModal({ onOpenChange, open }: { onOpenChange: (open: boo
               .filter((value) => visited.includes(value))
               .map((value) => (
                 <TabPanel active={value === section} idBase={SECTION_ID_BASE} key={value} value={value}>
-                  {/* «Versículos» is the one section that scrolls ITSELF: its
+                  {/* «Verses» is the one section that scrolls ITSELF: its
                       live preview is a fixed band above the controls, exactly
                       like the scene editor's, and a band cannot be pinned from
                       inside a scroller that also owns the padding around it. So

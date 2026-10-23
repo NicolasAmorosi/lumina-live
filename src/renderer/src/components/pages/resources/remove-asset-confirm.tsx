@@ -13,7 +13,7 @@ type RemoveAssetConfirmProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-/** "Eliminar igualmente" — the escape hatch from the in-use toast. Confirms,
+/** "Remove anyway" — the escape hatch from the in-use toast. Confirms,
  *  then force-deletes: the asset AND every saved-program item pointing at it
  *  (see `forceRemoveAsset` / `main/services/media-asset-removal.ts`).
  *

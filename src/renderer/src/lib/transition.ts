@@ -5,7 +5,7 @@
  * Extracted from `output-view.tsx` when a second thing started fading: a time
  * scene crossing into its end state (`TimerScene`). Both are the same picture
  * replacing another picture, so they share one set of keyframes and one set
- * of options; two copies would be two chances for «Disolvencia» to mean
+ * of options; two copies would be two chances for «Crossfade» to mean
  * something slightly different depending on where it was chosen.
  */
 import type { CSSProperties } from "react";
@@ -83,7 +83,7 @@ export function transitionStyle(
 /* -------------------------------------------------------------------------
  * The operator's two dropdowns
  *
- * Shared by Ajustes → Proyección and by a scene's «Al terminar la cuenta»,
+ * Shared by Settings → Projection and by a scene's «When the countdown ends»,
  * because the promise made to the operator is literally "the same options the
  * screen has".
  * ---------------------------------------------------------------------- */

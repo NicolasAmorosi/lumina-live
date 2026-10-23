@@ -9,6 +9,7 @@ import { useAudioStore, nextAssetTrack } from "@renderer/stores/audio.store";
 import { findScene, useUtilityStore } from "@renderer/stores/utility.store";
 import { notifyManualNavigation } from "@renderer/effects/deck-autoplay";
 import { projectVerse } from "@renderer/lib/actions/bible";
+import { explainSofficeRefusal } from "@renderer/lib/actions/soffice";
 import { stopPreviewPlayback } from "@renderer/lib/actions/preview-playback";
 import { previewedScheduleItem } from "@renderer/lib/actions/preview";
 import { defaultMediaVolume } from "@renderer/stores/settings.store";
@@ -32,7 +33,7 @@ let videoEpoch = 0;
  *  the deck-soundtrack slot; every other audio track already sounding keeps
  *  playing.
  *
- *  One asset, one track: if this asset is already in the live list, EN VIVO
+ *  One asset, one track: if this asset is already in the live list, GO LIVE
  *  never stacks a second instance of it. Already sounding → no-op, the
  *  existing track plays on untouched. Already there but paused → restarted
  *  in place instead of duplicated. */
@@ -73,7 +74,7 @@ function toLiveDeck(deck: DeckDTO): LiveDeck {
 
 /**
  * Note the ordering in here: the deck is fully ready BEFORE `base` changes, so
- * hitting EN VIVO on a not-yet-converted file leaves whatever is currently on
+ * hitting GO LIVE on a not-yet-converted file leaves whatever is currently on
  * the projector untouched instead of cutting to black for the length of a
  * conversion.
  *
@@ -89,7 +90,7 @@ async function goLiveWithDeck(assetId: number, startSlideIndex: number, intent: 
     // Already known ready in the store — go live with it immediately instead
     // of waiting on an `ensure()` round-trip. For an already-prewarmed deck
     // that round-trip is a pure cache hit on main's side anyway (same DTO,
-    // a beat later); waiting on it is exactly what made EN VIVO on a
+    // a beat later); waiting on it is exactly what made GO LIVE on a
     // prepared deck feel slow. Still revalidate in the background (a
     // relocate, a source file that changed on disk) so a real change is
     // caught on the next go-live rather than never.
@@ -98,7 +99,10 @@ async function goLiveWithDeck(assetId: number, startSlideIndex: number, intent: 
   } else {
     deck = await deckStore.ensure(assetId);
   }
-  if (!deck || deck.status !== "ready" || deck.slides.length === 0) return false;
+  if (!deck || deck.status !== "ready" || deck.slides.length === 0) {
+    if (useDeckStore.getState().byAssetId[assetId]?.status === "failed") void explainSofficeRefusal(assetId);
+    return false;
+  }
   // The conversion above may have taken seconds. Anything the operator did to
   // the projector in the meantime outranks this deck.
   if (!isCurrentLiveIntent(intent)) return false;
@@ -114,8 +118,8 @@ async function goLiveWithDeck(assetId: number, startSlideIndex: number, intent: 
     assetId: deck.assetId,
     slideIndex: Math.min(Math.max(1, startSlideIndex), deck.slides.length),
   });
-  // Going live always cuts straight from NEGRO/LOGO to the new content — the
-  // operator never has to remember to press EN VIVO/LOGO twice.
+  // Going live always cuts straight from BLACK/LOGO to the new content — the
+  // operator never has to remember to press GO LIVE/LOGO twice.
   store.setOverlay("none");
 
   const epoch = useProjectionStore.getState().soundtrackEpoch;
@@ -159,7 +163,7 @@ async function goLiveWithMediaAsset(
   const asset = await api.library.get(assetId);
   if (!asset) return "failed";
   // A DB read, so a far narrower window than a conversion — but the audio
-  // branch below is guarded by the same check on purpose: LIMPIAR means
+  // branch below is guarded by the same check on purpose: CLEAR means
   // silence, and a track that starts just after it would outlive the button
   // that was meant to kill it.
   if (!isCurrentLiveIntent(intent)) return "superseded";
@@ -196,7 +200,7 @@ async function goLiveWithMediaAsset(
  * and the commit below.
  *
  * `scheduleIndex` is the row that claims the on-air rail — a scene sent from
- * the Utilidades panel is live content that is not in the schedule, so it
+ * the Utilities panel is live content that is not in the schedule, so it
  * passes `null` and no row may claim it. Returns whether anything reached the
  * projector: a scene whose row was deleted between the drag and the press
  * changes nothing, and must not light up a rail either.
@@ -217,7 +221,7 @@ function goLiveWithUtilityScene(sceneId: number, scheduleIndex: number | null): 
     return true;
   }
 
-  // EN VIVO on a countdown nobody started means "start it": projecting a
+  // GO LIVE on a countdown nobody started means "start it": projecting a
   // frozen 10:00 is never what the operator meant by pressing it. One they
   // paused on purpose is left exactly as it is — same rule as a video's
   // declarative `paused`.
@@ -237,17 +241,17 @@ function goLiveWithUtilityScene(sceneId: number, scheduleIndex: number | null): 
 /**
  * A plate does not replace `base`: it goes UP over whatever is projected, and
  * replaces only the plate of its own kind (`showPlate`). Everything that makes
- * EN VIVO "send new content" is deliberately skipped — no `beginScene()`
+ * GO LIVE "send new content" is deliberately skipped — no `beginScene()`
  * (the stage would fade into itself), no rail on the schedule (the content
- * row below keeps it), and NEGRO/LOGO stay up: a plate is covered with
- * everything else, and pressing EN VIVO on a name must never uncover the
+ * row below keeps it), and BLACK/LOGO stay up: a plate is covered with
+ * everything else, and pressing GO LIVE on a name must never uncover the
  * stage behind the operator's back.
  *
  * Nor does it claim the live intent. A deck still converting from an earlier
- * EN VIVO must still land: putting a name over it is not the operator
+ * GO LIVE must still land: putting a name over it is not the operator
  * changing their mind about the content (see `liveIntent`).
  *
- * Already up → a no-op, like an audio track that is already sounding: EN VIVO
+ * Already up → a no-op, like an audio track that is already sounding: GO LIVE
  * twice must not replay its entrance or restart its count.
  */
 async function goLiveWithPlate(plateId: number): Promise<void> {
@@ -319,7 +323,7 @@ async function goLiveWithScheduleItem(
       return;
     }
     case "utility": {
-      // The same commit the Utilidades panel uses, with the row claiming the
+      // The same commit the Utilities panel uses, with the row claiming the
       // rail. `setActive` is inside it rather than here because the scene may
       // be gone — a program saved months ago whose scene was force-deleted
       // since — and a rail lit on a projector that never changed is the kind
@@ -376,8 +380,8 @@ function previewedMediaAssetId(target: PreviewTarget): number | null {
  * still converting (or could not convert). Its original would project black,
  * or sound nothing — the very failures the conversion exists to prevent.
  *
- * Checked before the live intent is claimed, like a plate: a refused EN VIVO
- * changes nothing at all. No fade starts, no NEGRO is lifted, no projector is
+ * Checked before the live intent is claimed, like a plate: a refused GO LIVE
+ * changes nothing at all. No fade starts, no BLACK is lifted, no projector is
  * opened onto an empty stage, and whatever was already live stays live.
  */
 function refusesUnconverted(target: PreviewTarget): boolean {
@@ -392,7 +396,7 @@ function refusesUnconverted(target: PreviewTarget): boolean {
 
 /**
  * Stage two: send whatever is in the preview pane to the projector. The single
- * implementation behind the EN VIVO button, the Enter shortcut and
+ * implementation behind the GO LIVE button, the Enter shortcut and
  * double-clicking a row, a tile or a verse — so all four can never diverge.
  */
 export async function goLive(): Promise<void> {
@@ -408,12 +412,12 @@ export async function goLive(): Promise<void> {
   if (refusesUnconverted(target)) return;
   // A verse that is not in the loaded chapter any more has nothing to send.
   // Checked before any side effect: past this point the verse branch clears
-  // the rail, cuts the deck's music and lifts NEGRO/LOGO — and then
+  // the rail, cuts the deck's music and lifts BLACK/LOGO — and then
   // `projectVerse` would have done nothing.
   if (target.kind === "verse" && !useBibleStore.getState().verses[target.verseIndex]) return;
 
   // Claimed before the first `await` below, so this press supersedes anything
-  // still in flight — typically an earlier EN VIVO on a deck that is still
+  // still in flight — typically an earlier GO LIVE on a deck that is still
   // converting — and is in turn superseded by whatever the operator does
   // next. See `liveIntent`. Except an audio, which is never what is on
   // screen: sending the accompaniment while the hymn's deck converts used to
@@ -465,11 +469,11 @@ export async function goLive(): Promise<void> {
   }
 }
 
-/** Takes everything off the projector — the LIMPIAR row in Ajustes ->
- *  Contenido en vivo (it is destructive, so it does not sit in the toolbar).
+/** Takes everything off the projector — the CLEAR row in Settings ->
+ *  Live content (it is destructive, so it does not sit in the toolbar).
  *  The projection
  *  window is never hidden, so "nothing live" is just the logo output. Cuts
- *  every audio track too, not just the deck's — LIMPIAR means silence. */
+ *  every audio track too, not just the deck's — CLEAR means silence. */
 export function clearLive(): void {
   claimLiveIntent();
   const store = useProjectionStore.getState();
@@ -506,23 +510,23 @@ export function gotoSlide(index: number): void {
 
 /** Clears just what's on the projector right now — a live video, PPT deck or
  *  image — back to nothing, via each row's own delete button. Unlike
- *  `clearLive` (the LIMPIAR button), it never touches independent audio
+ *  `clearLive` (the CLEAR button), it never touches independent audio
  *  tracks: deleting the video shouldn't silence a soundtrack playing
  *  alongside it.
  *
- *  NEGRO/LOGO are unaffected on purpose: `selectOutputWithoutUnderlay` shows
+ *  BLACK/LOGO are unaffected on purpose: `selectOutputWithoutUnderlay` shows
  *  black/the logo regardless of `base` while either is up, so deleting
  *  what's underneath is invisible to the congregation — the operator stays
  *  exactly where they were, nothing to fade. Only `overlay === "none"` (the
  *  live content itself was on screen) actually loses something visible, so
  *  only that case begins a new scene and forces the overlay to LOGO — with
- *  no base left, NEGRO/LOGO/VIVO would otherwise keep showing VIVO selected
+ *  no base left, BLACK/LOGO/LIVE would otherwise keep showing LIVE selected
  *  while the projector is actually rendering the logo fallback. */
 export function clearBaseContent(): void {
   // Claimed even when this runs unattended (`end-of-playback.ts`, a video that
   // reached its end): the rule is about the projector changing, not about who
   // changed it, and a deck landing on top of an auto-cleared stage is exactly
-  // as unexplainable to the operator as one landing on top of NEGRO.
+  // as unexplainable to the operator as one landing on top of BLACK.
   claimLiveIntent();
   const store = useProjectionStore.getState();
   const wasLive = store.overlay === "none";
@@ -538,7 +542,7 @@ export function clearBaseContent(): void {
   useBibleStore.getState().setCurrentVerseIndex(null);
 }
 
-/** Toggles NEGRO/LOGO — shared by the status-bar buttons and the B/L
+/** Toggles BLACK/LOGO — shared by the status-bar buttons and the B/L
  *  shortcuts so there's one definition of "toggle" (press again to clear).
  *  What plays under it — a video, a deck's soundtrack and its auto-advance —
  *  pauses and keeps its place (since 2026-09-09); a standalone audio track
@@ -552,7 +556,7 @@ export async function toggleOverlay(kind: Extract<OverlayState, "black" | "logo"
   setOverlay(overlay === kind ? "none" : kind);
 }
 
-/** Shared by the three status-bar buttons (LOGO/NEGRO/EN VIVO) — each always
+/** Shared by the three status-bar buttons (LOGO/BLACK/LIVE) — each always
  *  forces its own state (never "un-toggles" on a second press, unlike B/L's
  *  `toggleOverlay`). Opens the projection window on demand, same as
  *  `goLive()`, and begins a new scene so switching overlays fades like every

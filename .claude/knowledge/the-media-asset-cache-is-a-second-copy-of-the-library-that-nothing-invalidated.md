@@ -14,7 +14,7 @@ you are about to add another module-level cache keyed by id.
   therefore never refetches, whatever happens to the row underneath. Measured on 2026-09-14
   with the real app: an asset imported and then moved on disk was marked `missingSince` by
   `library-sweeper` and broadcast — and the preview panel went on rendering it as present, so
-  the "Media no encontrada" state (and the **Relocalizar…** button that repairs it) never
+  the "Media not found" state (and the **Locate…** button that repairs it) never
   appeared. Then, after a successful relocate, the same staleness held the panel on the missing
   state for a file that was no longer missing. Both directions of the same bug, in the one
   feature whose whole job is to notice.

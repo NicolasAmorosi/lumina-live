@@ -144,7 +144,7 @@ export function LiveMediaPanel() {
   }
 
   // Every plate that is up, with what it has left and a way down. Covered or
-  // not: a plate under NEGRO is still up, and still has to be takeable down.
+  // not: a plate under BLACK is still up, and still has to be takeable down.
   for (const plate of livePlates) {
     rows.push(<PlateTrackRow key={`plate-${plate.id}`} onDelete={() => hidePlate(plate.id)} plate={plate} />);
   }

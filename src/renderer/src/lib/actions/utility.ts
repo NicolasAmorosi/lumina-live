@@ -40,7 +40,7 @@ function currentClock(scene: UtilityScene): TimerClock {
 
 /** Whether this scene's count was ever started — the bit `TimerClock`
  *  deliberately does not carry, and the one that decides whether the button
- *  offers ARRANCAR or REANUDAR. A live scene reached the projector through
+ *  offers START or RESUME. A live scene reached the projector through
  *  `ensureStarted`, so it counts as started even after the armed slot has
  *  moved on to another scene. */
 function isStarted(scene: UtilityScene): boolean {
@@ -69,7 +69,7 @@ function commitClock(scene: UtilityScene, clock: TimerClock, started: boolean): 
   if (!live || run?.sceneId === scene.id) arm(scene.id, clock, started);
 }
 
-/** Back to the scene's starting value, stopped: what the row's «reiniciar» and
+/** Back to the scene's starting value, stopped: what the row's «restart» and
  *  the list's STOP both do. */
 export function resetTimer(scene: UtilityScene): void {
   commitClock(scene, initialClock(scene.tool, scene.config, Date.now()), false);
@@ -97,7 +97,7 @@ export function toggleTimer(scene: UtilityScene): void {
  * Only a countdown by duration offers this — the one tool with a total for a
  * position to be inside — and it changes nothing about whether the count is
  * running: a paused countdown stays paused where it landed, and one that was
- * never started stays un-started, so the button still reads ARRANCAR.
+ * never started stays un-started, so the button still reads START.
  */
 export function seekTimer(scene: UtilityScene, remainingMs: number): void {
   commitClock(scene, seekCountdown(currentClock(scene), remainingMs, Date.now()), isStarted(scene));
