@@ -351,3 +351,13 @@ process.on("uncaughtException", (error) => reportCrash("uncaughtException", erro
 // abort on one), so the whole `void somethingAsync()` style used across main
 // could fail invisibly.
 process.on("unhandledRejection", (reason) => reportCrash("unhandledRejection", reason));
+
+// A renderer that dies says so only on a console a packaged app doesn't have
+// («Renderer process crashed»), so a control window or projector gone blank
+// mid-service left nothing to read afterwards. No dialog: the operator already
+// sees it. The rasterizer handles its own (`slides/rasterizer.ts`).
+app.on("render-process-gone", (_event, contents, details) => {
+  const win = BrowserWindow.fromWebContents(contents);
+  if (win && isRasterizerWindow(win)) return;
+  appendLogLine(path.join(userDataDir, "crash.log"), "render-process-gone", `${contents.getURL()} ${JSON.stringify(details)}`);
+});
