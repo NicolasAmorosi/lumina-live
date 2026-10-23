@@ -1,36 +1,36 @@
-name: Reportar un error
-description: Algo no funciona como debería.
+name: Report a bug
+description: Something doesn't work the way it should.
 labels: [bug]
 body:
   - type: textarea
     id: what
     attributes:
-      label: Qué pasó
-      description: Qué hiciste, qué esperabas y qué pasó en cambio.
+      label: What happened
+      description: What you did, what you expected and what happened instead.
     validations:
       required: true
   - type: input
     id: version
     attributes:
-      label: Versión
-      description: Configuración › Acerca de.
+      label: Version
+      description: Settings › About.
       placeholder: 2.2.0
     validations:
       required: true
   - type: dropdown
     id: os
     attributes:
-      label: Sistema operativo
+      label: Operating system
       options: [Windows, macOS, Linux]
     validations:
       required: true
   - type: textarea
     id: file
     attributes:
-      label: Archivo
-      description: Si el problema es con una presentación, un video o una Biblia, adjuntalo o contá su formato y de dónde salió.
+      label: File
+      description: If the problem is with a presentation, a video or a Bible, attach it or tell us its format and where it came from.
   - type: textarea
     id: logs
     attributes:
-      label: Registros
-      description: Configuración › Acerca de › Abrir carpeta de registros. Adjuntá `main.log` (y `crash.log` si existe).
+      label: Logs
+      description: Settings › About › Open logs folder. Attach `main.log` (and `crash.log` if there is one).

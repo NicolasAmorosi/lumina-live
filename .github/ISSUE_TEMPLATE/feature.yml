@@ -1,0 +1,21 @@
+name: Suggest a feature
+description: Something Lumina Live should do and doesn't yet.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What you're trying to do
+      description: The moment in the service where you miss it, and how you work around it today.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you'd like
+      description: How you picture it working. If another program does it well (EasyWorship, ProPresenter, OpenLP…), tell us which and how.
+  - type: dropdown
+    id: help
+    attributes:
+      label: Would you like to build it?
+      options: ["No, just suggesting it", "Yes, with some guidance", "Yes, I'll open a PR"]
