@@ -20,9 +20,11 @@ type MediaTrackRowProps = {
   error?: string | undefined;
   kind: MediaTrackKind;
   label: string;
-  /** Compact second line under the label — e.g. "Silent until GO LIVE".
-   *  Part of the row itself (not a sibling paragraph) so every caller gets
-   *  it inside the same bordered container for free. */
+  /** Compact last line of the row — e.g. "Silent until GO LIVE". Part of the
+   *  row itself (not a sibling paragraph) so every caller gets it inside the
+   *  same bordered container for free. Below the position line, never above
+   *  it: the PREVIEW row carries a hint its LIVE twin across does not, and a
+   *  line between the two would put the one bar lower than the other. */
   hint?: string | undefined;
   /** The row's own GO LIVE — for content that goes up WITHOUT replacing what
    *  is projected (a plate), so the operator sends it from beside its picture
@@ -213,14 +215,17 @@ export function MediaTrackRow({
           <span className="shrink-0 whitespace-nowrap text-xs text-danger-ink">{readoutNote}</span>
         ) : null}
 
+        {/* `h-6`, the height of every `IconButton` beside it: an `xs` Button
+            is `h-7`, and it made the PREVIEW row of a plate 4px taller than
+            the LIVE one across. */}
         {onTakeDown ? (
-          <Button className="shrink-0" onClick={onTakeDown} size="xs" variant="outline">
+          <Button className="h-6 shrink-0" onClick={onTakeDown} size="xs" variant="outline">
             {t("media.takeDown")}
           </Button>
         ) : onGoLive ? (
           // The top bar's GO LIVE, same variant and wording: it does exactly
           // what that button does with this row's content in preview.
-          <Button className="shrink-0" onClick={onGoLive} size="xs" variant="live">
+          <Button className="h-6 shrink-0" onClick={onGoLive} size="xs" variant="live">
             <Icon name="play" />
             {t("actions.goLive")}
           </Button>
@@ -270,12 +275,6 @@ export function MediaTrackRow({
         )}
       </div>
 
-      {error ? (
-        <p className="truncate pl-6 text-xs text-danger-ink">{error}</p>
-      ) : hint ? (
-        <p className="truncate pl-6 text-xs text-subtle">{hint}</p>
-      ) : null}
-
       {hasTiming ? (
         // Deliberately not dimmed while paused, unlike the line above: a
         // paused track is exactly when the operator is aiming a seek, so the
@@ -302,6 +301,12 @@ export function MediaTrackRow({
             {formatClock(durationSeconds)}
           </span>
         </div>
+      ) : null}
+
+      {error ? (
+        <p className="truncate pl-6 text-xs text-danger-ink">{error}</p>
+      ) : hint ? (
+        <p className="truncate pl-6 text-xs text-subtle">{hint}</p>
       ) : null}
     </div>
   );

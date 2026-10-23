@@ -20,7 +20,10 @@ type MonitorProps = {
  */
 export function Monitor({ children, className, empty }: MonitorProps) {
   return (
-    <div className={cn("flex justify-center overflow-hidden p-3 pb-0", className)}>
+    // `shrink-0`: both columns are flex columns, and `overflow-hidden` drops a
+    // flex item's automatic minimum height to 0 — a column with more rows
+    // under its monitor would otherwise squeeze that stage first.
+    <div className={cn("flex shrink-0 justify-center overflow-hidden p-3 pb-0", className)}>
       {/* The 16:9 stage's height always follows its width, never the leftover
           space in whatever grid row it lands in — a sibling (deck transport,
           a media track row) taking more or less height below it must never

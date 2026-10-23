@@ -342,8 +342,11 @@ cuts/restarts it from Settings, not manually from the TopBar.
   single-tile grids that never grow: the scheduled verse, a text item, a standalone asset.
 - **`monitors/`**: the LIVE monitor on top (the `Monitor` primitive; the PREVIEW one moved to the
   center column, next to what it previews), below it the `deck-transport.tsx` and
-  `verse-transport.tsx` transports as sibling rows —never as the monitor's footer, so they can't
-  shrink the stage—, and at the end `live-content-grid.tsx`: the same grid as the center, but of
+  `verse-transport.tsx` transports and `live-media-panel.tsx` as sibling rows —never as the
+  monitor's footer, so they can't shrink the stage, and never inside the scrolling body: the row
+  right under each monitor has to land on the same pixel as its twin across, for every kind of
+  content, which `media.spec.ts` asserts. The media panel caps itself at 40% of the column and
+  scrolls on its own—, and at the end `live-content-grid.tsx`: the same grid as the center, but of
   what **is on air**. Clicking a tile calls `gotoSlide()`/`projectVerse()` and jumps there
   instantly (this is live, not preview: there's no second stage), and the grid **follows** the
   projector on its own (`scrollToIndex` of `VirtualGrid`), auto-advance included — virtualized, a

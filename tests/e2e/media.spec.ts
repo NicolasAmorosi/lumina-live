@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
-import type { Page } from "@playwright/test";
-import { audioStates, expect, test, videoStates } from "./support/app";
+import type { Locator, Page } from "@playwright/test";
+import { audioStates, expect, test, videoStates, type WorshipApp } from "./support/app";
 import { ffmpegBinary } from "./support/paths";
 
 test("a video goes through PREVIEW before it reaches the projector", async ({ app }) => {
@@ -81,6 +81,67 @@ test("closing the projector window from outside does not strand the operator", a
   await app.goLive();
   const second = await app.projector();
   await expect(second.locator('img[src^="worship://asset/"]')).toBeVisible();
+});
+
+/** The first row under a column's monitor, relative to the column: its X and,
+ *  when it has one, its position bar. `null` until it is on screen. */
+async function firstRow(column: Locator) {
+  const box = await column.boundingBox();
+  const close = await column.getByRole("button", { name: /^(Quitar|Detener)$/ }).first().boundingBox();
+  const bar = column.getByRole("slider", { name: /^Posición de / }).first();
+  const barBox = (await bar.count()) > 0 ? await bar.boundingBox() : null;
+  if (!box || !close) return null;
+  return { x: close.x - box.x, y: close.y, barY: barBox?.y ?? null };
+}
+
+async function rowOffset(app: WorshipApp) {
+  const [preview, live] = await Promise.all([firstRow(app.previewColumn()), firstRow(app.liveColumn())]);
+  if (!preview || !live) return null;
+  const round = (n: number) => Math.round(n * 10) / 10;
+  return {
+    dx: round(live.x - preview.x),
+    dy: round(live.y - preview.y),
+    dBar: preview.barY === null || live.barY === null ? 0 : round(live.barY - preview.barY),
+  };
+}
+
+test("the row under PREVIEW and the row under LIVE line up, whatever is on them", async ({ app }) => {
+  await app.addMedia("video", "clip.mp4");
+  await app.addMedia("audio", "song.mp3");
+  await app.addMedia("image", "photo.png");
+  await app.addMedia("ppt", "deck.pdf");
+  const kinds: [string, () => Promise<void>][] = [
+    ["video", () => app.previewFile("Videos", "clip")],
+    ["audio", () => app.previewFile("Audios", "song")],
+    ["image", () => app.previewFile("Imágenes", "photo")],
+    [
+      "deck",
+      async () => {
+        await app.previewFile("Presentaciones", "deck");
+        await expect(
+          app.previewColumn().getByRole("list", { name: "Presentación" }).getByRole("button", { name: "3", exact: true }),
+        ).toBeVisible({ timeout: 60_000 });
+      },
+    ],
+    [
+      "verse",
+      async () => {
+        await app.openChapter("Juan 3");
+        await app.control.getByRole("listitem").filter({ hasText: /Porque de tal manera amó Dios/ }).click();
+      },
+    ],
+  ];
+  for (const [kind, preview] of kinds) {
+    await preview();
+    await app.goLive();
+    // Twice it drifted apart: the LIVE panel inside the padded scrolling body
+    // (6px lower, narrower), then the deck strip inside PREVIEW's, and the
+    // PREVIEW hint between a row and its bar.
+    await expect.poll(async () => ({ kind, offset: await rowOffset(app) })).toEqual({
+      kind,
+      offset: { dx: 0, dy: 0, dBar: 0 },
+    });
+  }
 });
 
 /** The projector's mean brightness, frame by frame, while `action` runs — read
