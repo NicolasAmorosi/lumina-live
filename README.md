@@ -29,7 +29,9 @@ mirás la vista previa y recién ahí lo mandás EN VIVO.
 ## Descargar
 
 Los instaladores están en [Releases](https://github.com/NicolasAmorosi/lumina-live/releases/latest):
-Windows (instalador), macOS con Apple Silicon (`.dmg`) y Linux (`AppImage`).
+Windows (instalador), macOS con Apple Silicon (`.dmg`) y Linux: `.deb` para Ubuntu, Debian y Linux
+Mint, y `AppImage` para las demás distribuciones. En Ubuntu 24.04 o posterior usá el `.deb`: AppArmor
+no deja arrancar el AppImage salvo con `--no-sandbox`, que desactiva una protección de seguridad.
 
 - **LibreOffice** hace falta para las presentaciones de PowerPoint (los PDF no lo necesitan). Si no
   está instalado, la app lo detecta y explica cómo instalarlo.

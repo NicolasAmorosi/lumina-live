@@ -82,7 +82,7 @@ respuesta, y preguntá por lo que sí depende. No se entrega nada a medias en si
 | Utilidades UI | `clsx` + `tailwind-merge` (`cn()`), `lucide-react` — **sin cva, sin Radix** |
 | Estado | Zustand (slices por dominio) |
 | DB | `better-sqlite3` (Node-API, sin rebuild nativo) + Drizzle ORM + FTS5 para la Biblia |
-| Empaquetado | `electron-builder` (nsis / dmg / AppImage) |
+| Empaquetado | `electron-builder` (nsis / dmg firmado ad-hoc / AppImage + deb) |
 | Conversión de medios | FFmpeg 9.0.2 (`ffmpeg` + `ffprobe`) **empaquetado**, fijado por sha256 y bajado por `scripts/fetch-ffmpeg.ts` (GPLv3, ver `resources/ffmpeg-NOTICE.txt`) |
 | E2E | Playwright 1.63 (`_electron`) contra la app compilada o la instalada — `tests/e2e/` |
 

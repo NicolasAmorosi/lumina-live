@@ -114,11 +114,17 @@ demás siguen andando — ver «Sin LibreOffice» en `03-slides-libreoffice.md`.
 
 **Linux se empaquetó y probó por primera vez el 2026-10-22**, en Docker (Ubuntu 24.04 x86_64
 emulado): arranca, convierte con el LibreOffice del sistema y pasa `startup.spec` y `decks.spec`;
-el resto de la suite no se corrió ahí. Abierto: sin espacios de nombres de usuario el sandbox de
-Chromium aborta («The SUID sandbox helper binary was found, but is not configured correctly»), y
-Ubuntu 23.10+ los restringe por AppArmor, así que un doble click en el AppImage probablemente falle
-en un Ubuntu de escritorio. Las salidas son un `.deb` (instala `chrome-sandbox` con permisos de
-root) o documentar `--no-sandbox`; es decisión del dueño.
+el resto de la suite no se corrió ahí.
+
+**Linux sale en `.deb` y en AppImage** (decisión del dueño, 2026-10-23). El `.deb` es el de Ubuntu,
+Debian y Mint: su postinst deja `chrome-sandbox` con setuid root si faltan los espacios de nombres
+de usuario e instala un perfil de AppArmor con `userns` en Ubuntu 24.04+, así que abre con doble
+click y con el sandbox puesto. El AppImage no puede hacer nada de eso: en Ubuntu 23.10+ necesita
+`--no-sandbox` (lo dice el README) y queda para las demás distribuciones. `package:linux` instala en
+`/opt/lumina-live` (`-c.productName=lumina-live`): con el espacio de «Lumina Live» el sandbox setuid
+no arrancaba, y la suite E2E no lo ve porque Playwright agrega `--no-sandbox` en Linux — ver
+`.claude/knowledge/a-space-in-the-linux-install-path-breaks-the-suid-sandbox-and-playwright-never-tests-it.md`.
+Sin probar todavía en un Ubuntu de escritorio real (Docker no tiene AppArmor).
 
 Verificado en macOS contra decks reales de iglesia, incluyendo un `.ppt` binario de 52
 diapositivas y un fixture con auto-avance + audio embebido. `legacy/` se retiró del repo el
