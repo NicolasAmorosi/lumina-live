@@ -1,4 +1,7 @@
+import { execFileSync } from "node:child_process";
+import type { Page } from "@playwright/test";
 import { audioStates, expect, test, videoStates } from "./support/app";
+import { ffmpegBinary } from "./support/paths";
 
 test("a video goes through PREVIEW before it reaches the projector", async ({ app }) => {
   const [clip] = await app.addMedia("video", "clip.mp4");
@@ -78,4 +81,44 @@ test("closing the projector window from outside does not strand the operator", a
   await app.goLive();
   const second = await app.projector();
   await expect(second.locator('img[src^="worship://asset/"]')).toBeVisible();
+});
+
+/** The projector's mean brightness, frame by frame, while `action` runs — read
+ *  off the compositor (CDP screencast): a stray frame lives between two React
+ *  renders, where no DOM probe can see it. */
+async function brightnessDuring(projector: Page, action: () => Promise<void>) {
+  const cdp = await projector.context().newCDPSession(projector);
+  const frames: Buffer[] = [];
+  cdp.on("Page.screencastFrame", ({ data, sessionId }) => {
+    frames.push(Buffer.from(data, "base64"));
+    void cdp.send("Page.screencastFrameAck", { sessionId }).catch(() => undefined);
+  });
+  await cdp.send("Page.startScreencast", { format: "jpeg", maxWidth: 240, maxHeight: 135 });
+  await projector.waitForTimeout(300);
+  const mark = frames.length;
+  await action();
+  await projector.waitForTimeout(900);
+  await cdp.send("Page.stopScreencast");
+  await cdp.detach();
+  // One grey byte per frame: FFmpeg averages each JPEG down to a single pixel.
+  const args = "-hide_banner -loglevel error -f mjpeg -i - -vf scale=1:1:flags=area -f rawvideo -pix_fmt gray -";
+  const luma = [...execFileSync(ffmpegBinary(), args.split(" "), { input: Buffer.concat(frames) })];
+  return { before: luma[mark - 1] ?? 0, during: luma.slice(mark) };
+}
+
+test("leaving a video crossfades with no black frame and no dip", async ({ app }) => {
+  await app.addMedia("video", "clip.mp4");
+  await app.addMedia("image", "photo.png");
+  await app.previewFile("Videos", "clip");
+  await app.goLive();
+  const projector = await app.projector();
+  await expect.poll(async () => (await videoStates(projector))[0]?.currentTime ?? 0).toBeGreaterThan(0.5);
+
+  await app.previewFile("Imágenes", "photo");
+  const { before, during } = await brightnessDuring(projector, () => app.goLive());
+  expect(during.length).toBeGreaterThan(5);
+  // A dissolve between two pictures never gets darker than the darker of the
+  // two. Measured before the fix: a black frame (0) in 10 of 12 runs, and the
+  // two layers fading at once bottomed out at 87 between a 131 and a 116.
+  expect(Math.min(...during)).toBeGreaterThanOrEqual(0.9 * Math.min(before, during.at(-1) ?? 0));
 });

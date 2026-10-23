@@ -32,6 +32,10 @@ const FADE_KEYFRAMES: Record<Exclude<TransitionStyle, "none">, Record<"entering"
   "fade-through-black": { entering: "wa-scene-black-then-in", leaving: "wa-scene-out-then-black" },
 };
 
+/** The leaving side of a crossfade whose incoming side covers the whole stage:
+ *  it stays exactly as it is until the picture on top has fully arrived. */
+const HOLD_KEYFRAME = "wa-scene-hold";
+
 /** Whether this transition has anything to animate at all. Generic so the
  *  narrowing survives on whatever the caller passed — a `SceneTransition`
  *  stays a `SceneTransition`, `epoch` and all. */
@@ -53,19 +57,31 @@ export function isAnimatable<T extends TransitionSpec>(
  * very first frame.
  *
  * `held` pauses the animation at its start without changing anything else.
+ *
+ * `incomingCovers` says the entering side paints every pixel of the stage —
+ * the projector's scenes, which are whole pictures stacked on each other. A
+ * crossfade then holds the leaving side at full opacity under it instead of
+ * fading it out: fading both lets the black behind them through, a 25% dip at
+ * the midpoint (measured on the projector: an image at luma 116 into a video
+ * at 131 bottomed out at 95). A time scene's text blocks are transparent over
+ * a shared background, so they leave it false and both of them fade.
  */
 export function transitionStyle(
   role: LayerRole,
   transition: TransitionSpec,
   restOpacity: number,
   held = false,
+  incomingCovers = false,
 ): CSSProperties {
   if (role === "steady" || !isAnimatable(transition)) {
     return { zIndex: LAYER_Z[role], opacity: restOpacity };
   }
   return {
     zIndex: LAYER_Z[role],
-    animationName: FADE_KEYFRAMES[transition.style][role === "entering" ? "entering" : "leaving"],
+    animationName:
+      role === "leaving" && incomingCovers && transition.style === "crossfade"
+        ? HOLD_KEYFRAME
+        : FADE_KEYFRAMES[transition.style][role === "entering" ? "entering" : "leaving"],
     animationDuration: `${transition.durationMs}ms`,
     animationTimingFunction: "ease-in-out",
     // Holds the keyframe's start value until the animation actually starts
