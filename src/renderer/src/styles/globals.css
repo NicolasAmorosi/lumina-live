@@ -124,18 +124,18 @@
  * 2026-10-22). Every hue below is a value from that sheet, or a step derived
  * from two of them — never an invented colour:
  *
- *   Light   fondo #ffffff · diálogo #f5f6f9 · bordes #c8d2dc
- *           primario #2f557f · secundario #213c59 (the sheet LABELS it
+ *   Light   background #ffffff · dialog #f5f6f9 · borders #c8d2dc
+ *           primary #2f557f · secondary #213c59 (the sheet LABELS it
  *           #2f557f but draws #213c59; the drawn value is the one used)
- *           texto #182a40 / #5c7089
- *   Dark    fondo #162231 · diálogo #1b2c41 · bordes #2e4155
- *           primario #203651 · secundario #8299b2
- *           texto #eef2f6 / #9aa9b8
- *   Both    acento #3e8391 · indicadores #448d21 #ffa92d #e36520 #dd1f1f
+ *           text #182a40 / #5c7089
+ *   Dark    background #162231 · dialog #1b2c41 · borders #2e4155
+ *           primary #203651 · secondary #8299b2
+ *           text #eef2f6 / #9aa9b8
+ *   Both    accent #3e8391 · indicators #448d21 #ffa92d #e36520 #dd1f1f
  *   Logo    flame #ffa92d / #e36520 / #d14600, "Live" wordmark #d14600
  *
- * Roles, as decided with the owner: PRIMARIO fills the main buttons,
- * SECUNDARIO the secondary ones, and the teal ACENTO means "selected /
+ * Roles, as decided with the owner: PRIMARY fills the main buttons,
+ * SECONDARY the secondary ones, and the teal ACCENT means "selected /
  * focused / on" everywhere — selection, focus ring, switches, sliders,
  * progress, the active tab, a pressed toggle. The red indicator is the
  * on-air colour (and danger, as two tokens).
@@ -158,11 +158,11 @@
 :root, [data-theme="dark"] {
   --wa-bg-primary: #162231;
   --wa-bg-secondary: #162231;
-  /* diálogo -> bordes, 35% / 65% */
+  /* dialog -> borders, 35% / 65% */
   --wa-bg-tertiary: #223348;
   --wa-bg-card: #1b2c41;
   --wa-bg-hover: #273a4e;
-  /* The selected row: fondo + 26% acento. Teal because selection IS the
+  /* The selected row: background + 26% accent. Teal because selection IS the
    * accent's meaning; 26% is the most it takes before `text-subtle` on it
    * drops under 4.5:1. */
   --wa-bg-active: #203b4a;
@@ -172,11 +172,11 @@
   --wa-text-muted: #93a2b3;
   --wa-primary: #203651;
   --wa-primary-hover: #283e59;
-  /* The dark primario sits 1.31:1 from the fondo: without an edge a primary
-   * button is a label floating on nothing. primario -> secundario, 25%. */
+  /* The dark primary sits 1.31:1 from the background: without an edge a primary
+   * button is a label floating on nothing. primary -> secondary, 25%. */
   --wa-primary-border: #384f69;
-  /* The mark's tile IS the fondo (#162231): on the toolbar only the flame
-   * showed. Same problem as the primario, same edge. */
+  /* The mark's tile IS the background (#162231): on the toolbar only the flame
+   * showed. Same problem as the primary, same edge. */
   --wa-brand-edge: #384f69;
   --wa-secondary: #8299b2;
   --wa-secondary-hover: #91a5bb;
@@ -262,7 +262,7 @@
   --wa-shadow-overlay: 0 8px 16px -8px rgb(24 42 64 / 0.16), 0 20px 40px -8px rgb(24 42 64 / 0.2);
   /* Shaded instead of tinted: the light surfaces need the dark side. */
   --wa-danger-ink: #dd1f1f;        /* as is, 4.53 on #f5f6f9 */
-  --wa-accent-ink: #356f7b;        /* acento - 15% black, 5.24 */
+  --wa-accent-ink: #356f7b;        /* accent - 15% black, 5.24 */
   --wa-success-ink: #3a781c;       /* #448d21 - 15% black, 5.00 */
   --wa-warning-ink: #8c5d19;       /* #ffa92d - 45% black, 5.26 */
   --wa-badge-audio-ink: #356f7b;

@@ -184,9 +184,9 @@ describe("what each control does to the count", () => {
     expect(run?.started).toBe(false);
   });
 
-  test("EN VIVO starts the count where the preview bar was left, not at the top", () => {
+  test("GO LIVE starts the count where the preview bar was left, not at the top", () => {
     // The whole point of aiming a countdown on the PREVIEW row: the operator
-    // drags it to 1:30, presses EN VIVO, and the projector starts at 1:30. The
+    // drags it to 1:30, presses GO LIVE, and the projector starts at 1:30. The
     // same promise a video's preview scrub makes through `startAtSeconds`.
     const target = scene();
     seekTimer(target, 90_000);
@@ -204,7 +204,7 @@ describe("what each control does to the count", () => {
     expect(useUtilityStore.getState().run).toEqual({ sceneId: target.id, clock, started: true });
   });
 
-  test("EN VIVO leaves a count the operator paused on purpose exactly as it is", () => {
+  test("GO LIVE leaves a count the operator paused on purpose exactly as it is", () => {
     const target = scene();
     useUtilityStore.getState().arm(target.id, { mode: "countdown", state: "held", remainingMs: 42_000 }, true);
 

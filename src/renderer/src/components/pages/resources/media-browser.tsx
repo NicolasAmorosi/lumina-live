@@ -119,8 +119,8 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
     [query, sortOrder, viewAssets],
   );
   // "Empty" and "not read yet" are different answers and the grid used to
-  // give the same one for both — a linked folder with 600 files showed "no hay
-  // recursos" for as long as the listing took, which on a share is seconds.
+  // give the same one for both — a linked folder with 600 files showed "no
+  // resources" for as long as the listing took, which on a share is seconds.
   const viewKey = isFolderView ? folderAssetsKey(kind, activeView) : kind;
   const status = useLibraryStore((s) => s.viewStatus[viewKey]);
 
@@ -212,7 +212,7 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
   }, [active, kind]);
 
   // One round-trip for the whole view: which decks are ready (drives the
-  // "Preparar carpeta/vista" button and its count) and where each ready deck's
+  // "Prepare folder/view" button and its count) and where each ready deck's
   // first slide lives (drives every PPT tile's thumbnail). This is what
   // replaced one `deck:get` per tile.
   /** Monotonic request id. `invoke` cannot be cancelled, so switching folders
@@ -272,7 +272,7 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `refetchDeckStatuses` is stable per render by design (see useDebouncedCallback)
   }, [kind, viewAssets, prewarmBatch?.status, readyEpoch, fetchDeckStatuses]);
 
-  // Empty while the statuses are unknown: offering "Preparar carpeta" for a
+  // Empty while the statuses are unknown: offering "Prepare folder" for a
   // count we haven't confirmed would show a button that may have nothing to do.
   //
   // This list is only ever as honest as what `deck:statuses` returns, and for
@@ -285,13 +285,13 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
   // bumps `readyEpoch` as that lands, which re-runs the fetch above.
   //
   // The ids, not just the count — they are the same list, and they were not:
-  // the modal promised "hay N presentaciones sin convertir" and the batch it
+  // the modal promised "N presentations aren't converted yet" and the batch it
   // started was then handed EVERY asset in the view, missing files and
   // already-converted decks included. Main skips those, so the progress bar
   // counted to a total that never matched the number the operator had just
   // agreed to.
   //
-  // Over `assets`, so a search narrows it too: the button says "esta vista"
+  // Over `assets`, so a search narrows it too: the button says "this view"
   // and the modal quotes a count back, so with a filter up it has to prepare
   // the matches the operator can see rather than the thousand decks behind
   // them.
@@ -350,7 +350,7 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
       />
       {/* Kept to a few lines: this panel is short, and the grid under it is
           what the operator came for. The full set of fixes is one click away,
-          in front of any deck that needs it and in Ajustes. */}
+          in front of any deck that needs it and in Settings. */}
       {kind === "ppt" && deckEnvironment?.available === false && warnMissingSoffice ? (
         <div className="px-1.5 pt-1.5">
           <Callout tone="warning">

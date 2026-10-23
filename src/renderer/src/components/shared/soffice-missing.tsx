@@ -7,7 +7,7 @@ import { useDeckStore } from "@renderer/stores/deck.store";
 import { cn } from "@renderer/lib/utils";
 
 /** The three ways out of a missing LibreOffice, the same in front of a deck and
- *  in Ajustes: install it, look again once it is installed, or point at it. */
+ *  in Settings: install it, look again once it is installed, or point at it. */
 export function SofficeActions({ className }: { className?: string }) {
   const t = useT();
   const locateSoffice = useDeckStore((s) => s.locateSoffice);

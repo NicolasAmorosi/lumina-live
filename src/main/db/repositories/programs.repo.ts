@@ -335,7 +335,7 @@ export class ProgramsRepo {
    * The same query shape as `findSceneUsages`, answering a milder question:
    * this FK is `set null`, so the delete it precedes cannot fail and cannot
    * remove a row. It exists so the confirmation can NAME what changes —
-   * "estos programas pierden la versión" — instead of the operator finding out
+   * "these schedules lose the version" — instead of the operator finding out
    * next Sunday that a verse stopped printing «RV1909» underneath itself.
    */
   findBibleVersionUsages(versionId: number): BibleVersionUsage[] {

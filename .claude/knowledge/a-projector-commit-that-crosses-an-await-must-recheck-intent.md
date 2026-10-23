@@ -1,10 +1,10 @@
 ## A commit to the projector that crosses an `await` must re-check that the operator has not moved on — and the counter that decides it cannot be module-private
 
 **Area:** projection (`src/renderer/src/lib/actions/playback.ts`, `live-intent.ts`, `bible.ts`, `src/renderer/src/stores/display.store.ts`)
-**Trigger:** "the projector changed by itself", "the NEGRO I put up lifted on its own", or before
+**Trigger:** "the projector changed by itself", "the BLACK I put up lifted on its own", or before
 adding any action that writes `base`/`overlay` after an `await`.
 
-Found on 2026-09-13 auditing feature #5 (Negro/Logo/En vivo), which the media-chain audit never
+Found on 2026-09-13 auditing feature #5 (Black/Logo/Live), which the media-chain audit never
 covered — it does not name `playback.ts` once.
 
 ### What looked already handled, and was not
@@ -12,7 +12,7 @@ covered — it does not name `playback.ts` once.
 `goLiveWithDeck` carries a comment about ordering that reads like the async case was thought
 through:
 
-> the deck is fully ready BEFORE `base` changes, so hitting EN VIVO on a not-yet-converted file
+> the deck is fully ready BEFORE `base` changes, so hitting GO LIVE on a not-yet-converted file
 > leaves whatever is currently on the projector untouched instead of cutting to black for the
 > length of a conversion.
 
@@ -25,10 +25,10 @@ deck = await deckStore.ensure(assetId);   // seconds: a 400-slide deck, or an
                                           // interactive job preempting a background one
 store.beginScene();
 store.setBase({ kind: "deck", … });
-store.setOverlay("none");                 // ← lifts NEGRO/LOGO
+store.setOverlay("none");                 // ← lifts BLACK/LOGO
 ```
 
-The operator is not frozen for those seconds. They press NEGRO because nothing is happening, or
+The operator is not frozen for those seconds. They press BLACK because nothing is happening, or
 send something else live, or navigate the verse on air — and when the conversion finished it
 **lifted the overlay they had just put up and projected a deck they had abandoned**, mid-service.
 `setOverlay("none")` is what makes it worse than a stale picture: it is the app overruling an

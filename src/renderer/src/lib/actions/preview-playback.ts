@@ -44,7 +44,7 @@ export function seekPreview(seconds: number): void {
 }
 
 /** Stops the preview without losing its position — called right before
- *  EN VIVO hands the same file to the projector, so there is never more than
+ *  GO LIVE hands the same file to the projector, so there is never more than
  *  one active decode of it at a time. */
 export function stopPreviewPlayback(): void {
   usePreviewStore.getState().setPlaying(false);

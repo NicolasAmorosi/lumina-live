@@ -23,7 +23,7 @@ import { TOOL_ICON, TOOL_LABEL } from "./tool-display";
  * previews, a double click goes live, and `goLive()` is the only path to the
  * projector. Starting the countdown is deliberately NOT part of selecting it:
  * a timer that started because somebody clicked a row is a timer nobody asked
- * for. EN VIVO starts it (see `goLiveWithUtilityScene`), and so does the
+ * for. GO LIVE starts it (see `goLiveWithUtilityScene`), and so does the
  * transport on the row of the column the scene is in — `UtilityTrackRow`,
  * under the PREVIEW monitor and inside the LIVE media panel. This tab holds no
  * transport of its own: controlling a scene belongs next to the picture of
@@ -80,8 +80,8 @@ export function UtilitiesPanel() {
                 key={scene.id}
                 // No on-air rail here: the live scene is already the one
                 // showing a running clock on its right (`SceneReadout`), and a
-                // red bar beside it reads as an alert rather than as «esto
-                // está proyectado». See `ListRow`'s `rail`.
+                // red bar beside it reads as an alert rather than as «this
+                // is projected». See `ListRow`'s `rail`.
                 rail={false}
                 leading={
                   <Badge className="px-2" variant="neutral">
@@ -114,8 +114,8 @@ export function UtilitiesPanel() {
 
       {/* The same footer every resource tab has, so the two buttons that act
           on the selected row sit where the operator already looks for them —
-          «Escenas…» on the left like the tab's own tools, «Agregar al
-          programa» pinned right like the media browser's. */}
+          «Scenes…» on the left like the tab's own tools, «Add to
+          schedule» pinned right like the media browser's. */}
       <PanelFooter>
         <Tooltip content={t("utilities.manageHint")} floating>
           <IconButton

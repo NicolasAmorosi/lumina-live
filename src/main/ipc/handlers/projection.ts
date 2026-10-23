@@ -8,7 +8,7 @@ import { pinDecks } from "../../slides/deck-service";
 let currentProgramId: number | null = null;
 
 /** How long `projection:open` waits for the new window to mount: a renderer
- *  that never pulls its snapshot must not leave EN VIVO hanging. */
+ *  that never pulls its snapshot must not leave GO LIVE hanging. */
 const PROJECTOR_MOUNT_TIMEOUT_MS = 5_000;
 /** `webContents.id` → settles that window's `projection:open`. */
 const mountWaiters = new Map<number, () => void>();
@@ -56,14 +56,14 @@ export const projectionHandlers: Pick<
       if (projectionState.clearWindowIf(win)) broadcast("projection-closed", undefined);
     });
     // Answered once the page has mounted (its own `projection:getSnapshot`),
-    // not once the window exists. The control commits EN VIVO when this
+    // not once the window exists. The control commits GO LIVE when this
     // resolves, and a deck's auto-advance arms slide 1's timer at that commit:
     // answered earlier, slide 1 ran its clock while the page was still loading
     // — 0.2 s normally, up to 3 s with main busy — and a short one never showed.
     // A window that closes during that wait (closed from outside, a renderer
     // crash) answers `false`: its `projection-closed` reached the control
     // first, and answering as if it had mounted made `openIfNeeded` mark the
-    // projector open again — after which no EN VIVO ever reopened it.
+    // projector open again — after which no GO LIVE ever reopened it.
     const id = win.webContents.id;
     return new Promise<boolean>((resolve) => {
       const settle = (mounted: boolean) => {
@@ -91,10 +91,10 @@ export const projectionHandlers: Pick<
     // this was silently possible before (see `deck-service.ts`'s `pinDecks`),
     // masked only by `evictIfOverCap`'s 24h grace window on recency.
     //
-    // NEGRO and LOGO deliberately do NOT clear the pin. They are overlays: the
+    // BLACK and LOGO deliberately do NOT clear the pin. They are overlays: the
     // deck is still the base content and comes back the moment the operator
     // lifts them, so unpinning there re-opened the exact hole this closes —
-    // three minutes of NEGRO over a deck, an eviction pass in between, and the
+    // three minutes of BLACK over a deck, an eviction pass in between, and the
     // slides are gone when it comes back up. The pin is released by the next
     // output that genuinely replaces the content (a video, an image, a verse).
     if (output.kind === "slide") {

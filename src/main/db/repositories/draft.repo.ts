@@ -86,8 +86,8 @@ export class DraftRepo {
     if (items.length === 0 && row.programId === null && row.name === "") return null;
 
     // A draft of a program deleted since is a draft of a NEW program: keeping
-    // the dead id made «Guardar» fail on it forever (an FK error, or a
-    // TypeError on the summary), leaving only «Guardar como».
+    // the dead id made «Save» fail on it forever (an FK error, or a
+    // TypeError on the summary), leaving only «Save as».
     const programExists =
       row.programId !== null &&
       this.db.select({ id: programs.id }).from(programs).where(eq(programs.id, row.programId)).get() !== undefined;

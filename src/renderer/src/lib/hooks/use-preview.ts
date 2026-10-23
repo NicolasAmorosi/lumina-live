@@ -26,7 +26,7 @@ import type { ProjectionOutput } from "@shared/types/projection";
 export type PreviewContent =
   /** `ext` rides along so the panel can tell a deck that needs LibreOffice
    *  from a PDF, which is rasterized straight from its source and must not sit
-   *  behind the "instalá LibreOffice" gate (`deckRequiresSoffice`). */
+   *  behind the "install LibreOffice" gate (`deckRequiresSoffice`). */
   | { kind: "deck"; assetId: number; ext: string; title: string; missingSince: number | null }
   | { kind: "media"; asset: MediaAsset }
   | { kind: "bible"; reference: string; text: string; versionLabel: string | null; verseIndex: number | null }

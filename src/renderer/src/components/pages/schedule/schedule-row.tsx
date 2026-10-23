@@ -34,7 +34,7 @@ export function ScheduleRow({
   const t = useT();
   const label = useItemLabel(item);
   // Planned into the service but not playable yet: said on the row itself, so
-  // the operator finds out while preparing, not when pressing EN VIVO.
+  // the operator finds out while preparing, not when pressing GO LIVE.
   const conversion = useConversion(item.kind === "media" ? item.mediaAssetId : null);
   const { icon, badge } = useItemIconAndBadge(item);
   // Audio never claims the on-air rail (`active`) — that means "this is what

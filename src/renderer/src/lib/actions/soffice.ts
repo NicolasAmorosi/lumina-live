@@ -4,7 +4,7 @@ import { toast } from "@renderer/lib/toast";
 import { sofficeBlocks, useDeckStore } from "@renderer/stores/deck.store";
 import { useSettingsStore } from "@renderer/stores/settings.store";
 
-/** «Comprobar de nuevo»: a new sweep, for a LibreOffice installed while the
+/** «Check again»: a new sweep, for a LibreOffice installed while the
  *  app was open. Answered either way — the gate it lifts may not be on
  *  screen, and a button that changes nothing visible looks broken. */
 export async function recheckSoffice(): Promise<void> {
@@ -28,7 +28,7 @@ let announced = false;
 let startupToastId: string | null = null;
 
 /** It carries an action, so it never leaves on its own: it stayed up saying
- *  «no está disponible» beside «está listo», and after «No volver a mostrar»
+ *  «isn't available» beside «is ready», and after «Don't show again»
  *  was pressed on the PPT tab's strip. */
 function retireStartupToast(): void {
   if (startupToastId) toast.dismiss(startupToastId);
@@ -49,7 +49,7 @@ export async function announceMissingSoffice(): Promise<void> {
 }
 
 /**
- * Says why an EN VIVO on a deck changed nothing, when the reason is a missing
+ * Says why a GO LIVE on a deck changed nothing, when the reason is a missing
  * LibreOffice. The panel that explains it may not be the one the operator is
  * looking at, and a press that does nothing in silence reads as a frozen app.
  *

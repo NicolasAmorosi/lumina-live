@@ -23,7 +23,7 @@ type ProgramRowProps = {
   onOpen: () => void;
   onDragStart: (e: DragEvent<HTMLLIElement>) => void;
   /** Single click — opens the side panel with the program's items and an
-   *  explicit "Abrir" confirmation, instead of switching schedules on a
+   *  explicit "Open" confirmation, instead of switching schedules on a
    *  single accidental click. */
   onPreview: () => void;
   onToggleFavorite: () => void;

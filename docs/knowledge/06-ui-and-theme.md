@@ -1,383 +1,377 @@
-# 06 — UI y sistema de diseño
+# 06 — UI and design system
 
-## Origen: calcado de `libretto-villaaurora`
+## Origin: copied from `libretto-villaaurora`
 
-La arquitectura de `src/renderer/src/components/` (no la paleta) es una copia deliberada de
-`libretto-villaaurora/apps/web/src/components`: `ui/` (primitivas), `shared/` (composiciones
-cross-feature), `pages/` (una carpeta por feature). Ver la sección "Reutilización de componentes"
-en `CLAUDE.md` — es la regla que no se negocia en este repo.
+The architecture of `src/renderer/src/components/` (not the palette) is a deliberate copy of
+`libretto-villaaurora/apps/web/src/components`: `ui/` (primitives), `shared/` (cross-feature
+compositions), `pages/` (one folder per feature). See the "Component reuse" section in
+`CLAUDE.md` — it's the rule that isn't negotiable in this repo.
 
-Piezas copiadas casi literalmente porque resuelven un problema no obvio:
+Pieces copied almost verbatim because they solve a non-obvious problem:
 
-- `lib/utils.ts` → `cn()` con `extendTailwindMerge` extendiendo el grupo `shadow` con
-  `surface`/`raised`/`overlay` — sin esto, `tailwind-merge` no sabe que `shadow-surface` y
-  `shadow-none` compiten entre sí.
-- `components/ui/button.tsx` → el patrón de referencia para toda primitiva nueva.
-- `components/shared/modal/` → stack global + portal, para que solo el modal superior pinte el
-  backdrop cuando hay más de uno abierto.
+- `lib/utils.ts` → `cn()` with `extendTailwindMerge` extending the `shadow` group with
+  `surface`/`raised`/`overlay` — without this, `tailwind-merge` doesn't know that
+  `shadow-surface` and `shadow-none` conflict with each other.
+- `components/ui/button.tsx` → the reference pattern for every new primitive.
+- `components/shared/modal/` → global stack + portal, so that only the top modal paints the
+  backdrop when more than one is open.
 
-## Identidad: Lumina Live
+## Identity: Lumina Live
 
-Desde el 2026-10-22 el producto se llama **Lumina Live** y tiene identidad propia, que reemplazó a
-la paleta adventista (ALPS/Denim) de las versiones anteriores. La fuente es la hoja «Identidad App
-Lumina Live» (PDF de Illustrator, dos páginas: paleta por modo, y logo + wordmark). Tres cosas de esa
-hoja que no se ven a simple vista y se sacaron leyendo el PDF por dentro:
+Since 2026-10-22 the product is called **Lumina Live** and has its own identity, which replaced
+the Adventist palette (ALPS/Denim) of earlier versions. The source is the «Identidad App Lumina
+Live» sheet (an Illustrator PDF, two pages: palette per mode, and logo + wordmark). Three things
+about that sheet that aren't visible at a glance and were found by reading the PDF's internals:
 
-- El **Secundario del modo claro** está rotulado `#2f557f` (igual que el Primario) pero dibujado
-  `#213c59`. Vale el dibujado.
-- La tipografía de la hoja es **Noto Sans ExtraCondensed** (ExtraBold en títulos y en el wordmark,
-  SemiBold en rótulos). Es la misma familia que el texto de la app, en otro ancho.
-- El logo es vectorial: rectángulo redondeado `#162231` (radio 7,3 %), un resplandor radial
-  `#f7931e` al 8 %, y cuatro llamas — `#ffad40` al 31 %, `#ffa92d`, `#e36520`, `#d14600`. «Live»
-  va en `#d14600`. Está trazado tal cual en `src/renderer/src/assets/brand/lumina-live-mark.svg`.
+- The **light mode Secondary** is labeled `#2f557f` (same as the Primary) but drawn
+  `#213c59`. The drawn value wins.
+- The sheet's typeface is **Noto Sans ExtraCondensed** (ExtraBold for titles and the wordmark,
+  SemiBold for labels). It's the same family as the app's text, in another width.
+- The logo is vector: a rounded rectangle `#162231` (radius 7.3%), a radial glow `#f7931e` at 8%,
+  and four flames — `#ffad40` at 31%, `#ffa92d`, `#e36520`, `#d14600`. «Live» is in `#d14600`.
+  It's traced as-is in `src/renderer/src/assets/brand/lumina-live-mark.svg`.
 
-### La paleta y sus roles
+### The palette and its roles
 
-`src/renderer/src/styles/globals.css` define **dos paletas físicas** (`--wa-*`, en `:root`/
-`[data-theme="dark"]` y en `[data-theme="light"]`) mapeadas a **un solo set de tokens
-semánticos** vía `@theme inline`. Los componentes solo referencian los semánticos — nunca `--wa-*`
-directo — así el toggle de tema no requiere tocar ningún componente.
+`src/renderer/src/styles/globals.css` defines **two physical palettes** (`--wa-*`, in `:root`/
+`[data-theme="dark"]` and in `[data-theme="light"]`) mapped to **a single set of semantic
+tokens** via `@theme inline`. Components only reference the semantic ones — never `--wa-*`
+directly — so the theme toggle doesn't require touching any component.
 
-| Hoja | Claro | Oscuro | Token |
+| Sheet | Light | Dark | Token |
 |---|---|---|---|
-| Fondo | `#ffffff` | `#162231` | `background`, `surface` (paneles, barra, campos) |
-| Cuadro de diálogo | `#f5f6f9` | `#1b2c41` | `card` (diálogos, menús, tooltips, miniaturas) |
-| Bordes | `#c8d2dc` | `#2e4155` | `border` |
-| Primario | `#2f557f` | `#203651` | `primary` — el botón principal |
-| Secundario | `#213c59` | `#8299b2` | `secondary` — el botón secundario |
-| Texto primario / secundario | `#182a40` / `#5c7089` | `#eef2f6` / `#9aa9b8` | `foreground` / `muted-foreground` |
-| Acento | `#3e8391` | `#3e8391` | `accent` — seleccionado, foco, encendido |
-| Indicadores | `#448d21` `#ffa92d` `#e36520` `#dd1f1f` | iguales | `success`, `warning`, `badge-ppt`, `danger` y `on-air` |
+| Background | `#ffffff` | `#162231` | `background`, `surface` (panels, bar, fields) |
+| Dialog box | `#f5f6f9` | `#1b2c41` | `card` (dialogs, menus, tooltips, thumbnails) |
+| Borders | `#c8d2dc` | `#2e4155` | `border` |
+| Primary | `#2f557f` | `#203651` | `primary` — the main button |
+| Secondary | `#213c59` | `#8299b2` | `secondary` — the secondary button |
+| Primary / secondary text | `#182a40` / `#5c7089` | `#eef2f6` / `#9aa9b8` | `foreground` / `muted-foreground` |
+| Accent | `#3e8391` | `#3e8391` | `accent` — selected, focus, on |
+| Indicators | `#448d21` `#ffa92d` `#e36520` `#dd1f1f` | same | `success`, `warning`, `badge-ppt`, `danger` and `on-air` |
 
-Los roles los decidió el dueño de la identidad (2026-10-22): **Primario = botón principal,
-Secundario = botón secundario, Acento = selección/foco**, y **en vivo = rojo** (convención de
-tally; el naranja del «Live» del logo quedó para la marca y el badge de presentaciones).
+The roles were decided by the identity's owner (2026-10-22): **Primary = main button,
+Secondary = secondary button, Accent = selection/focus**, and **live = red** (tally convention;
+the orange of the logo's «Live» was kept for the brand and the presentations badge).
 
-Consecuencias que importan al tocar la paleta:
+Consequences that matter when touching the palette:
 
-1. **El Primario oscuro está a 1,31:1 del fondo.** Un botón principal sin borde es una etiqueta
-   flotando en la nada, así que lleva `border-primary-border` (`#384f69`, Primario → Secundario al
-   25 %). En claro ese token vale lo mismo que el relleno y no agrega nada. Es sobrio a propósito
-   —la cabina está a oscuras—, y por lo mismo el Secundario (acero claro) resalta más que el
-   Primario en oscuro: es la lectura literal de la hoja, aceptada así.
-2. **Lo que la hoja no define se MEZCLA, no se inventa.** `muted` y `hover` son Diálogo → Bordes al
-   35 % y 65 %; el borde claro más fuerte es Bordes → Texto secundario al 20 %; la fila
-   seleccionada (`active`) es Fondo + 26 % de acento en oscuro, que es lo máximo antes de que
-   `text-subtle` sobre ella baje de 4,5:1.
-3. **La selección es teal en todos lados**: borde de la miniatura elegida, riel de la pestaña
-   activa, toggle presionado (relleno), switch, slider, progreso, indicador de arrastre. Las filas
-   y pestañas seleccionadas llevan además un filete `ring-accent/40`: el tinte solo, en claro, está
-   apenas un tono por debajo del diálogo.
-4. **El texto terciario no existe en claro.** La hoja tiene dos grises y `#5c7089` ya está en
-   4,57:1 sobre `bg-muted`: un tercer gris más claro falla AA. `text-subtle` vale lo mismo que
-   `muted-foreground` en claro; la jerarquía sale del tamaño y el peso.
-5. Los badges por tipo de contenido salen de la hoja: presentaciones = naranja, video = ámbar,
-   imagen = verde, audio = teal, Biblia = Primario (claro) / Secundario (oscuro). Se pintan como
-   tinte al 20 % con `text-foreground` encima.
+1. **The dark Primary is at 1.31:1 against the background.** A main button without a border is a
+   label floating in the void, so it carries `border-primary-border` (`#384f69`, Primary →
+   Secondary at 25%). In light that token equals the fill and adds nothing. It's understated on
+   purpose —the booth is dark—, and for the same reason the Secondary (light steel) stands out
+   more than the Primary in dark: it's the literal reading of the sheet, accepted as such.
+2. **What the sheet doesn't define is MIXED, not invented.** `muted` and `hover` are Dialog →
+   Borders at 35% and 65%; the strongest light border is Borders → Secondary text at 20%; the
+   selected row (`active`) is Background + 26% accent in dark, which is the most it can take
+   before `text-subtle` on top of it drops below 4.5:1.
+3. **Selection is teal everywhere**: the border of the chosen thumbnail, the active tab's rail,
+   a pressed toggle (fill), switch, slider, progress, drag indicator. Selected rows and tabs also
+   carry a `ring-accent/40` hairline: the tint alone, in light, is barely one shade below the
+   dialog.
+4. **Tertiary text doesn't exist in light.** The sheet has two grays and `#5c7089` is already at
+   4.57:1 on `bg-muted`: a third, lighter gray fails AA. `text-subtle` equals `muted-foreground`
+   in light; the hierarchy comes from size and weight.
+5. The per-content-type badges come from the sheet: presentations = orange, video = amber,
+   image = green, audio = teal, Bible = Primary (light) / Secondary (dark). They're painted as a
+   20% tint with `text-foreground` on top.
 
-### Relleno, tinta y AA — la rampa `-ink`
+### Fill, ink and AA — the `-ink` ramp
 
-Un token de color tiene **dos roles incompatibles**: como **relleno** (`bg-danger` con blanco
-encima) tiene que ser oscuro para que el blanco se lea; como **texto** sobre `bg-card` tiene que
-ser claro para leerse él. Por eso hay una segunda familia, `--color-<tono>-ink`, para los cinco tonos
-que aparecen como texto o ícono suelto. Cada una es su color de la hoja aclarado (oscuro) u
-oscurecido (claro) justo hasta pasar 4,5:1 sobre la peor superficie donde cae:
+A color token has **two incompatible roles**: as a **fill** (`bg-danger` with white on top) it
+has to be dark so the white is readable; as **text** on `bg-card` it has to be light to be
+readable itself. That's why there's a second family, `--color-<tone>-ink`, for the five tones
+that appear as standalone text or icon. Each one is its sheet color lightened (dark) or darkened
+(light) just enough to pass 4.5:1 on the worst surface it lands on:
 
-| Token | Oscuro | Claro |
+| Token | Dark | Light |
 |---|---|---|
-| `danger-ink` | `#eb7979` (rojo + 40 % blanco, 5,09) | `#dd1f1f` tal cual (4,53 sobre `#f5f6f9`) |
-| `accent-ink` | `#78a8b2` (teal + 30 %, 5,42) | `#356f7b` (teal − 15 %, 5,24) |
-| `success-ink` | `#7caf64` (verde + 30 %, 5,51) | `#3a781c` (verde − 15 %, 5,00) |
-| `warning-ink` | `#ffa92d` tal cual (7,39) | `#8c5d19` (ámbar − 45 %, 5,26) |
+| `danger-ink` | `#eb7979` (red + 40% white, 5.09) | `#dd1f1f` as-is (4.53 on `#f5f6f9`) |
+| `accent-ink` | `#78a8b2` (teal + 30%, 5.42) | `#356f7b` (teal − 15%, 5.24) |
+| `success-ink` | `#7caf64` (green + 30%, 5.51) | `#3a781c` (green − 15%, 5.00) |
+| `warning-ink` | `#ffa92d` as-is (7.39) | `#8c5d19` (amber − 45%, 5.26) |
 | `badge-audio-ink` | = `accent-ink` | = `accent-ink` |
 
-(`accent-ink` se llamaba `primary-ink` cuando el azul era a la vez acción y selección.)
+(`accent-ink` was called `primary-ink` when blue was both action and selection.)
 
-El otro sentido también se mide: **un relleno con texto blanco encima tiene que pasar 4,5:1**. El
-verde de la hoja da 4,14 y el teal 4,32, así que `success` es `#3f821e` (−8 %) y `accent` es
-`#3a7b88` (−6 %) — a la vista son el mismo color. El ámbar nunca lleva blanco (1,92:1): su
-`warning-foreground` es el texto oscuro de la hoja (7,59:1). La banda «No hay logo cargado» del
-monitor lo violó la primera vez que se aplicó esta paleta, porque escribía `text-white` para
-cualquier tono.
+The other direction is measured too: **a fill with white text on top has to pass 4.5:1**. The
+sheet's green gives 4.14 and the teal 4.32, so `success` is `#3f821e` (−8%) and `accent` is
+`#3a7b88` (−6%) — to the eye they're the same color. Amber never carries white (1.92:1): its
+`warning-foreground` is the sheet's dark text (7.59:1). The monitor's «No logo set» banner
+violated this the first time this palette was applied, because it wrote `text-white` for any
+tone.
 
-Oscuro es el default (`DEFAULT_SETTINGS['ui.theme']` en `shared/types/settings.ts`) — pensado
-para operarse en una cabina de proyección a oscuras.
+Dark is the default (`DEFAULT_SETTINGS['ui.theme']` in `shared/types/settings.ts`) — meant to be
+operated in a dark projection booth.
 
-### Forma, foco, elevación y movimiento
+### Shape, focus, elevation and motion
 
-- **Píldora** para todo lo que actúa o marca: `Button`, `IconButton` (círculo), `Badge`, `Switch`,
-  los segmentos y la barra lateral de `Tabs`. Diálogos `rounded-2xl`; tarjetas, grupos
-  (`FieldGroup`), menús y popovers `rounded-xl`; campos, miniaturas y filas `rounded-lg`. Una
-  superficie nunca contiene un radio mayor que el suyo.
-- **Foco = `outline`** con las utilidades `focus-ring` / `focus-ring-inset` de `globals.css`, nunca
-  `ring` + `ring-offset`: Tailwind pinta el hueco del offset con un color explícito (blanco por
-  defecto), y en el tema oscuro cada control enfocado tenía un halo blanco de 1 px. El hueco de un
-  `outline-offset` es transparente en cualquier superficie. `-inset` es para lo que vive dentro de
-  algo que recorta (pestañas, grillas de miniaturas, listas).
-- **Un toggle presionado se RELLENA de acento** (`toggled` de `Button`/`IconButton`). Antes era un
-  anillo del color del foco: «está encendido» y «tiene el teclado» se veían igual. Los tres estados
-  del proyector de la TopBar (LOGO / NEGRO / VIVO) son `outline` y el encendido se llena de teal.
-- **Superficies en reposo planas** (`shadow-surface` = nada): la hoja dibuja sus cajas con borde y
-  sin sombra. `raised` y `overlay` siguen, en navy y más suaves en el tema claro.
-- **Movimiento**: `--ease-enter`/`--ease-exit`; el modal y su velo entran en 150 ms
-  (`wa-modal-enter`/`wa-backdrop-enter`), sin animación de salida a propósito — un diálogo que se
-  está cerrando no debería seguir tomando foco ni clicks. Todo lo decorativo va por `motion-safe:`
-  (el pulso del punto EN VIVO, el del audio vinculado, el skeleton, el spinner). Las transiciones
-  del PROYECTOR no: esas son contenido, no interfaz (ver la nota en `globals.css`).
-- El velo de un modal es `bg-scrim`: negro al 60 % en oscuro, navy al 40 % en claro.
-- **Sin espacio, cede el texto, nunca el ícono** (regla del dueño, 2026-10-22). `Icon` y `Badge`
-  son `shrink-0` de base; el texto se trunca en su propio `<span className="truncate">` —
-  `Button` (`truncateText()`) y `Tabs` lo hacen solos. Las pestañas de ancho igual (`folder`,
-  `segment`) muestran el nombre completo como `title` al pasar el mouse, solo si está cortado.
+- **Pill** for everything that acts or marks: `Button`, `IconButton` (circle), `Badge`, `Switch`,
+  the segments and the sidebar of `Tabs`. Dialogs `rounded-2xl`; cards, groups (`FieldGroup`),
+  menus and popovers `rounded-xl`; fields, thumbnails and rows `rounded-lg`. A surface never
+  contains a radius larger than its own.
+- **Focus = `outline`** with the `focus-ring` / `focus-ring-inset` utilities from `globals.css`,
+  never `ring` + `ring-offset`: Tailwind paints the offset gap with an explicit color (white by
+  default), and in the dark theme every focused control had a 1 px white halo. The gap of an
+  `outline-offset` is transparent on any surface. `-inset` is for what lives inside something
+  that clips (tabs, thumbnail grids, lists).
+- **A pressed toggle is FILLED with accent** (`toggled` on `Button`/`IconButton`). It used to be
+  a ring in the focus color: «it's on» and «it has the keyboard» looked the same. The TopBar's
+  three projector states (LOGO / BLACK / LIVE) are `outline` and the active one fills with teal.
+- **Resting surfaces are flat** (`shadow-surface` = nothing): the sheet draws its boxes with a
+  border and no shadow. `raised` and `overlay` remain, in navy and softer in the light theme.
+- **Motion**: `--ease-enter`/`--ease-exit`; the modal and its scrim enter in 150 ms
+  (`wa-modal-enter`/`wa-backdrop-enter`), with no exit animation on purpose — a dialog that's
+  closing shouldn't keep taking focus or clicks. Everything decorative goes through
+  `motion-safe:` (the pulse of the LIVE dot, the linked audio's pulse, the skeleton, the
+  spinner). The PROJECTOR's transitions don't: those are content, not interface (see the note in
+  `globals.css`).
+- A modal's scrim is `bg-scrim`: black at 60% in dark, navy at 40% in light.
+- **Out of room, the text gives way, never the icon** (owner's rule, 2026-10-22). `Icon` and
+  `Badge` are `shrink-0` by default; text truncates in its own `<span className="truncate">` —
+  `Button` (`truncateText()`) and `Tabs` do it on their own. Equal-width tabs (`folder`,
+  `segment`) show the full name as `title` on hover, only if it's cut off.
 
-## Tipografía: Noto Sans y su corte ExtraCondensed
+## Typography: Noto Sans and its ExtraCondensed cut
 
-Noto Sans para todo lo que el operador lee; **Noto Sans ExtraCondensed** (`font-stretch-extra-condensed`,
-62,5 %) para los títulos — `Title` h1/h2 (las cabeceras PROGRAMA / PREVIEW / EN VIVO y los grupos
-de Ajustes), los títulos de modal (`ModalTitle`) y el wordmark. Un corte condensado se lee más chico
-que su tamaño, por eso h2 sube a 15 px donde un rótulo de texto tendría 14.
+Noto Sans for everything the operator reads; **Noto Sans ExtraCondensed**
+(`font-stretch-extra-condensed`, 62.5%) for titles — `Title` h1/h2 (the SCHEDULE / PREVIEW / LIVE
+headers and the Settings groups), modal titles (`ModalTitle`) and the wordmark. A condensed cut
+reads smaller than its size, which is why h2 goes up to 15 px where a text label would be 14.
 
-Las dos salen del MISMO archivo variable: `main.tsx` importa
-`@fontsource-variable/noto-sans/wdth.css` (ejes `wdth` 62,5–100 % + `wght`), no el import por
-defecto del paquete, que trae solo `wght` — con ese, `font-stretch` no hace nada y el navegador
-sintetiza un condensado falso. La proyección sigue con el import por defecto: el escenario no usa
-el corte condensado. Todo self-hosted, sin Google Fonts: la app queda usable sin internet desde el
-primer render.
+Both come from the SAME variable file: `main.tsx` imports
+`@fontsource-variable/noto-sans/wdth.css` (axes `wdth` 62.5–100% + `wght`), not the package's
+default import, which only brings `wght` — with that one, `font-stretch` does nothing and the
+browser synthesizes a fake condensed. The projection keeps the default import: the stage doesn't
+use the condensed cut. All self-hosted, no Google Fonts: the app is usable without internet from
+the first render.
 
-## La marca dentro de la app
+## The brand inside the app
 
-`components/ui/brand.tsx`: `BrandMark` (el SVG del logo, como `<img alt="">` — es un asset, sus
-colores son del logo y no del tema, y es el único lugar donde un hex es legítimo) y `Wordmark`
-(«Lumina / Live» en ExtraCondensed ExtraBold, interlineado 0,858 como en la hoja, «Live» en
-`text-brand-live`). Aparece en dos lugares, por decisión del dueño: el isotipo a la izquierda de la
-TopBar y el encabezado de **Ajustes ▸ Acerca de** (logo, nombre, versión, registros). El cuadrado
-del logo es `#162231`, el mismo fondo del tema oscuro: sin borde solo se veía la llama flotando. Por
-eso `BrandMark` lleva un contorno interior de 1 px en `brand-edge` (en oscuro, el mismo `#384f69`
-que el borde del botón primario, por la misma razón; en claro, transparente). Nunca en el
-proyector: con LOGO y sin logo elegido el escenario sigue negro, la congregación ve la marca de la
-iglesia y no la del software.
+`components/ui/brand.tsx`: `BrandMark` (the logo SVG, as `<img alt="">` — it's an asset, its
+colors are the logo's and not the theme's, and it's the only place where a hex is legitimate) and
+`Wordmark` («Lumina / Live» in ExtraCondensed ExtraBold, line height 0.858 as on the sheet,
+«Live» in `text-brand-live`). It appears in two places, by the owner's decision: the symbol to the
+left of the TopBar and the header of **Settings ▸ About** (logo, name, version, logs). The logo's
+square is `#162231`, the same background as the dark theme: without a border only the flame was
+visible, floating. That's why `BrandMark` carries a 1 px inner outline in `brand-edge` (in dark,
+the same `#384f69` as the primary button's border, for the same reason; in light, transparent).
+Never on the projector: with LOGO and no logo chosen the stage stays black; the congregation sees
+the church's brand and not the software's.
 
-Íconos de la app, generados desde el mismo SVG: `build/icon.icns` (macOS, grilla de Apple: cuerpo
-de 824 px con radio ~22 % y la sombra de la plantilla) y `build/icon.png` (Windows/Linux, la forma
-de la hoja con 3 % de margen; electron-builder saca el `.ico` de ahí). Se renderizaron con una
-ventana offscreen de Electron (evento `paint`, que sí conserva el alfa) e `iconutil`.
+App icons, generated from the same SVG: `build/icon.icns` (macOS, Apple's grid: an 824 px body
+with a ~22% radius and the template's shadow) and `build/icon.png` (Windows/Linux, the sheet's
+shape with a 3% margin; electron-builder derives the `.ico` from it). They were rendered with an
+offscreen Electron window (the `paint` event, which does keep the alpha) and `iconutil`.
 
-## Formularios: `FieldGroup`/`FieldRow`, y `ColorField`
+## Forms: `FieldGroup`/`FieldRow`, and `ColorField`
 
-`FieldGroup` + `FieldRow` (`components/ui/field.tsx`) son la forma de CUALQUIER pantalla de
-opciones: un título, un recuadro con líneas divisorias y una fila por opción — etiqueta (con
-descripción opcional) a la izquierda, su control a la derecha, sin envolver nunca. Nacieron dentro
-de Ajustes como `SettingsGroup`/`SettingsRow` y subieron a `ui/` cuando el editor de escenas de
-Utilidades fue el segundo consumidor: es literalmente la regla de reutilización de `CLAUDE.md`
-disparándose. Se agrega una opción a un grupo existente, o se abre un grupo nuevo; nunca una lista
-plana de filas.
+`FieldGroup` + `FieldRow` (`components/ui/field.tsx`) are the shape of ANY options screen: a
+title, a box with dividing lines and one row per option — label (with an optional description)
+on the left, its control on the right, never wrapping. They were born inside Settings as
+`SettingsGroup`/`SettingsRow` and moved up to `ui/` when the Timers scene editor became the
+second consumer: it's literally the `CLAUDE.md` reuse rule firing. You add an option to an
+existing group, or open a new group; never a flat list of rows.
 
-`ColorField` es el control de color. Elige de las muestras de la hoja de Lumina Live (neutros,
-azules, acento, indicadores y la llama, con los valores EXACTOS de la hoja y no los ajustados a AA
-de la interfaz: en el proyector el color es de la marca) o acepta un hex propio, y **solo emite `#rrggbb`** — una sola forma
-canónica, porque dos escrituras del mismo color en la base es una comparación que falla sobre un
-valor que el operador nunca ve. Abre su popover por portal con `computeMenuPosition`, igual que
-`Select` y `Menu`, porque todo panel y todo diálogo de esta app recorta su overflow.
+`ColorField` is the color control. It picks from the Lumina Live sheet's swatches (neutrals,
+blues, accent, indicators and the flame, with the sheet's EXACT values and not the interface's
+AA-adjusted ones: on the projector the color belongs to the brand) or accepts a custom hex, and
+**only emits `#rrggbb`** — a single canonical form, because two spellings of the same color in
+the database is a comparison that fails over a value the operator never sees. It opens its
+popover through a portal with `computeMenuPosition`, same as `Select` and `Menu`, because every
+panel and every dialog in this app clips its overflow.
 
-Los hex que aparecen en `color-field.tsx`, en `DEFAULT_SCENE_STYLE` y en `DEFAULT_BIBLE_STYLE`
-**no violan** la regla de "nada de colores hardcodeados en un componente" —y desde el
-2026-10-22 también salen de la hoja de Lumina Live; una escena guardada antes conserva los suyos—: son valores de
-CONTENIDO, guardados en una fila y editables por el operador —la misma categoría que el nombre de
-un programa—, y terminan en un `style` inline sobre el escenario del proyector, que no tiene tema.
-Un color de la INTERFAZ sigue saliendo siempre de un token semántico.
+The hex values in `color-field.tsx`, in `DEFAULT_SCENE_STYLE` and in `DEFAULT_BIBLE_STYLE`
+**don't violate** the "no hardcoded colors in a component" rule —and since 2026-10-22 they also
+come from the Lumina Live sheet; a scene saved earlier keeps its own—: they're CONTENT values,
+stored in a row and editable by the operator —the same category as a schedule's name—, and they
+end up in an inline `style` on the projector's stage, which has no theme. An INTERFACE color
+still always comes from a semantic token.
 
-`Slider` (`components/ui/slider.tsx`) es el rango con su valor al lado. El ancho del número va en
-**`ch`** y no en píxeles (`readoutChars`): con `tabular-nums` un `ch` es exactamente un dígito, así
-que una caja del largo de la cadena más larga que ese slider puede producir no lleva espacio
-muerto — y el espacio muerto adentro del item se suma al `gap` de la fila, que es el bug medido en
+`Slider` (`components/ui/slider.tsx`) is the range with its value next to it. The number's width
+is in **`ch`** and not in pixels (`readoutChars`): with `tabular-nums` one `ch` is exactly one
+digit, so a box as long as the longest string that slider can produce carries no dead space —
+and dead space inside the item adds to the row's `gap`, which is the bug measured in
 [`.claude/knowledge/fixed-width-readout-inflates-flex-gap.md`](../../.claude/knowledge/fixed-width-readout-inflates-flex-gap.md).
 
-### `components/shared/style-fields.tsx` — las perillas de todo lo que se VISTE
+### `components/shared/style-fields.tsx` — the knobs for everything that gets DRESSED
 
-`SceneStyle` se diseñó para vestir tres cosas (escenas de tiempo, las placas de Overlays y el
-versículo bíblico). Los controles de lo que esas tres comparten —fondo sólido/degradado/imagen,
-tipografía, alineación vertical, y las cuatro perillas de un rol de texto— viven acá, no dentro
-del editor de escenas donde nacieron. Cada uno es un `FieldRow` pelado: el `FieldGroup` lo pone
-quien los usa, así que un editor puede darle al fondo un grupo propio y otro puede intercalarlo
-entre sus filas.
+`SceneStyle` was designed to dress three things (timer scenes, the Overlays plates and the Bible
+verse). The controls for what those three share —solid/gradient/image background, typography,
+vertical alignment, and the four knobs of a text role— live here, not inside the scene editor
+where they were born. Each one is a bare `FieldRow`: the `FieldGroup` is supplied by whoever uses
+them, so one editor can give the background its own group and another can interleave it among
+its rows.
 
-Las etiquetas se mudaron con ellos, de `scenes.*` a **`style.*`**. Dos features deletreando «Tipo
-de fondo» desde dos entradas del diccionario es exactamente como las dos escrituras empiezan a
-diferir.
+The labels moved with them, from `scenes.*` to **`style.*`**. Two features spelling «Background
+type» from two dictionary entries is exactly how the two spellings start to drift apart.
 
-## El versículo bíblico — `BibleScene` y el ajuste automático
+## The Bible verse — `BibleScene` and auto-fit
 
-`components/shared/bible-scene.tsx` dibuja la variante `bible` de `ProjectionOutput`, que ahora
-viaja **vestida**: lleva su `BibleStyle` y su `backgroundUrl` resueltos adentro, por la misma razón
-que los lleva una escena de tiempo — la ventana de proyección no resuelve nada y
-`projection-state.ts` reproduce ese valor tal cual en una ventana reconstruida en otra pantalla.
+`components/shared/bible-scene.tsx` draws the `bible` variant of `ProjectionOutput`, which now
+travels **dressed**: it carries its `BibleStyle` and its `backgroundUrl` resolved inside, for the
+same reason a timer scene carries them — the projection window resolves nothing, and
+`projection-state.ts` replays that value as-is in a window rebuilt on another screen.
 
-Es hermano de `TimerScene` y deliberadamente **no** una generalización suya: una cuenta regresiva
-es una tirada corta de glifos que nunca corta línea y un versículo es un PÁRRAFO. De ahí los
-cuatro campos que `SceneStyle` no tiene —`textAlign`, `lineHeight`, `maxWidthCqw` y `autoFit`— y
-dos roles de texto nombrados por lo que son (`text`, `reference`) en vez de doblados sobre
+It's a sibling of `TimerScene` and deliberately **not** a generalization of it: a countdown is a
+short run of glyphs that never breaks a line, and a verse is a PARAGRAPH. Hence the four fields
+`SceneStyle` doesn't have —`textAlign`, `lineHeight`, `maxWidthCqw` and `autoFit`— and two text
+roles named for what they are (`text`, `reference`) instead of bent onto
 `value`/`title`/`message`.
 
-**El ajuste automático se MIDE, no se calcula.** Juan 11:35 son dos palabras y Ester 8:9 son
-ochenta: a tamaño fijo, uno se pierde en el medio del cuadro y el otro se va por abajo — y el
-monitor de confianza, que renderiza el mismo componente con la misma proporción, lo recorta
-igual, así que en la cabina tampoco se ve. `useFittedTextSize` hace una búsqueda binaria de siete
-pasos escribiendo el `font-size` directo sobre el elemento (una medición necesita que el navegador
-ya haya maquetado; siete `setState` serían siete frames de texto achicándose) y recién commitea la
-RESPUESTA al estado. Dos detalles que no son opcionales:
+**Auto-fit is MEASURED, not computed.** Juan 11:35 is two words and Ester 8:9 is eighty: at a
+fixed size, one gets lost in the middle of the frame and the other runs off the bottom — and the
+confidence monitor, which renders the same component with the same aspect ratio, clips it the
+same way, so it isn't visible from the booth either. `useFittedTextSize` runs a seven-step binary
+search writing the `font-size` straight onto the element (a measurement needs the browser to have
+already laid out; seven `setState` calls would be seven frames of shrinking text) and only
+commits the ANSWER to state. Two details that aren't optional:
 
-- se mide el **bloque**, no el párrafo: la referencia está en la misma caja acotada y el versículo
-  no puede empujarla fuera del escenario;
-- se mide contra el **espacio**, no contra el desborde del propio bloque. El bloque está acotado
-  por `max-h-full`, así que hasta llegar a ese techo su altura ES la de su contenido, y ahí
-  `scrollHeight > clientHeight` ya no pregunta «no entra en el escenario» sino «hay tinta fuera de
-  sus line boxes» — que un `line-height` por debajo del content area de la fuente (1,362 em en
-  Noto Sans; el slider llega a 0,8) vuelve cierto a CUALQUIER tamaño. Con eso la búsqueda binaria
-  no encontraba nunca un tamaño que entrara y devolvía siempre `minSizeCqw`: el versículo se
-  achicaba solo y los cuatro sliders de «Versículos» parecían muertos. Se compara contra el
-  content box del escenario, con 1 px de tolerancia porque `clientHeight`/`scrollHeight` son
-  enteros redondeados de un layout fraccionario. `overflow-hidden` sigue, pero ya sólo como la
-  guarda que impide pintar por fuera del cuadro. Diagnóstico y mediciones en
+- the **block** is measured, not the paragraph: the reference is in the same bounded box and the
+  verse can't push it off the stage;
+- it's measured against the **space**, not against the block's own overflow. The block is bounded
+  by `max-h-full`, so until it reaches that ceiling its height IS its content's height, and then
+  `scrollHeight > clientHeight` no longer asks «it doesn't fit on the stage» but «there's ink
+  outside its line boxes» — which a `line-height` below the font's content area (1.362 em in
+  Noto Sans; the slider goes down to 0.8) makes true at ANY size. With that, the binary search
+  never found a size that fit and always returned `minSizeCqw`: the verse shrank on its own and
+  the four «Verses» sliders looked dead. It's compared against the stage's content box, with
+  1 px of tolerance because `clientHeight`/`scrollHeight` are integers rounded from a fractional
+  layout. `overflow-hidden` stays, but now only as the guard that prevents painting outside the
+  frame. Diagnosis and measurements in
   [`.claude/knowledge/a-content-sized-box-never-fits-itself-so-scrollheight-is-not-a-fit-test.md`](../../.claude/knowledge/a-content-sized-box-never-fits-itself-so-scrollheight-is-not-a-fit-test.md);
-- el `ResizeObserver` observa el **escenario**, no el bloque. Observar el bloque es un bucle por
-  construcción: el callback cambia el tamaño de letra, que cambia el bloque, que dispara el
+- the `ResizeObserver` observes the **stage**, not the block. Observing the block is a loop by
+  construction: the callback changes the font size, which changes the block, which fires the
   callback.
 
-El bloque guarda además un margen vertical fijo (`EDGE_GUTTER_CQW`, el equivalente vertical de
-`maxWidthCqw`): sin él un versículo achicado entra EXACTO en el cuadro, y en un proyector con
-overscan eso es la primera y la última línea cortadas al medio.
+The block also keeps a fixed vertical margin (`EDGE_GUTTER_CQW`, the vertical equivalent of
+`maxWidthCqw`): without it a shrunk verse fits the frame EXACTLY, and on a projector with
+overscan that means the first and last lines cut in half.
 
-## Layout de la ventana de control — EasyWorship 2009
+## Control window layout — EasyWorship 2009
 
-`components/pages/layout/AppShell.tsx` es el workspace completo, calcado de EasyWorship 2009:
+`components/pages/layout/AppShell.tsx` is the whole workspace, copied from EasyWorship 2009:
 
 ```
-┌ TopBar (grid-cols-3, igual que el main de abajo) ──────────────────────┐
-│ ⚙ · [nombre del programa · guardado · 💾 ✚ 📂]│▷ EN VIVO│LOGO·NEGRO·▷EN VIVO│
+┌ TopBar (grid-cols-3, same as the main below) ──────────────────────────┐
+│ ⚙ · [schedule name · saved · 💾 ✚ 📂]  │  ▷ GO LIVE  │ LOGO·BLACK·▷LIVE │
 ├───────────────┬──────────────┴────────┬─────────────────────────────────┤
-│ PROGRAMA      │                       │  EN VIVO                        │
-│ (schedule)    │      DIAPOSITIVAS     │  (+ transporte deck)            │
-│───────────────│   del ítem en preview │  (+ tira de diapositivas live)  │
-│ RECURSOS      │                       │──────────────────────────────── │
-│ Biblia|Vid|   │                       │  VISTA PREVIA                   │
-│ Img|Aud|PPT   │                       │                                 │
+│ SCHEDULE      │ PREVIEW               │  LIVE                           │
+│ (schedule)    │ (monitor)             │  (monitor)                      │
+│───────────────│ (+ media bar)         │  (+ deck/verse transport)       │
+│ RESOURCES     │ slides/verses of the  │  (+ live media panel)           │
+│ Bible|Media|  │ item in preview       │  slides/verses on air           │
+│ Functions     │                       │                                 │
 └───────────────┴───────────────────────┴─────────────────────────────────┘
 ```
 
-El `TopBar` es un **grid de 3 columnas idéntico al del `<main>`** de abajo (`grid-cols-3`), así
-cada grupo de controles queda exactamente arriba de la columna sobre la que actúa, no importa el
-ancho de la ventana:
+The `TopBar` is a **3-column grid identical to the `<main>`'s** below it (`grid-cols-3`), so each
+group of controls sits exactly above the column it acts on, regardless of the window's width:
 
-- **Columna 1** (arriba de Programa/Recursos): el isotipo de Lumina Live, el ícono de engranaje (Configuraciones) y el card
-  del programa actual — nombre, badge Guardado/No guardado, y tres botones (guardado rápido, nuevo
-  programa, administrar programas guardados) que abren `pages/programs/ProgramsModal.tsx`.
-- **Columna 2** (arriba de Diapositivas): un único botón **EN VIVO** que llama a
-  `lib/actions/playback.ts::goLive()` — manda lo que está en vista previa al proyector,
-  reemplazando lo que hubiera. Es la única forma de cruzar de preview a vivo; no hay un segundo
-  botón equivalente en ningún otro lado.
-- **Columna 3** (arriba de Monitores): tres botones mutuamente excluyentes — **LOGO**, **NEGRO**,
-  **EN VIVO** — que llaman a `setOverlay('logo'|'black'|'none')` **directamente** (no
-  `toggleOverlay`: cada uno siempre fuerza su propio estado, nunca "des-marca" al tocarlo de
-  nuevo). Son los tres estados posibles de lo que el proyector muestra por encima del contenido
-  base. Los atajos de teclado B/L siguen usando `toggleOverlay` (comportamiento sin cambios).
+- **Column 1** (above Schedule/Resources): the Lumina Live symbol, the gear icon (Settings) and
+  the current schedule's card — name, Saved/Not saved badge, and three buttons (quick save, new
+  schedule, manage saved schedules) that open `pages/programs/ProgramsModal.tsx`.
+- **Column 2** (above Slides): a single **GO LIVE** button that calls
+  `lib/actions/playback.ts::goLive()` — it sends what's in preview to the projector, replacing
+  whatever was there. It's the only way to cross from preview to live; there's no second
+  equivalent button anywhere else.
+- **Column 3** (above Monitors): three mutually exclusive buttons — **LOGO**, **BLACK**,
+  **LIVE** — that call `setOverlay('logo'|'black'|'none')` **directly** (not `toggleOverlay`:
+  each one always forces its own state, it never "un-checks" when pressed again). They're the
+  three possible states of what the projector shows on top of the base content. The B/L keyboard
+  shortcuts still use `toggleOverlay` (behavior unchanged).
 
-Las tres columnas del `<main>` son **`grid-cols-3`** — anchos iguales, ninguna de las tres tareas
-(explorar, montar, emitir) pesa visualmente más que las otras. La línea entre columnas es el fondo
-`bg-border` asomando por un `gap-px`, **nunca `divide-x`**: un divisor es un borde ADENTRO de la
-columna y solo lo llevan dos de las tres, así que el monitor de PREVIEW quedaba 1 px más angosto que
-el de EN VIVO y todo lo de abajo desalineado con su gemelo
-([diagnóstico](../../.claude/knowledge/monitor-stage-must-size-by-width-not-flex.md)). No hay StatusBar ni indicador de
-"proyector conectado/desconectado" en el TopBar — LIMPIAR, la selección de pantalla y abrir/cerrar
-la proyección, el tema claro/oscuro y el idioma se movieron todos a
-`pages/settings/SettingsModal.tsx`, detrás del ícono de engranaje que reemplaza el título de la
-app.
+The three columns of the `<main>` are **`grid-cols-3`** — equal widths; none of the three tasks
+(browse, assemble, broadcast) weighs visually more than the others. The line between columns is
+the `bg-border` background showing through a `gap-px`, **never `divide-x`**: a divider is a border
+INSIDE the column and only two of the three carry it, so the PREVIEW monitor ended up 1 px
+narrower than the LIVE one and everything below it misaligned with its twin
+([diagnosis](../../.claude/knowledge/monitor-stage-must-size-by-width-not-flex.md)). There's no
+StatusBar or "projector connected/disconnected" indicator in the TopBar — CLEAR, screen
+selection and opening/closing the projection, the light/dark theme and the language all moved to
+`pages/settings/SettingsModal.tsx`, behind the gear icon that replaces the app's title.
 
-Esa modal es un panel de categorías estilo Ajustes de macOS, no una lista plana: `Modal
-size="2xl" height="tall"` (alto fijo grande — cambiar de categoría nunca redimensiona el diálogo)
-con `Tabs variant="sidebar"` a la izquierda (`components/ui/tabs.tsx`, la misma primitiva de
-`resources/`, con una tercera variante vertical) y, a la derecha, un panel scrolleable con una
-`sections/<nombre>-section.tsx` por categoría. Dentro de cada sección, `FieldGroup` + `FieldRow`
-(en `components/ui/`, promovidos ahí cuando el editor de escenas se volvió el segundo usuario)
-agrupan filas relacionadas en una tarjeta con divisores; cada fila sigue la regla de siempre:
-etiqueta (+ descripción opcional) a la izquierda, control(es) a la derecha, sin wrap.
-Categorías de hoy: **Proyección** (pantalla, abrir/cerrar la ventana, logo, limpiar contenido en
-vivo, transición, volumen inicial), **Diapositivas** (caché y calidad de conversión),
-**Versículos** (cómo se VISTE un versículo, con su vista previa 16:9 arriba), **Biblia** (qué
-versiones hay instaladas: importar, renombrar, por defecto, borrar), **Sistema** (tema, idioma,
-carpetas, rendimiento) y **Acerca de** (logo, versión y carpeta de registros). Una configuración nueva entra en un grupo existente o crea uno dentro de su sección —
-no se agrega una categoría sin necesidad.
+That modal is a category panel in the style of macOS System Settings, not a flat list: `Modal
+size="2xl" height="tall"` (a large fixed height — switching category never resizes the dialog)
+with `Tabs variant="sidebar"` on the left (`components/ui/tabs.tsx`, the same primitive as
+`resources/`, with a third, vertical variant) and, on the right, a scrollable panel with one
+`sections/<name>-section.tsx` per category. Inside each section, `FieldGroup` + `FieldRow`
+(in `components/ui/`, promoted there when the scene editor became the second user) group related
+rows into a card with dividers; each row follows the usual rule: label (+ optional description)
+on the left, control(s) on the right, no wrap. Today's categories: **Projection** (screen,
+open/close the window, logo, clear live content, transition, starting volume), **Slides** (cache
+and conversion quality), **Verses** (how a verse is DRESSED, with its 16:9 preview on top),
+**Bible** (which versions are installed: import, rename, default, delete), **System** (theme,
+language, folders, performance) and **About** (logo, version and logs folder). A new setting goes
+into an existing group or creates one inside its section — a category isn't added without need.
 
-«Versículos» y «Biblia» son dos categorías y no una con pestañas, que es como estuvieron primero:
-el estilo es una sola clave de `settings` con una vista previa que quiere el panel entero, y las
-versiones son una tabla. La lista de versiones se dibuja con los MISMOS `FieldRow` que el resto
-de Ajustes (envueltos en `<li>` dentro de un `<ul class="divide-y">`), no con el `ListRow` denso
-de los paneles de recursos: una fila de 32 px entre filas de 60 px es lo que hacía que esa
-pantalla se leyera como otra aplicación. Por eso `FieldRow` acepta un `label` que es un nodo (el
-`<Input>` del renombrado ocupa el lugar del nombre, sin cambiar la altura de la fila) y un
-`leading` para el ícono. Las insignias («Incluida», «Por defecto») van al lado del nombre, nunca
-en la columna de acciones: son de ancho variable y desde ahí corrían los tres botones a una `x`
-distinta en cada fila.
+«Verses» and «Bible» are two categories and not one with tabs, which is how they started: the
+style is a single `settings` key with a preview that wants the whole panel, and the versions are
+a table. The version list is drawn with the SAME `FieldRow`s as the rest of Settings (wrapped in
+`<li>` inside a `<ul class="divide-y">`), not with the dense `ListRow` of the resource panels: a
+32 px row among 60 px rows is what made that screen read like a different application. That's
+why `FieldRow` accepts a `label` that is a node (the rename `<Input>` takes the name's place,
+without changing the row's height) and a `leading` for the icon. The badges («Included»,
+«Default») go next to the name, never in the actions column: they're variable-width, and from
+there they shifted the three buttons to a different `x` on each row.
 
-`go-live-bar.tsx` no existe más: el `EN VIVO` que antes vivía entre los monitores LIVE y PREVIEW
-ahora es el botón de la columna 2 del TopBar, y por eso las flechas de paginado de preview que
-tenía (↑/↓ manual) tampoco existen — la columna central ya permite clickear cualquier diapositiva
-o versículo, y las flechas del teclado (↑/↓, atajo global) cubren lo mismo.
+`go-live-bar.tsx` no longer exists: the `GO LIVE` that used to live between the LIVE and PREVIEW
+monitors is now the button in column 2 of the TopBar, and that's why the preview paging arrows
+it had (manual ↑/↓) don't exist either — the center column already lets you click any slide or
+verse, and the keyboard arrows (↑/↓, global shortcut) cover the same thing.
 
-### Pantalla y arranque de la proyección
+### Screen and projection startup
 
-`stores/display.store.ts` reemplaza al viejo hook `use-displays.ts`: lista las pantallas, resuelve
-cuál usar (la persistida en `settings['projection.displayId']`, si sigue conectada; si no, la
-primera no-primaria) y expone `open()/close()`. La app llama `open()` automáticamente al arrancar
-(`app/App.tsx`) — **la ventana de proyección se abre sola y arranca en NEGRO**, nunca mostrando el
-último contenido de un culto anterior. El operador corta/reinicia desde Configuraciones, no
-manualmente desde el TopBar.
+`stores/display.store.ts` replaces the old `use-displays.ts` hook: it lists the screens, resolves
+which one to use (the one persisted in `settings['projection.displayId']`, if it's still
+connected; otherwise, the first non-primary one) and exposes `open()/close()`. The app calls
+`open()` automatically at startup (`app/App.tsx`) — **the projection window opens on its own and
+starts on BLACK**, never showing the last content from a previous service. The operator
+cuts/restarts it from Settings, not manually from the TopBar.
 
-- **`schedule/`**: el orden del culto. Click = preview, doble click = en vivo, drag = reordenar.
-- **`resources/`**: un solo browser con pestañas para **todo** lo proyectable, Biblia incluida
-  (`variant="folder"` de `Tabs`). Un asset se puede previsualizar y proyectar sin estar en el
-  programa — eso es lo que hace el área de recursos de EW.
-- **`slides/`**: la grilla de lo que el ítem en preview puede poner en pantalla — diapositivas de
-  un deck, versículos de un capítulo, o el propio archivo si es uno solo. Es también el único
-  lugar que dispara conversiones (`useDeck`). Todo lo que puede crecer —las diapositivas de un
-  deck, los versículos de un capítulo— se pinta con **`VirtualGrid`**, con la geometría en
-  `components/ui/slide-grid.geometry.ts`: gap 12, ancho mínimo 144 para versículos y **2 columnas
-  fijas** para un deck (`columns`, excluyente con `minItemWidth`), para que las diapositivas de un
-  PPT se vean grandes en vez de una grilla chica de N columnas. `SlideGrid` (`slide-grid.tsx`)
-  quedó sólo para las grillas de un tile que no crecen nunca: el versículo agendado, un ítem de
-  texto, un asset suelto.
-- **`monitors/`**: el monitor LIVE arriba (la primitiva `Monitor`; el de PREVIEW se mudó a la
-  columna del centro, al lado de lo que previsualiza), debajo los transportes `deck-transport.tsx`
-  y `verse-transport.tsx` como filas hermanas —nunca como footer del monitor, para que no puedan
-  encoger el escenario—, y al final `live-content-grid.tsx`: la misma grilla que el centro, pero
-  de lo que **está en el aire**. Click en un tile llama `gotoSlide()`/`projectVerse()` y salta ahí
-  al instante (esto es vivo, no preview: no hay segunda etapa), y la grilla **sigue sola** al
-  proyector (`scrollToIndex` de `VirtualGrid`), auto-avance incluido — virtualizada, un tile fuera
-  de la ventana montada no existe, así que sin eso un deck largo dejaría al operador mirando una
-  parte del culto que ya pasó. Es un componente distinto de `deck-slides.tsx`, que navega el deck
-  *en preview*, no el que está en el aire.
+- **`schedule/`**: the order of service. Click = preview, double click = live, drag = reorder.
+- **`resources/`**: a single tabbed browser for **everything** projectable, Bible included
+  (`variant="folder"` of `Tabs`). An asset can be previewed and projected without being in the
+  schedule — that's what EW's resources area does.
+- **`slides/`**: the grid of what the item in preview can put on screen — the slides of a deck,
+  the verses of a chapter, or the file itself if it's a single one. It's also the only place that
+  triggers conversions (`useDeck`). Everything that can grow —a deck's slides, a chapter's
+  verses— is painted with **`VirtualGrid`**, with the geometry in
+  `components/ui/slide-grid.geometry.ts`: gap 12, minimum width 144 for verses and **2 fixed
+  columns** for a deck (`columns`, mutually exclusive with `minItemWidth`), so that a PPT's slides
+  look large instead of a small N-column grid. `SlideGrid` (`slide-grid.tsx`) remained only for
+  single-tile grids that never grow: the scheduled verse, a text item, a standalone asset.
+- **`monitors/`**: the LIVE monitor on top (the `Monitor` primitive; the PREVIEW one moved to the
+  center column, next to what it previews), below it the `deck-transport.tsx` and
+  `verse-transport.tsx` transports as sibling rows —never as the monitor's footer, so they can't
+  shrink the stage—, and at the end `live-content-grid.tsx`: the same grid as the center, but of
+  what **is on air**. Clicking a tile calls `gotoSlide()`/`projectVerse()` and jumps there
+  instantly (this is live, not preview: there's no second stage), and the grid **follows** the
+  projector on its own (`scrollToIndex` of `VirtualGrid`), auto-advance included — virtualized, a
+  tile outside the mounted window doesn't exist, so without that a long deck would leave the
+  operator looking at a part of the service that has already passed. It's a different component
+  from `deck-slides.tsx`, which navigates the deck *in preview*, not the one on air.
 
-### Flujo de dos etapas (estricto)
+### Two-stage flow (strict)
 
-Seleccionar **nunca** proyecta. `lib/actions/preview.ts` mueve el target de preview y
-`lib/actions/playback.ts::goLive()` es el único camino a `projection.store`. El cursor de preview
-(`stores/preview.store.ts`) es independiente del cursor en vivo, así que se puede armar la
-diapositiva 7 mientras la 3 sigue en pantalla.
+Selecting **never** projects. `lib/actions/preview.ts` moves the preview target and
+`lib/actions/playback.ts::goLive()` is the only path to `projection.store`. The preview cursor
+(`stores/preview.store.ts`) is independent from the live cursor, so you can set up slide 7 while
+slide 3 is still on screen.
 
-Los atajos siguen la misma división: ←/→ mueven **lo que está en vivo**, ↑/↓ mueven **el
-preview**, Enter cruza de uno al otro.
+The shortcuts follow the same split: ←/→ move **what's live**, ↑/↓ move **the preview**, Enter
+crosses from one to the other.
 
-### `OutputView`, la primitiva que impide que un monitor mienta
+### `OutputView`, the primitive that keeps a monitor from lying
 
-`components/shared/output-view.tsx` renderiza un `ProjectionOutput` y lo usan **los tres**
-lugares donde se ve contenido: la ventana de proyección (`mode="live"`) y los monitores LIVE y
-PREVIEW (`mode="monitor"`). Los tamaños de texto están en `cqw` sobre un contenedor (`@container`),
-no en `vw`, así que el mismo markup escala de un monitor de 240px a un proyector 4K sin variantes.
-El monitor de preview es literalmente el renderer de proyección alimentado con otro input
+`components/shared/output-view.tsx` renders a `ProjectionOutput` and is used by **all three**
+places where content is shown: the projection window (`mode="live"`) and the LIVE and PREVIEW
+monitors (`mode="monitor"`). Text sizes are in `cqw` over a container (`@container`), not in
+`vw`, so the same markup scales from a 240px monitor to a 4K projector without variants. The
+preview monitor is literally the projection renderer fed with a different input
 (`lib/hooks/use-preview.ts::usePreviewOutput`).
 
 ## `presentation.html` → `ProjectionApp.tsx`
 
-Los mismos 6 tipos de contenido relevantes de la legacy (`black`, `logo`, `image`, `video`,
-`bible`, `text`) más `slide` (una imagen ya rasterizada del deck). El tipo
-`text` legacy no tenía ningún caller — acá sí lo tiene (`ProgramItemDTO` con `kind:'text'`), así
-que dejó de ser una feature muerta.
+The same 6 relevant content types from the legacy (`black`, `logo`, `image`, `video`, `bible`,
+`text`) plus `slide` (an already-rasterized image of the deck). The legacy `text` type had no
+caller — here it does (`ProgramItemDTO` with `kind:'text'`), so it stopped being a dead feature.

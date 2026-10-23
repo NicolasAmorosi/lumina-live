@@ -40,7 +40,7 @@ async function encode(
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, `image/${format}`, quality),
   );
-  if (!blob) throw new Error("No se pudo codificar la imagen de la diapositiva");
+  if (!blob) throw new Error("Couldn't encode the slide image");
   return new Uint8Array(await blob.arrayBuffer());
 }
 
@@ -50,7 +50,7 @@ function drawScaled(source: HTMLCanvasElement, targetWidth: number): HTMLCanvasE
   canvas.width = Math.max(1, Math.round(source.width * ratio));
   canvas.height = Math.max(1, Math.round(source.height * ratio));
   const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("No se pudo crear el contexto 2D de la miniatura");
+  if (!ctx) throw new Error("Couldn't create the thumbnail's 2D context");
   ctx.imageSmoothingQuality = "high";
   ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
   return canvas;
@@ -60,7 +60,7 @@ async function run(message: StartMessage): Promise<void> {
   const { jobId, url, targetWidth, thumbWidth, format, quality } = message;
 
   const response = await fetch(url);
-  if (!response.ok) throw new Error(`No se pudo leer el PDF (${response.status})`);
+  if (!response.ok) throw new Error(`Couldn't read the PDF (${response.status})`);
   const data = new Uint8Array(await response.arrayBuffer());
 
   const loadingTask = pdfjs.getDocument({
@@ -113,7 +113,7 @@ async function run(message: StartMessage): Promise<void> {
         canvas.width = Math.round(viewport.width);
         canvas.height = Math.round(viewport.height);
         const ctx = canvas.getContext("2d");
-        if (!ctx) throw new Error("No se pudo crear el contexto 2D");
+        if (!ctx) throw new Error("Couldn't create the 2D context");
 
         await page.render({ canvas, canvasContext: ctx, viewport }).promise;
 

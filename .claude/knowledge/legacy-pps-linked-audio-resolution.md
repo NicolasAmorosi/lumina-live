@@ -28,7 +28,7 @@
   **basename** (never its path, which points at someone else's Windows machine) → the PowerPoint
   convention `<same base>.<audio ext>` → the sole audio file in the folder if only one exists.
   Manual override lives on `media_assets.linked_audio_path` (`library:setLinkedAudio` IPC,
-  "Asignar audio" in `deck-slides.tsx`).
+  "Add audio" in `deck-slides.tsx`).
 - Storage decision worth remembering: this linked audio is **not** written into `deck_audio` /
   the slides cache. `slide_decks` is keyed by content hash and shared across every library entry
   pointing at identical bytes — baking a folder-dependent sibling file into that shared cache

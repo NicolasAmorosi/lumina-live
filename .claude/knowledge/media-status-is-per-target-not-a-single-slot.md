@@ -27,6 +27,6 @@ progress bar showing another track's time) is the symptom.
 - Related: [`worship://` Range support + projector `<video>` lifecycle](worship-protocol-range-and-video-lifecycle.md)
   — the same session that added N simultaneous audio tracks also made a video's pause state
   (`VideoUnderlay.paused`) declarative instead of a `play`/`pause` command, for the same reason
-  covered there (NEGRO/LOGO must not silently override an operator's explicit pause).
+  covered there (BLACK/LOGO must not silently override an operator's explicit pause).
 
 **Last updated:** 2026-09-08

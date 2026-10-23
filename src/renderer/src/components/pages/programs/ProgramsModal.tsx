@@ -458,7 +458,7 @@ export function ProgramsModal({ initialMode, onOpenChange, open }: ProgramsModal
                 setPanelMode(null);
                 void refreshList();
                 // `discard` always switches the schedule; `new` only does when
-                // "crear y abrir" was checked — either way, once the schedule
+                // "Create and open" was checked — either way, once the schedule
                 // has moved on there's nothing left to manage here.
                 if (done.kind === "discard" || opened) onOpenChange(false);
               }}

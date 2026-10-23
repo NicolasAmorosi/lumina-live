@@ -112,7 +112,7 @@ export const api = {
     closeDecision: (decision: CloseDecision) => invoke("window:closeDecision", { decision }),
   },
   /** Saved time scenes — the countdowns, the clock and the stopwatch of
-   *  Funciones ▸ Utilidades. `remove` rather than `delete` for the same reason
+   *  Functions ▸ Timers. `remove` rather than `delete` for the same reason
    *  `library` uses it: a reserved word reads badly as a method. */
   utility: {
     list: () => invoke("utility:list", undefined),

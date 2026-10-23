@@ -5,7 +5,7 @@
  * invariants are the app's: the overlay wins over the base, a deck that is not
  * ready is black rather than a broken tile, and — the one that cost a
  * hardware-decoder crash to learn — a video keeps its element alive UNDER
- * NEGRO instead of being torn down and rebuilt on every toggle.
+ * BLACK instead of being torn down and rebuilt on every toggle.
  *
  * `selectOutputMemo` gets its own block because its whole reason for existing
  * is a negative: the busiest writer in the store (`setMediaStatus`, ~4 Hz per
@@ -85,7 +85,7 @@ beforeEach(() => {
 });
 
 describe("the overlay wins over the base", () => {
-  test("NEGRO is black whatever is selected", () => {
+  test("BLACK is black whatever is selected", () => {
     useProjectionStore.getState().setBase({ kind: "image", assetId: 3 });
     useProjectionStore.getState().setOverlay("black");
     expect(output().kind).toBe("black");
@@ -218,10 +218,10 @@ describe("a deck that is not ready is black, never a broken tile", () => {
 });
 
 describe("the video underlay survives the overlay", () => {
-  // The element is kept mounted under NEGRO/LOGO instead of being destroyed
+  // The element is kept mounted under BLACK/LOGO instead of being destroyed
   // and recreated: repeatedly tearing down a `<video>` is what produced
   // `PIPELINE_ERROR_DECODE` in Chromium's hardware decoder after a few cycles.
-  test("a video under NEGRO is still described, so its element stays alive", () => {
+  test("a video under BLACK is still described, so its element stays alive", () => {
     const store = useProjectionStore.getState();
     store.setBase({ kind: "video", assetId: 5, url: assetUrl(5), epoch: 2, startAtSeconds: 12 });
     store.setOverlay("black");
@@ -281,7 +281,7 @@ describe("the video underlay survives the overlay", () => {
 
 describe("a video embedded in the live slide", () => {
   // The whole reason `slideVideo` is a top-level field of `ProjectionOutput`
-  // and not part of the `slide` variant: under NEGRO the output kind is
+  // and not part of the `slide` variant: under BLACK the output kind is
   // "black", and a video that lived inside the variant would vanish from the
   // push — unmounting the element, losing its position and rebuilding the
   // decoder on every single toggle.
@@ -302,7 +302,7 @@ describe("a video embedded in the live slide", () => {
     expect(output().slideVideo).toBeNull();
   });
 
-  test("NEGRO covers it without taking it away", () => {
+  test("BLACK covers it without taking it away", () => {
     const store = useProjectionStore.getState();
     store.setLiveDeck(deckOf(9, 4, [slideVideoOn(2)]));
     store.setBase({ kind: "deck", assetId: 9, slideIndex: 2 });
@@ -313,7 +313,7 @@ describe("a video embedded in the live slide", () => {
     const out = output();
     expect(out.kind).toBe("black");
     // Still described, and still the SAME element: an overlay that bumped the
-    // epoch would restart the clip every time the operator pressed NEGRO.
+    // epoch would restart the clip every time the operator pressed BLACK.
     expect(out.slideVideo).not.toBeNull();
     expect(out.slideVideo?.epoch).toBe(epochBefore);
   });
@@ -488,7 +488,7 @@ describe("a utility scene on the projector", () => {
     expect(result.kind === "timer" && result.backgroundUrl).toBeNull();
   });
 
-  test("NEGRO covers it and the mark survives underneath, unchanged", () => {
+  test("BLACK covers it and the mark survives underneath, unchanged", () => {
     const store = useProjectionStore.getState();
     store.setBase({ kind: "utility", sceneId: 1, scene: scene(), clock });
     store.setOverlay("black");

@@ -21,12 +21,12 @@ import { installApplicationMenu } from "../../windows/app-menu";
 function assertValidSettings(partial: Partial<SettingsMap>): void {
   for (const [key, value] of Object.entries(partial)) {
     if (!isSettingsKey(key)) {
-      throw new IpcError({ code: "INVALID_SETTING", message: `Clave de ajuste desconocida: ${key}` });
+      throw new IpcError({ code: "INVALID_SETTING", message: `Unknown setting key: ${key}` });
     }
     if (!SETTINGS_VALIDATORS[key](value)) {
       throw new IpcError({
         code: "INVALID_SETTING",
-        message: `Valor inválido para el ajuste ${key}: ${JSON.stringify(value)}`,
+        message: `Invalid value for setting ${key}: ${JSON.stringify(value)}`,
       });
     }
   }

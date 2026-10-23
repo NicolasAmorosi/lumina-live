@@ -24,8 +24,8 @@ already exists than to one being built.
 
 ### The part that was worse than restarted audio
 
-The audit's own diagnosis said the deck case was already covered — *"el audio del deck se
-re-sincroniza solo con `deck-autoplay`"*. It does not. `deck-autoplay.ts` has exactly that
+The audit's own diagnosis said the deck case was already covered — *"the deck's audio re-syncs
+on its own through `deck-autoplay`"*. It does not. `deck-autoplay.ts` has exactly that
 recovery:
 
 ```ts

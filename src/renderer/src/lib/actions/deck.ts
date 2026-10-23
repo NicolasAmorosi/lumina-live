@@ -4,7 +4,7 @@ import { useDeckStore } from "@renderer/stores/deck.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 
 /**
- * "Volver a convertir" from the slide grid.
+ * "Convert again" from the slide grid.
  *
  * A forced reconversion replaces the deck row that has the same identity
  * (contentHash + renderWidth + imageFormat — see `insertDeck` in
@@ -17,7 +17,7 @@ import { useProjectionStore } from "@renderer/stores/projection.store";
  * So the rule is the operator's own: what is live is not reconverted. The
  * check lives here rather than in main because this is the only place that
  * knows what is live *under an overlay* — main sees nothing but the last
- * `ProjectionOutput`, and NEGRO or LOGO over a deck is indistinguishable
+ * `ProjectionOutput`, and BLACK or LOGO over a deck is indistinguishable
  * there from no deck at all.
  */
 export function reconvertDeck(assetId: number): void {

@@ -26,7 +26,7 @@
 - A related, initially-wrong idea while building the crossfade itself: assuming the entering
   layer of a transition can always paint on top just by being later in the DOM (so the
   persistent `<video>` element, always rendered last, would always win). That only holds in one
-  direction. Covering a live video with NEGRO needs the incoming black layer *on top of* the
+  direction. Covering a live video with BLACK needs the incoming black layer *on top of* the
   video; uncovering needs the reverse (the video on top of the outgoing black layer). DOM order
   is fixed, but the winner isn't — it depends on which side of the transition each element is on.
   Fixed with an explicit `role: "entering" | "leaving" | "steady"` → small fixed `zIndex` map
@@ -37,9 +37,9 @@
   a real commit point still isn't enough if the action then **forces** a field to a value it
   might already hold. `clearBaseContent()` (a row's own delete button) unconditionally did
   `setOverlay("logo")` after clearing `base` — reasonable when the overlay was `"none"` (the
-  live content really did disappear, falling back to the logo), but wrong whenever NEGRO/LOGO
+  live content really did disappear, falling back to the logo), but wrong whenever BLACK/LOGO
   was already up: forcing `"logo"` while already on `"logo"` produced a visible logo→logo fade,
-  and forcing it while on `"black"` silently kicked the operator OUT of NEGRO into LOGO — a
+  and forcing it while on `"black"` silently kicked the operator OUT of BLACK into LOGO — a
   functional bug, not just a spurious animation, since `selectOutputWithoutUnderlay` already
   shows black/logo regardless of `base` and deleting what's underneath should be invisible. Fix:
   only touch `beginScene()`/`setOverlay` when the overlay was `"none"` beforehand — the one case

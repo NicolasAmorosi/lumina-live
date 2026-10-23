@@ -17,10 +17,10 @@ type PreviewMediaBarProps = { asset: MediaAsset };
  * `OutputView`) to confirm it's the right clip and find an entry point by
  * watching it, not just guessing from the scrubber; its duration comes from
  * the real preview element instead of the detached probe. For **audio**,
- * nothing plays — sound in the control window before EN VIVO would interrupt
+ * nothing plays — sound in the control window before GO LIVE would interrupt
  * the service with no visual payoff, so it keeps the original silent,
  * informational row: duration from `useMediaDuration` and a scrubber that only
- * picks where EN VIVO should start it.
+ * picks where GO LIVE should start it.
  *
  * Same shell and row as the live media panel (`MediaPanel` + `MediaTrackRow`)
  * so the two columns' media controls never drift apart.

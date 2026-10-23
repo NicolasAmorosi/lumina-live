@@ -16,14 +16,14 @@ after the probe opened it. Also: before "fixing" anything a screenshot-driven pr
   (`src/renderer/src/components/shared/modal/Modal.tsx` focuses `focusablesIn(dialog)[0]`, which
   in `SettingsModal` is the close button):
 
-  | how Ajustes was opened | `document.activeElement` | `matches(":focus-visible")` |
+  | how Settings was opened | `document.activeElement` | `matches(":focus-visible")` |
   |---|---|---|
   | `Input.dispatchMouseEvent` mousePressed + mouseReleased on the gear | the close button | **false** |
   | `Runtime.evaluate("…click()")` on the gear | the close button | **true** |
 
   With `true`, the `Tooltip` that had just been put on that button opened its bubble by itself in
-  the screenshot, which read exactly like a real defect: "opening Ajustes greets you with a
-  «Cerrar» tooltip". It cannot happen with a mouse. The revert it caused was harmless only by
+  the screenshot, which read exactly like a real defect: "opening Settings greets you with a
+  «Close» tooltip". It cannot happen with a mouse. The revert it caused was harmless only by
   luck — the close button went back to the native `title` the other three modals use.
 
 - **So: drive anything focus-sensitive with real input events.** `Input.dispatchMouseEvent`

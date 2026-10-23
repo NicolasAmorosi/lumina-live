@@ -459,8 +459,8 @@ export class MediaRepo {
 
   /** Re-stats every in-library row — and every linked-folder row a saved
    *  program uses: without those, a schedule item from a linked folder never
-   *  got `missingSince`, so its «Relocalizar…» panel never appeared and it
-   *  failed later, on EN VIVO — marking newly-missing files and clearing
+   *  got `missingSince`, so its «Locate…» panel never appeared and it
+   *  failed later, on GO LIVE — marking newly-missing files and clearing
    *  the flag on ones that reappeared (e.g. a reconnected drive). Never
    *  deletes rows. Chunked with a yield every 200 rows — a large library must
    *  never turn this into a multi-second main-thread stall — and writes go
@@ -550,7 +550,7 @@ export class MediaRepo {
    * usually is: 1485 of 1501 rows come from linked folders, so after a USB
    * stick comes back as F: instead of E: and its folder is re-linked, every
    * file there has a row before the operator relocates a single item. A plain
-   * UPDATE then broke `ux_media_path`'s UNIQUE and «Relocalizar…» failed with a
+   * UPDATE then broke `ux_media_path`'s UNIQUE and «Locate…» failed with a
    * generic toast. The two rows are the same file, so they are MERGED: every
    * reference to the duplicate moves to this id, in one transaction, and the
    * duplicate goes (its `media_conversions` row with it, by cascade).

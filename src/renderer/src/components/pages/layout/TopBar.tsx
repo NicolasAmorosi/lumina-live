@@ -18,8 +18,8 @@ type TopBarProps = {
  * each group of controls sits exactly above the column it acts on:
  *
  *   col 1 (schedule/resources) — the mark, settings, the current-program card
- *   col 2 (slides)             — EN VIVO: preview -> live, right now
- *   col 3 (monitors)           — NEGRO / LOGO / VIVO: what the projector shows
+ *   col 2 (slides)             — GO LIVE: preview -> live, right now
+ *   col 3 (monitors)           — BLACK / LOGO / LIVE: what the projector shows
  *
  * Screen selection, theme and logo all live in Settings now — this bar only
  * ever changes what is on the projector, never how the app is configured.

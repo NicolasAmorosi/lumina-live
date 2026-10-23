@@ -1,8 +1,8 @@
 /**
- * EN VIVO on the time scene that is already on the projector.
+ * GO LIVE on the time scene that is already on the projector.
  *
  * What is live wins everywhere in the control window (`clockForScene`), so
- * PREVIEW shows the running countdown — and pressing EN VIVO on it must not
+ * PREVIEW shows the running countdown — and pressing GO LIVE on it must not
  * restart it from its full duration, nor touch a clock the operator armed on
  * another scene. It only uncovers it.
  */
@@ -38,7 +38,7 @@ beforeEach(() => {
   useDisplayStore.setState({ openIfNeeded: async () => {} });
 });
 
-test("EN VIVO on the countdown already on air keeps its clock and only uncovers it", async () => {
+test("GO LIVE on the countdown already on air keeps its clock and only uncovers it", async () => {
   usePreviewStore.getState().setTarget({ kind: "utility", sceneId: a.id });
   await goLive();
   const base = useProjectionStore.getState().base;

@@ -11,7 +11,7 @@ import { usePreviewMediaStatus } from "@renderer/lib/hooks/use-preview-media-sta
 import { attachPreviewVideo } from "@renderer/lib/actions/preview-playback";
 
 /** Stage one of the two-stage flow: what the operator has queued up, never on
- *  the projector until EN VIVO — that control now sits above this monitor,
+ *  the projector until GO LIVE — that control now sits above this monitor,
  *  shared with LIVE, instead of in this panel's own footer. Its position
  *  readout (slide 3/12…) lives in the column header — see `SlidesPanel.tsx`.
  *
@@ -46,7 +46,7 @@ export function PreviewMonitor() {
   // placeholder with no sign anything is happening.
   const convertingAssetId = !missing && !output && content?.kind === "deck" ? content.assetId : null;
   // …unless nothing is: with LibreOffice missing, an unconverted deck is
-  // never queued, and this stage said «Preparando la conversión…» forever.
+  // never queued, and this stage said «Getting ready to convert…» forever.
   const environment = useDeckStore((s) => s.environment);
   const sofficeMissing = convertingAssetId !== null && content?.kind === "deck" && sofficeBlocks(environment, content.ext);
   // A video or audio being converted: its original would play black, or not

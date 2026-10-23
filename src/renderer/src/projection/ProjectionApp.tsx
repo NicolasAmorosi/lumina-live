@@ -37,9 +37,9 @@ type AudioTrackElementProps = {
  * `paused` is declarative (set from the control window's media panel), so an
  * operator's explicit pause survives an overlay round-trip and a projection
  * window reload the same way `LiveVideo`'s does. A standalone asset track
- * keeps playing through NEGRO/LOGO; the deck's own soundtrack does not — the
+ * keeps playing through BLACK/LOGO; the deck's own soundtrack does not — the
  * control window (`projection-sync.ts`) folds the overlay into this track's
- * `paused` before it ever reaches here, so NEGRO/LOGO pauses and holds it
+ * `paused` before it ever reaches here, so BLACK/LOGO pauses and holds it
  * exactly like `LiveVideo` does for a video.
  */
 function AudioTrackElement({ registry, track }: AudioTrackElementProps) {
@@ -134,7 +134,7 @@ function resolveCommandTarget(
  * `audio-tracks` says which audio elements should exist — a deck's soundtrack
  * and any number of standalone audio assets sent live, none of them keyed off
  * the current output because they have to outlive every slide change (only a
- * standalone asset keeps playing through NEGRO/LOGO itself — see
+ * standalone asset keeps playing through BLACK/LOGO itself — see
  * `AudioTrackElement`).
  *
  * The pixels themselves are `OutputView`, the very component the control
@@ -227,8 +227,8 @@ export function ProjectionApp() {
 
       {/* Outside the output view on purpose: keyed by trackId+epoch so a track
           restarts from the beginning only when it is truly a new play (a
-          fresh EN VIVO on the same asset bumps the epoch), never merely
-          because NEGRO/LOGO or a pause toggled. */}
+          fresh GO LIVE on the same asset bumps the epoch), never merely
+          because BLACK/LOGO or a pause toggled. */}
       {tracks.map((track) => (
         <AudioTrackElement
           key={`${track.trackId}:${track.epoch}`}

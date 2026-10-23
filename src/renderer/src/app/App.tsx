@@ -37,7 +37,7 @@ import { useGlobalShortcuts } from "@renderer/lib/hooks/use-global-shortcuts";
  *
  * StrictMode double-invokes effects in development, and that is enough to make
  * a one-shot visible: the boot effect ran twice and the operator got the
- * "se recuperó el programa" toast twice. It is the same trap as `F1` in the
+ * "recovered the schedule" toast twice. It is the same trap as `F1` in the
  * field-bug report — a one-shot consumed where it can run more than once —
  * and the same answer: make it impossible by construction instead of relying
  * on how many times the caller happens to fire.
@@ -53,8 +53,8 @@ export function App() {
     { kind: "create" } | undefined
   >(undefined);
   // The only modal whose flag lives outside this component: a toast raised
-  // from `display.store` (no screen to project on) offers to open Ajustes ->
-  // Pantalla, and a toast action has no component tree under it. See
+  // from `display.store` (no screen to project on) offers to open Settings ->
+  // Screen, and a toast action has no component tree under it. See
   // `ui.store.ts`.
   const settingsOpen = useUiStore((s) => s.settingsOpen);
   const setSettingsOpen = useUiStore((s) => s.setSettingsOpen);
@@ -101,7 +101,7 @@ export function App() {
           settings["library.linkedFolders"],
         );
       // Nothing opens the projection window on launch any more — it was
-      // unreliable. The operator's first tap on NEGRO, LOGO or EN VIVO opens
+      // unreliable. The operator's first tap on BLACK, LOGO or GO LIVE opens
       // it on demand (see display.store's `openIfNeeded`).
       await useDisplayStore.getState().load();
       // After the settings, never before: `loadVersions` settles on
@@ -169,7 +169,7 @@ export function App() {
   }, [transitionStyle, transitionDurationMs, setTransitionSettings]);
 
   // The verse's own look, mirrored for the same reason and by the same route.
-  // Editing it in Ajustes while scripture is on the projector therefore
+  // Editing it in Settings while scripture is on the projector therefore
   // reaches the room immediately and WITHOUT a scene transition: nothing here
   // touches `sceneEpoch`, so `OutputView` swaps the layer in place instead of
   // fading a verse into a near-identical copy of itself.

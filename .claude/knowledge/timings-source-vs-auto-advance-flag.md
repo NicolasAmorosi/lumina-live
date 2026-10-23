@@ -11,7 +11,7 @@
 - The field that actually answers "does this deck auto-advance" is `DeckDTO.autoAdvance`
   (`src/main/db/repositories/slides.repo.ts`: `slides.some(s => s.advanceAfterMs !== null)`) —
   true only when at least one slide has a real timing. It was already being used correctly for
-  `DeckTransport`'s autoplay controls (third column), but `DeckAudioStrip`'s "Auto-avance" badge
+  `DeckTransport`'s autoplay controls (third column), but `DeckAudioStrip`'s "Auto-advance" badge
   (second/preview column, `src/renderer/src/components/pages/slides/deck-slides.tsx`) was gated
   on `timingsSource !== "none"` instead — so the badge showed on essentially every native
   `.pptx`, regardless of whether it had any real auto-advance timing.

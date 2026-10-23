@@ -17,7 +17,7 @@ type PlateTrackRowProps = {
    *  projector in the LIVE panel. */
   onDelete: () => void;
   plate: Plate;
-  /** The preview row only: its own EN VIVO, or «Ocultar» once it is up. The
+  /** The preview row only: its own GO LIVE, or «Hide» once it is up. The
    *  LIVE row's X already takes it down, and a second button doing the same
    *  would be noise. */
   withLiveButton?: boolean;
@@ -28,8 +28,8 @@ type PlateTrackRowProps = {
  * the LIVE media panel. Both read the same live state, so they can never
  * disagree on whether it is up, covered, or how long it has left.
  *
- * «Tapada» is spelled out on the row because the stage cannot say it: a plate
- * that is up under NEGRO, LOGO or an empty stage is invisible to the room, and
+ * «Covered» is spelled out on the row because the stage cannot say it: a plate
+ * that is up under BLACK, LOGO or an empty stage is invisible to the room, and
  * one sent while covered stays invisible until the stage is uncovered.
  *
  * A plate that hides itself carries the video rows' transport line: how long

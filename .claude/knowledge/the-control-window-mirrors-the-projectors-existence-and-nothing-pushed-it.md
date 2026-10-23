@@ -1,7 +1,7 @@
 ## `presentationOpen` mirrors a window owned by main, and nothing was pushing it — so the projector could die with the control window never finding out
 
 **Area:** projection / ipc (`src/renderer/src/stores/display.store.ts`, `src/main/ipc/handlers/projection.ts`, `src/shared/ipc/contract.ts`)
-**Trigger:** "EN VIVO / NEGRO / LOGO stopped doing anything", the on-air dot blinking with nothing
+**Trigger:** "GO LIVE / BLACK / LOGO stopped doing anything", the on-air dot blinking with nothing
 on screen, or before relying on `presentationOpen` for any decision.
 
 Found on 2026-09-13 auditing feature #5. Latent since the projection window existed.
@@ -29,14 +29,14 @@ projection renderer produces the same state.
 `openIfNeeded()` short-circuits on the flag (`if (presentationOpen) return`), so once it was stuck
 `true`:
 
-- EN VIVO, NEGRO and LOGO all stopped reaching any projector **in complete silence** —
+- GO LIVE, BLACK and LOGO all stopped reaching any projector **in complete silence** —
   `projection:show` still travelled to main, where `projectionState.getWindow()` returned `null`,
   which is a mute drop;
 - `MonitorsColumn`'s `broadcasting = presentationOpen && overlay === "none" && base !== null` kept
-  the on-air dot blinking and `useLiveStatus()` returned `""` instead of "desconectado" — the
+  the on-air dot blinking and `useLiveStatus()` returned `""` instead of "disconnected" — the
   monitors lying to the operator, which `CLAUDE.md` forbids outright;
-- the only recovery was Ajustes → Pantalla → "cerrar" (which closes nothing but resets the flag) →
-  "abrir". Nothing on screen hinted at it.
+- the only recovery was Settings → Screen → "close" (which closes nothing but resets the flag) →
+  "open". Nothing on screen hinted at it.
 
 ### The rule
 

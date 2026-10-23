@@ -77,7 +77,7 @@ function offerForcedRemoval(id: number): void {
  * only invoked when the window closes. Restoring a deleted row instead —
  * re-importing by path — would hand back a DIFFERENT asset: a new id, and with
  * it the linked audio track, the `inLibrary` flag and the row's place in the
- * unsaved service order all gone. A toast that offers "Deshacer" has to mean
+ * unsaved service order all gone. A toast that offers "Undo" has to mean
  * it.
  *
  * The one thing deferral moves rather than removes: if the asset is on the
@@ -112,8 +112,8 @@ async function commitRemoval(id: number): Promise<void> {
   } catch (error) {
     // The undo window is long enough for the operator to have saved a program
     // that references this asset in the meantime, so the in-use rejection is
-    // still reachable here and still has to surface as the "eliminar
-    // igualmente" offer rather than as an unhandled rejection. The row comes
+    // still reachable here and still has to surface as the "remove
+    // anyway" offer rather than as an unhandled rejection. The row comes
     // back to the grid: it was never deleted.
     useLibraryStore.getState().endPendingRemoval(id);
     if (error instanceof IpcError && error.code === "MEDIA_ASSET_IN_USE") {
@@ -176,7 +176,7 @@ export async function removeAsset(id: number): Promise<void> {
   pending.set(id, { timer, toastId });
 }
 
-/** The "Eliminar igualmente" escape hatch — same cleanup as `removeAsset`,
+/** The "Remove anyway" escape hatch — same cleanup as `removeAsset`,
  *  but bypasses the in-use guard by also deleting the referencing
  *  `program_items` (main-side, in one transaction — see
  *  `main/services/media-asset-removal.ts`). Not deferred: the operator has

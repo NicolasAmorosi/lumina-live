@@ -57,7 +57,7 @@ export type ProjectionStoreState = {
   logoUrl: string | null;
   presentationOpen: boolean;
   /** Declarative, operator-set pause for the live video — see `VideoUnderlay`.
-   *  Reset to `false` whenever `base` changes, so a fresh EN VIVO always
+   *  Reset to `false` whenever `base` changes, so a fresh GO LIVE always
    *  starts playing. */
   videoPaused: boolean;
   /** 0..1 for the live video — the counterpart of `videoPaused`, and pushed
@@ -69,7 +69,7 @@ export type ProjectionStoreState = {
   /** Identity of the live slide's video element — see `SlideVideo.epoch`.
    *  Advanced by everything that can change WHICH slide is live, and by
    *  nothing else: an overlay going up must not remount the element, or the
-   *  video restarts every time the operator presses NEGRO. */
+   *  video restarts every time the operator presses BLACK. */
   slideVideoEpoch: number;
   /** Operator's declarative pause for the live slide's video. Reset with the
    *  epoch, so a new slide always starts playing. */
@@ -136,7 +136,7 @@ export type ProjectionStoreState = {
    * colliding with another (`platesCollide`), in `PLATE_KINDS` order so the projector's DOM order never
    * depends on which one went up first.
    *
-   * Independent of `base` and of `overlay`: a plate stays "up" under NEGRO and
+   * Independent of `base` and of `overlay`: a plate stays "up" under BLACK and
    * while nothing is live, and `selectOutput` is what keeps it off the stage
    * then. None of the three actions below calls `beginScene()` — a plate is
    * not a new scene.
@@ -187,7 +187,7 @@ export type ProjectionStoreState = {
   setTimerClock: (clock: TimerClock) => void;
 
   /** Re-dresses the live utility scene after the operator edited it in the
-   *  «Escenas» modal — a new background, a bigger number, a different end
+   *  «Scenes» modal — a new background, a bigger number, a different end
    *  message.
    *
    *  Same rule as `setTimerClock`, and it is the whole F2 gate: editing what is
@@ -385,7 +385,7 @@ export const useProjectionStore = create<ProjectionStoreState>()(
     // Writing the cursor into `base` is what makes a slide change flow through
     // selectOutput -> projection:show like every other content change. The COM
     // version kept it in a side field that the output never read, which is why
-    // NEGRO/LOGO over a deck needed the window hide/show dance.
+    // BLACK/LOGO over a deck needed the window hide/show dance.
     setSlideIndex: (index) => {
       const { base, liveDeck } = get();
       if (base?.kind !== "deck" || !liveDeck) return;
@@ -517,7 +517,7 @@ export const useProjectionStore = create<ProjectionStoreState>()(
  * selector recomputes. The switch below is exhaustive — TypeScript refuses to
  * compile if a new BaseContent variant is added and not handled here.
  */
-/** `base`'s own video identity, regardless of NEGRO/LOGO — see `VideoUnderlay`. */
+/** `base`'s own video identity, regardless of BLACK/LOGO — see `VideoUnderlay`. */
 function selectVideoUnderlay(state: ProjectionStoreState): VideoUnderlay {
   if (state.base?.kind !== "video") return null;
   return {
@@ -533,7 +533,7 @@ function selectVideoUnderlay(state: ProjectionStoreState): VideoUnderlay {
  * The video embedded in the live slide, if that slide has one.
  *
  * Reads `base`/`liveDeck` and deliberately NOT `overlay`: a slide video has to
- * survive NEGRO/LOGO as a mounted, paused element, exactly like
+ * survive BLACK/LOGO as a mounted, paused element, exactly like
  * `selectVideoUnderlay`'s does — the projector is what covers it. Asking about
  * the overlay here would unmount the element on every toggle and restart the
  * clip each time the operator uncovered the stage.
@@ -616,7 +616,7 @@ function selectTransition(state: ProjectionStoreState): SceneTransition {
   };
 }
 
-/** NEGRO is black and LOGO is the logo, with no exception the operator has to
+/** BLACK is black and LOGO is the logo, with no exception the operator has to
  *  remember mid-service — and "nothing live" is the same logo, so it covers
  *  the plates too (decided 2026-09-24). The plates stay up in the store and
  *  come back the moment something is live again. */

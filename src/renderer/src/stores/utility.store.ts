@@ -16,7 +16,7 @@ import type { TimerClock } from "@shared/types/timer";
  * `started` is the bit `TimerClock` deliberately does not carry. The projector
  * draws "paused" and "not started yet" identically and has no use for the
  * difference; the control window does, because it decides whether the button
- * says ARRANCAR or REANUDAR, and whether EN VIVO should start the count.
+ * says START or RESUME, and whether GO LIVE should start the count.
  */
 export type TimerRun = {
   sceneId: number;
@@ -36,7 +36,7 @@ type UtilityStoreState = {
    *  it committed, so a caller that has to project it in the same tick never
    *  has to re-read the store. */
   start: (scene: UtilityScene) => TimerClock;
-  /** What EN VIVO uses: resumes the armed clock — wherever the operator left
+  /** What GO LIVE uses: resumes the armed clock — wherever the operator left
    *  it — and leaves one they deliberately paused exactly as it is. */
   ensureStarted: (scene: UtilityScene) => TimerClock;
   /** Puts a clock the transport already computed into the armed slot, arming
@@ -85,7 +85,7 @@ export const useUtilityStore = create<UtilityStoreState>()((set, get) => ({
       if (run.started) return run.clock;
       // Armed but never started — which is what dragging the PREVIEW row's bar
       // leaves behind (`seekTimer`). RESUMING that clock instead of building a
-      // fresh one is what makes EN VIVO start the countdown from where the
+      // fresh one is what makes GO LIVE start the countdown from where the
       // operator dropped the marker, exactly like a video's preview scrub
       // deciding its `startAtSeconds`. Rebuilding it was a silent reset: the
       // armed value was on screen in two monitors and then the projector

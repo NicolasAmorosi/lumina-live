@@ -6,7 +6,7 @@
  * Rasterization is deliberately NOT covered here — it needs a Chromium canvas,
  * so it only runs inside the app.
  *
- *   npx tsx scripts/convert-smoke.ts <archivo.pptx> [...]
+ *   npx tsx scripts/convert-smoke.ts <file.pptx> [...]
  */
 import { execFile } from "node:child_process";
 import fs from "node:fs";
@@ -37,7 +37,7 @@ function findSoffice(): string {
   if (fromEnv && fs.existsSync(fromEnv)) return fromEnv;
   const found = CANDIDATES.find((c) => fs.existsSync(c));
   if (!found) {
-    console.error("LibreOffice no encontrado. Instalá con: brew install --cask libreoffice");
+    console.error("LibreOffice not found. Install it with: brew install --cask libreoffice");
     process.exit(1);
   }
   return found;
@@ -72,14 +72,14 @@ async function convert(
     { timeout: 180_000, env: { ...process.env, SAL_DISABLE_OPENCL: "1" } },
   );
   const produced = fs.readdirSync(outDir).find((f) => f.toLowerCase().endsWith(`.${target}`));
-  if (!produced) throw new Error(`LibreOffice no generó un ${target}`);
+  if (!produced) throw new Error(`LibreOffice didn't produce a ${target}`);
   return path.join(outDir, produced);
 }
 
 async function main(): Promise<void> {
   const files = process.argv.slice(2);
   if (files.length === 0) {
-    console.error("Uso: npx tsx scripts/convert-smoke.ts <archivo.pptx> [...]");
+    console.error("Usage: npx tsx scripts/convert-smoke.ts <file.pptx> [...]");
     process.exit(1);
   }
 
@@ -96,7 +96,7 @@ async function main(): Promise<void> {
   for (const file of files) {
     console.log(`── ${path.basename(file)}`);
     if (!fs.existsSync(file)) {
-      console.log("   ✗ no existe\n");
+      console.log("   ✗ doesn't exist\n");
       failures += 1;
       continue;
     }
@@ -104,7 +104,7 @@ async function main(): Promise<void> {
     const work = fs.mkdtempSync(path.join(workRoot, "deck-"));
     try {
       const kind = containerKind(file);
-      console.log(`   contenedor: ${kind}`);
+      console.log(`   container: ${kind}`);
 
       // A PDF is already the intermediate format: `deck-service` hands it to
       // the rasterizer untouched, so this must not convert it either — running
@@ -112,7 +112,7 @@ async function main(): Promise<void> {
       // measure something the app never does.
       if (kind === "pdf") {
         const mb = (fs.statSync(file).size / 1024 / 1024).toFixed(1);
-        console.log(`   PDF: origen, sin conversión (${mb} MB) — no requiere LibreOffice`);
+        console.log(`   PDF: source, no conversion (${mb} MB) — LibreOffice not needed`);
       } else {
         const started = Date.now();
         const pdf = await convert(soffice, profileDir, file, path.join(work, "pdf"), "pdf");
@@ -127,7 +127,7 @@ async function main(): Promise<void> {
       if (kind === "binary") {
         parseSource = await convert(soffice, profileDir, file, path.join(work, "pptx"), "pptx");
         timingsSource = "ooxml-converted";
-        console.log(`   .ppt legacy -> .pptx para leer timings`);
+        console.log(`   legacy .ppt -> .pptx to read timings`);
       } else if (kind !== "ooxml") {
         timingsSource = "none";
       }
@@ -135,8 +135,8 @@ async function main(): Promise<void> {
       if (timingsSource === "none") {
         console.log(
           kind === "pdf"
-            ? "   sin metadata (un PDF no tiene transiciones ni media embebida)\n"
-            : "   sin metadata (contenedor no soportado)\n",
+            ? "   no metadata (a PDF has no transitions or embedded media)\n"
+            : "   no metadata (unsupported container)\n",
         );
         continue;
       }
@@ -161,35 +161,35 @@ async function main(): Promise<void> {
             }
           });
         } else {
-          console.log(`   ⚠ no se pudieron leer timings del binario de origen`);
+          console.log(`   ⚠ couldn't read timings from the source binary`);
         }
       }
       const timed = meta.slides.filter((s) => s.autoAdvanceMs !== null);
 
-      console.log(`   diapositivas: ${meta.slideCount} (fuente de timings: ${timingsSource})`);
+      console.log(`   slides: ${meta.slideCount} (timings source: ${timingsSource})`);
       if (recovered > 0) {
-        console.log(`   recuperados del binario (el .pptx los perdió): ${recovered}`);
+        console.log(`   recovered from the binary (the .pptx lost them): ${recovered}`);
       }
-      console.log(`   con auto-avance: ${timed.length}${
+      console.log(`   with auto-advance: ${timed.length}${
         timed.length > 0
           ? ` [${timed.slice(0, 6).map((s) => `${s.slideIndex}:${s.autoAdvanceMs}ms`).join(", ")}${timed.length > 6 ? ", …" : ""}]`
           : ""
       }`);
-      if (hidden.length > 0) console.log(`   ocultas: ${hidden.map((s) => s.slideIndex).join(", ")}`);
+      if (hidden.length > 0) console.log(`   hidden: ${hidden.map((s) => s.slideIndex).join(", ")}`);
       if (meta.slideSizeEmu) {
         const ratio = (meta.slideSizeEmu.cx / meta.slideSizeEmu.cy).toFixed(2);
-        console.log(`   relación de aspecto: ${ratio}`);
+        console.log(`   aspect ratio: ${ratio}`);
       }
 
       if (meta.audio.length > 0) {
         const extracted = extractAudioParts(parseSource, meta.audio, path.join(work, "audio"));
         console.log(
-          `   audio: ${extracted.length} pista(s) -> ${extracted
-            .map((a) => `${a.ext} ${(a.bytes / 1024).toFixed(0)}KB scope=${a.scope}${a.playable ? "" : " (NO reproducible)"}`)
+          `   audio: ${extracted.length} track(s) -> ${extracted
+            .map((a) => `${a.ext} ${(a.bytes / 1024).toFixed(0)}KB scope=${a.scope}${a.playable ? "" : " (NOT playable)"}`)
             .join(", ")}`,
         );
       } else {
-        console.log("   audio: ninguno");
+        console.log("   audio: none");
       }
       if (meta.video.length > 0) {
         const extracted = extractVideoParts(parseSource, meta.video, path.join(work, "video"));
@@ -198,15 +198,15 @@ async function main(): Promise<void> {
             .map((v) => {
               const r = v.rect;
               const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
-              return `slide ${v.slideIndex} ${v.ext} ${(v.bytes / 1024).toFixed(0)}KB rect ${pct(r.x)},${pct(r.y)} ${pct(r.width)}x${pct(r.height)}${v.playable ? "" : " (NO reproducible)"}`;
+              return `slide ${v.slideIndex} ${v.ext} ${(v.bytes / 1024).toFixed(0)}KB rect ${pct(r.x)},${pct(r.y)} ${pct(r.width)}x${pct(r.height)}${v.playable ? "" : " (NOT playable)"}`;
             })
             .join(", ")}`,
         );
       } else {
-        console.log("   video: ninguno");
+        console.log("   video: none");
       }
       if (meta.skippedVideoParts.length > 0) {
-        console.log(`   video no utilizable: ${meta.skippedVideoParts.join(", ")}`);
+        console.log(`   unusable video: ${meta.skippedVideoParts.join(", ")}`);
       }
 
       // Only relevant when the deck has no usable embedded/transition audio —
@@ -214,8 +214,8 @@ async function main(): Promise<void> {
       const linked = resolveLinkedAudio(file);
       console.log(
         meta.audio.length > 0
-          ? `   audio vinculado: (ignorado, el deck ya tiene audio embebido)`
-          : `   audio vinculado: ${linked ? path.basename(linked) : "no encontrado"}`,
+          ? `   linked audio: (ignored, the deck already has embedded audio)`
+          : `   linked audio: ${linked ? path.basename(linked) : "not found"}`,
       );
       console.log();
     } catch (error) {
@@ -227,10 +227,10 @@ async function main(): Promise<void> {
   fs.rmSync(workRoot, { recursive: true, force: true });
 
   if (failures > 0) {
-    console.error(`${failures} archivo(s) fallaron.`);
+    console.error(`${failures} file(s) failed.`);
     process.exit(1);
   }
-  console.log("Todo OK.");
+  console.log("All OK.");
 }
 
 void main();

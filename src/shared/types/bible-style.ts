@@ -34,7 +34,7 @@
  * design tokens — so `CLAUDE.md`'s ban on a hardcoded colour in a component is
  * not in play. Every default below reproduces, to the number, what
  * `output-view.tsx` hardcoded before this file existed, so an install that
- * never opens Ajustes projects exactly what it projected yesterday.
+ * never opens Settings projects exactly what it projected yesterday.
  */
 import {
   DEFAULT_SHADOW_STRENGTH,
@@ -145,7 +145,7 @@ export const BIBLE_MAX_WIDTH_MAX_CQW = 100;
 /**
  * Exactly what `output-view.tsx` drew before any of this existed.
  *
- * Deliberately so: this is the value an install that never opens Ajustes gets,
+ * Deliberately so: this is the value an install that never opens Settings gets,
  * and a "better" default would silently restyle every verse of the first
  * service after an update. `text-[3.5cqw] leading-snug font-light`, a
  * `2cqw`/`font-semibold` reference below it, `px-[6cqw]` of gutter (hence

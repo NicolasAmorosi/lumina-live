@@ -1,6 +1,6 @@
 ---
 name: learn
-description: Record a durable finding from this session into .claude/knowledge/ and index it in INDEX.md. Use at the end of a non-trivial task, when a bug's real cause turned out to be non-obvious, when a library/tool behaved differently than expected, or when the user says "registra esto", "aprende esto", "guarda este hallazgo".
+description: Record a durable finding from this session into .claude/knowledge/ and index it in INDEX.md. Use at the end of a non-trivial task, when a bug's real cause turned out to be non-obvious, when a library/tool behaved differently than expected, or when the user says "record this", "learn this", "save this finding".
 user-invocable: true
 tools: Read, Write, Edit, Bash, Glob, Grep
 ---
@@ -91,7 +91,7 @@ is useless; `— the ignored Range header that made seeking impossible` is the p
 
 ## Phase 4 — Report
 
-Two or three lines, in Spanish:
+Two or three lines, in the user's language:
 
 - which file was created or updated, and why it qualified;
 - whether anything graduated to `docs/knowledge/` or `CLAUDE.md`;

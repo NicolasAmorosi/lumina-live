@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { subscribeWithSelector } from "zustand/middleware";
 
-/** One audio track sonando ahora en la ventana de proyección — either a
+/** One audio track playing right now in the projection window — either a
  *  standalone asset sent live or a deck's own soundtrack. Kept separate from
  *  `projection.store`'s `base` because, unlike every other kind of content,
  *  audio never replaces what's on screen: any number of these can coexist
@@ -17,7 +17,7 @@ export type LiveAudioTrack = {
   epoch: number;
   paused: boolean;
   startAtSeconds: number;
-  /** 0..1. Starts at `media.volume` (Ajustes) for every new track and is the
+  /** 0..1. Starts at `media.volume` (Settings) for every new track and is the
    *  operator's for as long as the track lives; it is deliberately not
    *  persisted, so nothing ever starts at a level left over from another
    *  service. */
@@ -60,7 +60,7 @@ type AudioStoreState = {
   setVolume: (trackId: string, volume: number) => void;
   /** Restarts an already-live track in place: bumps its epoch (remounting
    *  the `<audio>` element so `startAtSeconds` re-applies) and unpauses it,
-   *  without touching `trackId` — used when EN VIVO targets an asset that is
+   *  without touching `trackId` — used when GO LIVE targets an asset that is
    *  already in the list but paused, so it plays again instead of stacking a
    *  second instance of the same audio. */
   restartTrack: (trackId: string, startAtSeconds: number) => void;

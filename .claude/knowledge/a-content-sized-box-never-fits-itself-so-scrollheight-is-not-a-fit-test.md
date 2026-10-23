@@ -1,4 +1,4 @@
-## A content-sized box never "fits itself", so `scrollHeight > clientHeight` is not a fit test — a sub-1.36 `line-height` made it permanently true and killed every slider in «Versículos»
+## A content-sized box never "fits itself", so `scrollHeight > clientHeight` is not a fit test — a sub-1.36 `line-height` made it permanently true and killed every slider in «Verses»
 **Area:** renderer / ui
 **Trigger:** the verse auto-fit (`useFittedTextSize` / `measureFittedSize` in
 `src/renderer/src/components/shared/bible-scene.tsx`), or any new "shrink until it fits" search;
@@ -16,7 +16,7 @@ also the symptom "I move the slider and nothing on the stage changes".
   ascent 1.069 + descent 0.293 = **1.362 em**, so any `line-height` under ~1.36 gives a negative
   half-leading and the glyphs spill out of their own line boxes at *every* font size. The app's
   default is `1.375` — barely above the threshold, which is why this was invisible until
-  «Versículos» shipped a leading slider starting at `0.8`.
+  «Verses» shipped a leading slider starting at `0.8`.
 
   Measured on 2026-09-21 in the real app over CDP (block `clientHeight` vs `scrollHeight`, short
   verse, `maxWidthCqw: 100`, stage 448×252 CSS px):
@@ -30,9 +30,9 @@ also the symptom "I move the slider and nothing on the stage changes".
 
   So `fits()` returned `false` for the ceiling **and for all seven probes of the binary search**,
   which converges on `low = min` — the verse silently collapsed to `autoFit.minSizeCqw` and stayed
-  there. The «Tamaño» slider then moved from 1 to 12 with the projected text frozen at 1.5 cqw:
+  there. The «Size» slider then moved from 1 to 12 with the projected text frozen at 1.5 cqw:
   four sliders that all *did* write their value to SQLite and all *looked* dead. That is what the
-  bug report "hay números que hacen que no funcione el cambio" actually was.
+  bug report "some numbers make the change not work" actually was.
 
 - **The `1.2 / 6 cqw` row is a second, independent cause: `clientHeight` and `scrollHeight` are
   integers rounded off a fractional layout.** A box that fills its space exactly can report one

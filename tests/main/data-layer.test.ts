@@ -1038,7 +1038,7 @@ describe("An overlay plate as an order-of-service item", () => {
  * The order the version picker offers is the operator's, and it survives a
  * re-seed.
  *
- * Both halves matter and only one of them is visible in Ajustes: `sort_order`
+ * Both halves matter and only one of them is visible in Settings: `sort_order`
  * also drives `bible.store`'s `versions`, which is the list the Bible tab's
  * picker is built from — so a reorder that did not persist would read as a
  * settings screen that forgets, and a re-seed that reset it would send the

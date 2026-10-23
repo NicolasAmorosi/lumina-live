@@ -69,7 +69,7 @@ describe("goLive with a plate", () => {
     expect(useProgramStore.getState().activeIndex).toBe(0);
   });
 
-  test("does not lift NEGRO: the plate goes up covered", async () => {
+  test("does not lift BLACK: the plate goes up covered", async () => {
     useProjectionStore.getState().setOverlay("black");
     usePreviewStore.getState().setTarget({ kind: "plate", plateId: pastor.id });
     await goLive();
@@ -80,7 +80,7 @@ describe("goLive with a plate", () => {
     expect(selectOutput(state).plates).toEqual([]);
   });
 
-  test("does not supersede a deck still converting from an earlier EN VIVO", async () => {
+  test("does not supersede a deck still converting from an earlier GO LIVE", async () => {
     const deckIntent = claimLiveIntent();
     usePreviewStore.getState().setTarget({ kind: "plate", plateId: pastor.id });
     await goLive();

@@ -185,7 +185,7 @@ let mainControlWindow: BrowserWindow | null = null;
 
 app.on("second-instance", () => {
   // A destroyed window throws on every call, which is what turned a second
-  // launch into the «Error inesperado» dialog with no window behind it.
+  // launch into the «Unexpected error» dialog with no window behind it.
   if (!mainControlWindow || mainControlWindow.isDestroyed()) {
     if (app.isReady()) mainControlWindow = openControlWindow();
     return;

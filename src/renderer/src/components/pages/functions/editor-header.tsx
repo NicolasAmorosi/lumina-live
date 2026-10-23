@@ -2,15 +2,15 @@ import type { ReactNode } from "react";
 import { Callout } from "@renderer/components/ui";
 
 type EditorHeaderProps = {
-  /** Why «Guardar» is off, when the draft cannot be saved at all. */
+  /** Why «Save» is off, when the draft cannot be saved at all. */
   invalidHint?: string | undefined;
   preview: ReactNode;
 };
 
 /**
- * The top of the «Escenas» and «Placas» editors: the live preview, centered,
+ * The top of the «Scenes» and «Overlays» editors: the live preview, centered,
  * with the reason the draft cannot be saved under it. The editor's actions do
- * not live here — they are `EditorActions`, under «Nueva» in the list column,
+ * not live here — they are `EditorActions`, under «New» in the list column,
  * so the preview keeps the whole width to itself.
  */
 export function EditorHeader({ invalidHint, preview }: EditorHeaderProps) {

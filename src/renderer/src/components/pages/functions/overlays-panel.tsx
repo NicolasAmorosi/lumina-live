@@ -20,7 +20,7 @@ import { PLATE_KIND_ICON, PLATE_KIND_LABEL } from "./plate-display";
  *
  * The same two-stage flow as every other list: a click previews the plate —
  * the PREVIEW monitor draws it over what is live, and its row under the
- * monitor carries its own EN VIVO — and a double click puts it up. `goLive()`
+ * monitor carries its own GO LIVE — and a double click puts it up. `goLive()`
  * is the only path either way (`goLiveWithPlate`), which puts it up without
  * replacing what is projected.
  *
@@ -60,7 +60,7 @@ export function OverlaysPanel() {
                 draggable
                 key={plate.id}
                 // No on-air rail: `PlateAirStatus` on the right already says
-                // «En el aire» or «Tapada», and the rail can't tell the two
+                // «On air» or «Covered», and the rail can't tell the two
                 // apart. Same call as the Utilities list — see `ListRow`'s `rail`.
                 rail={false}
                 leading={
@@ -90,8 +90,8 @@ export function OverlaysPanel() {
         )}
       </PanelBody>
 
-      {/* The footer every resource tab has: the editor on the left, «Agregar al
-          programa» pinned right. */}
+      {/* The footer every resource tab has: the editor on the left, «Add to
+          schedule» pinned right. */}
       <PanelFooter>
         <Tooltip content={t("overlays.manageHint")} floating>
           <IconButton aria-label={t("overlays.manage")} onClick={() => setEditorOpen(true)} size="sm" variant="outline">

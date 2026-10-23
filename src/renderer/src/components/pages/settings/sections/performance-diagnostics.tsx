@@ -74,9 +74,9 @@ function reasonText(t: Translate, reason: VideoProbeReason): string {
 }
 
 /**
- * The rows under «Rendimiento» that describe the machine rather than set a
+ * The rows under «Performance» that describe the machine rather than set a
  * preference: which GPU draws the app, whether Chromium is decoding video on
- * it, the two `chrome://` pages that say more, and «Probar video».
+ * it, the two `chrome://` pages that say more, and «Test video».
  *
  * The probe plays in the CONTROL window, visibly and muted. Visibly because an
  * element nobody can see is not decoded like one that is; in this window
@@ -138,7 +138,7 @@ export function PerformanceDiagnostics() {
     return () => controller.abort();
   }, [probeSrc]);
 
-  // Leaving Ajustes mid-probe must not leave the CDP session attached.
+  // Leaving Settings mid-probe must not leave the CDP session attached.
   const probingRef = useRef(false);
   probingRef.current = probeSrc !== null;
   useEffect(

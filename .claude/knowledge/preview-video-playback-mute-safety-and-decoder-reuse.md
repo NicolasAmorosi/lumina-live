@@ -22,7 +22,7 @@
   future regression in one gate doesn't make the element audible on its own.
 - The preview's `<video>` (see [`worship-protocol-range-and-video-lifecycle.md`](worship-protocol-range-and-video-lifecycle.md)
   for why `videoUnderlay` exists at all) keeps `epoch` **frozen at 0 forever** across every target
-  change in the preview, unlike the live video's `videoEpoch` which increments per EN VIVO. The
+  change in the preview, unlike the live video's `videoEpoch` which increments per GO LIVE. The
   preview target changes on every single click in the resource library; re-keying the element on
   each one would tear down and rebuild a decoder in rapid succession — the exact churn pattern that
   produces `PIPELINE_ERROR_DECODE (-12909)` on macOS's hardware decoder. Only the `src` attribute

@@ -1,6 +1,6 @@
 ## The deck cache is addressed by content, but "is it converted?" is answered by row ownership — and ownership is exclusive
 **Area:** slides, data, renderer
-**Trigger:** any count, badge or batch built on `deck:statuses` / `statusesByAsset` — "Preparar carpeta", the prewarm totals, a tile's icon-vs-thumbnail, `adoptProgram`'s eviction pins. Also whenever a "pending" number refuses to reach zero.
+**Trigger:** any count, badge or batch built on `deck:statuses` / `statusesByAsset` — "Prepare folder", the prewarm totals, a tile's icon-vs-thumbnail, `adoptProgram`'s eviction pins. Also whenever a "pending" number refuses to reach zero.
 
 - **Two different identities, and nobody reconciles them.** A deck is cached by
   `contentHash + renderWidth + imageFormat` (`findDeckByIdentity`, `tryCacheHit` step 2 in

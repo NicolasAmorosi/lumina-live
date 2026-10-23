@@ -19,7 +19,7 @@ end-of-playback, an auto-advance rule, a "this track finished" toast, etc.
   video/deck" feature): never trust `ended` alone. Compare `status.epoch` against the current
   epoch for that target — `base.epoch` for the video (`BaseContent` of kind `"video"`),
   `soundtrackEpoch` for the deck soundtrack (`projection.store.ts`) — and only act when they
-  match. Verified live via CDP: sending a stale-epoch `ended: true` after a fresh EN VIVO left
+  match. Verified live via CDP: sending a stale-epoch `ended: true` after a fresh GO LIVE left
   `base` untouched; the same message at the current epoch cleared it.
 - Related: [`mediaStatus` must be keyed per target](media-status-is-per-target-not-a-single-slot.md)
   (why the record is keyed at all) and

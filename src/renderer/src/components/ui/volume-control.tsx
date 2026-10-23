@@ -5,11 +5,11 @@ import { IconButton } from "./icon-button";
 
 type VolumeControlProps = {
   className?: string;
-  /** Names the pair for a screen reader — "Volumen de <track>". Both the mute
-   *  button and the slider get it, because a bare "Volumen" repeated once per
+  /** Names the pair for a screen reader — "Volume for <track>". Both the mute
+   *  button and the slider get it, because a bare "Volume" repeated once per
    *  live track says nothing about which one. */
   label: string;
-  /** What the slider announces at 0, e.g. "Silenciar" / "Activar sonido". */
+  /** What the slider announces at 0, e.g. "Mute" / "Unmute". */
   muteLabel: string;
   onChange: (volume: number) => void;
   tone?: "accent" | "audio";

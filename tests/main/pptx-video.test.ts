@@ -269,7 +269,7 @@ describe("a video we cannot place is refused, never guessed at", () => {
     const meta = readPresentationMeta(file);
     expect(meta.video).toHaveLength(0);
     expect(meta.skippedVideoParts).toHaveLength(1);
-    expect(meta.skippedVideoParts[0]).toContain("externo");
+    expect(meta.skippedVideoParts[0]).toContain("external");
   });
 });
 

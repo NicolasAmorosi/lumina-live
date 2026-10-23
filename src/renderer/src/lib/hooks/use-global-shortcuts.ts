@@ -13,7 +13,7 @@ const ARROW_KEYS_LIST: string[] = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRi
 const TEXT_ENTRY_TAGS = new Set(["INPUT", "SELECT", "TEXTAREA"]);
 // ...except the `<input>` types that are not text entry at all. A range is a
 // slider: it owns the arrows (and Home/End/PageUp/PageDown) and nothing else.
-// Treating it as a text field would have made `b` and `l` — NEGRO and LOGO,
+// Treating it as a text field would have made `b` and `l` — BLACK and LOGO,
 // the controls an operator reaches for when something appears the
 // congregation should not see — dead for as long as a volume slider kept
 // focus, which is right after they touched one. Same defect the comment on
@@ -52,9 +52,9 @@ const ARROW_CONSUMING_ROLES = new Set([
  *
  * Suppressing every shortcut whenever a `<button>` had focus looked harmless
  * and was not: Chromium focuses a button when you click it, so after a single
- * click on ANY button in the app — EN VIVO, LOGO, save, any `IconButton` — the
+ * click on ANY button in the app — GO LIVE, LOGO, save, any `IconButton` — the
  * `b` and `l` shortcuts stopped working, with nothing on screen to say why.
- * NEGRO is the control an operator reaches for when something appears that the
+ * BLACK is the control an operator reaches for when something appears that the
  * congregation should not see, and it was dead for the rest of the service
  * unless they happened to click on empty space. `b`, `l`, Delete and Backspace
  * mean nothing to a button, so there was never anything to protect.
@@ -83,11 +83,11 @@ function suppressesKey(target: EventTarget | null, key: string): boolean {
  *   Derived from `base`, not from which panel has focus, so the arrows always
  *   mean the same thing.
  * - ↑/↓: navigate the PREVIEW cursor. Nothing reaches the projector.
- * - Enter: send the preview to the projector (the EN VIVO button), also right
+ * - Enter: send the preview to the projector (the GO LIVE button), also right
  *   after clicking a button with the mouse — see `lib/focus-modality.ts`.
  * - Space: pause/resume a self-advancing deck. The one shortcut a PPT that
  *   plays by itself really needs: the operator has to be able to freeze it.
- * - B/L: toggle NEGRO/LOGO overlay.
+ * - B/L: toggle BLACK/LOGO overlay.
  * - Delete/Backspace: remove the selected library or schedule item.
  *
  * Suppressed entirely while `suspended` (any modal open — see

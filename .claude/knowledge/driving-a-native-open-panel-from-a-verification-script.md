@@ -40,7 +40,7 @@
 - Also worth knowing before scripting a service: `tell application "System Events" to click at {x, y}`
   fails with `Connection is invalid. (-609)` in this environment, so screen-coordinate clicking
   is not an escape hatch. And Return sent to the control window after the panel closes lands on
-  the app's own `Enter` shortcut — which is **EN VIVO** — so a stray extra Return in a script
+  the app's own `Enter` shortcut — which is **GO LIVE** — so a stray extra Return in a script
   projects whatever was in preview.
 
 **Last updated:** 2026-09-14

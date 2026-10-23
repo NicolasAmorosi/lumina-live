@@ -68,9 +68,9 @@ export function SchedulePanel() {
   /** One dialog, every supported extension at once — each picked file is then
    *  routed to its own kind by extension, same classifier the OS-file drag
    *  uses, so a single selection can mix PPTs, videos, images and audio. */
-  /** Same guard as «Nuevo programa» beside it: unsaved work is only thrown
+  /** Same guard as «New schedule» beside it: unsaved work is only thrown
    *  away when the operator says so. A saved program empties at once — it is
-   *  still in «Programas guardados». */
+   *  still in «Saved schedules». */
   function handleClear() {
     if (hasUnsavedChanges()) {
       toast.warning(t("programs.discardWarning"), { action: { label: t("schedule.discardAndClear"), onClick: clear } });

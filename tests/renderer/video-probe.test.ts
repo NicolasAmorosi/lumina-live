@@ -1,5 +1,5 @@
 /**
- * `classifyVideoProbe` — «Probar video»'s verdict. The case it exists for is a
+ * `classifyVideoProbe` — «Test video»'s verdict. The case it exists for is a
  * 4K file the GPU cannot decode: that is a CPU decode, and on the machines
  * this app runs on it stutters no matter how few frames the short probe lost.
  */

@@ -3,7 +3,7 @@
  *
  * Almost every path to the projector is synchronous; `goLiveWithDeck` is not,
  * because it awaits a conversion that can take seconds. The operator is not
- * frozen while it runs — they press NEGRO, or send something else live — and
+ * frozen while it runs — they press BLACK, or send something else live — and
  * the conversion used to finish and commit anyway, lifting the overlay they
  * had just put up and projecting a deck they had already abandoned, mid
  * service.

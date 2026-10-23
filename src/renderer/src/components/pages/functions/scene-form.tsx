@@ -35,7 +35,7 @@ type SceneFormProps = {
 
 /**
  * Everything about one scene, as grouped rows in the same visual language as
- * Ajustes — which is what the `FieldGroup`/`FieldRow` promotion was for.
+ * Settings — which is what the `FieldGroup`/`FieldRow` promotion was for.
  *
  * The rows that edit the parts of `SceneStyle` the Bible verse style ALSO has
  * — the background, the typeface, the vertical alignment, a text role's four

@@ -34,7 +34,7 @@ function isDirectory(candidate: string): boolean {
 
 /**
  * Where the file dialog opens for one kind of asset: the operator's override
- * (Ajustes → Sistema → Carpetas) or, when there is none, the OS's own folder
+ * (Settings → System → File folders) or, when there is none, the OS's own folder
  * for that kind.
  *
  * Deliberately NOT the last folder used. A dialog that opens wherever the

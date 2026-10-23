@@ -33,7 +33,7 @@ export const libraryHandlers: Pick<
   // A pure read: the "is this file still there?" sweep no longer runs inline
   // on every list — see `services/library-sweeper.ts`. `missingSince` can lag
   // a sweep's debounce/throttle window, which is fine: dragging a truly gone
-  // file to EN VIVO is still caught downstream (`SOURCE_MISSING` in
+  // file to GO LIVE is still caught downstream (`SOURCE_MISSING` in
   // `deck-service.ts`, the 410 from `worship-protocol.ts`).
   "library:list": ({ kind }) => getMediaRepo().list(kind),
 

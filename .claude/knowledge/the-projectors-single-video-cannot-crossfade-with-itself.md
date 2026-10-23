@@ -2,17 +2,17 @@
 
 **Area:** renderer / projection (`src/renderer/src/components/shared/output-view.tsx`,
 `src/renderer/src/lib/actions/playback.ts`)
-**Trigger:** any report that a projection transition "doesn't do what Ajustes says" or "always goes
+**Trigger:** any report that a projection transition "doesn't do what Settings says" or "always goes
 through black"; before touching `videoRole`, `SceneLayer`, `LiveVideo` or the `key` on the
 persistent `<video>`; before adding a new `TransitionStyle`.
 
-Found on 2026-09-13 from a field report: with **disolvencia (`crossfade`, 300 ms)** configured,
+Found on 2026-09-13 from a field report: with **crossfade (`crossfade`, 300 ms)** configured,
 going live with a video while another video is live never crosses — it goes to black and back.
 
 ### The mechanism
 
 `OutputView` keeps **one** `<video>`, outside the scene layers and keyed by
-`output.videoUnderlay.epoch`. That is deliberate: it is what lets NEGRO/LOGO *cover* a video without
+`output.videoUnderlay.epoch`. That is deliberate: it is what lets BLACK/LOGO *cover* a video without
 unmounting the element, because repeatedly tearing down and rebuilding it is what produces
 `PIPELINE_ERROR_DECODE (-12909)` (see
 [worship-protocol-range-and-video-lifecycle.md](worship-protocol-range-and-video-lifecycle.md)).
@@ -77,7 +77,7 @@ That table is the reason this is a one-branch bug and not an architecture proble
   element is the exact churn that produced `PIPELINE_ERROR_DECODE` here before.
 - Mounting two `<video>` elements (one per layer — each `layer.output` already carries its own
   `videoUnderlay`) also works, but pays two simultaneous decoders for `durationMs` and has to keep
-  the persistent element from remounting on a NEGRO/LOGO toggle.
+  the persistent element from remounting on a BLACK/LOGO toggle.
 
 The LIVE monitor animates too (`mode === "monitor"`), so it shows the same defect — the monitor is
 not lying, it is faithfully reproducing a broken projector.

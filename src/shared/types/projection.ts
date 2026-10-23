@@ -12,22 +12,22 @@ import type { TimerClock, TimerFormat } from "./timer";
 import type { TransitionSpec } from "./transition";
 import type { UtilityScene } from "./utility";
 
-/** Which video (if any) is the current *base* content, independent of NEGRO/
+/** Which video (if any) is the current *base* content, independent of BLACK/
  *  LOGO. Present on every `ProjectionOutput` variant (including "black" and
  *  "logo" themselves) so the projection window can keep a video's element —
  *  and therefore its OS-level hardware decoder session — alive and playing
  *  underneath an overlay instead of tearing it down and recreating it on every
  *  toggle. Repeatedly destroying/recreating a `<video>` element is what
  *  produces `PIPELINE_ERROR_DECODE` crashes in Chromium's hardware video
- *  decoder on macOS after a few NEGRO/EN VIVO cycles.
+ *  decoder on macOS after a few BLACK/GO LIVE cycles.
  *
  *  `paused` is declarative state, not a command: an explicit pause from the
- *  operator's media panel must survive an overlay round-trip (NEGRO no longer
+ *  operator's media panel must survive an overlay round-trip (BLACK no longer
  *  force-resumes a video the operator paused on purpose), so "should this be
  *  playing" travels in the same push as "what should this be showing".
  *
  *  `startAtSeconds` is the point the operator chose on the preview scrubber
- *  before pressing EN VIVO. Applied once, right when the element mounts for
+ *  before pressing GO LIVE. Applied once, right when the element mounts for
  *  this `epoch` — never re-applied on a later re-render or overlay toggle. */
 export type VideoUnderlay = {
   url: string;
@@ -46,7 +46,7 @@ export type VideoUnderlay = {
  * A video embedded in the slide that is currently live, positioned inside it.
  *
  * Top-level on `ProjectionOutput` and NOT a field of the `slide` variant, for
- * exactly the reason `videoUnderlay` is: NEGRO/LOGO replaces the output kind
+ * exactly the reason `videoUnderlay` is: BLACK/LOGO replaces the output kind
  * with `black`/`logo`, so a video that lived inside the `slide` variant would
  * vanish from the push the instant the operator covered the stage — unmounting
  * the element, losing its position, and recreating the hardware decoder on
@@ -199,7 +199,7 @@ export type ProjectionPlate = {
 export type ProjectionOutput = ProjectionOutputKind & {
   videoUnderlay: VideoUnderlay;
   slideVideo: SlideVideo;
-  /** At most one per kind and one per edge (`platesCollide`), and always empty under NEGRO, LOGO and "nothing
+  /** At most one per kind and one per edge (`platesCollide`), and always empty under BLACK, LOGO and "nothing
    *  live" — `selectOutput` decides, the projector only draws. */
   plates: readonly ProjectionPlate[];
   transition: SceneTransition;
@@ -292,7 +292,7 @@ export type MediaStatus = {
  * assets sent live all have to survive every slide change, so none of them
  * can be keyed off `output`. `paused` is declarative for the same reason as
  * `VideoUnderlay.paused` — with one difference: for the deck's own soundtrack,
- * the control window folds NEGRO/LOGO into this `paused` before sending it
+ * the control window folds BLACK/LOGO into this `paused` before sending it
  * (see `projection-sync.ts`), so it pauses/resumes through an overlay exactly
  * like a video; a standalone asset track is untouched by the overlay.
  *
@@ -319,7 +319,7 @@ export type BaseContent =
    *  main has converted the file (`playableAssetUrl`), and `selectOutput`
    *  cannot ask the conversion store. Resolving it once also means a copy
    *  finishing while the original is on air never swaps the file under the
-   *  congregation — the next EN VIVO picks it up. */
+   *  congregation — the next GO LIVE picks it up. */
   | { kind: "video"; assetId: number; url: string; epoch: number; startAtSeconds: number }
   | { kind: "image"; assetId: number }
   /** `versionLabel` rides along rather than being re-derived at push time:

@@ -9,7 +9,7 @@ import { DEFAULT_TIMER_FORMAT, type TimerClock } from "@shared/types/timer";
  * Whether a plate is up, as the trailing slot of a list row — the Overlays
  * list and a `plate` row of the order of service. `null` while it is down.
  *
- * «Tapada» says it is up but NEGRO, LOGO or an empty stage keeps it off the
+ * «Covered» says it is up but BLACK, LOGO or an empty stage keeps it off the
  * screen: the operator must never be told a plate is showing when the room
  * cannot see it. A plate that hides itself also shows what it has left,
  * frozen while it is covered.

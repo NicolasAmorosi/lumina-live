@@ -195,7 +195,7 @@ export class SlidesRepo {
    * reported "pending" forever — measured on the real library, 555 of 1235
    * assets with zero work to do, and a count that oscillated instead of
    * reaching zero because preparing one folder stole the rows back from the
-   * other. Every caller inherited it: the "Preparar carpeta" count, the tile
+   * other. Every caller inherited it: the "Prepare folder" count, the tile
    * thumbnails, and `adoptProgram`'s eviction pins.
    *
    * So the primary lookup joins `media_assets.content_hash` (stamped with the
@@ -632,7 +632,7 @@ export class SlidesRepo {
       .all();
   }
 
-  /** Every deck, rows and cache directories alike — the "Vaciar caché" button.
+  /** Every deck, rows and cache directories alike — the "Clear cache" button.
    *  Goes through `deleteDeck` one by one rather than a single `DELETE FROM`
    *  so each cache directory is removed with its row; a bulk delete would
    *  leave the whole `slides-cache` on disk with nothing left pointing at it.

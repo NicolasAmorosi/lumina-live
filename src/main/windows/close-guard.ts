@@ -10,7 +10,7 @@ import type { CloseDecision } from "@shared/types/window";
  * knows. So main never asks itself "is there unsaved work?" — it vetoes the
  * close once, tells the control window the operator wants out, and waits to be
  * told what to do. Only the renderer can put the question to the operator, in
- * the app's own language, next to a Guardar button that actually works.
+ * the app's own language, next to a Save button that actually works.
  *
  * The grace timer is the other half of the contract: a renderer that is
  * wedged, crashed, or simply has no listener must never make the app
@@ -53,7 +53,7 @@ let guarded: BrowserWindow | null = null;
  *
  * That veto came too late. By the time the control window got its `close`,
  * Electron had already closed the projection window, which has no guard. So an
- * operator who hit ⌘Q by accident and answered «Cancelar» kept the app and lost
+ * operator who hit ⌘Q by accident and answered «Cancel» kept the app and lost
  * the projector, in front of the congregation (measured in the 2026-10-14
  * rehearsal). Preventing `before-quit` itself means no window closes and none of
  * the quit's shutdown chores run until the answer is "close", and that answer

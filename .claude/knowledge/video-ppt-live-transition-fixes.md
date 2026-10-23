@@ -38,7 +38,7 @@ producing `{kind:"deck", assetId: 7}`. `useDeck(7)`'s effect fired on that and c
 presentation. `convertTimeoutFor` gives a file that size a ~10-minute timeout, and
 `deck-service.ts`'s `pump()` processes exactly **one conversion job at a time** — so this bogus
 job blocked the real PPT's conversion behind it, which is what read to the operator as
-"Convirtiendo diapositivas… N de N" stuck forever.
+"Converting slides… N of N" stuck forever.
 
 **Fixed** by rewriting `useMediaAsset` (`src/renderer/src/lib/hooks/use-media-asset.ts`) to
 always derive its return value **synchronously from the module-level cache during render**,

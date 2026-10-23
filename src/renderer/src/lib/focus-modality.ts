@@ -4,10 +4,10 @@
  * Enter, Space and the arrows on a button mean two different things depending
  * on how the operator got there. Reached with Tab, they are that button's own
  * keys. Clicked, they are not: Chromium focuses a button on click, so after
- * touching «Pausar» or a resource tile, Enter pressed that button again instead
- * of going EN VIVO, which is the one key an operator presses blind — and after
- * clicking EN VIVO itself, → no longer moved the verse or the slide that had
- * just gone live, and Space pressed EN VIVO again (a new scene: the video and
+ * touching «Pause» or a resource tile, Enter pressed that button again instead
+ * of going live, which is the one key an operator presses blind — and after
+ * clicking GO LIVE itself, → no longer moved the verse or the slide that had
+ * just gone live, and Space pressed GO LIVE again (a new scene: the video and
  * the deck's music back to 0). `:focus-visible` cannot tell the two apart here.
  * Chromium flips it to true on the very keydown being handled, already in the
  * capture phase (measured 2026-10-14). So the modality is recorded when focus

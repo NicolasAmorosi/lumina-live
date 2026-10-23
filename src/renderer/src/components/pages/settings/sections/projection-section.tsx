@@ -108,7 +108,7 @@ export function ProjectionSection() {
           </Button>
           {/* Asked first only when the logo IS the picture on the projector:
               removing it then turns the screen black in front of everybody,
-              which is not what "quitar una preferencia" looks like. With
+              which is not what "removing a preference" looks like. With
               nothing on air it is a plain setting and gets no dialog. */}
           <Button
             disabled={logoPath === null}

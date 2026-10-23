@@ -11,7 +11,7 @@ const VIDEO_TARGET_KEY = mediaTargetKey({ kind: "video" });
 const SLIDE_VIDEO_TARGET_KEY = mediaTargetKey({ kind: "slideVideo" });
 
 /** What the congregation is seeing, rendered by the same component the
- *  projection window uses — so the monitor can't lie. Its status text (NEGRO,
+ *  projection window uses — so the monitor can't lie. Its status text (BLACK,
  *  LOGO, slide counter…) lives in the column header, not here — see
  *  `useLiveStatus` in `MonitorsColumn.tsx`. The deck transport used to render
  *  as this monitor's footer; it's a sibling row in `MonitorsColumn` now so a
@@ -51,8 +51,8 @@ export function LiveMonitor() {
   // it names the way out instead of the symptom.
   //
   // Gated on `loaded` because `logoUrl` is mirrored from the settings
-  // (`App.tsx`) and starts null: without it, every launch would flash "no hay
-  // logo" for as long as the first `settings:get` takes, on a machine that
+  // (`App.tsx`) and starts null: without it, every launch would flash "No logo
+  // set" for as long as the first `settings:get` takes, on a machine that
   // has one.
   const settingsLoaded = useSettingsStore((s) => s.loaded);
   const logoMissing = settingsLoaded && output.kind === "logo" && output.url === null;
@@ -70,7 +70,7 @@ export function LiveMonitor() {
         posterUrl,
         videoUrl: liveVideoUrl,
       };
-  // Only while the stage is actually showing the still: under NEGRO/LOGO the
+  // Only while the stage is actually showing the still: under BLACK/LOGO the
   // stage is what it says it is.
   const stillNotice =
     videoStill !== undefined && (output.kind === "video" || output.slideVideo !== null);

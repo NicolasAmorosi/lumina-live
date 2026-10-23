@@ -135,7 +135,7 @@ export function DeckSlides({
     );
   }
 
-  /** «Volver a convertir»/«Reintentar» over slides that are still there —
+  /** «Convert again»/«Retry» over slides that are still there —
    *  replaced by the reason when it cannot work, rather than offered to fail. */
   const reconvertAction = (label: string) =>
     blocked ? (
@@ -156,7 +156,7 @@ export function DeckSlides({
   // else — a slide grid that vanishes and reappears for a deck that was
   // never really being reconverted.
   // A cancelled conversion (`stale` with no DTO — see `DeckConversionStatus`)
-  // belongs here too: the "no tiene diapositivas" empty state below would
+  // belongs here too: the "has no slides" empty state below would
   // accuse the file for something the operator chose to do. Spelled out rather
   // than written as `!== "ready"` so this only ever routes states that
   // `DeckConversionStatus` actually renders.

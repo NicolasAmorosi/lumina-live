@@ -35,7 +35,7 @@ function yieldToEventLoop(): Promise<void> {
 
 /**
  * Whether a file may become a library row of `kind`. Every way in goes through
- * here: «Agregar», drag and drop, a linked folder, the legacy import.
+ * here: «Add», drag and drop, a linked folder, the legacy import.
  *
  * - **Never a sidecar.** macOS writes an AppleDouble `._522.pps` next to every
  *   file it copies onto a FAT/exFAT stick, and PowerPoint keeps a `~$Himno.pptx`
@@ -160,8 +160,8 @@ export async function importPaths(
     //
     // Capped: an import is one gesture, and dragging in a whole folder must
     // not turn it into hundreds of unrequested conversions (see
-    // `PREWARM_EXPLICIT_MAX`). The rest are reachable from "Preparar
-    // carpeta", which asks first and can be stopped.
+    // `PREWARM_EXPLICIT_MAX`). The rest are reachable from "Prepare
+    // folder", which asks first and can be stopped.
     if (kind === "ppt" && inLibrary) {
       prewarmExplicit(results.slice(0, PREWARM_EXPLICIT_MAX).map((asset) => asset.id));
     }

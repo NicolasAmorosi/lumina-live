@@ -245,7 +245,7 @@ export async function rasterizePdf(request: RasterRequest): Promise<RasterPage[]
 
     /** Abandoning a job in main does not stop the page: the hidden window
      *  kept rendering every remaining slide, alongside the next job, so a
-     *  «Cancelar» or a preemption never freed the CPU it was meant to free —
+     *  «Cancel» or a preemption never freed the CPU it was meant to free —
      *  and a page that truly hung kept its window, reused by the next deck.
      *  So the window goes too, unless another job still needs it; the next
      *  conversion starts a fresh one. */

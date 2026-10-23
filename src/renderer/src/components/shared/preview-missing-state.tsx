@@ -10,7 +10,7 @@ import { relocateAsset } from "@renderer/lib/actions/relocate-asset";
  * been moved rather than deleted (a renamed folder, a different USB stick),
  * and relocating keeps the row's id, so the programs that use it and the
  * order of service being assembled stay intact. Re-adding the file from
- * Recursos would create a second asset and leave all of that pointing at the
+ * Resources would create a second asset and leave all of that pointing at the
  * broken one.
  */
 export function PreviewMissingState({ assetId }: { assetId: number }) {

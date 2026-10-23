@@ -27,8 +27,8 @@ sourcePath`, straight to `rasterizePdf`. `warmBatchPdfCache` filters PDFs out of
 `convertBatchToPdf` for the same reason. Two consequences worth knowing:
 
 - **A PDF deck needs no LibreOffice at all.** That is why `deckRequiresSoffice(ext)` exists in
-  `shared/constants.ts` and why the "instalá LibreOffice" gate in `deck-slides.tsx` and the
-  "Preparar carpeta" button in `media-browser.tsx` are per-deck, not global. A gate on the
+  `shared/constants.ts` and why the "install LibreOffice" gate in `deck-slides.tsx` and the
+  "Prepare folder" button in `media-browser.tsx` are per-deck, not global. A gate on the
   environment flag alone refuses work that has no such dependency.
 - `consecutiveTimeouts = 0` moved inside the `else`: it tracks LibreOffice health, and a deck
   that never launched it must not clear a streak of real `soffice` timeouts.
@@ -68,7 +68,7 @@ if (!resolved.startsWith(slidesTempDir + path.sep)) return new Response("Forbidd
 That prefix was a correct proxy for "main vetted this path" for exactly as long as every PDF the
 rasterizer ever read was one main had just written into its own temp dir. A PDF *source* lives
 wherever the operator keeps it, so every one of them would have failed with
-`No se pudo leer el PDF (403)` — a conversion error with nothing in it pointing at a protocol
+`No se pudo leer el PDF (403)` ("couldn't read the PDF") — a conversion error with nothing in it pointing at a protocol
 guard.
 
 The fix is a **positive** assertion rather than a widened prefix: `MediaRepo.hasPath(resolved)`,

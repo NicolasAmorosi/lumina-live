@@ -35,7 +35,7 @@ export function MediaTabs({ active }: { active: boolean }) {
 
   // Keeps Delete/Backspace pointed at the grid on screen. It has to follow
   // BOTH the sub-tab and whether Media is the open tab at all: coming back
-  // from Biblia re-selects this kind, and `removeSelected()` prefers the
+  // from Bible re-selects this kind, and `removeSelected()` prefers the
   // library over the schedule, so a stale `activeTab` is a delete that lands
   // on a list the operator is not looking at.
   useEffect(() => {

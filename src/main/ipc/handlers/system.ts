@@ -145,7 +145,7 @@ export const systemHandlers: Pick<
   "system:openInternals": ({ page }, ev) => {
     // The renderer is trusted, but a page name still becomes a URL here.
     if (!INTERNALS_PAGES.includes(page)) {
-      throw new IpcError({ code: "INVALID_INPUT", message: "Página desconocida." });
+      throw new IpcError({ code: "INVALID_INPUT", message: "Unknown page." });
     }
     const existing = internalsWindows.get(page);
     if (existing && !existing.isDestroyed()) {

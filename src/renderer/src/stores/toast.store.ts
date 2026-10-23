@@ -11,7 +11,7 @@ export type ToastItem = {
   action?: ToastAction | undefined;
   /** Dismissed, still on screen playing its exit animation. It stops being
    *  interactive the moment this flips — otherwise the 180 ms of fade are a
-   *  window where "Deshacer" still looks clickable and no longer is. */
+   *  window where "Undo" still looks clickable and no longer is. */
   exiting?: boolean;
   /** `null` means no auto-dismiss — always the case when there's an `action`,
    *  so an accountable toast can never evaporate before the operator reads it. */

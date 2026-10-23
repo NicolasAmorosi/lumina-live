@@ -1,50 +1,52 @@
-# 01 — Arquitectura
+# 01 — Architecture
 
-## Qué es
+## What it is
 
-WorshipApp es una app Electron 36 con **TypeScript + React 19 + Vite**, empaquetada con
-`electron-vite` (no vite+tsc a mano — ver "Por qué electron-vite" abajo). Tres procesos:
+WorshipApp is an Electron 44 app with **TypeScript + React 19 + Vite**, bundled with
+`electron-vite` (not vite+tsc wired by hand — see "Why electron-vite" below). Three processes:
 
-- **Main** (`src/main/`) — ventanas, DB SQLite, IPC, conversión de diapositivas con LibreOffice.
-- **Preload** (`src/preload/index.ts`) — puente `contextBridge` genérico (`invoke`/`on` por
-  string de canal), ~25 líneas que no cambian nunca al agregar funcionalidad.
-- **Renderer de control** (`src/renderer/index.html` + `src/renderer/src/`) — toda la UI de la
-  ventana de operador: React + Zustand + Tailwind.
-- **Renderer de proyección** (`src/renderer/projection.html` + `src/renderer/src/projection/`) —
-  deliberadamente sin lógica de dominio: una función pura del último `ProjectionOutput` recibido.
+- **Main** (`src/main/`) — windows, SQLite DB, IPC, slide conversion with LibreOffice.
+- **Preload** (`src/preload/index.ts`) — generic `contextBridge` bridge (`invoke`/`on` by
+  channel string), ~35 lines that never change when features are added.
+- **Control renderer** (`src/renderer/index.html` + `src/renderer/src/`) — the whole UI of the
+  operator window: React + Zustand + Tailwind.
+- **Projection renderer** (`src/renderer/projection.html` + `src/renderer/src/projection/`) —
+  deliberately free of domain logic: a pure function of the last `ProjectionOutput` received.
 
-## Por qué `electron-vite`
+## Why `electron-vite`
 
-El andamiaje de referencia (`church-presenter`, archivado) usaba Vite pelado + `tsc --watch` +
-`concurrently`, y tenía 3 bugs de cadena de build nunca resueltos: `NODE_ENV` nunca se seteaba
-(dev caía siempre a producción), el `outDir` del renderer no coincidía con lo que el main
-buscaba, y faltaba `root` en la config de Vite. `electron-vite` resuelve los tres de fábrica:
-detecta dev-server URL automáticamente (`process.env.ELECTRON_RENDERER_URL`), compila los tres
-targets con sus propios `tsconfig`, externaliza `electron` y módulos nativos, y reinicia el main
-en watch. Config completa en `electron.vite.config.ts` (raíz del repo).
+The reference scaffolding (`church-presenter`, archived) used bare Vite + `tsc --watch` +
+`concurrently`, and had 3 build-chain bugs that were never fixed: `NODE_ENV` was never set
+(dev always fell through to production), the renderer's `outDir` didn't match what main looked
+for, and the Vite config was missing `root`. `electron-vite` fixes all three out of the box: it
+detects the dev-server URL automatically (`process.env.ELECTRON_RENDERER_URL`), compiles the three
+targets with their own `tsconfig`, externalizes `electron` and native modules, and restarts main
+in watch mode. Full config in `electron.vite.config.ts` (repo root).
 
-## Dev vs. empaquetado
+## Dev vs. packaged
 
-`src/main/windows/control-window.ts` y `projection-window.ts` deciden `loadURL` (dev, con HMR) vs.
-`loadFile` (producción) mirando `app.isPackaged` + `process.env.ELECTRON_RENDERER_URL` — nunca
-`NODE_ENV` a mano. **Todas** las rutas dependientes de empaquetado (dónde viven las migraciones,
-los recursos de la Biblia, la DB de usuario) se resuelven en un único archivo,
-`src/main/paths.ts` — no repitas `app.isPackaged ? ... : ...` en otro lado.
+`src/main/windows/control-window.ts` and `projection-window.ts` choose `loadURL` (dev, with HMR) vs.
+`loadFile` (production) by looking at `app.isPackaged` + `process.env.ELECTRON_RENDERER_URL` — never
+`NODE_ENV` by hand. **All** packaging-dependent paths (where the migrations, the Bible resources
+and the user DB live) are resolved in a single file, `src/main/paths.ts` — don't repeat
+`app.isPackaged ? ... : ...` anywhere else.
 
-## Las dos ventanas
+## The two windows
 
-Igual que la versión legacy: `createControlWindow()` (1400×900, mínimo 1000×700, fondo
-`#0b1929`) y `createProjectionWindow(displayId?)`, que se **recrea** (no se reutiliza) en cada
-`projection:open` y cae a 800×600 centrada sin `alwaysOnTop` con un solo monitor conectado. La
-sync de minimizar/restaurar entre ambas ventanas vive en `main/index.ts` (`wireMinimizeRestoreSync`).
+As in the legacy version (removed from the repo on 2026-10-22; still in git history at
+`90d3821`): `createControlWindow()` (1400×900, minimum 1000×700, background `#162231`) and
+`createProjectionWindow(displayId?)`, which is **recreated** (not reused) on every
+`projection:open` and falls back to 800×600, centered, without `alwaysOnTop` when only one monitor
+is connected. The minimize/restore sync between both windows lives in `main/index.ts`
+(`wireMinimizeRestoreSync`).
 
-Como la ventana de proyección se destruye y recrea, main guarda el último `ProjectionOutput`
-enviado (`src/main/services/projection-state.ts`) y lo reenvía en `did-finish-load` — si no,
-reabrir la proyección la deja en negro aunque el control crea que está proyectando algo.
+Because the projection window is destroyed and recreated, main keeps the last `ProjectionOutput`
+sent (`src/main/services/projection-state.ts`) and replays it on `did-finish-load` — otherwise,
+reopening the projection leaves it black even though the control believes it is projecting
+something.
 
-## Seguridad de ventanas
+## Window security
 
-`contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, **`webSecurity: true`** (a
-diferencia de accesos rápidos comunes en Electron, acá no se desactiva — ver
-`02-ipc-contract.md` y el protocolo `worship://` para cómo se sirven archivos locales sin
-necesitarlo). CSP declarada en ambos HTML.
+`contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`, **`webSecurity: true`** (unlike
+common Electron shortcuts, it is not disabled here — see `02-ipc-contract.md` and the `worship://`
+protocol for how local files are served without needing it). CSP declared in both HTML files.

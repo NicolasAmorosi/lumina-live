@@ -26,7 +26,7 @@ export type SettingsMap = {
    *  through the OS API, so it follows a moved home directory and is spelled
    *  in whatever language the machine is installed in. Storing the resolved
    *  path instead would freeze both. A non-null value is an explicit override
-   *  the operator chose in Ajustes. */
+   *  the operator chose in Settings. */
   "files.defaultFolders": Record<AssetKind, string | null>;
   "projection.displayId": number | null;
   "ui.theme": Theme;
@@ -51,7 +51,7 @@ export type SettingsMap = {
   /** Whether a missing LibreOffice is announced on its own: the toast at
    *  launch and the strip over the PPT tab. Off, the operator still meets it
    *  where it actually stops something — a deck that cannot be converted, and
-   *  Ajustes — but a machine that never projects a PowerPoint stops being told
+   *  Settings — but a machine that never projects a PowerPoint stops being told
    *  about it every morning. */
   "slides.warnMissingSoffice": boolean;
   "slides.imageFormat": SlideImageFormat;
@@ -80,8 +80,8 @@ export type SettingsMap = {
    *  (`defaultUtilityScenes`). A flag and not a row count, deliberately:
    *  re-seeding whenever `utility_scenes` happens to be empty would mean an
    *  operator can never be rid of a scene they deleted — the four would come
-   *  back on the next launch. Seeding once is what makes "borrar" mean
-   *  borrar. */
+   *  back on the next launch. Seeding once is what makes "delete" mean
+   *  delete. */
   "utility.seeded": boolean;
   /** How a scripture verse is drawn on the projector — see `BibleStyle`.
    *  A JSON column in all but name, so it is the one settings key with a
@@ -97,8 +97,8 @@ export type SettingsMap = {
    *
    *  Exists for exactly the reason `utility.seeded` does, with one extra
    *  wrinkle. `seedBuiltinBibles()` runs on every launch, so without a flag a
-   *  deleted RV1909 would reappear at the next one and «borrar» would not
-   *  mean borrar. But the flag must NOT disable seeding outright: the seed is
+   *  deleted RV1909 would reappear at the next one and «delete» would not
+   *  mean delete. But the flag must NOT disable seeding outright: the seed is
    *  also the upgrade path — it re-imports when `resources/bibles/rv1909.json`
    *  changes hash, which is how a corrected bundle reaches an existing
    *  install. So the flag is only consulted when the version row is GONE (see
@@ -116,7 +116,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   // Full. Anything sent live is meant to be heard, and a level the operator
   // never set is a level nobody can explain from the booth — halfway up just
   // looks like the file is quiet. Balancing down is one drag away, per track,
-  // in the En Vivo panel.
+  // in the Live panel.
   "media.volume": 1,
   "projection.transition.style": "crossfade",
   "projection.transition.durationMs": 300,

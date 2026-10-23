@@ -404,7 +404,7 @@ function escapeForRegex(value: string): string {
  * Best-effort and non-blocking: `pkill` exits 1 when nothing matched, which is
  * the normal case. On Windows there is no `pkill`, and no built-in that can
  * filter processes by command line except WMI, so it goes through PowerShell.
- * That case matters MORE there: a «Finalizar tarea» on a frozen app leaves
+ * That case matters MORE there: a «End task» on a frozen app leaves
  * `soffice.bin` holding the profile, `resetSofficeProfile` cannot delete a
  * locked folder, and every conversion kept failing until a reboot.
  */
@@ -461,7 +461,7 @@ function runSoffice(options: RunOptions): Promise<void> {
   // once, but the killed instance keeps the shared profile's lock and pipe
   // until it exits — and on Windows `taskkill` is itself asynchronous — so a
   // conversion started in that window exited 1 with nothing to show: the
-  // interactive EN VIVO that had just preempted a «Preparar carpeta» batch.
+  // interactive GO LIVE that had just preempted a «Prepare folder» batch.
   // Rejections are swallowed here so one failure never wedges the chain;
   // callers still get their own through `done`.
   sofficeChain = started.then((run) => run.exited).catch(() => undefined);

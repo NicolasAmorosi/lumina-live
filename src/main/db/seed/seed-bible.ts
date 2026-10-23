@@ -153,7 +153,7 @@ export function seedBibleFromFile(
  *   a corrected `resources/bibles/rv1909.json` in a later build reaches an
  *   existing install.
  * - row gone, flag set → the operator deleted it. Leave it deleted; this is
- *   what makes «borrar» mean borrar, exactly like `utility.seeded`.
+ *   what makes «delete» mean delete, exactly like `utility.seeded`.
  * - row gone, flag unset → a fresh database. Seed, and set the flag.
  *
  * Checking only the flag would break the upgrade path; checking only the row

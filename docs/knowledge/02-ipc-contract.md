@@ -1,62 +1,66 @@
-# 02 — Contrato IPC
+# 02 — IPC contract
 
-## Una sola fuente de verdad
+## A single source of truth
 
-Todo el contrato vive en **`src/shared/ipc/contract.ts`**: un tipo `IpcContract` con un entry
-por canal (`{ req, res }`), agrupado por prefijo de dominio (`displays:`, `projection:`,
-`files:`, `ppt:`, `bible:`, `library:`, `programs:`, `settings:`). Los push events (main →
-renderer sin invoke) están aparte, en `IpcEvents`.
+The whole contract lives in **`src/shared/ipc/contract.ts`**: an `IpcContract` type with one entry
+per channel (`{ req, res }`), grouped by domain prefix (`displays:`, `projection:`,
+`files:`, `deck:`, `bible:`, `library:`, `conversion:`, `programs:`, `program:`, `window:`,
+`utility:`, `overlay:`, `settings:`, `system:`). Push events (main → renderer without invoke)
+are kept separately, in `IpcEvents`.
 
-Esto reemplaza el viejo "lockstep de 3 archivos" (`main.js` + `preload.js` + `app.js`, todo a
-mano, sin verificación). Ahora:
+This replaces the old "3-file lockstep" (`main.js` + `preload.js` + `app.js`, all by
+hand, with no verification). Now:
 
-1. **`src/main/ipc/handlers/<dominio>.ts`** implementa un subconjunto de `Handlers`
-   (`src/main/ipc/register.ts`), tipado como `Pick<Handlers, "canal-a" | "canal-b">`.
-2. **`src/main/ipc/index.ts`** ensambla todos los handlers en un solo objeto tipado como
-   `Handlers` completo — **si falta un canal o tiene la firma equivocada, no compila.**
-3. **`src/preload/index.ts`** no cambia nunca: expone `invoke(channel, req)` / `on(channel, cb)`
-   genéricos. No es un agujero de seguridad — `ipcRenderer.invoke` a un canal sin
-   `ipcMain.handle` simplemente rechaza; la superficie real la define qué se registra en el paso
-   2, no el preload.
-4. **`src/renderer/src/lib/ipc.ts`** tiene el `invoke<K>`/`onIpc<K>` tipados a partir del
-   contrato, y **`src/renderer/src/lib/api.ts`** es una fachada por dominio
-   (`api.bible.search(...)`) — puro azúcar de legibilidad, sus tipos salen inferidos de
-   `invoke`, no son una tercera declaración del contrato.
+1. **`src/main/ipc/handlers/<domain>.ts`** implements a subset of `Handlers`
+   (`src/main/ipc/register.ts`), typed as `Pick<Handlers, "channel-a" | "channel-b">`.
+2. **`src/main/ipc/index.ts`** assembles all the handlers into a single object typed as the full
+   `Handlers` — **if a channel is missing or has the wrong signature, it doesn't compile.**
+3. **`src/preload/index.ts`** never changes: it exposes generic `invoke(channel, req)` /
+   `on(channel, cb)`. It isn't a security hole — `ipcRenderer.invoke` to a channel without an
+   `ipcMain.handle` simply rejects; the real surface is defined by what gets registered in step
+   2, not by the preload.
+4. **`src/renderer/src/lib/ipc.ts`** has the `invoke<K>`/`onIpc<K>` typed from the
+   contract, and **`src/renderer/src/lib/api.ts`** is a per-domain facade
+   (`api.bible.search(...)`) — pure readability sugar; its types are inferred from
+   `invoke`, they are not a third declaration of the contract.
 
-## Cómo agregar un canal
+## How to add a channel
 
-1. Agregá la línea a `IpcContract` en `shared/ipc/contract.ts`.
-2. Implementalo en el handler de dominio correspondiente (o creá uno nuevo en
+1. Add the line to `IpcContract` in `shared/ipc/contract.ts`.
+2. Implement it in the matching domain handler (or create a new one in
    `main/ipc/handlers/`).
-3. Si es un handler nuevo, agregalo al spread de `main/ipc/index.ts`.
-4. (Opcional) Agregá el método correspondiente a la fachada en `renderer/src/lib/api.ts`.
+3. If it's a new handler, add it to the spread in `main/ipc/index.ts`.
+4. (Optional) Add the matching method to the facade in `renderer/src/lib/api.ts`.
 
-El compilador te avisa en el paso 3 si te olvidaste del paso 2.
+The compiler warns you at step 3 if you forgot step 2.
 
-## `Result<T>` — errores tipados de punta a punta
+## `Result<T>` — typed errors end to end
 
-Cada `ipcMain.handle` registrado por `registerHandlers` envuelve la respuesta en
-`{ok:true,data}` / `{ok:false,error:{code,message}}` (`shared/ipc/result.ts`). `invoke<K>` en el
-renderer desenvuelve esto una sola vez y relanza como `IpcError` si `ok:false` — el resto del
-código del renderer llama `await api.dominio.metodo(...)` como si nunca pudiera fallar por el
-lado del transporte, y atrapa errores de negocio con try/catch normal.
+Every `ipcMain.handle` registered by `registerHandlers` wraps the response in
+`{ok:true,data}` / `{ok:false,error:{code,message}}` (`shared/ipc/result.ts`). `invoke<K>` in the
+renderer unwraps this exactly once and rethrows as `IpcError` if `ok:false` — the rest of the
+renderer code calls `await api.domain.method(...)` as if it could never fail on the
+transport side, and catches business errors with a normal try/catch.
 
 ## Push events
 
-`display-content` y `video-command` van de main a la ventana de proyección;
-`window.worship.on(channel, cb)` devuelve una función de limpieza — a diferencia del preload
-legacy, que no tenía forma de des-suscribirse. `useIpcEvent` (`renderer/src/lib/hooks/`) es el
-hook que envuelve esto con `useEffect`.
+`display-content`, `media-command` and `audio-tracks` go from main to the projection window;
+`projection-closed`, `displays-changed`, `projector-screen`, `media-status`, `media-error`,
+`deck-progress`, `prewarm-progress`, `deck-statuses-changed`, `library-changed`,
+`conversion-changed`, `deck-updated`, `library-import-progress` and `close-requested` go to the
+control window. `window.worship.on(channel, cb)` returns a cleanup function — unlike the legacy
+preload, which had no way to unsubscribe. `onIpc` (`renderer/src/lib/ipc.ts`) is its typed
+wrapper; the control window subscribes in `renderer/src/effects/` (`*-sync.ts`).
 
-## Mapeo de canales legacy → nuevos
+## Legacy → new channel mapping
 
-| Legacy | Nuevo | Nota |
+| Legacy | New | Note |
 |---|---|---|
-| `get-displays` | `displays:list` | igual |
-| `open/close-presentation` | `projection:open`/`projection:close` | igual |
-| `show-content`/`show-black`/`show-logo` | `projection:show` (uno solo) | colapsan en variantes de `ProjectionOutput` |
-| `presentation-show/hide`, `ppt-show/hide-overlay` | `projection:setOverlayVisible` | eran el mismo show()/hide() cuatro veces |
-| `read-file-url` | eliminado | reemplazado por `worship://` |
-| `load-bible` (JSON de 4MB entero) | `bible:books` + `bible:chapter` + `bible:search` | ya no cruza el JSON completo por IPC |
-| `load/save-media-library` | `library:list`/`library:add`/`library:remove` | escritura incremental, no el archivo entero |
-| `import-bible` | `bible:import` | ya no escribe dentro del bundle de la app |
+| `get-displays` | `displays:list` | same |
+| `open/close-presentation` | `projection:open`/`projection:close` | same |
+| `show-content`/`show-black`/`show-logo` | `projection:show` (a single one) | they collapse into `ProjectionOutput` variants |
+| `presentation-show/hide`, `ppt-show/hide-overlay` | removed | the overlay dance went away with PowerPoint (2026-09-07): a slide is content sent through `projection:show` |
+| `read-file-url` | removed | replaced by `worship://` |
+| `load-bible` (the whole 4MB JSON) | `bible:books` + `bible:chapter` + `bible:search` | the full JSON no longer crosses IPC |
+| `load/save-media-library` | `library:list`/`library:add`/`library:remove` | incremental writes, not the whole file |
+| `import-bible` | `bible:import` | no longer writes inside the app bundle |

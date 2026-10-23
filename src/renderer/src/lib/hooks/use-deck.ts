@@ -17,7 +17,7 @@ export type DeckState = {
 
 /**
  * Loads the deck for `assetId`, converting it on selection so it is warm
- * before anyone hits EN VIVO. The cache-only `peek` first keeps an
+ * before anyone hits GO LIVE. The cache-only `peek` first keeps an
  * already-converted deck from re-entering the queue on every click.
  *
  * Extracted from the old DeckPreview so the slide grid and the preview monitor
@@ -41,7 +41,7 @@ export function useDeck(assetId: number | null, requiresSoffice = true): DeckSta
   // Asked again whenever this deck's entry DISAPPEARS: the store drops one
   // that turns `ready` with no DTO and nobody awaiting it — a deck the
   // operator cancelled and a background prewarm finished later — and the
-  // panel then sat on «Preparando la conversión…» over a ready deck.
+  // panel then sat on «Getting ready to convert…» over a ready deck.
   const missing = entry === undefined;
 
   useEffect(() => {

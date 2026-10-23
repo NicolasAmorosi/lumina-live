@@ -13,7 +13,7 @@ export type AssetKind = (typeof ASSET_KINDS)[number];
  *  its CHECK constraint), and a PDF is a deck whose pages happen to be
  *  rendered already. Listing the extension here is what gives it the file
  *  dialog's filter, drag & drop, folder import, the content-addressed cache
- *  and "Preparar carpeta" without a single branch. */
+ *  and "Prepare folder" without a single branch. */
 export const ASSET_EXTENSIONS: Record<AssetKind, readonly string[]> = {
   // Everything past the first six is converted to a playable copy on its way
   // in (`main/media/conversion-service.ts`) — and so can the first six be,
@@ -41,7 +41,7 @@ export const ASSET_EXTENSIONS: Record<AssetKind, readonly string[]> = {
  * fidelity for nothing.
  *
  * The consequence the UI has to honour: a PDF is projectable on a machine with
- * no LibreOffice installed, so the "instalá LibreOffice" gate must not stand in
+ * no LibreOffice installed, so the "install LibreOffice" gate must not stand in
  * front of one.
  */
 export function deckRequiresSoffice(ext: string): boolean {
@@ -52,11 +52,11 @@ export function deckRequiresSoffice(ext: string): boolean {
 // preview, projector output — everything except a way to create one. It was
 // removed in 0009 rather than finished; an announcement is a PPT slide in
 // this church's workflow, and a half-wired kind is worse than no kind.
-// `utility` (a saved time scene) joined them in F3 of the Funciones plan: it
+// `utility` (a saved time scene) joined them in F3 of the Functions plan: it
 // is full-screen base content like any other, so it is a row of the order of
 // service like any other. `plate` (a saved overlay plate) followed on
-// 2026-09-24: not base content, but the operator plans «el nombre del pastor
-// antes del sermón» into the order of service like everything else.
+// 2026-09-24: not base content, but the operator plans «the pastor's name
+// before the sermon» into the order of service like everything else.
 export const PROGRAM_ITEM_KINDS = ["media", "ppt", "bible", "utility", "plate"] as const;
 export type ProgramItemKind = (typeof PROGRAM_ITEM_KINDS)[number];
 
@@ -129,15 +129,15 @@ export const SLIDES_BATCH_SIZE = 20;
  *  than "this whole linked folder's current view", so this is a backstop
  *  rather than the main defence: a very tall window at a very small tile size
  *  could still mount more tiles than a background queue should be handed at
- *  once. Anything beyond it is reachable through the manual "Preparar
- *  carpeta" button. */
+ *  once. Anything beyond it is reachable through the manual "Prepare
+ *  folder" button. */
 export const PREWARM_VISIBLE_MAX = 32;
 /** How many of an explicit import's presentations are converted automatically.
  *
  *  Dropping a folder of 600 `.pps` onto the library used to enqueue 600
  *  conversions — no confirmation, no progress bar, no way to stop it — which
- *  is precisely the "nunca 600 decks automáticos" case the tracked, cancelable
- *  "Preparar carpeta" button exists for. Importing a handful and having them
+ *  is precisely the "never 600 automatic decks" case the tracked, cancelable
+ *  "Prepare folder" button exists for. Importing a handful and having them
  *  ready by the time you scroll to them is the behaviour worth keeping, and
  *  that is what this preserves; everything past it stays a deliberate act.
  *  Nothing is lost either way — an unconverted deck still converts on demand
