@@ -49,7 +49,7 @@ const en: Messages = {
     addToSchedule: "Add to schedule",
     addToScheduleHint: "Add the selected item to the schedule",
     mediaTab: "Media",
-    recentTab: "Recently used",
+    recentTab: "Library",
     search: "Search by name…",
     searchNoResults: "No results",
     searchNoResultsHint: "No file in this view matches “{query}”",

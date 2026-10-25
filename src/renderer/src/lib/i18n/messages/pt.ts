@@ -49,7 +49,7 @@ const pt: Messages = {
     addToSchedule: "Adicionar ao roteiro",
     addToScheduleHint: "Adicionar o item selecionado ao roteiro",
     mediaTab: "Mídia",
-    recentTab: "Usados recentemente",
+    recentTab: "Biblioteca",
     search: "Buscar por nome…",
     searchNoResults: "Nenhum resultado",
     searchNoResultsHint: "Nenhum arquivo desta visualização se chama “{query}”",

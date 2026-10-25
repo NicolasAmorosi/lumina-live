@@ -48,7 +48,7 @@ const es = {
     addToSchedule: "Agregar al programa",
     addToScheduleHint: "Agregar el elemento seleccionado al programa",
     mediaTab: "Media",
-    recentTab: "Usados recientemente",
+    recentTab: "Biblioteca",
     search: "Buscar por nombre…",
     searchNoResults: "Sin resultados",
     searchNoResultsHint: "Ningún archivo de esta vista se llama «{query}»",

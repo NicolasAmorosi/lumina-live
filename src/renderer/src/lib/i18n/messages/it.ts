@@ -49,7 +49,7 @@ const it: Messages = {
     addToSchedule: "Aggiungi alla scaletta",
     addToScheduleHint: "Aggiungi alla scaletta l'elemento selezionato",
     mediaTab: "Media",
-    recentTab: "Usati di recente",
+    recentTab: "Libreria",
     search: "Cerca per nome…",
     searchNoResults: "Nessun risultato",
     searchNoResultsHint: "Nessun file di questa vista si chiama «{query}»",
