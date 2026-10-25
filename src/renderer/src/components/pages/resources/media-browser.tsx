@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import {
   Button,
@@ -118,6 +118,15 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
     () => sortAssets(filterAssetsByName(viewAssets, query), sortOrder),
     [query, sortOrder, viewAssets],
   );
+  // A new order, filter or view starts from its first file. The grid used to
+  // keep its scroll offset, so an operator scrolled to the bottom of A → Z who
+  // picked Z → A was shown "Himno 9 … Himno 1" — the tail of the new order,
+  // which reads as an order that did nothing. Layout effect: the re-sorted
+  // list is never painted at the old offset first.
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    bodyRef.current?.scrollTo({ top: 0 });
+  }, [activeView, query, sortOrder]);
   // "Empty" and "not read yet" are different answers and the grid used to
   // give the same one for both — a linked folder with 600 files showed "no
   // resources" for as long as the listing took, which on a share is seconds.
@@ -371,6 +380,7 @@ export function MediaBrowser({ active, kind }: { active: boolean; kind: AssetKin
         className="p-1.5"
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => void handleDrop(e)}
+        ref={bodyRef}
       >
         {viewAssets.length === 0 && status?.error ? (
           <LoadingState

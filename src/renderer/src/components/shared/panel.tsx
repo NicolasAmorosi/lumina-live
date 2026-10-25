@@ -1,8 +1,8 @@
-import type { HTMLAttributes, ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@renderer/lib/utils";
 import { Title } from "@renderer/components/ui";
 
-type PanelProps = HTMLAttributes<HTMLDivElement> & { children: ReactNode };
+type PanelProps = ComponentProps<"div"> & { children: ReactNode };
 
 /** The one shared shape behind every panel of the workspace. */
 export function Panel({ children, className, ...props }: PanelProps) {
