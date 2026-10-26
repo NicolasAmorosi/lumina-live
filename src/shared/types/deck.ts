@@ -17,6 +17,10 @@ export type DeckSlide = {
   url: string;
   /** worship://deck/<deckId>/<index>/thumb — small preview. */
   thumbUrl: string;
+  /** worship://deck/<deckId>/<index>/model for a deck drawn from its model
+   *  (`SlideView`, a `.pptx`): then `url`/`thumbUrl` are only its identity and
+   *  serve no image. `null` for a slide that is an image. */
+  modelUrl: string | null;
   /** Auto-advance delay from the .pptx transition timing, in ms. `null` means
    *  this slide only advances manually. */
   advanceAfterMs: number | null;
@@ -127,6 +131,9 @@ export type DeckDTO = {
 export type DeckStatusSummary = {
   status: DeckStatus;
   thumbUrl: string | null;
+  /** The first slide's model, for a deck drawn from its model: the tile draws
+   *  it with `SlideView` instead of an image. */
+  modelUrl: string | null;
 };
 
 export type DeckEnvironment = {

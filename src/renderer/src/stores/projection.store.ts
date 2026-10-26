@@ -592,13 +592,17 @@ function selectOutputWithoutUnderlay(state: ProjectionStoreState): ProjectionOut
       }
       const index = clamp(state.base.slideIndex, 1, deck.slides.length);
       const current = deck.slides[index - 1]!;
-      const preload = [deck.slides[index]?.url, deck.slides[index - 2]?.url].filter(
+      // A slide drawn from its model is warmed through its model (which also
+      // decodes its pictures), an image slide through its image.
+      const warm = (slide: DeckSlide | undefined): string | undefined => slide?.modelUrl ?? slide?.url;
+      const preload = [warm(deck.slides[index]), warm(deck.slides[index - 2])].filter(
         (url): url is string => url !== undefined,
       );
       return {
         kind: "slide",
         deckAssetId: deck.assetId,
         url: current.url,
+        modelUrl: current.modelUrl,
         index,
         total: deck.slides.length,
         preload,

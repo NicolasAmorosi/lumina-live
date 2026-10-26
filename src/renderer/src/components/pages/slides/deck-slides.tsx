@@ -15,6 +15,7 @@ import {
   thumbTileHeight,
 } from "@renderer/components/ui";
 import { PreviewMissingState } from "@renderer/components/shared/preview-missing-state";
+import { ModelSlide } from "@renderer/components/shared/slide-view/ModelSlide";
 import { DeckConversionStatus } from "@renderer/components/shared/deck-conversion-status";
 import { SofficeActions } from "@renderer/components/shared/soffice-missing";
 import { useDeck } from "@renderer/lib/hooks/use-deck";
@@ -225,7 +226,8 @@ export function DeckSlides({
               else void goLive();
             }}
             selected={previewIndex === slide.index}
-            src={slide.thumbUrl}
+            media={slide.modelUrl ? <ModelSlide onError={markStale} url={slide.modelUrl} /> : undefined}
+            src={slide.modelUrl ? null : slide.thumbUrl}
             tabIndex={tabIndex}
             title={t("deck.slideAlt", { index: slide.index })}
           />

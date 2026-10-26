@@ -41,6 +41,7 @@ function slide(
     index,
     url: slideUrl(500, index),
     thumbUrl: `${slideUrl(500, index)}/thumb`,
+    modelUrl: null,
     advanceAfterMs,
     transition,
   };

@@ -57,6 +57,31 @@ export function slideThumbUrl(deckId: number, slideIndex: number): string {
   return `worship://deck/${deckId}/${slideIndex}/thumb`;
 }
 
+/** A slide of a deck drawn from its model (`SlideView`, image_format
+ *  'model'): the `SlideModel` JSON, immutable like the slide images. */
+export function slideModelUrl(deckId: number, slideIndex: number): string {
+  return `worship://deck/${deckId}/${slideIndex}/model`;
+}
+
+/** A part of the deck's own source package — a picture a slide model names —
+ *  served straight from the file, never extracted. A metafile (EMF/WMF) comes
+ *  back as SVG. */
+export function deckPartUrl(deckId: number, part: string): string {
+  return `worship://deck/${deckId}/part/${encodeURIComponent(part)}`;
+}
+
+/** A font embedded in the deck, decoded to the TrueType a `FontFace` takes. */
+export function deckFontUrl(deckId: number, part: string): string {
+  return `worship://deck/${deckId}/font/${encodeURIComponent(part)}`;
+}
+
+/** The deck id in any `worship://deck/<id>/…` url, so a slide model's parts
+ *  resolve against the deck its url names. */
+export function deckIdOfUrl(url: string): number | null {
+  const match = /^worship:\/\/deck\/(\d+)\//.exec(url);
+  return match ? Number(match[1]) : null;
+}
+
 /** `file` is the clip's file name inside the deck's cache. It changes when
  *  `media/deck-clips.ts` replaces an unplayable clip with a converted one, so
  *  the url changes with the bytes — which Chromium's media cache requires —

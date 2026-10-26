@@ -19,7 +19,14 @@ export type SlideModel = {
   height: number;
   background: Fill | null;
   elements: SlideElement[];
+  /** The deck's embedded fonts (the same on every slide), registered by
+   *  whoever draws the slide before its text is laid out. */
+  fonts: EmbeddedFontRef[];
 };
+
+/** A font embedded in the deck: the face its text names, and the part that
+ *  holds it (EOT, decoded by main). */
+export type EmbeddedFontRef = { family: string; style: "regular" | "bold" | "italic" | "boldItalic"; part: string };
 
 export type SlideElement = ShapeElement | PictureElement | GroupElement | TableElement | ChartElement;
 

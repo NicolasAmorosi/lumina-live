@@ -120,6 +120,9 @@ export type ProjectionOutputKind =
        *  deck into one row instead of one per slide change. */
       deckAssetId: number;
       url: string;
+      /** The slide's `SlideModel` url when it is drawn from its model
+       *  (`SlideView`) rather than shown as the image at `url`. */
+      modelUrl: string | null;
       /** 1-based. */
       index: number;
       total: number;

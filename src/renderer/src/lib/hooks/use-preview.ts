@@ -174,6 +174,7 @@ function usePreviewOutputWithoutPlates(content: PreviewContent | null): Projecti
         kind: "slide",
         deckAssetId: content.assetId,
         url: slide.url,
+        modelUrl: slide.modelUrl,
         index: slide.index,
         total: slides.length,
         // The projector warms neighbours; a monitor has no reason to.

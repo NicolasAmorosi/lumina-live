@@ -12,6 +12,8 @@ import {
   type LayerRole,
   type LayerTransition,
 } from "@renderer/lib/transition";
+import { loadSlideModel } from "@renderer/lib/slide-models";
+import { ModelSlide } from "./slide-view/ModelSlide";
 import { BibleScene } from "./bible-scene";
 import { TimerScene } from "./timer-scene";
 import { PlateLayer } from "./plate-layer";
@@ -520,7 +522,10 @@ function OutputScene({ frozenFrame, mode, onImageError, output, posterUrl }: Out
       {/* No `key` here either — swapping `src` within the same layer (same
           `seq`, see `OutputView`) on slide navigation is what avoids the
           white flash between slides. */}
-      {output.kind === "slide" ? (
+      {output.kind === "slide" && output.modelUrl ? (
+        <ModelSlide onError={() => onImageError?.(output.modelUrl ?? output.url)} url={output.modelUrl} />
+      ) : null}
+      {output.kind === "slide" && !output.modelUrl ? (
         <img
           alt=""
           className="size-full object-contain"
@@ -922,7 +927,7 @@ export function OutputView({
   // sake (the visible `<img>` is already fetching it) but so the set below can
   // tell "still wanted" from "abandoned" without a second source of truth.
   const preloadKey =
-    mode === "live" && output.kind === "slide" ? [output.url, ...output.preload].join("|") : "";
+    mode === "live" && output.kind === "slide" ? [output.modelUrl ?? output.url, ...output.preload].join("|") : "";
   const warmedRef = useRef(new Map<string, HTMLImageElement>());
   useEffect(() => {
     const wanted = preloadKey ? preloadKey.split("|") : [];
@@ -944,6 +949,12 @@ export function OutputView({
 
     for (const url of wanted) {
       if (warmed.has(url)) continue;
+      // A slide model is warmed by loading it (fonts and pictures included);
+      // it is small, so there is nothing worth aborting.
+      if (url.endsWith("/model")) {
+        void loadSlideModel(url);
+        continue;
+      }
       const img = new Image();
       img.decoding = "async";
       img.src = url;
@@ -1238,8 +1249,10 @@ export function OutputView({
   // A timer scene's own url is its background image, when it has one — the
   // only file a generated scene can fail to load.
   const sceneUrl =
-    output.kind === "image" || output.kind === "slide" || output.kind === "logo"
-      ? output.url
+    output.kind === "slide"
+      ? (output.modelUrl ?? output.url)
+      : output.kind === "image" || output.kind === "logo"
+        ? output.url
       : output.kind === "timer"
         ? output.backgroundUrl
         : null;

@@ -18,6 +18,8 @@ import { buildLegacyPpt } from "../../fixtures/legacy-ppt";
  * visible transition, because LibreOffice only writes `advTm` when a slide has
  * one (`.claude/knowledge/libreoffice-pptx-export-drops-advtm-without-a-transition-effect.md`).
  * Without LibreOffice the deck tests that need it skip; the PDF ones still run.
+ * A `.pptx` is drawn from its model, never converted, so what a conversion does
+ * (its queue, cancelling it) is tested on two `.odp` exported the same way.
  */
 export default function globalSetup(): void {
   const stamp = path.join(FIXTURES_DIR, ".version");
@@ -81,21 +83,23 @@ export default function globalSetup(): void {
 
   const soffice = findSoffice();
   if (soffice) {
-    const toPptx = (name: string, fodpXml: string) => {
+    const toDeck = (name: string, fodpXml: string, format = "pptx") => {
       const fodp = out(`${name}.fodp`);
       fs.writeFileSync(fodp, fodpXml);
       const profile = fs.mkdtempSync(path.join(os.tmpdir(), "worship-e2e-soffice-"));
       try {
         execFileSync(soffice, [
           `-env:UserInstallation=${pathToFileURL(profile).href}`,
-          ...["--headless", "--convert-to", "pptx", "--outdir", FIXTURES_DIR, fodp],
+          ...["--headless", "--convert-to", format, "--outdir", FIXTURES_DIR, fodp],
         ]);
       } finally {
         fs.rmSync(profile, { recursive: true, force: true });
         fs.rmSync(fodp, { force: true });
       }
     };
-    toPptx("hymn", hymnFodp(3, 2));
+    toDeck("hymn", hymnFodp(3, 2));
+    toDeck("converted", hymnFodp(3, 2), "odp");
+    toDeck("queued", hymnFodp(4, 2), "odp");
 
     // A WMV embedded in a slide — what PowerPoint 2007 decks carry and Chromium
     // cannot play (`media/deck-clips.ts` converts it in place). LibreOffice only
@@ -104,7 +108,7 @@ export default function globalSetup(): void {
     // relationship, and its content type.
     const wmv = out("slide-clip.wmv");
     run(...picture("640x360", 4), "-c:v", "wmv2", wmv);
-    toPptx("clipdeck", clipDeckFodp(wmv));
+    toDeck("clipdeck", clipDeckFodp(wmv));
     embedExternalVideo(out("clipdeck.pptx"), wmv);
     fs.rmSync(wmv, { force: true });
   }

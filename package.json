@@ -96,6 +96,10 @@
       {
         "from": "resources/bibles",
         "to": "bibles"
+      },
+      {
+        "from": "resources/ooxml",
+        "to": "ooxml"
       }
     ],
     "directories": {

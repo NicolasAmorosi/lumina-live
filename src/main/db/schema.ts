@@ -270,7 +270,9 @@ export const slideDecks = sqliteTable(
      *  straight out of the source file (`ppt-binary.ts`), described by
      *  `deck_slides.layers` and served from it. `renderWidth` is 0 and
      *  `cacheDir` empty for those: they own no folder. */
-    imageFormat: text("image_format", { enum: ["webp", "png", "native"] }).notNull(),
+    /** "model": a `.pptx` drawn from its model (`SlideView`); each slide's
+     *  `SlideModel` JSON is in `deck_slides.layers`, nothing rasterized. */
+    imageFormat: text("image_format", { enum: ["webp", "png", "native", "model"] }).notNull(),
     converterVersion: integer("converter_version").notNull(),
     mediaAssetId: integer("media_asset_id").references(() => mediaAssets.id, {
       onDelete: "set null",
@@ -327,9 +329,10 @@ export const deckSlides = sqliteTable(
      *  `SlideTransitionStyle`, with its length in `transition_ms`. `null` is a
      *  cut. */
     transition: text("transition"),
-    /** A native deck's slide: the JSON `SlideLayers` saying which pictures of
-     *  the source make it up. `null` for a rasterized one, whose image is
-     *  `image_file` in the deck's cache folder. */
+    /** A slide read from its source: the JSON `SlideLayers` saying which
+     *  pictures of the source make it up (native), or its `SlideModel` (model).
+     *  `null` for a rasterized one, whose image is `image_file` in the deck's
+     *  cache folder. */
     layers: text("layers"),
     hidden: integer("hidden").notNull().default(0),
     title: text("title"),

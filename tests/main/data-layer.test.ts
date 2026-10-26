@@ -721,8 +721,8 @@ describe("A deck read natively owns no folder and replaces its converted copy", 
       sourcePath: asset.path,
       layers: '{"width":5760,"height":4320,"layers":[]}',
     });
-    expect(slidesRepo.findNativeDeckByAsset(asset.id)?.id).toBe(nativeId);
-    expect(slidesRepo.statusesByAsset([asset.id]).get(asset.id)).toEqual({ deckId: nativeId, status: "ready" });
+    expect(slidesRepo.findSourceDeckByAsset(asset.id, "native")?.id).toBe(nativeId);
+    expect(slidesRepo.statusesByAsset([asset.id]).get(asset.id)).toEqual({ deckId: nativeId, status: "ready", drawnFromModel: false });
     const dto = slidesRepo.toDTO(slidesRepo.getDeckById(nativeId)!, asset.id);
     expect(dto.slides[0]).toMatchObject({ advanceAfterMs: 10_515, transition: { style: "random-bars-vertical", durationMs: 750 } });
   });
@@ -758,9 +758,9 @@ describe("A deck read natively owns no folder and replaces its converted copy", 
         [],
       );
     }
-    expect(slidesRepo.deleteSupersededByNative([convertedId], hash)).toBe(0);
+    expect(slidesRepo.deleteSupersededBySource([convertedId], hash)).toBe(0);
     expect(fs.existsSync(convertedDir)).toBe(true);
-    expect(slidesRepo.deleteSupersededByNative([])).toBe(1);
+    expect(slidesRepo.deleteSupersededBySource([])).toBe(1);
     expect(slidesRepo.getDeckById(convertedId)).toBeNull();
     expect(fs.existsSync(convertedDir)).toBe(false);
     expect(slidesRepo.getDeckById(nativeId)).not.toBeNull();

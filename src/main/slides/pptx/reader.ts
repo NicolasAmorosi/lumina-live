@@ -3,6 +3,7 @@ import type {
   Fill,
   Frame,
   GroupElement,
+  EmbeddedFontRef,
   ImageRef,
   Line,
   PictureElement,
@@ -30,7 +31,7 @@ export type PptxSlide = {
   unsupported: Record<string, number>;
 };
 
-export type EmbeddedFont = { family: string; style: "regular" | "bold" | "italic" | "boldItalic"; part: string };
+export type EmbeddedFont = EmbeddedFontRef;
 
 export type PptxDeck = { width: number; height: number; slides: PptxSlide[]; fonts: EmbeddedFont[] };
 
@@ -69,7 +70,7 @@ export function readPptxDeck(file: string, resources: PptxResources): PptxDeck {
     if (!rel || rel.external) continue;
     number += 1;
     const unsupported = new Map<string, number>();
-    const model = readSlide(pkg, rel.target, { width, height, defaultTextStyle, presets, themes, unsupported, number, tableStyles, builtinTableStyles: resources.tableStyles });
+    const model = readSlide(pkg, rel.target, { width, height, defaultTextStyle, presets, themes, unsupported, number, tableStyles, builtinTableStyles: resources.tableStyles, fonts });
     slides.push({
       number,
       hidden: attr(pkg.xml(rel.target), "show") === "0",
@@ -133,6 +134,7 @@ type DeckScope = {
   number: number;
   tableStyles: TableStyleTable;
   builtinTableStyles: TableStyleTable;
+  fonts: EmbeddedFontRef[];
 };
 
 /** One of the three parts a slide is drawn from. */
@@ -218,7 +220,7 @@ function readSlide(pkg: PptxPackage, slidePart: string, deck: DeckScope): SlideM
   if (layout.root && showMaster(slide)) elements.push(...readTree(path(layout.root, "p:cSld", "p:spTree"), 1, scope));
   elements.push(...readTree(path(slide.root, "p:cSld", "p:spTree"), 0, scope));
 
-  return { width: deck.width, height: deck.height, background: readBackground(scope), elements };
+  return { width: deck.width, height: deck.height, background: readBackground(scope), elements, fonts: deck.fonts };
 }
 
 function styleCtx(scope: SlideScope, part: string, groupFill?: Fill | null): TextContext {

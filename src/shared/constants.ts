@@ -52,12 +52,13 @@ export function deckRequiresSoffice(ext: string): boolean {
  * A legacy `.ppt`/`.pps` is usually read straight from its source, with no
  * LibreOffice at all (`ppt-binary.ts`): the whole hymnal is. Usually, not
  * always — a deck with text still needs it, and only main can tell, by reading
- * the file. So for these the "install LibreOffice" gate is decided after main
- * answers, never in front of the deck.
+ * the file. A `.pptx` and its siblings are drawn from their model
+ * (`slides/pptx/`), and only one that won't open as a presentation goes to
+ * LibreOffice. So for all of these the "install LibreOffice" gate is decided
+ * after main answers, never in front of the deck.
  */
 export function deckMayBeReadNatively(ext: string): boolean {
-  const bare = ext.replace(/^\./, "").toLowerCase();
-  return bare === "ppt" || bare === "pps";
+  return ["ppt", "pps", "pptx", "pptm", "ppsx", "ppsm"].includes(ext.replace(/^\./, "").toLowerCase());
 }
 
 // A `text` kind used to live here too: schema column, DTO, repo mapping,
@@ -89,6 +90,11 @@ export const SLIDES_CONVERTER_VERSION = 3;
  *  a slide change, so every native deck is read again. Reading one costs
  *  milliseconds and writes nothing to disk, so a bump is free. */
 export const SLIDES_NATIVE_VERSION = 1;
+
+/** The same for a deck drawn from its model (`image_format = 'model'`, a
+ *  `.pptx` read by `src/main/slides/pptx/`): bump when the reader changes what
+ *  it puts in a `SlideModel`, so every such deck is read again. */
+export const SLIDES_MODEL_VERSION = 1;
 
 /** Bump to force every non-manual `media_assets` row to re-run
  *  `resolveLinkedAudio` once, next time its deck is opened, even though a
