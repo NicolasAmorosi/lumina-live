@@ -28,6 +28,9 @@ const FLAGS = [
   // language (`main/i18n/system-locale.ts`): pinned, so the suite reads the
   // same Spanish on any machine.
   "--lang=es",
+  // Against the packaged app the launch check would reach GitHub in every
+  // test. The update suite serves its own feed and asks by hand.
+  "--no-update-check",
 ];
 
 /** What the renderer's global handlers log before showing the "error

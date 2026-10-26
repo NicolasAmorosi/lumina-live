@@ -42,6 +42,7 @@ import type { GpuStatus, InternalsPage, VideoDecoderReport } from "../types/syst
 import type { UtilityScene, UtilitySceneUpsert, UtilitySceneUsage } from "../types/utility";
 import type { Plate, PlateUpsert, PlateUsage } from "../types/overlay";
 import type { CloseDecision } from "../types/window";
+import type { UpdateStatus } from "../types/updates";
 
 /**
  * The single source of truth for every main<->renderer call. Add a channel here
@@ -306,6 +307,19 @@ export type IpcContract = {
   /** Stops listening and answers for the player that loaded `src`, or `null`
    *  when none reported anything. */
   "system:probeEnd": { req: { src: string }; res: VideoDecoderReport | null };
+
+  "updates:getStatus": { req: void; res: UpdateStatus };
+  /** The operator pressed «Check now»: unlike the launch check, its failure
+   *  is shown. */
+  "updates:check": { req: void; res: void };
+  "updates:download": { req: void; res: void };
+  /** `"now"` quits and installs. The control window asks first (on air,
+   *  unsaved changes) and only then calls this: once the installer is running
+   *  there is no «Cancel» left — it kills the app within seconds. */
+  "updates:install": { req: { when: "now" | "onQuit" }; res: void };
+  /** Opens the available version's release page in the system browser. The
+   *  URL is main's. */
+  "updates:openReleaseNotes": { req: void; res: void };
 };
 
 export type IpcChannel = keyof IpcContract;
@@ -362,6 +376,8 @@ export type IpcEvents = {
    *  `window:closeDecision`, or never, in which case main closes anyway after
    *  a short grace — a wedged renderer must not make the app unquittable. */
   "close-requested": void;
+  /** Every change of `updates:getStatus`; download progress at most 4/s. */
+  "update-status": UpdateStatus;
 };
 
 export type IpcEventName = keyof IpcEvents;

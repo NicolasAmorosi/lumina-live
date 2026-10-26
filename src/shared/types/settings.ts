@@ -105,6 +105,12 @@ export type SettingsMap = {
    *  `seedBuiltinBibles`), which is the only case that means the operator
    *  deleted it on purpose. */
   "bible.builtinSeeded": boolean;
+  /** Whether the app looks for a new version on its own, once per launch. Off,
+   *  it never connects anywhere unless the operator presses «Check now». */
+  "updates.autoCheck": boolean;
+  /** The last version the launch toast announced, so each one is announced
+   *  once and not every morning until it is installed. */
+  "updates.announcedVersion": string | null;
 };
 
 export const DEFAULT_SETTINGS: SettingsMap = {
@@ -136,6 +142,8 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   "bible.style": DEFAULT_BIBLE_STYLE,
   "bible.defaultVersionId": null,
   "bible.builtinSeeded": false,
+  "updates.autoCheck": true,
+  "updates.announcedVersion": null,
 };
 
 /* -------------------------------------------------------------------------
@@ -217,6 +225,8 @@ export const SETTINGS_VALIDATORS: Record<keyof SettingsMap, (value: unknown) => 
   "bible.style": isBibleStyle,
   "bible.defaultVersionId": (v) => v === null || (typeof v === "number" && Number.isInteger(v) && v > 0),
   "bible.builtinSeeded": isBoolean,
+  "updates.autoCheck": isBoolean,
+  "updates.announcedVersion": isNullOr(isString),
 };
 
 export function isSettingsKey(key: string): key is keyof SettingsMap {
