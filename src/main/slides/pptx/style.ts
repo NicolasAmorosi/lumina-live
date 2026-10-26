@@ -188,8 +188,9 @@ export function readImage(blipFill: XmlElement, ctx: StyleContext): ImageRef | n
 }
 
 /** Picture formats Chromium can't decode: counted, so a slide that shows one
- *  is never drawn wrong in silence. */
-const UNDRAWABLE = new Set(["emf", "wmf", "emz", "wmz", "tif", "tiff", "wdp", "jxr", "pict", "pct"]);
+ *  is never drawn wrong in silence. (EMF/WMF and their gzipped .emz/.wmz are
+ *  served as SVG: see `metafile.ts`.) */
+const UNDRAWABLE = new Set(["tif", "tiff", "wdp", "jxr", "pict", "pct"]);
 
 const DASHES: Record<string, number[]> = {
   dash: [4, 3],

@@ -476,7 +476,7 @@ function readGraphicFrame(el: XmlElement, levelIndex: number, scope: SlideScope,
     const pic = descendants(data, "p:pic")[0];
     const image = pic ? readPicture(pic, levelIndex, scope, ctx, scale, frame) : null;
     if (image) return image;
-    const preview = olePreview(descendants(data, "p:oleObj")[0] ?? null, levelIndex, scope, ctx);
+    const preview = olePreview(descendants(data, "p:oleObj")[0] ?? null, levelIndex, scope);
     if (preview) return { kind: "picture", frame, image: preview, fill: null, clip: null, line: null, effects: NO_EFFECTS };
     miss(scope, "ole:no-picture");
     return null;
@@ -490,7 +490,7 @@ function readGraphicFrame(el: XmlElement, levelIndex: number, scope: SlideScope,
  * last rendering in the slide's VML drawing: the shape whose id is the
  * object's `spid`, through its `v:imagedata`.
  */
-function olePreview(ole: XmlElement | null, levelIndex: number, scope: SlideScope, ctx: TextContext): ImageRef | null {
+function olePreview(ole: XmlElement | null, levelIndex: number, scope: SlideScope): ImageRef | null {
   const spid = attr(ole, "spid");
   if (!spid) return null;
   const part = scope.levels[levelIndex]!.part;
@@ -500,8 +500,6 @@ function olePreview(ole: XmlElement | null, levelIndex: number, scope: SlideScop
     const relid = attr(descendants(shape, "v:imagedata")[0], "o:relid");
     const target = relid ? scope.pkg.rels(rel.target).get(relid) : undefined;
     if (!target || target.external) continue;
-    const ext = target.target.slice(target.target.lastIndexOf(".") + 1).toLowerCase();
-    if (["emf", "wmf", "emz", "wmz"].includes(ext)) miss(ctx, `image:${ext}`);
     return { part: target.target, crop: null, fill: null, alpha: 1, effects: [] };
   }
   return null;
