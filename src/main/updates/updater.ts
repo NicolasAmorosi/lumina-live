@@ -28,6 +28,9 @@ const REPO_URL = "https://github.com/NicolasAmorosi/lumina-live";
 /** Past the control window's first paint, like the other launch chores. */
 const LAUNCH_CHECK_DELAY_MS = 10_000;
 const PROGRESS_INTERVAL_MS = 250;
+/** macOS without a Developer ID: the app opens the `.dmg` and the operator
+ *  drags it over itself (`mac-dmg.ts`). */
+const OPENS_DMG = process.platform === "darwin";
 
 let updater: AppUpdater | null = null;
 let status: UpdateStatus = { kind: "unsupported" };
@@ -105,7 +108,7 @@ export function downloadUpdate(): void {
   step = "download";
   lastProgressAt = 0;
   setStatus({ kind: "downloading", version: info.version, percent: 0 });
-  if (process.platform !== "darwin") {
+  if (!OPENS_DMG) {
     updater.downloadUpdate().catch(() => undefined);
     return;
   }
@@ -144,7 +147,7 @@ export function openReleaseNotes(): Promise<void> {
 }
 
 function downloaded(): void {
-  if (info) setStatus({ kind: "downloaded", version: info.version, installOnQuit: false });
+  if (info) setStatus({ kind: "downloaded", version: info.version, installOnQuit: false, opensInstaller: OPENS_DMG });
 }
 
 function reportProgress(percent: number): void {
@@ -158,8 +161,10 @@ function reportProgress(percent: number): void {
  *  seconds. False when it could not start; the `error` event has said why. */
 function launchInstaller(relaunch: boolean): boolean {
   step = "install";
-  if (process.platform === "darwin") {
+  if (OPENS_DMG) {
     if (!dmgPath) return false;
+    // electron-updater logs its own `Install:` line; this is the `.dmg`'s.
+    console.info("[updates] opening the installer", dmgPath);
     openDmg(dmgPath);
     // Once: «Open installer» after «When the app closes» must not open it
     // again on the way out.

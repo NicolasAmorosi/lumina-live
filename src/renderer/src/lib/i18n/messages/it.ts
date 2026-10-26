@@ -748,6 +748,15 @@ const it: Messages = {
     updatesCheck: "Cerca aggiornamenti",
     updatesNotes: "Novità",
     updatesNew: "Nuova versione",
+    updatesDownload: "Scarica",
+    updatesInstallNow: "Riavvia e aggiorna",
+    updatesOpenInstaller: "Apri l'installer",
+    updatesInstallOnQuit: "Alla chiusura dell'app",
+    updatesView: "Vedi",
+    updatesProgress: "Download dell'aggiornamento",
+    updatesInstallTitle: "Chiudere l'app per aggiornare?",
+    updatesAutoCheck: "Cerca all'apertura dell'app",
+    updatesAutoCheckDesc: "Una volta per avvio, in silenzio. Non scarica mai niente senza che tu lo chieda.",
     updatesState: {
       unsupported:
         "Questa installazione non si aggiorna dall'app. Le nuove versioni si scaricano dal sito di Lumina Live.",
@@ -755,6 +764,14 @@ const it: Messages = {
       checking: "Ricerca…",
       upToDate: "Hai l'ultima versione (controllata alle {time}).",
       available: "Lumina Live {version} è disponibile.",
+      downloading: "Download di Lumina Live {version}… {percent}%",
+      ready:
+        "Lumina Live {version} è pronta. Per installarla, l'app si chiude e si riapre; se il computer chiede il permesso, concedilo.",
+      readyOnQuit: "Lumina Live {version} si installa alla chiusura dell'app. Se il computer chiede il permesso, concedilo.",
+      readyDmg:
+        "Lumina Live {version} è pronta. Aprendo l'installer, l'app si chiude: trascina Lumina Live in Applicazioni e scegli «Sostituisci».",
+      readyDmgOnQuit:
+        "L'installer di Lumina Live {version} si apre alla chiusura dell'app: trascina Lumina Live in Applicazioni e scegli «Sostituisci».",
     },
     updatesErrors: {
       offline: "Impossibile cercare: non c'è connessione a internet.",

@@ -737,6 +737,15 @@ const en: Messages = {
     updatesCheck: "Check for updates",
     updatesNotes: "What's new",
     updatesNew: "New version",
+    updatesDownload: "Download",
+    updatesInstallNow: "Restart and update",
+    updatesOpenInstaller: "Open installer",
+    updatesInstallOnQuit: "When the app closes",
+    updatesView: "View",
+    updatesProgress: "Update download",
+    updatesInstallTitle: "Close the app to update?",
+    updatesAutoCheck: "Check when the app opens",
+    updatesAutoCheckDesc: "Once per launch, quietly. It never downloads anything unless you ask.",
     updatesState: {
       unsupported:
         "This installation can't update itself. New versions are downloaded from the Lumina Live website.",
@@ -744,6 +753,14 @@ const en: Messages = {
       checking: "Checking…",
       upToDate: "You have the latest version (checked at {time}).",
       available: "Lumina Live {version} is available.",
+      downloading: "Downloading Lumina Live {version}… {percent}%",
+      ready:
+        "Lumina Live {version} is ready. Installing it closes the app and opens it again; if the computer asks for permission, allow it.",
+      readyOnQuit: "Lumina Live {version} installs when the app closes. If the computer asks for permission, allow it.",
+      readyDmg:
+        "Lumina Live {version} is ready. Opening the installer closes the app: drag Lumina Live to Applications and choose “Replace”.",
+      readyDmgOnQuit:
+        "The Lumina Live {version} installer opens when the app closes: drag Lumina Live to Applications and choose “Replace”.",
     },
     updatesErrors: {
       offline: "Couldn't check: there's no internet connection.",

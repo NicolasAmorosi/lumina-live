@@ -29,7 +29,7 @@ function warnNoScreen(): void {
   toast.warning(t("projector.noScreen"), {
     action: {
       label: t("projector.chooseScreen"),
-      onClick: () => useUiStore.getState().setSettingsOpen(true),
+      onClick: () => useUiStore.getState().openSettings("projection"),
     },
   });
 }

@@ -146,6 +146,8 @@ export const api = {
   updates: {
     getStatus: () => invoke("updates:getStatus", undefined),
     check: () => invoke("updates:check", undefined),
+    download: () => invoke("updates:download", undefined),
+    install: (when: "now" | "onQuit") => invoke("updates:install", { when }),
     openReleaseNotes: () => invoke("updates:openReleaseNotes", undefined),
   },
 };

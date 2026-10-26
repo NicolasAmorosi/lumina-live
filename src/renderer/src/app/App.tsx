@@ -29,6 +29,7 @@ import { startProjectionEffects } from "@renderer/effects/projection-sync";
 import { startLibrarySyncEffects } from "@renderer/effects/library-sync";
 import { startDraftAutosave } from "@renderer/effects/draft-autosave";
 import { startConversionSync } from "@renderer/effects/conversion-sync";
+import { startUpdateAnnouncement } from "@renderer/effects/update-announcement";
 import { useGlobalShortcuts } from "@renderer/lib/hooks/use-global-shortcuts";
 
 /**
@@ -52,12 +53,12 @@ export function App() {
   const [programsInitialMode, setProgramsInitialMode] = useState<
     { kind: "create" } | undefined
   >(undefined);
-  // The only modal whose flag lives outside this component: a toast raised
-  // from `display.store` (no screen to project on) offers to open Settings ->
-  // Screen, and a toast action has no component tree under it. See
-  // `ui.store.ts`.
-  const settingsOpen = useUiStore((s) => s.settingsOpen);
-  const setSettingsOpen = useUiStore((s) => s.setSettingsOpen);
+  // The only modal whose flag lives outside this component: toasts offer to
+  // open Settings on a given section, and a toast action has no component
+  // tree under it. See `ui.store.ts`.
+  const settingsOpen = useUiStore((s) => s.settingsSection !== null);
+  const openSettings = useUiStore((s) => s.openSettings);
+  const closeSettings = useUiStore((s) => s.closeSettings);
   // Same reasoning, and one more: mounted here it exists ONCE. Rendered by
   // `MediaBrowser` it was one dialog per resource tab the operator had
   // visited, since those panels stay mounted after their first visit.
@@ -143,11 +144,15 @@ export function App() {
     // Started BEFORE the restore above can finish: its first write is
     // debounced, and the restore itself only ever rewrites the same draft.
     const stopDraftAutosave = startDraftAutosave();
+    // Main's launch check comes ten seconds after the window, long after the
+    // settings it reads have loaded.
+    const stopUpdateAnnouncement = startUpdateAnnouncement();
     return () => {
       stopProjectionEffects();
       stopLibrarySync();
       stopConversionSync();
       stopDraftAutosave();
+      stopUpdateAnnouncement();
     };
   }, [loadSettings]);
 
@@ -216,7 +221,7 @@ export function App() {
             );
             setProgramsOpen(true);
           }}
-          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenSettings={() => openSettings()}
         />
       </ErrorBoundary>
       {/* One boundary per modal, deliberately NOT a share of the shell's:
@@ -237,12 +242,12 @@ export function App() {
       </ModalBoundary>
       <ModalBoundary
         onCrash={() => {
-          setSettingsOpen(false);
+          closeSettings();
           toast.danger(t("app.modalCrashed"));
         }}
         open={settingsOpen}
       >
-        <SettingsModal onOpenChange={setSettingsOpen} open={settingsOpen} />
+        <SettingsModal />
       </ModalBoundary>
       <ModalBoundary
         onCrash={() => {

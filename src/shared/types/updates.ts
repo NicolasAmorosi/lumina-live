@@ -19,8 +19,11 @@ export type UpdateStatus =
   | { kind: "upToDate"; checkedAt: number }
   | { kind: "available"; version: string }
   | { kind: "downloading"; version: string; percent: number }
-  /** `installOnQuit`: the operator chose «When the app closes». */
-  | { kind: "downloaded"; version: string; installOnQuit: boolean }
+  /** `installOnQuit`: the operator chose «When the app closes».
+   *  `opensInstaller`: installing opens the `.dmg` for the operator to drag
+   *  over the app (macOS without a Developer ID) instead of replacing it and
+   *  reopening on its own. */
+  | { kind: "downloaded"; version: string; installOnQuit: boolean; opensInstaller: boolean }
   | { kind: "error"; code: UpdateErrorCode; during: UpdateStep };
 
 /** A check never starts over one in flight, and never undoes a download.

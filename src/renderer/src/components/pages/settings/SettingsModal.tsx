@@ -9,8 +9,7 @@ import { BibleSection } from "./sections/bible-section";
 import { SlidesSection } from "./sections/slides-section";
 import { SystemSection } from "./sections/system-section";
 import { AboutSection } from "./sections/about-section";
-
-type SettingsSection = "projection" | "slides" | "verse" | "bible" | "system" | "about";
+import { useUiStore, type SettingsSection } from "@renderer/stores/ui.store";
 
 const SECTION_ID_BASE = "settings";
 
@@ -18,16 +17,30 @@ const SECTION_ID_BASE = "settings";
  *  style), a scrollable panel of grouped rows on the right. The dialog itself
  *  has a large, fixed height — switching category never resizes it. Add a new
  *  setting to an existing group/section, or add a section here plus one
- *  `<Tabs>` entry, not another flat row on top of the pile. */
-export function SettingsModal({ onOpenChange, open }: { onOpenChange: (open: boolean) => void; open: boolean }) {
+ *  `<Tabs>` entry, not another flat row on top of the pile.
+ *
+ *  Open and on which section is `ui.store`'s, so a toast can land on one. */
+export function SettingsModal() {
   const t = useT();
-  const [section, setSection] = useState<SettingsSection>("projection");
+  const shown = useUiStore((s) => s.settingsSection);
+  const open = shown !== null;
+  const section = shown ?? "projection";
+  const openSettings = useUiStore((s) => s.openSettings);
+  const closeSettings = useUiStore((s) => s.closeSettings);
   // Same shape as `ResourcePanel`: only the categories actually opened are
   // mounted, and a visited one then stays mounted behind `TabPanel`. Nested
   // ternaries remounted the whole section on every switch, throwing away its
   // scroll offset — the Bible list and the slides panel are both long enough
   // to notice.
-  const [visited, setVisited] = useState<readonly SettingsSection[]>([section]);
+  const [visited, setVisited] = useState<readonly SettingsSection[]>([]);
+  // Adjusted while rendering, not in an effect: the section can change from
+  // outside (a toast's «View»), and an effect would paint one frame with no
+  // panel mounted for it. Closing drops what was mounted: settings are read at
+  // mount, and reopening the dialog should not show a figure from a previous
+  // visit that the operator has since changed elsewhere.
+  if (open ? !visited.includes(section) : visited.length > 0) {
+    setVisited(open ? [...visited, section] : []);
+  }
 
   const sections: readonly TabItem<SettingsSection>[] = [
     { icon: "display", label: t("settings.sections.projection"), value: "projection" },
@@ -45,14 +58,7 @@ export function SettingsModal({ onOpenChange, open }: { onOpenChange: (open: boo
     <Modal
       height="tall"
       onOpenChange={(next) => {
-        if (!next) {
-          setSection("projection");
-          // Closing drops what was mounted: settings are read at mount, and
-          // reopening the dialog should not show a figure from a previous
-          // visit that the operator has since changed elsewhere.
-          setVisited(["projection"]);
-        }
-        onOpenChange(next);
+        if (!next) closeSettings();
       }}
       open={open}
       size="2xl"
@@ -65,7 +71,7 @@ export function SettingsModal({ onOpenChange, open }: { onOpenChange: (open: boo
             the four differ. */}
         <IconButton
           aria-label={t("settings.close")}
-          onClick={() => onOpenChange(false)}
+          onClick={closeSettings}
           size="xs"
           title={t("settings.close")}
           variant="ghost"
@@ -76,10 +82,7 @@ export function SettingsModal({ onOpenChange, open }: { onOpenChange: (open: boo
       <div className="flex min-h-0 flex-1">
         <Tabs
           idBase={SECTION_ID_BASE}
-          onChange={(value) => {
-            setSection(value);
-            setVisited((current) => (current.includes(value) ? current : [...current, value]));
-          }}
+          onChange={openSettings}
           tabs={sections}
           value={section}
           variant="sidebar"

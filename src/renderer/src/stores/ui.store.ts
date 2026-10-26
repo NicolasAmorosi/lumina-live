@@ -1,20 +1,26 @@
 import { create } from "zustand";
 
+export type SettingsSection = "projection" | "slides" | "verse" | "bible" | "system" | "about";
+
 /**
  * App-level chrome that something outside React has to be able to open.
  *
  * Modal visibility normally belongs in `App.tsx`'s own state, and `programsOpen`
- * still lives there. Settings is the exception: a toast raised from
- * `display.store` when there is no screen to project on offers "Choose
- * screen", and a toast action is a plain function with no component tree
- * under it. Routing just that one flag through a store is what lets the offer
- * actually land on Settings -> Screen instead of only naming it.
+ * still lives there. Settings is the exception: two toasts offer a way into it
+ * — "Choose screen" from `display.store` when there is no screen to project
+ * on, «View» from `effects/update-announcement.ts` when a new version is out —
+ * and a toast action is a plain function with no component tree under it.
+ * Routing Settings and its section through a store is what lets each offer
+ * land on the section it names (Screen, About) instead of only naming it.
  */
 type UiStoreState = {
-  settingsOpen: boolean;
-  setSettingsOpen: (open: boolean) => void;
+  /** The Settings section on screen; `null` while Settings is closed. */
+  settingsSection: SettingsSection | null;
+  /** Opens Settings on `section`, or switches to it when already open. */
+  openSettings: (section?: SettingsSection) => void;
+  closeSettings: () => void;
   /** The asset whose "remove anyway" confirmation is open, `null` when
-   *  none. Here for the same reason as `settingsOpen`: the offer is a toast
+   *  none. Here for the same reason as `settingsSection`: the offer is a toast
    *  action raised from `lib/actions/remove-asset.ts`, with no component tree
    *  under it. Global also means the dialog can be rendered ONCE, in `App`,
    *  rather than by every mounted `MediaBrowser` — see `F1`. */
@@ -32,8 +38,9 @@ type UiStoreState = {
 export type CloseGuardReasons = { unsaved: boolean; onAir: boolean };
 
 export const useUiStore = create<UiStoreState>((set) => ({
-  settingsOpen: false,
-  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  settingsSection: null,
+  openSettings: (section = "projection") => set({ settingsSection: section }),
+  closeSettings: () => set({ settingsSection: null }),
   removeAssetConfirmId: null,
   setRemoveAssetConfirmId: (removeAssetConfirmId) => set({ removeAssetConfirmId }),
   closeGuard: null,
