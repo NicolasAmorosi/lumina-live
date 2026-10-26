@@ -6,6 +6,7 @@ import type { MediaRepo } from "../db/repositories/media.repo";
 import { getSettingsRepo, getSlidesRepo, isDatabaseOpen } from "../services/repos";
 import { slidesCacheDir, slidesTempDir } from "../paths";
 import { resolveRasterPdf } from "../slides/rasterizer";
+import { renderNativeSlide } from "../slides/native-deck";
 import { ensureThumbnail } from "../media/thumbnail-service";
 import { convertedPathFor } from "../media/conversion-service";
 
@@ -320,15 +321,32 @@ export function registerWorshipProtocolHandler(mediaRepo: MediaRepo): void {
             return new Response("Not found", { status: 404 });
           }
           const variant = segments[2] === "thumb" ? "thumb" : "full";
-          const filePath = withinCache(
-            getSlidesRepo().getSlideImagePath(deckId, slideIndex, variant),
-          );
+          const image = getSlidesRepo().getSlideImage(deckId, slideIndex, variant);
           // A (deckId, slideIndex) pair is immutable by construction: changing
           // the source file yields a different content hash and therefore a
           // different deck id. Without this header Chromium re-reads every
           // image on each <img> swap — during a live service.
-          return serveFile(request, filePath, {
-            "Cache-Control": "public, max-age=31536000, immutable",
+          const immutable = { "Cache-Control": "public, max-age=31536000, immutable" };
+          if (image?.kind !== "native") {
+            return serveFile(request, withinCache(image?.path ?? null), immutable);
+          }
+          // Built from the source itself, so it has to still BE the file the
+          // layers were read from: a deck edited in place would hand out bytes
+          // from the wrong offsets. Gone, not a guess — the deck is read again
+          // the next time it is opened.
+          const stat = await fs.promises.stat(image.sourcePath).catch(() => null);
+          if (!stat || stat.size !== image.sourceSizeBytes || Math.trunc(stat.mtimeMs) !== image.sourceMtimeMs) {
+            return new Response("Gone", { status: 410 });
+          }
+          const slide = renderNativeSlide(image.sourcePath, image.layers, image.variant);
+          if (!slide) return new Response("Gone", { status: 410 });
+          return new Response(request.method === "HEAD" ? null : new Uint8Array(slide.body), {
+            status: 200,
+            headers: {
+              ...immutable,
+              "Content-Type": slide.contentType,
+              "Content-Length": String(slide.body.length),
+            },
           });
         }
         case "deck-audio": {

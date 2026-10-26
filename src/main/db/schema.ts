@@ -266,7 +266,11 @@ export const slideDecks = sqliteTable(
     id: integer("id").primaryKey({ autoIncrement: true }),
     contentHash: text("content_hash").notNull(),
     renderWidth: integer("render_width").notNull(),
-    imageFormat: text("image_format", { enum: ["webp", "png"] }).notNull(),
+    /** "native": nothing was rasterized — the slides are pictures read
+     *  straight out of the source file (`ppt-binary.ts`), described by
+     *  `deck_slides.layers` and served from it. `renderWidth` is 0 and
+     *  `cacheDir` empty for those: they own no folder. */
+    imageFormat: text("image_format", { enum: ["webp", "png", "native"] }).notNull(),
     converterVersion: integer("converter_version").notNull(),
     mediaAssetId: integer("media_asset_id").references(() => mediaAssets.id, {
       onDelete: "set null",
@@ -280,10 +284,14 @@ export const slideDecks = sqliteTable(
     status: text("status", { enum: ["pending", "converting", "ready", "error"] }).notNull(),
     errorCode: text("error_code"),
     errorMessage: text("error_message"),
-    timingsSource: text("timings_source", { enum: ["ooxml", "ooxml-converted", "none"] })
+    timingsSource: text("timings_source", { enum: ["ooxml", "ooxml-converted", "binary", "none"] })
       .notNull()
       .default("none"),
     bytesOnDisk: integer("bytes_on_disk").notNull().default(0),
+    /** 1 once `deck_slides.transition` was read from the source. A deck
+     *  converted before slide transitions existed has 0, and reads them on its
+     *  next use (`deck-service.ts`) instead of being reconverted. */
+    transitionsRead: integer("transitions_read").notNull().default(0),
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
     lastUsedAt: integer("last_used_at").notNull(),
@@ -315,6 +323,14 @@ export const deckSlides = sqliteTable(
     advanceMs: integer("advance_ms"),
     advanceOnClick: integer("advance_on_click").notNull().default(1),
     transitionMs: integer("transition_ms"),
+    /** How this slide enters when the deck moves forward onto it — a
+     *  `SlideTransitionStyle`, with its length in `transition_ms`. `null` is a
+     *  cut. */
+    transition: text("transition"),
+    /** A native deck's slide: the JSON `SlideLayers` saying which pictures of
+     *  the source make it up. `null` for a rasterized one, whose image is
+     *  `image_file` in the deck's cache folder. */
+    layers: text("layers"),
     hidden: integer("hidden").notNull().default(0),
     title: text("title"),
     notes: text("notes"),

@@ -1,8 +1,12 @@
+import type { SlideTransition } from "./transition";
+
 /**
- * A PowerPoint/Impress deck converted once to a set of rasterized images plus
- * whatever audio/timing metadata could be recovered from the .pptx OOXML.
- * Replaces the COM-driven live slideshow session — a deck is content, not a
- * remote-controlled process, so main owns a cache instead of a slide cursor.
+ * A PowerPoint/Impress deck as a set of images plus whatever audio/timing
+ * metadata could be recovered from it: converted once and rasterized, or —
+ * for a deck made only of pictures, like the hymnal — read straight from its
+ * source file with no copy at all. Replaces the COM-driven live slideshow
+ * session — a deck is content, not a remote-controlled process, so main owns
+ * a cache instead of a slide cursor.
  */
 export type DeckStatus = "converting" | "ready" | "failed" | "stale";
 
@@ -16,6 +20,9 @@ export type DeckSlide = {
   /** Auto-advance delay from the .pptx transition timing, in ms. `null` means
    *  this slide only advances manually. */
   advanceAfterMs: number | null;
+  /** How this slide enters when the deck moves forward onto it; `null` is a
+   *  cut. See `SlideTransition`. */
+  transition: SlideTransition | null;
 };
 
 export type DeckSoundtrack = {
@@ -102,7 +109,7 @@ export type DeckDTO = {
    *  line up with the rendered pages — auto-advance was disabled on purpose,
    *  not lost by accident. Drives whether the UI shows that as a fact instead
    *  of silence. */
-  timingsSource: "ooxml" | "ooxml-converted" | "none";
+  timingsSource: "ooxml" | "ooxml-converted" | "binary" | "none";
   sourceMtimeMs: number;
   convertedAt: number;
   error: string | null;

@@ -3,6 +3,7 @@ import path from "node:path";
 import { XMLParser } from "fast-xml-parser";
 import { SLIDES_MIN_ADVANCE_MS } from "@shared/constants";
 import type { SlideRect } from "@shared/types/deck";
+import { SLIDE_TRANSITION_SPEED_MS, type SlideTransition } from "@shared/types/transition";
 import { readZipEntries } from "./zip-reader";
 
 export type ContainerKind = "ooxml" | "binary" | "odf" | "pdf" | "unknown";
@@ -13,7 +14,7 @@ export type SlideTiming = {
   partName: string;
   autoAdvanceMs: number | null;
   advanceOnClick: boolean;
-  transitionMs: number | null;
+  transition: SlideTransition | null;
   hidden: boolean;
   title: string | null;
   notes: string | null;
@@ -230,6 +231,43 @@ function findTransition(slide: XmlNode): XmlNode | undefined {
   return asNode(slide["p:transition"]);
 }
 
+/** Children of `p:transition` that are not the effect itself. */
+const TRANSITION_EXTRAS = new Set(["p:sndAc", "p:extLst"]);
+
+/** How the slide enters, from its `p:transition`: `p:fade` (through black
+ *  with `thruBlk`) and `p:randomBar` are drawn as themselves, a cut is no
+ *  transition, and any other effect is a crossfade of its own length
+ *  (`SlideTransition`). The length is `p14:dur` when PowerPoint wrote one,
+ *  else the `spd` word — `fast` when absent, the schema's default. */
+function ooxmlTransition(transition: XmlNode | undefined): SlideTransition | null {
+  if (!transition) return null;
+  const effect = Object.keys(transition).find(
+    (key) => !key.startsWith("@") && !key.startsWith("#") && !TRANSITION_EXTRAS.has(key),
+  );
+  if (!effect || effect === "p:cut") return null;
+
+  const durAttr = attr(transition, "@p14:dur") ?? attr(transition, "@dur");
+  const speed = attr(transition, "@spd");
+  const durationMs =
+    durAttr !== undefined && Number.isFinite(Number(durAttr)) && Number(durAttr) > 0
+      ? Number(durAttr)
+      : speed === "slow"
+        ? SLIDE_TRANSITION_SPEED_MS.slow
+        : speed === "med"
+          ? SLIDE_TRANSITION_SPEED_MS.medium
+          : SLIDE_TRANSITION_SPEED_MS.fast;
+
+  const options = asNode(transition[effect]);
+  if (effect === "p:fade") {
+    const thruBlk = attr(options, "@thruBlk");
+    return { style: thruBlk === "1" || thruBlk === "true" ? "fade-through-black" : "crossfade", durationMs };
+  }
+  if (effect === "p:randomBar") {
+    return { style: attr(options, "@dir") === "vert" ? "random-bars-vertical" : "random-bars-horizontal", durationMs };
+  }
+  return { style: "crossfade", durationMs };
+}
+
 function collectText(node: unknown, out: string[]): void {
   if (node === null || node === undefined) return;
   if (Array.isArray(node)) {
@@ -410,9 +448,6 @@ export function readPresentationMeta(filePath: string): PresentationMeta {
     const advClick = attr(transition, "@advClick");
     const advanceOnClick = !(advClick === "0" || advClick === "false");
 
-    const durAttr = attr(transition, "@p14:dur") ?? attr(transition, "@dur");
-    const transitionMs =
-      durAttr !== undefined && Number.isFinite(Number(durAttr)) ? Number(durAttr) : null;
 
     const cSld = asNode(sld["p:cSld"]);
     const title = attr(cSld, "@name") ?? null;
@@ -525,7 +560,7 @@ export function readPresentationMeta(filePath: string): PresentationMeta {
       partName,
       autoAdvanceMs,
       advanceOnClick,
-      transitionMs,
+      transition: ooxmlTransition(transition),
       hidden,
       title,
       notes,

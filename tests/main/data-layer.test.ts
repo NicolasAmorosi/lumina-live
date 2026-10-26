@@ -32,11 +32,11 @@ import { DraftRepo } from "../../src/main/db/repositories/draft.repo";
 import { UtilityRepo } from "../../src/main/db/repositories/utility.repo";
 import { seedUtilityScenes } from "../../src/main/db/seed/seed-utility-scenes";
 import { getOverlaysRepo, initRepos } from "../../src/main/services/repos";
-import { readBinarySlideTimings } from "../../src/main/slides/ppt-binary-timings";
+import { readBinarySlideTimings } from "../../src/main/slides/ppt-binary";
 import { backfillDeckTimings } from "../../src/main/slides/backfill-timings";
 import { SNIPPET_MARK_END, SNIPPET_MARK_START, parseSnippet } from "../../src/shared/types/bible";
 import { DEFAULT_SETTINGS, SETTINGS_VALIDATORS, isSettingsKey } from "../../src/shared/types/settings";
-import { BUILTIN_BIBLE_CODE, SLIDES_CONVERTER_VERSION } from "../../src/shared/constants";
+import { BUILTIN_BIBLE_CODE, SLIDES_CONVERTER_VERSION, SLIDES_NATIVE_VERSION } from "../../src/shared/constants";
 import { defaultUtilityScenes } from "../../src/shared/types/utility";
 import mainEs from "../../src/main/i18n/messages/es";
 import { removeUtilityScene } from "../../src/main/services/utility-scene-removal";
@@ -434,7 +434,8 @@ describe("Deck status is answered by CONTENT, not by row ownership", () => {
           bytes: 1024,
           advanceMs: null,
           advanceOnClick: true,
-          transitionMs: null,
+          transition: null,
+          layers: null,
           hidden: false,
           title: null,
           notes: null,
@@ -514,7 +515,8 @@ describe("Auto-advance survives the LibreOffice round-trip that drops it", () =>
     bytes: 1024,
     advanceMs: null as number | null,
     advanceOnClick: true,
-    transitionMs: null,
+    transition: null,
+    layers: null,
     hidden: false,
     title: null,
     notes: null,
@@ -636,6 +638,167 @@ describe("Auto-advance survives the LibreOffice round-trip that drops it", () =>
       slidesRepo.slideAdvanceTimes(staleDeckId).every((s) => s.advanceMs === null),
       "a deck whose source no longer matches its (size, mtime) must be skipped",
     );
+  });
+});
+
+describe("A deck read natively owns no folder and replaces its converted copy", () => {
+  // `image_format = 'native'`: slides are pictures read straight from the
+  // source (`ppt-binary.ts`), so the row has no cache folder at all — and every
+  // path that deletes or rebases a deck's folder has to know that, or it acts
+  // on the empty path (the process's working directory).
+  const hash = "7".repeat(64);
+  let asset: MediaAsset;
+  let convertedId: number;
+  let nativeId: number;
+  let convertedDir: string;
+
+  const slide = (layers: string | null) => ({
+    slideIndex: 1,
+    imageFile: layers === null ? "1.webp" : "",
+    thumbFile: layers === null ? "1.thumb.webp" : "",
+    widthPx: 960,
+    heightPx: 720,
+    bytes: layers === null ? 1024 : 0,
+    advanceMs: 10_515,
+    advanceOnClick: true,
+    transition: { style: "random-bars-vertical" as const, durationMs: 750 },
+    layers,
+    hidden: false,
+    title: null,
+    notes: null,
+  });
+
+  beforeAll(() => {
+    const source = path.join(mediaDir, "native-hymn.pps");
+    fs.writeFileSync(source, buildLegacyPpt());
+    asset = mediaRepo.upsertFromPath(source, "ppt", true);
+    const stat = fs.statSync(source);
+    mediaRepo.setContentHash(asset.id, hash, stat.size, Math.trunc(stat.mtimeMs));
+    convertedDir = path.join(tmpDir, "converted-hymn");
+    fs.mkdirSync(convertedDir);
+    fs.writeFileSync(path.join(convertedDir, "1.webp"), "");
+    const deck = {
+      contentHash: hash,
+      mediaAssetId: asset.id,
+      sourcePath: source,
+      sourceSizeBytes: stat.size,
+      sourceMtimeMs: Math.trunc(stat.mtimeMs),
+      aspectRatio: "5760:4320",
+      bytesOnDisk: 0,
+    };
+    convertedId = slidesRepo.insertDeck(
+      {
+        ...deck,
+        renderWidth: 1920,
+        imageFormat: "webp",
+        converterVersion: SLIDES_CONVERTER_VERSION,
+        cacheDir: convertedDir,
+        timingsSource: "ooxml-converted",
+        bytesOnDisk: 1024,
+        lastUsedAt: Date.now() - 60_000,
+      },
+      [slide(null)],
+      [],
+    );
+    nativeId = slidesRepo.insertDeck(
+      {
+        ...deck,
+        renderWidth: 0,
+        imageFormat: "native",
+        converterVersion: SLIDES_NATIVE_VERSION,
+        cacheDir: "",
+        timingsSource: "binary",
+      },
+      [slide('{"width":5760,"height":4320,"layers":[]}')],
+      [],
+    );
+  });
+
+  test("its slides are served from the source, and it is the asset's current deck", () => {
+    expect(slidesRepo.getSlideImage(nativeId, 1, "thumb")).toMatchObject({
+      kind: "native",
+      variant: "thumb",
+      sourcePath: asset.path,
+      layers: '{"width":5760,"height":4320,"layers":[]}',
+    });
+    expect(slidesRepo.findNativeDeckByAsset(asset.id)?.id).toBe(nativeId);
+    expect(slidesRepo.statusesByAsset([asset.id]).get(asset.id)).toEqual({ deckId: nativeId, status: "ready" });
+    const dto = slidesRepo.toDTO(slidesRepo.getDeckById(nativeId)!, asset.id);
+    expect(dto.slides[0]).toMatchObject({ advanceAfterMs: 10_515, transition: { style: "random-bars-vertical", durationMs: 750 } });
+  });
+
+  test("it is not counted, evicted or rebased as cached content", () => {
+    expect(slidesRepo.lruCandidates([], Date.now() + 1, 100).some((row) => row.id === nativeId)).toBe(false);
+    expect(slidesRepo.allDeckDirs()).not.toContain("");
+    slidesRepo.adoptCacheRoot(path.join(tmpDir, "some-other-cache"));
+    expect(slidesRepo.getDeckById(nativeId)?.cacheDir).toBe("");
+  });
+
+  test("the converted copy it replaces goes with its folder — unless it is kept for the projector", () => {
+    // `adoptCacheRoot` above forgot the converted row (its folder is not under
+    // that root); put it back the way it was for this case.
+    if (!slidesRepo.getDeckById(convertedId)) {
+      convertedId = slidesRepo.insertDeck(
+        {
+          contentHash: hash,
+          renderWidth: 1920,
+          imageFormat: "webp",
+          converterVersion: SLIDES_CONVERTER_VERSION,
+          mediaAssetId: asset.id,
+          sourcePath: asset.path,
+          sourceSizeBytes: 1,
+          sourceMtimeMs: 1,
+          cacheDir: convertedDir,
+          aspectRatio: null,
+          timingsSource: "ooxml-converted",
+          bytesOnDisk: 1024,
+          lastUsedAt: Date.now() - 60_000,
+        },
+        [slide(null)],
+        [],
+      );
+    }
+    expect(slidesRepo.deleteSupersededByNative([convertedId], hash)).toBe(0);
+    expect(fs.existsSync(convertedDir)).toBe(true);
+    expect(slidesRepo.deleteSupersededByNative([])).toBe(1);
+    expect(slidesRepo.getDeckById(convertedId)).toBeNull();
+    expect(fs.existsSync(convertedDir)).toBe(false);
+    expect(slidesRepo.getDeckById(nativeId)).not.toBeNull();
+  });
+
+  test("deleting it removes no folder, whatever its row names", () => {
+    const sentinel = path.join(tmpDir, "not-a-deck-folder");
+    fs.mkdirSync(sentinel);
+    sqlite.prepare("UPDATE slide_decks SET cache_dir = ? WHERE id = ?").run(sentinel, nativeId);
+    slidesRepo.deleteDeck(nativeId);
+    expect(slidesRepo.getDeckById(nativeId)).toBeNull();
+    expect(fs.existsSync(sentinel)).toBe(true);
+  });
+
+  test("a deck converted before transitions were read gets them written, once", () => {
+    const id = slidesRepo.insertDeck(
+      {
+        contentHash: "8".repeat(64),
+        renderWidth: 1920,
+        imageFormat: "webp",
+        converterVersion: SLIDES_CONVERTER_VERSION,
+        mediaAssetId: asset.id,
+        sourcePath: asset.path,
+        sourceSizeBytes: 1,
+        sourceMtimeMs: 1,
+        cacheDir: path.join(tmpDir, "older-conversion"),
+        aspectRatio: null,
+        timingsSource: "ooxml",
+        bytesOnDisk: 0,
+      },
+      [{ ...slide(null), transition: null }],
+      [],
+    );
+    sqlite.prepare("UPDATE slide_decks SET transitions_read = 0 WHERE id = ?").run(id);
+    slidesRepo.setSlideTransitions(id, [{ style: "crossfade", durationMs: 500 }]);
+    const row = slidesRepo.getDeckById(id)!;
+    expect(row.transitionsRead).toBe(1);
+    expect(slidesRepo.toDTO(row, asset.id).slides[0]?.transition).toEqual({ style: "crossfade", durationMs: 500 });
   });
 });
 
@@ -1117,7 +1280,12 @@ describe("Installed bibles keep the order the operator gave them", () => {
     fs.cpSync(drizzleDir, before0017, { recursive: true });
     const journalPath = path.join(before0017, "meta/_journal.json");
     const journal = JSON.parse(fs.readFileSync(journalPath, "utf8")) as { entries: { tag: string }[] };
-    journal.entries = journal.entries.filter((entry) => entry.tag !== "0017_builtin_bible_rv1909");
+    // Everything from 0017 on: drizzle skips a migration older than the last
+    // one applied, so leaving a later one in would hide 0017 from the upgrade.
+    journal.entries = journal.entries.slice(
+      0,
+      journal.entries.findIndex((entry) => entry.tag === "0017_builtin_bible_rv1909"),
+    );
     fs.writeFileSync(journalPath, JSON.stringify(journal));
 
     let dbIndex = 0;

@@ -5,8 +5,9 @@ import type Database from "better-sqlite3";
 import type { Db } from "../client";
 import { deckAudio, deckSlides, deckVideos, mediaAssets, slideDecks } from "../schema";
 import { slideThumbUrl, slideUrl, deckAudioUrl, deckVideoUrl, linkedAudioUrl } from "@shared/urls";
-import { SLIDES_CONVERTER_VERSION } from "@shared/constants";
+import { SLIDES_CONVERTER_VERSION, SLIDES_NATIVE_VERSION } from "@shared/constants";
 import type { DeckDTO, DeckSlide, DeckSlideVideo, DeckStatus, SlideRect } from "@shared/types/deck";
+import { isSlideTransitionStyle, type SlideTransition } from "@shared/types/transition";
 
 /** One `IN (...)` binds one parameter per id; SQLite refuses the statement
  *  past `SQLITE_MAX_VARIABLE_NUMBER`. Same partition size `media.repo.ts`
@@ -25,10 +26,29 @@ type SlideRow = typeof deckSlides.$inferSelect;
 type AudioRow = typeof deckAudio.$inferSelect;
 type VideoRow = typeof deckVideos.$inferSelect;
 
+/** Whether a deck row was written by the pipeline this build runs — the
+ *  rasterizer's version for a converted deck, the reader's for a native one. */
+export function isCurrentDeck(row: Pick<DeckRow, "imageFormat" | "converterVersion">): boolean {
+  return row.converterVersion === (row.imageFormat === "native" ? SLIDES_NATIVE_VERSION : SLIDES_CONVERTER_VERSION);
+}
+
+/** What `worship://deck/<id>/<n>` serves: a file in the deck's cache folder,
+ *  or a native slide built from its source (`native-deck.ts`). */
+export type SlideImage =
+  | { kind: "file"; path: string }
+  | {
+      kind: "native";
+      variant: "full" | "thumb";
+      sourcePath: string;
+      sourceSizeBytes: number;
+      sourceMtimeMs: number;
+      layers: string;
+    };
+
 export type NewDeck = {
   contentHash: string;
   renderWidth: number;
-  imageFormat: "webp" | "png";
+  imageFormat: "webp" | "png" | "native";
   converterVersion: number;
   mediaAssetId: number | null;
   sourcePath: string;
@@ -36,7 +56,7 @@ export type NewDeck = {
   sourceMtimeMs: number;
   cacheDir: string;
   aspectRatio: string | null;
-  timingsSource: "ooxml" | "ooxml-converted" | "none";
+  timingsSource: "ooxml" | "ooxml-converted" | "binary" | "none";
   bytesOnDisk: number;
   /** Defaults to the moment of insertion. A background prewarm backdates
    *  this on purpose — see the call site in `deck-service.ts`. */
@@ -52,10 +72,13 @@ export type NewSlide = {
   bytes: number;
   advanceMs: number | null;
   advanceOnClick: boolean;
-  transitionMs: number | null;
+  transition: SlideTransition | null;
   hidden: boolean;
   title: string | null;
   notes: string | null;
+  /** `SlideLayers` JSON for a native deck's slide, `null` for a rasterized
+   *  one (whose `imageFile` is then the image). */
+  layers: string | null;
 };
 
 export type NewAudio = {
@@ -103,7 +126,9 @@ export class SlidesRepo {
 
   private slideImageStmt(): Database.Statement {
     this.slideImageStatement ??= this.sqlite.prepare(
-      `SELECT d.cache_dir AS cacheDir, s.image_file AS imageFile, s.thumb_file AS thumbFile
+      `SELECT d.cache_dir AS cacheDir, s.image_file AS imageFile, s.thumb_file AS thumbFile,
+              s.layers AS layers, d.source_path AS sourcePath,
+              d.source_size_bytes AS sourceSizeBytes, d.source_mtime_ms AS sourceMtimeMs
          FROM deck_slides s JOIN slide_decks d ON d.id = s.deck_id
         WHERE s.deck_id = ? AND s.slide_index = ?`,
     );
@@ -119,8 +144,8 @@ export class SlidesRepo {
     this.insertSlideStatement ??= this.sqlite.prepare(
       `INSERT INTO deck_slides
          (deck_id, slide_index, image_file, thumb_file, width_px, height_px, bytes,
-          advance_ms, advance_on_click, transition_ms, hidden, title, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          advance_ms, advance_on_click, transition, transition_ms, hidden, title, notes, layers)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     return this.insertSlideStatement;
   }
@@ -177,6 +202,20 @@ export class SlidesRepo {
     );
   }
 
+  /** This asset's native deck (`image_format = 'native'`), whatever else it
+   *  has: until the next launch it may still own the converted copy it
+   *  replaced. */
+  findNativeDeckByAsset(mediaAssetId: number): DeckRow | null {
+    return (
+      this.db
+        .select()
+        .from(slideDecks)
+        .where(and(eq(slideDecks.mediaAssetId, mediaAssetId), eq(slideDecks.imageFormat, "native")))
+        .orderBy(sql`${slideDecks.lastUsedAt} DESC`)
+        .get() ?? null
+    );
+  }
+
   /**
    * One query per chunk for a whole grid's worth of assets, instead of
    * `findDeckByAsset` + `fs.existsSync` per asset (what `deckStatuses` used to
@@ -224,7 +263,13 @@ export class SlidesRepo {
     // a given assetId's rows can only ever land in one chunk, since the chunks
     // partition the ids.
     const take = (
-      rows: readonly { id: number; assetId: number | null; status: string; converterVersion: number }[],
+      rows: readonly {
+        id: number;
+        assetId: number | null;
+        status: string;
+        converterVersion: number;
+        imageFormat: DeckRow["imageFormat"];
+      }[],
     ) => {
       for (const row of rows) {
         if (row.assetId === null || result.has(row.assetId)) continue;
@@ -240,7 +285,7 @@ export class SlidesRepo {
             ? "failed"
             : row.status !== "ready"
               ? "converting"
-              : row.converterVersion === SLIDES_CONVERTER_VERSION
+              : isCurrentDeck(row)
                 ? "ready"
                 : "stale";
         result.set(row.assetId, { deckId: row.id, status });
@@ -262,6 +307,7 @@ export class SlidesRepo {
             assetId: mediaAssets.id,
             status: slideDecks.status,
             converterVersion: slideDecks.converterVersion,
+            imageFormat: slideDecks.imageFormat,
           })
           .from(mediaAssets)
           .innerJoin(slideDecks, eq(slideDecks.contentHash, mediaAssets.contentHash))
@@ -287,6 +333,7 @@ export class SlidesRepo {
             assetId: slideDecks.mediaAssetId,
             status: slideDecks.status,
             converterVersion: slideDecks.converterVersion,
+            imageFormat: slideDecks.imageFormat,
           })
           .from(slideDecks)
           .where(inArray(slideDecks.mediaAssetId, unresolved))
@@ -301,7 +348,7 @@ export class SlidesRepo {
    *  settings — the exact identity `insertDeck` enforces, so at most one row.
    *  Lets `tryCacheHit` resolve a duplicate file without re-reading it just to
    *  recompute a digest the asset already carries. */
-  findDeckByAssetContent(mediaAssetId: number, renderWidth: number, imageFormat: "webp" | "png"): DeckRow | null {
+  findDeckByAssetContent(mediaAssetId: number, renderWidth: number, imageFormat: DeckRow["imageFormat"]): DeckRow | null {
     const row = this.db
       .select({ deck: slideDecks })
       .from(mediaAssets)
@@ -330,7 +377,7 @@ export class SlidesRepo {
   findDeckByIdentity(
     contentHash: string,
     renderWidth: number,
-    imageFormat: "webp" | "png",
+    imageFormat: DeckRow["imageFormat"],
   ): DeckRow | null {
     return (
       this.db
@@ -412,6 +459,7 @@ export class SlidesRepo {
         .values({
           ...deck,
           slideCount: slides.length,
+          transitionsRead: 1,
           status: "ready",
           errorCode: null,
           errorMessage: null,
@@ -436,10 +484,12 @@ export class SlidesRepo {
           slide.bytes,
           slide.advanceMs,
           slide.advanceOnClick ? 1 : 0,
-          slide.transitionMs,
+          slide.transition?.style ?? null,
+          slide.transition?.durationMs ?? null,
           slide.hidden ? 1 : 0,
           slide.title,
           slide.notes,
+          slide.layers,
         );
       }
 
@@ -538,7 +588,9 @@ export class SlidesRepo {
    *  next existence check. */
   deleteDeck(deckId: number): void {
     const row = this.getDeckById(deckId);
-    if (row) {
+    // A native deck owns no folder: its `cacheDir` is empty, and `rmSync` of a
+    // path resolved from "" is the process's working directory.
+    if (row && row.imageFormat !== "native" && row.cacheDir !== "") {
       try {
         fs.rmSync(row.cacheDir, { recursive: true, force: true });
       } catch {
@@ -564,7 +616,11 @@ export class SlidesRepo {
    */
   adoptCacheRoot(cacheRoot: string): { rebased: number; forgotten: number } {
     const root = path.resolve(cacheRoot);
-    const rows = this.db.select({ id: slideDecks.id, dir: slideDecks.cacheDir }).from(slideDecks).all();
+    const rows = this.db
+      .select({ id: slideDecks.id, dir: slideDecks.cacheDir })
+      .from(slideDecks)
+      .where(sql`${slideDecks.imageFormat} <> 'native'`)
+      .all();
     const counts = { rebased: 0, forgotten: 0 };
     this.sqlite.transaction(() => {
       for (const row of rows) {
@@ -583,15 +639,23 @@ export class SlidesRepo {
   }
 
   allDeckDirs(): string[] {
-    return this.db.select({ dir: slideDecks.cacheDir }).from(slideDecks).all().map((r) => r.dir);
+    return this.db
+      .select({ dir: slideDecks.cacheDir })
+      .from(slideDecks)
+      .where(sql`${slideDecks.imageFormat} <> 'native'`)
+      .all()
+      .map((r) => r.dir);
   }
 
   /** `allDeckDirs().length` used to answer this — every cache path in the
    *  database materialized as a string, to read one number. */
   deckCount(): number {
+    // What the cache holds: a native deck is a few rows describing a file
+    // elsewhere, not a cached copy of anything.
     const row = this.db
       .select({ n: sql<number>`COUNT(*)` })
       .from(slideDecks)
+      .where(sql`${slideDecks.imageFormat} <> 'native'`)
       .get();
     return row?.n ?? 0;
   }
@@ -619,8 +683,10 @@ export class SlidesRepo {
     usedBefore: number,
     limit: number,
   ): { id: number; bytesOnDisk: number }[] {
+    // A native deck frees nothing when deleted, and is read again on next use.
     const base = and(
       lt(slideDecks.lastUsedAt, usedBefore),
+      sql`${slideDecks.imageFormat} <> 'native'`,
       excludeIds.length > 0 ? notInArray(slideDecks.id, excludeIds) : undefined,
     );
     return this.db
@@ -680,6 +746,48 @@ export class SlidesRepo {
       .where(sql`${slideDecks.status} IN ('pending','converting')`)
       .all();
     for (const row of rows) this.deleteDeck(row.id);
+  }
+
+  /**
+   * Deletes the rasterized decks a native one replaces — same content, drawn
+   * by LibreOffice before this build could read it — except the ids in
+   * `keep`: one on the projector right now keeps its images until the next
+   * launch, when nothing is. `contentHash` narrows it to one deck; without it,
+   * every superseded deck goes (the startup sweep). Returns how many went.
+   */
+  deleteSupersededByNative(keep: readonly number[], contentHash?: string): number {
+    const rows = this.sqlite
+      .prepare(
+        `SELECT d.id AS id FROM slide_decks d
+          WHERE d.image_format <> 'native'
+            AND (? IS NULL OR d.content_hash = ?)
+            AND EXISTS (SELECT 1 FROM slide_decks n
+                         WHERE n.image_format = 'native' AND n.content_hash = d.content_hash)`,
+      )
+      .all(contentHash ?? null, contentHash ?? null) as { id: number }[];
+    const kept = new Set(keep);
+    let deleted = 0;
+    for (const row of rows) {
+      if (kept.has(row.id)) continue;
+      this.deleteDeck(row.id);
+      deleted += 1;
+    }
+    return deleted;
+  }
+
+  /** Writes the transitions read from a deck's source onto its slides, in
+   *  slide order, and marks the deck as having them — see
+   *  `slide_decks.transitions_read`. */
+  setSlideTransitions(deckId: number, transitions: readonly (SlideTransition | null)[] | null): void {
+    const statement = this.sqlite.prepare(
+      `UPDATE deck_slides SET transition = ?, transition_ms = ? WHERE deck_id = ? AND slide_index = ?`,
+    );
+    this.sqlite.transaction(() => {
+      transitions?.forEach((transition, i) =>
+        statement.run(transition?.style ?? null, transition?.durationMs ?? null, deckId, i + 1),
+      );
+      this.db.update(slideDecks).set({ transitionsRead: 1 }).where(eq(slideDecks.id, deckId)).run();
+    })();
   }
 
   // -- timings backfill -----------------------------------------------------
@@ -766,12 +874,32 @@ export class SlidesRepo {
    * One JOIN, prepared once and reused. `slideIndex` is 1-based and in
    * PRESENTATION order, which is what `deck_slides.slide_index` stores.
    */
-  getSlideImagePath(deckId: number, slideIndex: number, variant: "full" | "thumb"): string | null {
+  getSlideImage(deckId: number, slideIndex: number, variant: "full" | "thumb"): SlideImage | null {
     const row = this.slideImageStmt().get(deckId, slideIndex) as
-      | { cacheDir: string; imageFile: string; thumbFile: string }
+      | {
+          cacheDir: string;
+          imageFile: string;
+          thumbFile: string;
+          layers: string | null;
+          sourcePath: string;
+          sourceSizeBytes: number;
+          sourceMtimeMs: number;
+        }
       | undefined;
     if (!row) return null;
-    return path.join(row.cacheDir, variant === "full" ? row.imageFile : row.thumbFile);
+    // A native slide is built from its source for either variant
+    // (`renderNativeSlide`), nothing on disk.
+    if (row.layers !== null) {
+      return {
+        kind: "native",
+        variant,
+        sourcePath: row.sourcePath,
+        sourceSizeBytes: row.sourceSizeBytes,
+        sourceMtimeMs: row.sourceMtimeMs,
+        layers: row.layers,
+      };
+    }
+    return { kind: "file", path: path.join(row.cacheDir, variant === "full" ? row.imageFile : row.thumbFile) };
   }
 
   getVideoPath(videoId: number): string | null {
@@ -854,6 +982,10 @@ export class SlidesRepo {
       url: slideUrl(deckRow.id, row.slideIndex),
       thumbUrl: slideThumbUrl(deckRow.id, row.slideIndex),
       advanceAfterMs: row.advanceMs,
+      transition:
+        isSlideTransitionStyle(row.transition) && row.transitionMs !== null && row.transitionMs > 0
+          ? { style: row.transition, durationMs: row.transitionMs }
+          : null,
     }));
 
     return {

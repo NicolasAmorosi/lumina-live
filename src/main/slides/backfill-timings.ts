@@ -1,7 +1,7 @@
 import fsp from "node:fs/promises";
 import { SLIDES_MIN_ADVANCE_MS } from "@shared/constants";
 import { getSlidesRepo } from "../services/repos";
-import { readBinarySlideTimings } from "./ppt-binary-timings";
+import { readBinarySlideTimings } from "./ppt-binary";
 
 /**
  * Recovers the auto-advance times that LibreOffice's PPTX export dropped, for

@@ -32,12 +32,17 @@ function output() {
   return selectOutput(useProjectionStore.getState());
 }
 
-function slide(index: number, advanceAfterMs: number | null = null): DeckSlide {
+function slide(
+  index: number,
+  advanceAfterMs: number | null = null,
+  transition: DeckSlide["transition"] = null,
+): DeckSlide {
   return {
     index,
     url: slideUrl(500, index),
     thumbUrl: `${slideUrl(500, index)}/thumb`,
     advanceAfterMs,
+    transition,
   };
 }
 

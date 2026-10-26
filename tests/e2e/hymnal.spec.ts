@@ -1,16 +1,17 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { DeckDTO } from "../../src/shared/types/deck";
 import type { MediaAsset } from "../../src/shared/types/media";
 import { audioStates, expect, test } from "./support/app";
 
 /**
  * The decks the app exists for: the church's hymnal, legacy OLE2 `.pps` files
- * whose song is a separate `.mp3` beside them and whose timings LibreOffice
- * loses on the way to `.pptx`. No generated fixture reproduces all of that, so
- * this runs against the real folder when the machine has it —
- * `WORSHIP_E2E_HYMNAL=<folder with 522.pps>` on the church PC — and skips
- * otherwise. The files are only read, never changed.
+ * whose song is a separate `.mp3` beside them. Since 2026-10-26 they are read
+ * straight from the file, with no LibreOffice (`ppt-binary.ts`). No generated
+ * fixture reproduces a real hymn whole, so this runs against the real folder
+ * when the machine has it — `WORSHIP_E2E_HYMNAL=<folder with 522.pps>` on the
+ * church PC — and skips otherwise. The files are only read, never changed.
  */
 const HYMNAL = process.env["WORSHIP_E2E_HYMNAL"] ?? path.join(os.homedir(), "Downloads/PPT test/Himnario Nuevo Cantado");
 const HYMN = path.join(HYMNAL, "522.pps");
@@ -28,7 +29,7 @@ function projectedSlide(page: import("@playwright/test").Page): Promise<number |
 
 test("hymn 522 finds its song, keeps its timings and advances with the music", async ({ app }) => {
   test.setTimeout(240_000);
-  await app.invoke<MediaAsset[]>("library:add", { kind: "ppt", paths: [HYMN] });
+  const [asset] = await app.invoke<MediaAsset[]>("library:add", { kind: "ppt", paths: [HYMN] });
   await app.previewFile("Presentaciones", "522");
   const preview = app.previewColumn();
   await expect(preview.getByRole("list", { name: "Presentación" }).getByRole("button", { name: "14", exact: true })).toBeAttached({
@@ -37,6 +38,10 @@ test("hymn 522 finds its song, keeps its timings and advances with the music", a
   // The song next to the file, and the timings the .pptx export dropped.
   await expect(preview.getByText("522 Suenen las palabras")).toBeVisible();
   await expect(preview.getByText("Auto-avance", { exact: true })).toBeVisible();
+  // Read from the file itself, not converted: its own unrounded times.
+  const deck = await app.invoke<DeckDTO>("deck:get", { assetId: asset!.id });
+  expect(deck.timingsSource).toBe("binary");
+  expect(deck.slides[0]?.advanceAfterMs).toBe(10_515);
 
   await app.goLive();
   const projector = await app.projector();

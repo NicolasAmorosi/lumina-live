@@ -127,6 +127,13 @@
       "when": 1792687782774,
       "tag": "0017_builtin_bible_rv1909",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1793018487078,
+      "tag": "0018_native_decks_and_slide_transitions",
+      "breakpoints": true
     }
   ]
 }

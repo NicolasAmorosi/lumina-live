@@ -21,7 +21,7 @@ import {
   readPresentationMeta,
 } from "../src/main/slides/pptx-metadata";
 import { resolveLinkedAudio } from "../src/main/slides/linked-audio";
-import { readBinarySlideTimings } from "../src/main/slides/ppt-binary-timings";
+import { readBinarySlideTimings } from "../src/main/slides/ppt-binary";
 
 const run = promisify(execFile);
 

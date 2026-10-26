@@ -7,8 +7,10 @@ import {
   SLIDES_MAX_RENDER_WIDTH,
   SLIDES_MIN_ADVANCE_MS,
   SLIDES_MIN_RENDER_WIDTH,
+  SLIDES_NATIVE_VERSION,
 } from "@shared/constants";
 import type { DeckDTO, DeckProgress } from "@shared/types/deck";
+import type { SlideTransition } from "@shared/types/transition";
 import { deckCacheDir, slidesCacheDir, slidesTempDir, sofficeProfileDir } from "../paths";
 import { getMediaRepo, getSettingsRepo, getSlidesRepo } from "../services/repos";
 import { broadcast } from "../services/broadcast";
@@ -36,7 +38,8 @@ import {
   readPresentationMeta,
   type PresentationMeta,
 } from "./pptx-metadata";
-import { readBinarySlideTimings } from "./ppt-binary-timings";
+import { readBinaryDeck, readBinarySlideTimings, type BinaryDeck } from "./ppt-binary";
+import { encodeSlideLayers } from "./native-deck";
 import { rasterizePdf, shutdownRasterizer } from "./rasterizer";
 import { hashFile } from "../media/content-hash";
 import { healDeckClips } from "../media/deck-clips";
@@ -424,6 +427,14 @@ export function prepareDeck(assetId: number, opts: PrepareOptions = {}): Promise
   if (!inFlight.has(assetId)) {
     const sourcePath = getMediaRepo().getPathById(assetId);
     if (sourcePath) {
+      // Before the cache and before the queue: a deck read straight from its
+      // source never waits behind a LibreOffice conversion, and never needs
+      // LibreOffice at all — this is the whole hymnal.
+      const native = nativeDeck(assetId, sourcePath, opts.force ?? false);
+      if (native) {
+        releaseBatchDirFor(assetId);
+        return native;
+      }
       const cacheHit = tryCacheHit(assetId, sourcePath, opts.force ?? false);
       if (cacheHit) {
         // A deck that a batch warmed a PDF for but that turned out to
@@ -830,6 +841,7 @@ function tryCacheHit(assetId: number, sourcePath: string, force: boolean): DeckD
   // for an already-ready deck).
   const hit = (row: DeckRow): DeckDTO => {
     slidesRepo.touchDeck(row.id);
+    if (row.transitionsRead === 0) readTransitionsInto(row);
     const dto = toDeckDTO(row, assetId);
     emitProgress({ assetId, status: "ready", done: dto.slideCount, total: dto.slideCount, error: null });
     return dto;
@@ -880,6 +892,169 @@ function tryCacheHit(assetId: number, sourcePath: string, force: boolean): DeckD
   return null;
 }
 
+/**
+ * Reads the transitions of a deck converted before this build read them, from
+ * its source — no reconversion, the images are fine. Aligned on the visible
+ * slides, like the timings; when the counts disagree the deck keeps the cuts it
+ * always had, and either way it is not asked again.
+ */
+function readTransitionsInto(row: DeckRow): void {
+  let transitions: (SlideTransition | null)[] | null = null;
+  try {
+    const kind = containerKind(row.sourcePath);
+    const slides =
+      kind === "binary"
+        ? readBinarySlideTimings(row.sourcePath)
+        : kind === "ooxml"
+          ? readPresentationMeta(row.sourcePath).slides
+          : null;
+    const visible = slides?.filter((slide) => !slide.hidden).map((slide) => slide.transition) ?? null;
+    if (visible && visible.length === row.slideCount) transitions = visible;
+  } catch {
+    // Unreadable now: it keeps its cuts.
+  }
+  getSlidesRepo().setSlideTransitions(row.id, transitions);
+}
+
+// ---------------------------------------------------------------------------
+// Native decks — read straight from the source, nothing converted or copied
+// ---------------------------------------------------------------------------
+
+/** Binary decks read once and found not to be ones `readBinaryDeck` draws, by
+ *  path, with the `(size, mtime)` they were read at: a deck LibreOffice has to
+ *  draw is not re-read on every open, and one edited since is read again. */
+const notNativeStamp = new Map<string, string>();
+
+/** One read per asset at a time. The preview effect and GO LIVE arrive within
+ *  milliseconds of each other, and two inserts of the same deck replace each
+ *  other's row — and the deck id in the urls the first caller already holds. */
+const nativeInFlight = new Map<number, Promise<DeckDTO>>();
+
+function isUsableNative(row: DeckRow, stat: fs.Stats): boolean {
+  return (
+    row.imageFormat === "native" &&
+    row.status === "ready" &&
+    row.converterVersion === SLIDES_NATIVE_VERSION &&
+    row.sourceSizeBytes === stat.size &&
+    row.sourceMtimeMs === Math.trunc(stat.mtimeMs)
+  );
+}
+
+function readyNative(row: DeckRow, assetId: number): DeckDTO {
+  getSlidesRepo().touchDeck(row.id);
+  const dto = toDeckDTO(row, assetId);
+  emitProgress({ assetId, status: "ready", done: dto.slideCount, total: dto.slideCount, error: null });
+  return dto;
+}
+
+/**
+ * The deck read straight from its source, when it is one: already on record
+ * (answered synchronously) or being read now. `null` sends the caller on to
+ * LibreOffice — a deck that is not a legacy binary, or one `readBinaryDeck`
+ * refuses.
+ */
+function nativeDeck(assetId: number, sourcePath: string, force: boolean): Promise<DeckDTO> | null {
+  const stat = fs.statSync(sourcePath, { throwIfNoEntry: false });
+  if (!stat) return null;
+  const inFlightRead = nativeInFlight.get(assetId);
+  if (inFlightRead) return inFlightRead;
+
+  const slidesRepo = getSlidesRepo();
+  const mtimeMs = Math.trunc(stat.mtimeMs);
+  if (!force) {
+    const own = slidesRepo.findNativeDeckByAsset(assetId);
+    if (own && isUsableNative(own, stat)) return Promise.resolve(readyNative(own, assetId));
+    if (notNativeStamp.get(sourcePath) === stampOf(stat)) return null;
+  }
+  // By content, never by extension — and before anything that writes: every
+  // `.pptx` and PDF passes through here on its way to the cache.
+  if (containerKind(sourcePath) !== "binary") return null;
+
+  if (!force) {
+    // The same bytes through another library entry — the same hymn in two
+    // folders. The stamp has to describe the file on disk first, or a deck
+    // edited in place matches its own old digest.
+    getMediaRepo().refreshStat(assetId, stat.size, mtimeMs);
+    const shared = slidesRepo.findDeckByAssetContent(assetId, 0, "native");
+    if (shared && shared.status === "ready" && shared.converterVersion === SLIDES_NATIVE_VERSION) {
+      slidesRepo.relinkDeck(shared.id, assetId, sourcePath, stat.size, mtimeMs);
+      return Promise.resolve(
+        readyNative({ ...shared, mediaAssetId: assetId, sourcePath, sourceSizeBytes: stat.size, sourceMtimeMs: mtimeMs }, assetId),
+      );
+    }
+  }
+
+  const read = readBinaryDeck(sourcePath);
+  if (!read || "unsupported" in read) {
+    notNativeStamp.set(sourcePath, stampOf(stat));
+    if (read) console.info(`[slides] drawn by LibreOffice, not read natively (${read.unsupported}): ${sourcePath}`);
+    return null;
+  }
+  const promise = recordNativeDeck(assetId, sourcePath, stat, read.deck).finally(() =>
+    nativeInFlight.delete(assetId),
+  );
+  nativeInFlight.set(assetId, promise);
+  return promise;
+}
+
+async function recordNativeDeck(assetId: number, sourcePath: string, stat: fs.Stats, deck: BinaryDeck): Promise<DeckDTO> {
+  const slidesRepo = getSlidesRepo();
+  const mtimeMs = Math.trunc(stat.mtimeMs);
+  // The identity every status question is answered by (`statusesByAsset`),
+  // exactly as for a converted deck.
+  const contentHash = await hashFile(sourcePath);
+  getMediaRepo().setContentHash(assetId, contentHash, stat.size, mtimeMs);
+
+  const slides: NewSlide[] = deck.slides.map((slide, index) => ({
+    slideIndex: index + 1,
+    imageFile: "",
+    thumbFile: "",
+    // The slide at 96 dpi: what a video rect would be measured against, were
+    // a legacy deck ever to carry one.
+    widthPx: Math.round(deck.width / 6),
+    heightPx: Math.round(deck.height / 6),
+    bytes: 0,
+    advanceMs: slide.autoAdvanceMs === null ? null : Math.max(SLIDES_MIN_ADVANCE_MS, slide.autoAdvanceMs),
+    advanceOnClick: slide.advanceOnClick,
+    transition: slide.transition,
+    hidden: false,
+    title: null,
+    notes: null,
+    layers: encodeSlideLayers({ width: deck.width, height: deck.height, layers: slide.layers }),
+  }));
+
+  const deckId = slidesRepo.insertDeck(
+    {
+      contentHash,
+      renderWidth: 0,
+      imageFormat: "native",
+      converterVersion: SLIDES_NATIVE_VERSION,
+      mediaAssetId: assetId,
+      sourcePath,
+      sourceSizeBytes: stat.size,
+      sourceMtimeMs: mtimeMs,
+      cacheDir: "",
+      aspectRatio: `${deck.width}:${deck.height}`,
+      timingsSource: "binary",
+      bytesOnDisk: 0,
+    },
+    slides,
+    [],
+  );
+
+  // What LibreOffice drew of these same bytes is a copy nobody needs any more
+  // (decided by the owner, 2026-10-26). One the projector is showing keeps
+  // its images until the next launch: some may still be on their way there.
+  const freed = slidesRepo.deleteSupersededByNative(allPinnedDeckIds(), contentHash);
+  if (freed > 0) console.info(`[slides] read natively, ${freed} converted copy(ies) deleted: ${sourcePath}`);
+
+  const row = slidesRepo.getDeckById(deckId);
+  if (!row) throw new SlideError("RASTER_FAILED", mt("slides.deckUnreadable"));
+  const dto = toDeckDTO(row, assetId);
+  emitProgress({ assetId, status: "ready", done: dto.slideCount, total: dto.slideCount, error: null });
+  return dto;
+}
+
 async function runConversion(job: Job): Promise<DeckDTO> {
   const { assetId, force, controller } = job;
   const signal = controller.signal;
@@ -894,6 +1069,14 @@ async function runConversion(job: Job): Promise<DeckDTO> {
   if (!fs.existsSync(sourcePath)) {
     releaseBatchDirFor(assetId);
     throw new SlideError("SOURCE_MISSING", mt("slides.sourceGone", { path: sourcePath }));
+  }
+
+  // A job queued before this deck was read — or edited into one we read —
+  // still never goes to LibreOffice for it.
+  const native = nativeDeck(assetId, sourcePath, force);
+  if (native) {
+    releaseBatchDirFor(assetId);
+    return native;
   }
 
   const cacheHit = tryCacheHit(assetId, sourcePath, force);
@@ -1047,10 +1230,11 @@ async function runConversion(job: Job): Promise<DeckDTO> {
         bytes: page.bytes,
         advanceMs: timing?.autoAdvanceMs ?? null,
         advanceOnClick: timing?.advanceOnClick ?? true,
-        transitionMs: timing?.transitionMs ?? null,
+        transition: timing?.transition ?? null,
         hidden: timing?.hidden ?? false,
         title: timing?.title ?? null,
         notes: timing?.notes ?? null,
+        layers: null,
       };
     });
 
@@ -1270,6 +1454,12 @@ export async function warmBatchPdfCache(assetIds: readonly number[]): Promise<vo
     if (statuses.get(assetId)?.status === "ready") continue;
     const sourcePath = mediaRepo.getPathById(assetId);
     if (!sourcePath) continue;
+    // Read here instead: the job that follows joins this same read.
+    const native = nativeDeck(assetId, sourcePath, false);
+    if (native) {
+      native.catch(() => undefined);
+      continue;
+    }
     try {
       const stat = fs.statSync(sourcePath);
       items.push({ assetId, sourcePath, stat });
@@ -1346,8 +1536,20 @@ export async function warmBatchPdfCache(assetIds: readonly number[]): Promise<vo
 /** Cache-only read: safe to call while merely rendering a list. */
 export function getDeck(assetId: number): DeckDTO | null {
   const repo = getSlidesRepo();
+  const sourcePath = getMediaRepo().getPathById(assetId);
+  const stat = sourcePath ? fs.statSync(sourcePath, { throwIfNoEntry: false }) : undefined;
+
+  const native = repo.findNativeDeckByAsset(assetId);
+  if (native && stat && isUsableNative(native, stat)) return toDeckDTO(native, assetId, { resolve: false });
+  // A legacy deck goes to the reader first (`deck:ensure`). Answering with
+  // what LibreOffice drew of it before would put urls on screen that the read
+  // is about to retire.
+  if (sourcePath && stat && notNativeStamp.get(sourcePath) !== stampOf(stat) && containerKind(sourcePath) === "binary") {
+    return null;
+  }
+
   const row = repo.findDeckByAsset(assetId);
-  if (!row || row.status !== "ready") return null;
+  if (!row || row.status !== "ready" || row.imageFormat === "native") return null;
   // Not a hit for `tryCacheHit` either, so `ensure` reconverts it — and the new
   // row REPLACES this one (same identity, same cache dir). A deck that went
   // live off this peek lost, mid-service, every slide Chromium had not loaded
@@ -1359,8 +1561,6 @@ export function getDeck(assetId: number): DeckDTO | null {
   // never ensured at all: an announcements deck fixed during the week
   // previewed AND went live with last week's slides. A source that cannot be
   // stat'ed keeps the cached deck; telling it missing is the sweeper's job.
-  const sourcePath = getMediaRepo().getPathById(assetId);
-  const stat = sourcePath ? fs.statSync(sourcePath, { throwIfNoEntry: false }) : undefined;
   if (stat && (row.sourceSizeBytes !== stat.size || row.sourceMtimeMs !== Math.trunc(stat.mtimeMs))) return null;
   return toDeckDTO(row, assetId, { resolve: false });
 }
@@ -1465,6 +1665,11 @@ export function sweepCache(): void {
   }
 
   repo.deleteUnfinished();
+
+  // Converted copies a native deck replaced while they were on the projector
+  // (`recordNativeDeck`): nothing is on it now.
+  const superseded = repo.deleteSupersededByNative([]);
+  if (superseded > 0) console.info(`[slides] deleted ${superseded} converted deck(s) now read natively`);
 
   // Children whose deck row is gone. Never expected (the FK cascades), found
   // in the wild anyway — see `deleteOrphanDeckChildren`. Logged rather than

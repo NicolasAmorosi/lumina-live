@@ -84,6 +84,12 @@ export const SLIDES_CONVERTER_VERSION = 3;
 export const LINKED_AUDIO_RESOLVER_VERSION = 1;
 export const SLIDES_THUMB_WIDTH = 320;
 
+/** The same role for a deck read straight from its source (`image_format =
+ *  'native'`, `ppt-binary.ts`): bump when the rules for which pictures make up
+ *  a slide change, so every native deck is read again. Reading one costs
+ *  milliseconds and writes nothing to disk, so a bump is free. */
+export const SLIDES_NATIVE_VERSION = 1;
+
 /** Bump to invalidate every cached media thumbnail at once when the way they
  *  are generated changes (a different width, a different encoder setting).
  *  Same role `SLIDES_CONVERTER_VERSION` plays for decks: it is part of the
