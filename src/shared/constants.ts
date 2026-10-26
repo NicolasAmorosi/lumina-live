@@ -48,6 +48,18 @@ export function deckRequiresSoffice(ext: string): boolean {
   return ext.replace(/^\./, "").toLowerCase() !== "pdf";
 }
 
+/**
+ * A legacy `.ppt`/`.pps` is usually read straight from its source, with no
+ * LibreOffice at all (`ppt-binary.ts`): the whole hymnal is. Usually, not
+ * always — a deck with text still needs it, and only main can tell, by reading
+ * the file. So for these the "install LibreOffice" gate is decided after main
+ * answers, never in front of the deck.
+ */
+export function deckMayBeReadNatively(ext: string): boolean {
+  const bare = ext.replace(/^\./, "").toLowerCase();
+  return bare === "ppt" || bare === "pps";
+}
+
 // A `text` kind used to live here too: schema column, DTO, repo mapping,
 // preview, projector output — everything except a way to create one. It was
 // removed in 0009 rather than finished; an announcement is a PPT slide in
@@ -72,6 +84,12 @@ export type ProgramItemKind = (typeof PROGRAM_ITEM_KINDS)[number];
  *  say "this cache entry predates a source of content it does not know about". */
 export const SLIDES_CONVERTER_VERSION = 3;
 
+/** The same role for a deck read straight from its source (`image_format =
+ *  'native'`, `ppt-binary.ts`): bump when the rules for which pictures make up
+ *  a slide change, so every native deck is read again. Reading one costs
+ *  milliseconds and writes nothing to disk, so a bump is free. */
+export const SLIDES_NATIVE_VERSION = 1;
+
 /** Bump to force every non-manual `media_assets` row to re-run
  *  `resolveLinkedAudio` once, next time its deck is opened, even though a
  *  cached result (including a cached "no match") is normally trusted as-is
@@ -83,12 +101,6 @@ export const SLIDES_CONVERTER_VERSION = 3;
  *  self-correct without the operator touching each one by hand. */
 export const LINKED_AUDIO_RESOLVER_VERSION = 1;
 export const SLIDES_THUMB_WIDTH = 320;
-
-/** The same role for a deck read straight from its source (`image_format =
- *  'native'`, `ppt-binary.ts`): bump when the rules for which pictures make up
- *  a slide change, so every native deck is read again. Reading one costs
- *  milliseconds and writes nothing to disk, so a bump is free. */
-export const SLIDES_NATIVE_VERSION = 1;
 
 /** Bump to invalidate every cached media thumbnail at once when the way they
  *  are generated changes (a different width, a different encoder setting).

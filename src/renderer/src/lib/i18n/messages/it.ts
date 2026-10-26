@@ -445,9 +445,10 @@ const it: Messages = {
       recheck: "Controlla di nuovo",
       checking: "Ricerca di LibreOffice…",
       found: "LibreOffice {version} è pronto",
-      strip: "I PowerPoint non ancora convertiti non si possono aprire. I PDF e quelli già convertiti funzionano normalmente.",
+      strip:
+        "Alcuni PowerPoint non si possono aprire senza convertirli. Quelli fatti solo di immagini, i PDF e quelli già convertiti funzionano normalmente.",
       startup:
-        "LibreOffice non è disponibile: le presentazioni PowerPoint non si possono convertire. Tutto il resto funziona normalmente.",
+        "LibreOffice non è disponibile: alcune presentazioni PowerPoint non si potranno convertire. Quelle fatte solo di immagini e tutto il resto funzionano normalmente.",
       dontWarn: "Non mostrare più",
       liveRefused: "«{name}» non si può proiettare: serve LibreOffice per convertirla.",
       stageHint: "Serve LibreOffice per convertire questa presentazione",

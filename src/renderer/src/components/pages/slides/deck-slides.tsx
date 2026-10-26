@@ -1,4 +1,3 @@
-import { deckRequiresSoffice } from "@shared/constants";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import {
   Badge,
@@ -112,17 +111,11 @@ export function DeckSlides({
   missingSince: number | null;
 }) {
   const t = useT();
-  // A PDF is handed straight to the rasterizer, so it converts and projects on
-  // a machine that has no LibreOffice at all.
-  const requiresSoffice = deckRequiresSoffice(ext);
   // A missing source file has nothing to convert — skip `useDeck`'s
   // ensure/conversion trigger entirely instead of surfacing its
   // "conversion failed" error for a file that was never going to exist.
-  const { entry, environment, markStale, reconvert } = useDeck(
-    missingSince !== null ? null : assetId,
-    requiresSoffice,
-  );
-  const blocked = sofficeBlocks(environment, ext);
+  const { entry, environment, markStale, reconvert } = useDeck(missingSince !== null ? null : assetId, ext);
+  const blocked = sofficeBlocks(environment, ext, entry);
   const base = useProjectionStore((s) => s.base);
   const previewIndex = usePreviewStore((s) => s.slideIndex);
 

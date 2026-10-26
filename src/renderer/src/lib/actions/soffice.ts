@@ -61,7 +61,8 @@ export async function announceMissingSoffice(): Promise<void> {
 export async function explainSofficeRefusal(assetId: number): Promise<void> {
   // Re-read: the failed conversion just swept for LibreOffice again.
   const [asset] = await Promise.all([api.library.get(assetId), useDeckStore.getState().loadEnvironment()]);
-  if (asset && sofficeBlocks(useDeckStore.getState().environment, asset.ext)) {
+  const { environment, byAssetId } = useDeckStore.getState();
+  if (asset && sofficeBlocks(environment, asset.ext, byAssetId[assetId])) {
     toast.warning(t("deck.noLibreOffice.liveRefused", { name: asset.name }));
   }
 }

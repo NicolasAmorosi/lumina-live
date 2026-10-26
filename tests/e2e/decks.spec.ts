@@ -300,11 +300,11 @@ test("without LibreOffice: warned at launch, a PowerPoint is gated, a PDF still 
 
   const again = await relaunch(app);
   const toast = (on: WorshipApp, text: string) => on.control.getByRole("status").filter({ hasText: text });
-  await expect(toast(again, "no se pueden convertir presentaciones de PowerPoint")).toBeVisible();
+  await expect(toast(again, "algunas presentaciones de PowerPoint no se van a poder convertir")).toBeVisible();
 
   await again.previewFile("Presentaciones", "himno");
   const tab = again.control.getByRole("tabpanel", { name: "Presentaciones" });
-  await expect(tab.getByText("Los PowerPoint sin convertir no se pueden abrir")).toBeVisible();
+  await expect(tab.getByText("Algunos PowerPoint no se pueden abrir sin convertir")).toBeVisible();
   await expect(again.previewColumn().getByText("Lumina Live usa LibreOffice para convertir")).toBeVisible();
   // The stage says why — it used to say «Preparando la conversión…» forever.
   await expect(again.previewColumn().getByText("Hace falta LibreOffice para convertir esta presentación")).toBeVisible();
@@ -323,13 +323,13 @@ test("without LibreOffice: warned at launch, a PowerPoint is gated, a PDF still 
   // Silenced from the strip — the launch toast saying the same goes with it —
   // and it stays silenced.
   await tab.getByRole("button", { name: "No volver a mostrar" }).click();
-  await expect(tab.getByText("Los PowerPoint sin convertir no se pueden abrir")).toHaveCount(0);
-  await expect(toast(again, "no se pueden convertir presentaciones de PowerPoint")).toHaveCount(0);
+  await expect(tab.getByText("Algunos PowerPoint no se pueden abrir sin convertir")).toHaveCount(0);
+  await expect(toast(again, "algunas presentaciones de PowerPoint no se van a poder convertir")).toHaveCount(0);
   await again.quit();
   const third = await relaunch(again);
   await third.openResources("Media", "Presentaciones");
-  await expect(third.control.getByText("Los PowerPoint sin convertir no se pueden abrir")).toHaveCount(0);
-  await expect(toast(third, "no se pueden convertir presentaciones de PowerPoint")).toHaveCount(0);
+  await expect(third.control.getByText("Algunos PowerPoint no se pueden abrir sin convertir")).toHaveCount(0);
+  await expect(toast(third, "algunas presentaciones de PowerPoint no se van a poder convertir")).toHaveCount(0);
 
   // Installed while the app is open (here: the bad override goes away), found
   // by «Comprobar de nuevo» without a restart. Only where there is one to find.

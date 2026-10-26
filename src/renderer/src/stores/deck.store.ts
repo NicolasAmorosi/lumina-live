@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { api } from "@renderer/lib/api";
 import { IpcError } from "@shared/ipc/result";
-import { deckRequiresSoffice } from "@shared/constants";
+import { deckMayBeReadNatively, deckRequiresSoffice } from "@shared/constants";
 import type { DeckDTO, DeckEnvironment, DeckProgress, DeckStatus, PrewarmProgress } from "@shared/types/deck";
 
 export type DeckEntry = {
@@ -91,9 +91,15 @@ function isCurrent(assetId: number, gen: number): boolean {
  * Says nothing about a deck that is already converted — that one projects
  * without LibreOffice, so every gate built on this also asks whether there are
  * slides to show. An environment not asked for yet is not "missing".
+ *
+ * A legacy `.ppt`/`.pps` is blocked only once main has tried it and failed
+ * (`entry`): it is normally read with no LibreOffice at all
+ * (`deckMayBeReadNatively`), and refusing it up front left the hymnal behind
+ * a gate it never had.
  */
-export function sofficeBlocks(environment: DeckEnvironment | null, ext: string): boolean {
-  return environment?.available === false && deckRequiresSoffice(ext);
+export function sofficeBlocks(environment: DeckEnvironment | null, ext: string, entry?: DeckEntry): boolean {
+  if (environment?.available !== false || !deckRequiresSoffice(ext)) return false;
+  return !deckMayBeReadNatively(ext) || entry?.status === "failed";
 }
 
 function entryFor(deck: DeckDTO): DeckEntry {

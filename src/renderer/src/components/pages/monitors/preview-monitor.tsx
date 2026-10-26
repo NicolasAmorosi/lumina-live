@@ -48,7 +48,9 @@ export function PreviewMonitor() {
   // …unless nothing is: with LibreOffice missing, an unconverted deck is
   // never queued, and this stage said «Getting ready to convert…» forever.
   const environment = useDeckStore((s) => s.environment);
-  const sofficeMissing = convertingAssetId !== null && content?.kind === "deck" && sofficeBlocks(environment, content.ext);
+  const convertingEntry = useDeckStore((s) => (convertingAssetId === null ? undefined : s.byAssetId[convertingAssetId]));
+  const sofficeMissing =
+    convertingAssetId !== null && content?.kind === "deck" && sofficeBlocks(environment, content.ext, convertingEntry);
   // A video or audio being converted: its original would play black, or not
   // at all, so the stage says so instead of mounting a player for it.
   const mediaAsset = !missing && content?.kind === "media" ? content.asset : null;

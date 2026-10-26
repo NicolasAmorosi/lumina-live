@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { FIXTURES_DIR, FIXTURE_VERSION, ffmpegBinary, findSoffice } from "./paths";
 import { buildPdf } from "./pdf";
+import { buildLegacyPpt } from "../../fixtures/legacy-ppt";
 
 /**
  * Generates every file the suite projects, once, with the FFmpeg the app
@@ -51,6 +52,32 @@ export default function globalSetup(): void {
   run("-f", "lavfi", "-i", "testsrc2=size=1280x720", "-frames:v", "1", out("photo.png"));
 
   fs.writeFileSync(out("deck.pdf"), buildPdf(["#1f4e9c", "#c0392b", "#27ae60"]));
+
+  // A legacy hymn as the real ones are: a JPEG per slide, a logo over the
+  // first and a speaker icon PowerPoint hides — read with no LibreOffice at
+  // all (`ppt-binary.ts`). The second slide fades in slowly and the third
+  // enters by vertical random bars, both as the file says.
+  const frame = (source: string, name: string) => {
+    run("-f", "lavfi", "-i", source, "-frames:v", "1", out(name));
+    const bytes = fs.readFileSync(out(name));
+    fs.rmSync(out(name));
+    return bytes;
+  };
+  const slides = ["#1f4e9c", "#c0392b", "#27ae60"].map((colour, i) => frame(`color=c=${colour}:size=800x600`, `s${i}.jpg`));
+  fs.writeFileSync(
+    out("legacy-hymn.pps"),
+    buildLegacyPpt({
+      pictures: [
+        ...slides.map((bytes) => ({ type: "jpeg" as const, bytes })),
+        { type: "png", bytes: frame("color=c=white:size=60x54", "logo.png") },
+      ],
+      slides: [
+        { shapes: [{ rect: [0, 0, 5760, 4320], pib: 1 }, { rect: [3748, 5057, 5411, 4072], pib: 4 }] },
+        { effectType: 23, speed: 0, shapes: [{ rect: [0, 0, 5760, 4320], pib: 2 }] },
+        { effectType: 8, effectDirection: 1, speed: 2, shapes: [{ rect: [0, 0, 5760, 4320], pib: 3 }] },
+      ],
+    }),
+  );
 
   const soffice = findSoffice();
   if (soffice) {
