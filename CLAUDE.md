@@ -114,7 +114,8 @@ src/
 │   │   └── handlers/              # one file per domain, same grouping as the contract
 │   ├── protocol/worship-protocol.ts   # worship:// — serves files by id, never by path
 │   ├── slides/                    # libreoffice.ts (discovery+soffice), pptx-metadata.ts (OOXML),
-│   │                              # rasterizer.ts (hidden window+pdfjs), deck-service.ts (queue+cache)
+│   │                              # rasterizer.ts (hidden window+pdfjs), deck-service.ts (queue+cache),
+│   │                              # ppt-binary.ts + native-deck.ts (legacy decks read with no LibreOffice)
 │   ├── media/                     # media-compat.ts (what Chromium plays: PURE, tested), ffmpeg.ts
 │   │                              #   (processes), conversion-service.ts (queue + cache of playable copies),
 │   │                              #   deck-clips.ts (video/audio embedded in a .pptx), thumbnail-service.ts
@@ -315,23 +316,27 @@ npm install              # installs deps — better-sqlite3 ships prebuilt binar
 npm run dev               # electron-vite dev (HMR in the renderer, main restarts on watch)
 npm run typecheck          # tsc --noEmit over node (main+preload+shared) and web (renderer+shared)
 npm run lint                # eslint .
-npm run test                 # vitest run — 403 cases in two projects: `main` (Node: migrations, seed,
+npm run test                 # vitest run — 442 cases in two projects: `main` (Node: migrations, seed,
                               #   FTS5, repos and the library sweep, draft, settings and scene validators, WAL backup,
-                              #   zip reader, linked audio, urls, history prune, timer functions,
+                              #   zip reader, the legacy-deck reader against an OLE2 file built in the test
+                              #   (`tests/fixtures/legacy-ppt.ts`: pictures, master inheritance, what it refuses),
+                              #   slide transitions from OOXML, native deck rows, linked audio, urls, history prune, timer functions,
                               #   dragging a countdown, timer scenes as an order-of-service item,
                               #   video embedded in a slide: geometry, external rels and node by `spid`,
                               #   verse style, and the Bible format readers against real files
                               #   written on the fly: Zefania, USFX, OSIS, SQLite modules, Latin-1 and .zip)
                               #   and `renderer` (jsdom: selectOutput —including slide video under
-                              #   BLACK—, the dressed verse and its live restyling,
+                              #   BLACK and a slide's own way in, forward only—, the LibreOffice gate per deck,
+                              #   the dressed verse and its live restyling,
                               #   freezeLivePositions, live-intent, transport
                               #   of timer scenes, the «Test video» verdict, the size of the
                               #   frozen frame, toast store, utils). Nothing imports `electron`: that's
                               #   the suite's boundary
 npm run test:watch            # the same suite in watch mode, while working on a module
-npm run test:e2e              # build + Playwright: 106 walkthroughs of the real app (~6 min) with a
+npm run test:e2e              # build + Playwright: 123 walkthroughs of the real app (~7 min) with a
                               #   throwaway profile and media generated on the fly with the bundled FFmpeg (videos, AVI,
-                              #   WMA, PDF, and .pptx with auto-advance and with an embedded WMV if LibreOffice is there):
+                              #   WMA, PDF, a legacy .pps made of pictures read with no LibreOffice, and .pptx with
+                              #   auto-advance and with an embedded WMV if LibreOffice is there):
                               #   live, library, LOGO, decks, Bible, Functions, programs, keyboard, Settings,
                               #   robustness and an entire service (`service.spec.ts`). Native dialogs are
                               #   answered with `answerOpenDialog`. With WORSHIP_E2E_EXECUTABLE=<path to the installed
@@ -469,7 +474,7 @@ npm run package:win|mac|linux  # build + electron-builder for that platform
 - **A legacy `.ppt`/`.pps`'s auto-advance timings are read from the source binary, not from the
   converted `.pptx`.** LibreOffice's PPTX exporter only writes `<p:transition>` when the
   slide has a visual effect, and `advTm` is an attribute of that element: without an effect, the
-  timing disappears (222 of 1226 files of the real hymnal). `ppt-binary-timings.ts` reads them, and
+  timing disappears (222 of 1226 files of the real hymnal). `ppt-binary.ts` reads them, and
   `mergeBinaryTimings` **only fills gaps and abandons the whole merge on a single discrepancy**
   with what the `.pptx` did bring — advancing with another slide's timing mid-service is worse
   than not advancing. Diagnosis in
@@ -585,11 +590,21 @@ npm run package:win|mac|linux  # build + electron-builder for that platform
   control window only lists the screens again (`display.store.refresh`) and shows the warning; it
   never moves the window, and nothing sends it to the main screen on its own. While it exists, a
   `powerSaveBlocker` keeps the screens from turning off mid-sermon.
-- **Slides are pre-rasterized images, not a controlled slideshow.** A `.pptx` is
+- **Slides are images, not a controlled slideshow.** A `.pptx` is
   converted only once (LibreOffice → PDF → WebP per slide) and cached in
-  `userData/slides-cache` + SQLite, addressed by **content hash**. BLACK/LOGO never hide the
-  projection window: they are normal results of `selectOutput`. Don't
-  reintroduce COM, PowerShell or `assertWindows()`.
+  `userData/slides-cache` + SQLite, addressed by **content hash**. A legacy `.ppt`/`.pps` made of
+  pictures — the hymnal — is not converted at all: `ppt-binary.ts` reads which pictures make up each
+  slide and `worship://` serves them straight from the file (`image_format = 'native'`, no cache
+  folder, see «Native decks» in `03-slides-libreoffice.md`). **A deck the native reader cannot draw
+  exactly is refused whole and goes to LibreOffice** — never half a deck each way, never a slide
+  drawn wrong in silence. BLACK/LOGO never hide the projection window: they are normal results of
+  `selectOutput`. Don't reintroduce COM, PowerShell or `assertWindows()`.
+- **A slide enters the way its file says, and only moving forward.** `DeckSlide.transition` comes
+  from the deck (fade, fade through black and random bars drawn as themselves, anything else a
+  crossfade of its length); `setSlideIndex` keeps it only when the index grows, and a new scene
+  forgets it — back is a cut and the deck's first slide gets the scene fade (owner, 2026-10-26). It
+  reaches the projector as the `slide` output's `enter`, whose `seq` (`slideVideoEpoch`) is what
+  `OutputView` compares, so a push re-sending the same slide plays nothing.
 - **The `name` in `package.json` (`worship-app`) and the `appId` (`com.worshipapp.app`) aren't
   touched, even though the product is called Lumina Live.** Electron names the data folder after
   `name` —the `productName` lives in `build`, belongs to electron-builder and doesn't reach the

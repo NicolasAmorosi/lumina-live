@@ -35,6 +35,19 @@ Leaving BLACK/LOGO is `setOverlay('none')` — there is nothing to "restore", be
 (`shared/types/projection.ts`) without handling it in the `switch` is a **compile error**, not a
 "it got stuck showing the logo" bug discovered in production.
 
+### A slide's own way in rides in the output, with its own identity
+
+`setSlideIndex` records the transition of the slide it moves to (`slideEntry`) only when the index
+grows; any move back, and any new scene (`setBase`, `setLiveDeck`), records `null`. `selectOutput`
+hands it to the projector as the `slide` variant's `enter`, with `seq` = `slideVideoEpoch` — the
+counter that already advances with every change of slide and nothing else. `OutputView` animates
+when `enter.seq` is one it has not seen and the epoch did not change (a new scene plays the scene
+fade instead): a push that re-sends the same slide (a plate, a volume, BLACK coming off) carries
+the same `seq` and plays nothing, and a projector rebuilt from main's snapshot mounts with no
+previous slide to fade from. Random bars are drawn as one strip per bar, each the size of its bar
+with `overflow: hidden` (`RandomBars` in `output-view.tsx`), never full-stage copies clipped by
+`clip-path` — sixty of those at 4K would be two gigabytes of GPU memory.
+
 ### `selectOutput` loses information, and that defines what main can decide
 
 Look at the first three lines above: with a deck as `base`, BLACK returns `{kind:"black"}` and
