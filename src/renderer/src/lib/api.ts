@@ -143,4 +143,9 @@ export const api = {
     probeEnd: (src: string) => invoke("system:probeEnd", { src }),
     openLogsFolder: () => invoke("system:openLogsFolder", undefined),
   },
+  updates: {
+    getStatus: () => invoke("updates:getStatus", undefined),
+    check: () => invoke("updates:check", undefined),
+    openReleaseNotes: () => invoke("updates:openReleaseNotes", undefined),
+  },
 };
