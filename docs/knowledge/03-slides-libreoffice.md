@@ -1,9 +1,10 @@
-# 03 — Slide pipeline (headless LibreOffice, and native decks)
+# 03 — Slide pipeline (model decks, native decks, and headless LibreOffice)
 
 Completely replaces the COM/PowerShell integration with PowerPoint. There is **no** longer anything
 Windows-only: the app runs and is validated the same way on macOS, Windows and Linux. Since
-2026-10-26 a legacy deck made of pictures — the hymnal — skips LibreOffice entirely (*Native
-decks*, below); everything else still goes through it.
+2026-10-26 neither a `.pptx` (*Model decks*, below: read and drawn by the app itself) nor a legacy
+deck made of pictures — the hymnal (*Native decks*) — goes through LibreOffice. What still does: an
+`.odp`, a legacy `.ppt`/`.pps` with text, and a `.pptx` that won't open as a presentation.
 
 ## The model change
 
@@ -23,6 +24,56 @@ currentSlide/close` — the cursor lives in the renderer's store and it is the o
 ```
 
 `soffice --convert-to png` **only exports the first slide** — hence the detour through PDF.
+
+## Model decks: a `.pptx` is drawn, not converted (2026-10-26)
+
+Any OOXML presentation (`.pptx`, `.pptm`, `.ppsx`, `.ppsm` — decided by the container,
+`containerKind === "ooxml"`, not the extension) is read into a **model of what to paint** per
+slide and drawn in the renderer by `SlideView`. No LibreOffice, no PDF, no images on disk:
+
+```
+.pptx ──slides/pptx/ (reader.ts: theme, master, layout, slide)──► SlideModel per slide ──► SQLite (deck_slides.layers)
+                                                                                              │
+SlideView (React, components/shared/slide-view/) ◄── worship://deck/<id>/<n>/model ◄──────────┘
+        └── pictures, metafiles (as SVG) and embedded fonts ◄── worship://deck/<id>/part|font/<part>, read from the .pptx
+```
+
+- **The owner's decisions** (2026-10-26): the switch is **total** — a deck is never drawn half by
+  the model and half by LibreOffice, and what the model can't draw exactly (3D bevels, artistic
+  effects, a SmartArt without its drawing) is **approximated, never refused**. The reference for
+  "right" is PowerPoint, LibreOffice second. Fidelity is measured against PowerPoint's own
+  rendering, slide by slide, and improved in place; `SLIDES_MODEL_VERSION` is bumped when the
+  reader changes what it puts in a model, so every model deck is read again.
+- **What is read** (`src/main/slides/pptx/`, entry `pptx-deck.ts`): the XML parts and relationships
+  only, through `readZipEntries`. The preset geometries and the built-in table styles come from
+  `resources/ooxml/` (`paths.ts` → `ooxmlDir`, shipped as `extraResources`). Pictures, media and
+  fonts are never read here — the model names them by part.
+- **What is stored**: a `slide_decks` row with `image_format = 'model'`, `render_width = 0`,
+  `converter_version = SLIDES_MODEL_VERSION`; one `deck_slides` row per visible slide whose `layers`
+  column is the `SlideModel` JSON (median 6.5 KB, but a slide with a big table or chart can be
+  megabytes — that is why it is served by url and never inlined in a DTO). `cache_dir` is `''`
+  unless the deck embeds sound or video, which are still extracted there exactly as for a converted
+  deck (`ponytail:` until the media engine serves them from the `.pptx` by range). Timings,
+  transitions, sound and video come from the same `readPresentationMeta` a converted deck used,
+  aligned by visible position; when the counts disagree the timings go.
+- **What is served**: `…/<n>/model` is the JSON; `…/part/<part>` is a picture as is, or an
+  EMF/WMF (or its gzipped `.emz`/`.wmz`) as the SVG `metafileToSvg` makes of it — Chromium decodes
+  neither; `…/font/<part>` is an embedded font (EOT / MicroType Express) rebuilt as TrueType by
+  `decodeEmbeddedFont`. All `immutable`, and all 410 once the source is no longer the file the model
+  was read from. A model slide's `url`/`thumbUrl` serve no image: `modelUrl` (on `DeckSlide`, the
+  `slide` output and `DeckStatusSummary`) is what draws it, and every consumer — `OutputView`, the
+  two slide grids, the library tile — checks it first.
+- **In the renderer**: `lib/slide-models.ts` fetches a model once per window and hands it out only
+  once the deck's embedded fonts are registered and its pictures decoded, so the projector never
+  shows a fallback face or a picture arriving late; `OutputView`'s preload warms the neighbours
+  through it. `ModelSlide` fits the slide into its box the way `object-contain` fitted the image.
+  Faces a deck names but this machine lacks fall back to bundled metric twins (Carlito, Caladea,
+  Liberation, `assets/fonts/slides/`).
+- **Unreadable**: a file that won't open as a presentation (or whose slides are all hidden) is
+  remembered by `(size, mtime)` and goes to LibreOffice as before.
+- **The converted copy goes**, as for a native deck (`deleteSupersededBySource`).
+- **No LibreOffice needed**, so a `.pptx` joins the legacy decks in `deckMayBeReadNatively`: the
+  renderer's gate is decided after main answers.
 
 ## Native decks: a legacy deck made of pictures is read, not converted (2026-10-26)
 
@@ -68,7 +119,7 @@ worship://deck/<id>/<n> ◄── native-deck.ts: the JPEG as is, or an SVG ◄�
   a converted copy the read is about to retire.
 - **The converted copy goes** (owner's decision, 2026-10-26): reading a deck natively deletes the
   rasterized decks of the same content hash and their folders — except one pinned to the projector,
-  which the startup sweep deletes on the next launch (`deleteSupersededByNative`).
+  which the startup sweep deletes on the next launch (`deleteSupersededBySource`).
 - **No LibreOffice needed** for these decks, so the renderer's gate for a `.ppt`/`.pps` is decided
   after main answers (`sofficeBlocks(environment, ext, entry)`, `deckMayBeReadNatively`), never in
   front of the deck. See *Without LibreOffice* below.
@@ -118,11 +169,12 @@ which also explains the case of non-embedded fonts and the new `PDF_PASSWORD` er
 ## Without LibreOffice
 
 LibreOffice isn't bundled, so a machine without it is a normal case, not an error: the app starts,
-warns, and blocks **only** what truly needs it — converting a PowerPoint that isn't cached yet. A
-PDF, an already-converted deck (projecting it is serving images), a legacy deck read natively and
-everything that isn't a deck keep working the same. Which legacy `.ppt`/`.pps` still needs it is only
-known once main has read it, so for those every block below is decided by main's answer: the
-renderer tries, and `sofficeBlocks(environment, ext, entry)` blocks one only after it `failed`.
+warns, and blocks **only** what truly needs it — converting a deck that isn't cached yet and that
+the app can't read itself. A PDF, an already-converted deck (projecting it is serving images), a
+`.pptx` drawn from its model, a legacy deck read natively and everything that isn't a deck keep
+working the same. Which `.pptx` or legacy `.ppt`/`.pps` still needs it is only known once main has
+read it, so for those every block below is decided by main's answer: the renderer tries, and
+`sofficeBlocks(environment, ext, entry)` blocks one only after it `failed`.
 
 **The question, on each side:**
 
