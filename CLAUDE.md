@@ -82,6 +82,7 @@ answer, and ask about what does. Nothing is delivered half-done in silence.
 | State | Zustand (slices per domain) |
 | DB | `better-sqlite3` (Node-API, no native rebuild) + Drizzle ORM + FTS5 for the Bible |
 | Packaging | `electron-builder` (nsis / ad-hoc signed dmg / AppImage + deb) |
+| Updates | `electron-updater` 6.8.9, from the GitHub release marked Latest; on macOS the app downloads and opens the `.dmg` itself |
 | Media conversion | FFmpeg 9.0.2 (`ffmpeg` + `ffprobe`) **bundled**, pinned by sha256 and downloaded by `scripts/fetch-ffmpeg.ts` (GPLv3, see `resources/ffmpeg-NOTICE.txt`) |
 | E2E | Playwright 1.63 (`_electron`) against the built app or the installed one — `tests/e2e/` |
 
@@ -119,6 +120,8 @@ src/
 │   │                              #   (processes), conversion-service.ts (queue + cache of playable copies),
 │   │                              #   deck-clips.ts (video/audio embedded in a .pptx), thumbnail-service.ts
 │   ├── windows/projector-screen.ts # the projector bound to its screen: anti-sleep and reconnection
+│   ├── updates/                   # updater.ts (owns UpdateStatus, wraps electron-updater), mac-dmg.ts
+│   │                              #   (macOS without Squirrel), update-status.ts (PURE, tested)
 │   ├── logging.ts                 # main.log and crash.log, rotated
 │   └── services/                  # repos.ts (registry), projection-state.ts, broadcast.ts
 ├── preload/
@@ -315,13 +318,14 @@ npm install              # installs deps — better-sqlite3 ships prebuilt binar
 npm run dev               # electron-vite dev (HMR in the renderer, main restarts on watch)
 npm run typecheck          # tsc --noEmit over node (main+preload+shared) and web (renderer+shared)
 npm run lint                # eslint .
-npm run test                 # vitest run — 403 cases in two projects: `main` (Node: migrations, seed,
+npm run test                 # vitest run — 413 cases in two projects: `main` (Node: migrations, seed,
                               #   FTS5, repos and the library sweep, draft, settings and scene validators, WAL backup,
                               #   zip reader, linked audio, urls, history prune, timer functions,
                               #   dragging a countdown, timer scenes as an order-of-service item,
                               #   video embedded in a slide: geometry, external rels and node by `spid`,
-                              #   verse style, and the Bible format readers against real files
-                              #   written on the fly: Zefania, USFX, OSIS, SQLite modules, Latin-1 and .zip)
+                              #   verse style, the update errors and launch check, and the Bible format
+                              #   readers against real files written on the fly: Zefania, USFX, OSIS,
+                              #   SQLite modules, Latin-1 and .zip)
                               #   and `renderer` (jsdom: selectOutput —including slide video under
                               #   BLACK—, the dressed verse and its live restyling,
                               #   freezeLivePositions, live-intent, transport
@@ -329,11 +333,12 @@ npm run test                 # vitest run — 403 cases in two projects: `main` 
                               #   frozen frame, toast store, utils). Nothing imports `electron`: that's
                               #   the suite's boundary
 npm run test:watch            # the same suite in watch mode, while working on a module
-npm run test:e2e              # build + Playwright: 106 walkthroughs of the real app (~6 min) with a
+npm run test:e2e              # build + Playwright: 130 walkthroughs of the real app (~7 min) with a
                               #   throwaway profile and media generated on the fly with the bundled FFmpeg (videos, AVI,
                               #   WMA, PDF, and .pptx with auto-advance and with an embedded WMV if LibreOffice is there):
                               #   live, library, LOGO, decks, Bible, Functions, programs, keyboard, Settings,
-                              #   robustness and an entire service (`service.spec.ts`). Native dialogs are
+                              #   updates against a local fake of GitHub, robustness and an entire service
+                              #   (`service.spec.ts`). Native dialogs are
                               #   answered with `answerOpenDialog`. With WORSHIP_E2E_EXECUTABLE=<path to the installed
                               #   executable> it runs against the PACKAGED app — the only way to test what
                               #   resolves from `resources/` —, and with WORSHIP_E2E_HYMNAL=<folder with 522.pps>
@@ -395,6 +400,15 @@ npm run package:win|mac|linux  # build + electron-builder for that platform
   projection window and «Cancel» left the app alive and the projector off. Resuming it is
   `app.quit()` and not `win.close()`; diagnosis in
   [`.claude/knowledge/vetoing-a-close-during-a-quit-cancels-the-quit.md`](.claude/knowledge/vetoing-a-close-during-a-quit-cancels-the-quit.md).
+- **An update's question comes BEFORE its installer starts, and that quit skips the close guard.**
+  Once launched, the Windows installer kills the app within ~1.3 s whatever anyone answers, so a
+  question asked after it offers a «Cancel» that cancels nothing, with the projector on.
+  «Restart and update» asks `quitRisks()` (the same answer `close-requested` gets), and only with
+  the OK does `installUpdate` start the installer and then call `releaseForUpdate()` + `app.quit()`.
+  The rest of the updater follows from the same idea: nothing about it reaches the projector, a
+  failed launch check only goes to `main.log`, and `autoInstallOnAppQuit` stays `false`. See
+  «In-app updates» in `01-architecture.md` and
+  [`.claude/knowledge/the-update-installer-kills-the-app-so-the-question-goes-before-it.md`](.claude/knowledge/the-update-installer-kills-the-app-so-the-question-goes-before-it.md).
 - **The backup before a migration is taken with `VACUUM INTO` + `PRAGMA integrity_check`, never
   with `copyFileSync`.** The database runs in WAL: copying only `worship.db` silently loses everything
   after the last checkpoint — measured, 5000 rows against 4977 with a hot `-wal`. And the database
@@ -627,3 +641,8 @@ something behaved before: `git show 90d3821:legacy/src/js/app.js`.
   `npm run typecheck && npm run lint && npm run test` is the minimum bar before calling
   a task done, and it runs by hand. Before a release, also `npm run test:e2e` and the same suite against
   the package (`WORSHIP_E2E_EXECUTABLE`).
+- A release is published as **Latest, never as a prerelease**, and it carries the three
+  `latest*.yml` and the `.blockmap` files next to the installers, uploaded in the same
+  `gh release create`. Without them no install updates; with a stale one, every install downloads
+  an update and then rejects it. Releases are immutable once published, so a mistake is fixed with
+  a new version.

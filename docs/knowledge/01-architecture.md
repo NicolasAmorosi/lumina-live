@@ -5,7 +5,8 @@
 WorshipApp is an Electron 44 app with **TypeScript + React 19 + Vite**, bundled with
 `electron-vite` (not vite+tsc wired by hand — see "Why electron-vite" below). Three processes:
 
-- **Main** (`src/main/`) — windows, SQLite DB, IPC, slide conversion with LibreOffice.
+- **Main** (`src/main/`) — windows, SQLite DB, IPC, slide conversion with LibreOffice, in-app
+  updates.
 - **Preload** (`src/preload/index.ts`) — generic `contextBridge` bridge (`invoke`/`on` by
   channel string), ~35 lines that never change when features are added.
 - **Control renderer** (`src/renderer/index.html` + `src/renderer/src/`) — the whole UI of the
@@ -44,6 +45,65 @@ Because the projection window is destroyed and recreated, main keeps the last `P
 sent (`src/main/services/projection-state.ts`) and replays it on `did-finish-load` — otherwise,
 reopening the projection leaves it black even though the control believes it is projecting
 something.
+
+## In-app updates
+
+Main owns them (`src/main/updates/`): the control window asks for the state (`updates:getStatus`)
+and listens to `update-status`. Nothing about updating reaches the projector, and the only thing
+that starts without the operator asking is one check, 10 s after launch.
+
+- **The feed is the GitHub release marked Latest**, the same one the landing's buttons resolve.
+  electron-builder writes `app-update.yml` (`provider: github`) from `repository`; there is no
+  `publish` block. `allowPrerelease` is set to `false` on purpose: electron-updater turns it on for
+  any `-beta` version, and then the provider looks for a `beta.yml` that no release carries. That's
+  why a beta is published as Latest and never as a prerelease.
+- **A release has to carry `latest.yml`, `latest-mac.yml` and `latest-linux.yml`**, plus the
+  `.blockmap` files for Windows' differential download. The `package:*` scripts write them to
+  `release/` and don't publish anything. A release without them gives every install a 404 that only
+  reaches `main.log`: nothing breaks, and nobody updates.
+- **State.** `UpdateStatus` (`shared/types/updates.ts`) is a discriminated union. `unsupported` is a
+  build that can't update itself: `npm run dev`, an AppImage started without `APPIMAGE`, a snap.
+  Errors travel as a stable `UpdateErrorCode`, and the renderer words them. A failed launch check
+  goes to `main.log` only; whatever the operator asked for says how it failed. The pure half (error
+  → code, the installer each platform uses, whether to check at launch) lives in
+  `update-status.ts`, which has unit tests.
+- **When.** The launch check runs if `updates.autoCheck` is on and `--no-update-check` isn't on the
+  command line (the E2E suite passes it). Downloading (~200 MB) waits for «Download», so it never
+  competes with a livestream. Installing waits for «Restart and update» or «When the app closes».
+  The launch toast (`effects/update-announcement.ts`) shows once per version
+  (`updates.announcedVersion`), and its «View» opens Settings ▸ About.
+
+| | Download | «Restart and update» | «When the app closes» |
+|---|---|---|---|
+| Windows (NSIS) | electron-updater, sha512 | silent install, reopens; UAC if installed for all users | silent install, doesn't reopen |
+| macOS (ad-hoc) | `mac-dmg.ts`: `net.fetch`, sha512 against `latest-mac.yml` | opens the `.dmg` and quits; the operator drags it over the app | opens the `.dmg` on the way out |
+| Linux AppImage / `.deb` | electron-updater, sha512 | replaces the file / `pkexec dpkg -i`, reopens | the same, on the way out |
+
+- **macOS doesn't go through `MacUpdater`.** Squirrel.Mac rejects every new build of an ad-hoc
+  signed app: see
+  [`squirrel-mac-rejects-every-update-of-an-ad-hoc-signed-app.md`](../../.claude/knowledge/squirrel-mac-rejects-every-update-of-an-ad-hoc-signed-app.md).
+  With a Developer ID, add the `zip` target and use `MacUpdater`; the macOS row becomes the
+  Windows one and the interface doesn't change.
+- **The question comes before the installer starts, never after.** «Restart and update» asks
+  `quitRisks()` (`effects/draft-autosave.ts`), the same answer the close guard gets. Only with the
+  OK does `installUpdate("now")` start the installer, and only once it's running does it call
+  `releaseForUpdate()` and `app.quit()`. Once started, the Windows installer kills the app within
+  ~1.3 s whatever the operator answers: see
+  [`the-update-installer-kills-the-app-so-the-question-goes-before-it.md`](../../.claude/knowledge/the-update-installer-kills-the-app-so-the-question-goes-before-it.md).
+- **«When the app closes» is not `autoInstallOnAppQuit`**, which stays `false`. With it on, any
+  quit after a download would install in silence, and electron-updater only arms it when the
+  download finishes anyway: see
+  [`electron-updater-arms-install-on-quit-only-when-the-download-finishes.md`](../../.claude/knowledge/electron-updater-arms-install-on-quit-only-when-the-download-finishes.md).
+  `updater.ts` registers its own `app.once("quit")` instead. It fires only after the close guard has
+  let the quit through, so a «Cancel» installs nothing, and it does its work synchronously.
+- **electron-updater is imported by default** (`import electronUpdater from "electron-updater"`).
+  The named import passes `typecheck` and kills the app at launch: see
+  [`a-named-import-from-a-commonjs-dependency-passes-typecheck-and-dies-at-launch.md`](../../.claude/knowledge/a-named-import-from-a-commonjs-dependency-passes-typecheck-and-dies-at-launch.md).
+- **Testing.** `WORSHIP_UPDATE_FEED_URL` swaps the feed for a `generic` one and lets an unpackaged
+  build update (`forceDevUpdateConfig`). It's honoured only on loopback (`loopbackFeedUrl`), so it
+  can never point a real install at another host. `tests/e2e/updates.spec.ts` serves a fake
+  `latest-mac.yml` and `.dmg` through it, and puts a fake `open` first on the app's `PATH`, so the
+  macOS install path runs for real. The NSIS, AppImage and `.deb` installs are only tested by hand.
 
 ## Window security
 

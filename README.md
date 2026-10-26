@@ -42,6 +42,30 @@ macOS. Test it thoroughly before relying on it in a service.
 - The installers **aren't signed yet**. On Windows: «More info» → «Run anyway». On macOS: System
   Settings → Privacy & Security → «Open Anyway».
 
+## Updates
+
+Lumina Live updates itself from the app. Versions up to 2.2.0-beta.5 can't: download the new one
+from Releases once, and from then on it can.
+
+- **Checking.** About 10 seconds after it opens, the app asks GitHub whether this repository's
+  release marked *Latest* is newer than the installed version. That is the only connection it makes
+  on its own; it sends nothing about you or your church, and there is no telemetry. Turn it off in
+  Settings › About › «Check when the app opens», or check by hand with «Check for updates».
+- **Downloading** (about 200 MB) only starts when you press «Download», so it never competes with
+  a livestream for the network. Before anything is installed, the file is checked against the
+  sha512 published with the release.
+- **Installing.** Choose «Restart and update» or «When the app closes». If something is on the
+  projector or the schedule isn't saved, restarting asks first, exactly like closing the app. A
+  notice appears in the control window when a new version is found, once per version; nothing about
+  updates ever shows on the projector.
+- **Windows** installs silently, and «Restart and update» opens the app again afterwards. If it was
+  installed for all users, Windows asks for permission first.
+- **macOS:** without a paid Apple signature, macOS doesn't let an app replace itself. Lumina Live
+  downloads and checks the `.dmg` and opens it: drag Lumina Live to Applications and choose
+  «Replace». Your programs, library and settings stay as they are.
+- **Linux** (experimental): the AppImage replaces itself; the `.deb` asks for your password to
+  install.
+
 ## Development
 
 Requires Node.js 22 or later.

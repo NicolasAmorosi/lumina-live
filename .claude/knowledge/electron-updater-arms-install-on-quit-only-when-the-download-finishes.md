@@ -13,10 +13,9 @@
   which calls `BaseUpdater.install(true, false)` (or opens the `.dmg` on macOS) only if the
   status says `installOnQuit` and the exit code is 0. `quit` only fires once the close guard let
   the quit through, so a «Cancel» in that dialog installs nothing.
-- The other two traps of this library are in the plan and in the code comments:
-  `quitAndInstall()` launches the installer BEFORE quitting (so the operator's confirmation
-  has to come first and the close guard has to be released with `releaseForUpdate()`), and
-  the named `import { autoUpdater }` throws at startup in this ESM main
-  («Named export 'autoUpdater' not found») while `typecheck` passes.
+- The library's other two traps have their own entries:
+  [the installer kills the app, so the question goes first](the-update-installer-kills-the-app-so-the-question-goes-before-it.md),
+  and [the named import that passes typecheck and dies at launch](a-named-import-from-a-commonjs-dependency-passes-typecheck-and-dies-at-launch.md).
+  How the whole updater works is in «In-app updates» in `docs/knowledge/01-architecture.md`.
 
-**Last updated:** 2026-10-25
+**Last updated:** 2026-10-26

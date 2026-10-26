@@ -50,6 +50,25 @@ songs/lyrics with projectable sections.
   (`slides.sofficePath`): a manually chosen path wins over automatic detection, so if it points to
   something that isn't LibreOffice the only way out is to pick another one with «Locate soffice…».
 
+## In-app updates — left out on purpose
+
+How they work is in `01-architecture.md`. This was left out when they were built (2026-10-25),
+each item with its reason:
+
+- **Cancelling a download in progress.** Closing the app stops it. Add it if it gets in the way in
+  practice.
+- **Automatic updates on macOS, and its differential download.** Both need a Developer ID (see
+  `01-architecture.md`). Until then the operator drags the `.dmg`.
+- **Staged rollouts** (`stagingPercentage`). The emergency brake for a broken release is to mark
+  the previous one as Latest again: installs that haven't updated yet stop being offered it, and
+  the ones that did wait for the fixed version (`allowDowngrade` stays `false`).
+- **Our own signature on `latest*.yml`** (ed25519, minisign). The real threat is a compromised
+  GitHub account. 2FA and immutable releases narrow it, and paid code signing (Authenticode,
+  Developer ID) closes it, so it goes with that paid decision.
+- **A system notification.** The notice is a toast in the control window, and never anything on
+  the projector. With the app minimized it waits there: it carries an action, so it doesn't leave
+  on its own.
+
 ## Pre-launch review of 2026-10-18 — what was left open on purpose
 
 The full review on that date (main, slides, renderer, UI and Windows) closed all of its critical,
