@@ -11,7 +11,11 @@
 import type { CSSProperties } from "react";
 import type { SelectOption } from "@renderer/components/ui";
 import type { MessageKey, Translate } from "@renderer/lib/i18n/i18n-provider";
-import { TRANSITION_STYLES, type TransitionSpec, type TransitionStyle } from "@shared/types/transition";
+import {
+  TRANSITION_STYLES,
+  type SlideTransitionStyle,
+  type TransitionStyle,
+} from "@shared/types/transition";
 
 /** Grace added to a transition's own duration before the outgoing layer is
  *  dropped without having reported `animationend`. Generous on purpose: it is
@@ -36,13 +40,57 @@ const FADE_KEYFRAMES: Record<Exclude<TransitionStyle, "none">, Record<"entering"
  *  it stays exactly as it is until the picture on top has fully arrived. */
 const HOLD_KEYFRAME = "wa-scene-hold";
 
+/** What two stacked scene layers can run between them: a scene fade the
+ *  operator chose, or the way a slide of a deck enters as its file says
+ *  (`SlideTransition`) — random bars only ever arrive that second way. */
+export type LayerTransition = {
+  style: TransitionStyle | SlideTransitionStyle;
+  durationMs: number;
+};
+
 /** Whether this transition has anything to animate at all. Generic so the
  *  narrowing survives on whatever the caller passed — a `SceneTransition`
  *  stays a `SceneTransition`, `epoch` and all. */
-export function isAnimatable<T extends TransitionSpec>(
+export function isAnimatable<T extends LayerTransition>(
   transition: T,
-): transition is T & { style: Exclude<TransitionStyle, "none"> } {
+): transition is T & { style: Exclude<T["style"], "none"> } {
   return transition.style !== "none" && transition.durationMs > 0;
+}
+
+export function isRandomBars(transition: LayerTransition): boolean {
+  return transition.style === "random-bars-horizontal" || transition.style === "random-bars-vertical";
+}
+
+/** How many bars a random-bars transition cuts the stage into. PowerPoint's
+ *  are thin; this many reads as the same effect at any size. */
+export const RANDOM_BAR_COUNT = 60;
+
+/**
+ * When each bar of a random-bars transition appears, in ms from its start,
+ * by bar index. A seeded shuffle rather than `Math.random`: the projector and
+ * the LIVE monitor draw the same entry in two windows, and must draw the same
+ * bars in the same order.
+ */
+export function randomBarDelays(seed: number, durationMs: number): number[] {
+  // mulberry32 — tiny and good enough to look random.
+  let state = seed >>> 0;
+  const next = (): number => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const order = Array.from({ length: RANDOM_BAR_COUNT }, (_, i) => i);
+  for (let i = order.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(next() * (i + 1));
+    [order[i], order[j]] = [order[j]!, order[i]!];
+  }
+  const delays: number[] = [];
+  order.forEach((bar, rank) => {
+    delays[bar] = Math.round((rank * durationMs) / RANDOM_BAR_COUNT);
+  });
+  return delays;
 }
 
 /**
@@ -68,7 +116,7 @@ export function isAnimatable<T extends TransitionSpec>(
  */
 export function transitionStyle(
   role: LayerRole,
-  transition: TransitionSpec,
+  transition: LayerTransition,
   restOpacity: number,
   held = false,
   incomingCovers = false,
@@ -76,12 +124,21 @@ export function transitionStyle(
   if (role === "steady" || !isAnimatable(transition)) {
     return { zIndex: LAYER_Z[role], opacity: restOpacity };
   }
+  // Random bars: the entering side reveals itself bar by bar (`SceneLayer`),
+  // so the layer itself stays put; the leaving side holds under it for the
+  // whole length, which is also what reports the end through `animationend`.
+  if (isRandomBars(transition) && role === "entering") {
+    return { zIndex: LAYER_Z[role], opacity: restOpacity };
+  }
+  const style = transition.style;
   return {
     zIndex: LAYER_Z[role],
     animationName:
-      role === "leaving" && incomingCovers && transition.style === "crossfade"
+      isRandomBars(transition) || (role === "leaving" && incomingCovers && style === "crossfade")
         ? HOLD_KEYFRAME
-        : FADE_KEYFRAMES[transition.style][role === "entering" ? "entering" : "leaving"],
+        : FADE_KEYFRAMES[style === "fade-through-black" ? "fade-through-black" : "crossfade"][
+            role === "entering" ? "entering" : "leaving"
+          ],
     animationDuration: `${transition.durationMs}ms`,
     animationTimingFunction: "ease-in-out",
     // Holds the keyframe's start value until the animation actually starts

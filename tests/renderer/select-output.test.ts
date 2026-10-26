@@ -408,6 +408,76 @@ describe("the scene transition", () => {
   });
 });
 
+describe("a slide's own way in", () => {
+  // Within a deck the file's transitions play, but only FORWARD (decided by
+  // the owner, 2026-10-26): back is a cut, and the first slide of a scene keeps
+  // the scene's fade.
+  const FADE = { style: "crossfade" as const, durationMs: 1000 };
+  const BARS = { style: "random-bars-vertical" as const, durationMs: 750 };
+
+  function hymn(): LiveDeck {
+    const slides = [slide(1, null, FADE), slide(2, null, BARS), slide(3, null, null)];
+    return { ...deckOf(9, 3), slides, cumulativeMs: buildCumulativeMs(slides) };
+  }
+
+  function enter() {
+    const out = output();
+    return out.kind === "slide" ? out.enter : undefined;
+  }
+
+  beforeEach(() => {
+    const store = useProjectionStore.getState();
+    store.setLiveDeck(hymn());
+    store.setBase({ kind: "deck", assetId: 9, slideIndex: 1 });
+  });
+
+  test("the first slide of a scene enters with the scene, not with its own", () => {
+    expect(enter()).toBeNull();
+  });
+
+  test("moving forward plays the transition of the slide arriving, as its own move", () => {
+    useProjectionStore.getState().setSlideIndex(2);
+    const first = enter();
+    expect(first).toMatchObject(BARS);
+    useProjectionStore.getState().setSlideIndex(3);
+    expect(enter()).toBeNull(); // the third slide has none: a cut
+  });
+
+  test("going back is a cut, whatever the slide it lands on has", () => {
+    useProjectionStore.getState().setSlideIndex(3);
+    useProjectionStore.getState().setSlideIndex(2);
+    expect(enter()).toBeNull();
+  });
+
+  test("a push that re-sends the same slide carries the same move, so nothing replays", () => {
+    useProjectionStore.getState().setSlideIndex(2);
+    const seq = enter()?.seq;
+    useProjectionStore.getState().setSlideVideoVolume(0.3);
+    expect(enter()?.seq).toBe(seq);
+    useProjectionStore.getState().setSlideIndex(3);
+    useProjectionStore.getState().setSlideIndex(2);
+    useProjectionStore.getState().setSlideIndex(3);
+    useProjectionStore.getState().setSlideIndex(2);
+    expect(enter()).toBeNull();
+  });
+
+  test("two moves forward onto the same transition are two different moves", () => {
+    const store = useProjectionStore.getState();
+    store.setLiveDeck({ ...hymn(), slides: [slide(1), slide(2, null, BARS), slide(3, null, BARS)] });
+    store.setBase({ kind: "deck", assetId: 9, slideIndex: 1 });
+    useProjectionStore.getState().setSlideIndex(2);
+    const first = enter()?.seq;
+    useProjectionStore.getState().setSlideIndex(3);
+    expect(enter()?.seq).not.toBe(first);
+  });
+
+  test("a new scene forgets the last move", () => {
+    useProjectionStore.getState().setSlideIndex(2);
+    useProjectionStore.getState().setBase({ kind: "deck", assetId: 9, slideIndex: 2 });
+    expect(enter()).toBeNull();
+  });
+});
+
 describe("selectOutputMemo", () => {
   test("a media status report does not produce a new output", () => {
     // The whole point: the store's busiest writer touches no field the output

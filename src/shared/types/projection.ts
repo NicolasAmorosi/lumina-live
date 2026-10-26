@@ -9,7 +9,7 @@ import type { SlideRect } from "./deck";
 import type { PlateKind, PlatePosition, PlateStyle } from "./overlay";
 import type { SceneStyle } from "./scene-style";
 import type { TimerClock, TimerFormat } from "./timer";
-import type { TransitionSpec } from "./transition";
+import type { SlideTransition, TransitionSpec } from "./transition";
 import type { UtilityScene } from "./utility";
 
 /** Which video (if any) is the current *base* content, independent of BLACK/
@@ -127,6 +127,12 @@ export type ProjectionOutputKind =
        *  slide change never waits on a decode. Computed here (domain logic
        *  belongs in the control window), materialized there. */
       preload: string[];
+      /** How this slide arrived, when the deck moved FORWARD onto it and the
+       *  file gives it a transition; `null` for a cut — going back, the first
+       *  slide of a scene, a slide with none. `seq` is that move's own
+       *  identity: a push that re-sends the same slide (a plate going up, a
+       *  volume change) carries the same one and animates nothing. */
+      enter: SlideEnter | null;
     }
   /**
    * A generated time scene: a countdown, the wall clock or a stopwatch.
@@ -171,6 +177,9 @@ export type ProjectionOutputKind =
  *  time scene's end state carries — "none" here is always what a confidence
  *  monitor other than LIVE gets. */
 export type SceneTransition = TransitionSpec & { epoch: number };
+
+/** See the `slide` variant's `enter`. */
+export type SlideEnter = SlideTransition & { seq: number };
 
 /** Used by every preview output (`use-preview.ts`) — stage one of the
  *  two-stage flow never fades, no matter what the projector is configured

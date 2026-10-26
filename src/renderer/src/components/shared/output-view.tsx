@@ -1,12 +1,16 @@
-import { useEffect, useLayoutEffect, useRef, useState, type Ref } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { Icon } from "@renderer/components/ui";
 import { cn } from "@renderer/lib/utils";
 import { frameCaptureSize } from "@renderer/lib/frame-capture";
 import {
   isAnimatable,
+  isRandomBars,
+  randomBarDelays,
   transitionStyle,
   LEAVE_FALLBACK_MARGIN_MS,
+  RANDOM_BAR_COUNT,
   type LayerRole,
+  type LayerTransition,
 } from "@renderer/lib/transition";
 import { BibleScene } from "./bible-scene";
 import { TimerScene } from "./timer-scene";
@@ -15,7 +19,6 @@ import type {
   MediaStatus,
   ProjectionMediaError,
   ProjectionOutput,
-  SceneTransition,
   SlideVideo,
 } from "@shared/types/projection";
 
@@ -106,7 +109,7 @@ type LiveVideoProps = {
    *  once, right when this element mounts — never re-applied later, so a
    *  scrub from the media panel afterwards isn't fought on the next render. */
   startAtSeconds: number;
-  transition: SceneTransition;
+  transition: LayerTransition;
   url: string;
   videoRef?: Ref<HTMLVideoElement> | undefined;
   /** 0..1, and only ever honored in "live" mode — the monitors are muted by
@@ -304,7 +307,7 @@ type SlideVideoLayerProps = {
   /** The projector's own report for this element — only passed in
    *  `mode === "monitor"`, exactly like `LiveVideo`'s. */
   status?: MediaStatus | null | undefined;
-  transition: SceneTransition;
+  transition: LayerTransition;
   videoRef?: Ref<HTMLVideoElement> | undefined;
 };
 
@@ -552,7 +555,7 @@ type SceneLayerProps = {
   posterUrl: string | null;
   output: ProjectionOutput;
   role: LayerRole;
-  transition: SceneTransition;
+  transition: LayerTransition;
 };
 
 /** One stacked scene — `OutputView` mounts up to two at once (the outgoing
@@ -580,23 +583,84 @@ function SceneLayer({
   // letterboxing `object-contain` leaves.
   // A poster (`videoStill`) is the same case: the layer is the picture.
   const opaque = output.kind !== "video" || frozenFrame != null || posterUrl !== null;
+  const scene = (errors: typeof onImageError) => (
+    <OutputScene frozenFrame={frozenFrame} mode={mode} onImageError={errors} output={output} posterUrl={posterUrl} />
+  );
+  // A slide entering by random bars is drawn once per bar, each bar clipped to
+  // itself; the layer stays transparent so the slide leaving shows through
+  // the bars still to come.
+  const bars = role === "entering" && output.kind === "slide" && output.enter && isRandomBars(transition);
   return (
     <div
-      className={cn("absolute inset-0 flex items-center justify-center", opaque && "bg-black")}
+      className={cn("absolute inset-0 flex items-center justify-center", opaque && !bars && "bg-black")}
       onAnimationEnd={(e) => {
         if (e.target === e.currentTarget && role === "leaving") onLeaveComplete?.();
       }}
       style={transitionStyle(role, transition, 1, held, incomingCovers)}
     >
-      <OutputScene
-        frozenFrame={frozenFrame}
-        mode={mode}
-        onImageError={onImageError}
-        output={output}
-        posterUrl={posterUrl}
-      />
+      {bars && output.kind === "slide" && output.enter ? (
+        <RandomBars
+          durationMs={transition.durationMs}
+          seed={output.enter.seq}
+          vertical={transition.style === "random-bars-vertical"}
+        >
+          {(first) => scene(first ? onImageError : undefined)}
+        </RandomBars>
+      ) : (
+        scene(onImageError)
+      )}
     </div>
   );
+}
+
+/**
+ * The slide entering by random bars: `RANDOM_BAR_COUNT` strips across the
+ * stage, each showing its own slice of the slide and appearing on its own
+ * turn (`randomBarDelays`).
+ *
+ * Each strip is a box the size of its bar with `overflow: hidden`, holding the
+ * whole stage offset into place — not a full-stage copy clipped by
+ * `clip-path`: sixty full-stage layers at 4K are two gigabytes of GPU memory,
+ * sixty strips are one stage. The bars span the stage, letterbox included;
+ * the letterbox is black on both sides of the transition, so nothing shows.
+ */
+function RandomBars({
+  children,
+  durationMs,
+  seed,
+  vertical,
+}: {
+  children: (first: boolean) => ReactNode;
+  durationMs: number;
+  seed: number;
+  vertical: boolean;
+}) {
+  const delays = randomBarDelays(seed, durationMs);
+  const share = 100 / RANDOM_BAR_COUNT;
+  return delays.map((delay, bar) => (
+    <div
+      className="absolute overflow-hidden"
+      key={bar}
+      style={{
+        ...(vertical
+          ? { top: 0, bottom: 0, left: `${bar * share}%`, width: `${share}%` }
+          : { left: 0, right: 0, top: `${bar * share}%`, height: `${share}%` }),
+        // A 1 ms fade at its own moment: hidden until then, shown after.
+        animation: `wa-scene-fade-in 1ms linear ${delay}ms both`,
+      }}
+    >
+      <div
+        className="absolute flex items-center justify-center bg-black"
+        style={
+          vertical
+            ? { top: 0, bottom: 0, width: `${RANDOM_BAR_COUNT * 100}%`, left: `${-bar * 100}%` }
+            : { left: 0, right: 0, height: `${RANDOM_BAR_COUNT * 100}%`, top: `${-bar * 100}%` }
+        }
+      >
+        {children(bar === 0)}
+      </div>
+    </div>
+  ));
 }
 
 type OutputNoticeTone = "danger" | "warning";
@@ -912,7 +976,10 @@ export function OutputView({
   const lastEpochRef = useRef(output.transition.epoch);
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [layers, setLayers] = useState<Layer[]>(() => [topRef.current]);
-  const [transition, setTransition] = useState<SceneTransition>(output.transition);
+  const [transition, setTransition] = useState<LayerTransition>(output.transition);
+  /** The last slide entry seen (`output.enter.seq`), so a push re-sending the
+   *  same slide — a plate, a volume — does not play its way in again. */
+  const lastEnterSeqRef = useRef(output.kind === "slide" ? (output.enter?.seq ?? null) : null);
 
   /**
    * The video hold. A transition INTO a video that has just been mounted waits,
@@ -975,6 +1042,17 @@ export function OutputView({
     const sameEpoch = lastEpochRef.current === output.transition.epoch;
     lastEpochRef.current = output.transition.epoch;
     const sameContent = sceneContentKey(topRef.current.output) === sceneContentKey(output);
+    // Within a scene, a slide the deck moved forward onto plays its own way
+    // in (`enter`); a new scene plays the scene fade, whatever slide it opens.
+    const enter = output.kind === "slide" ? output.enter : null;
+    const slideEntered =
+      sameEpoch && enter !== null && enter.seq !== lastEnterSeqRef.current && topRef.current.output.kind === "slide";
+    lastEnterSeqRef.current = enter?.seq ?? null;
+    const layerTransition: LayerTransition | null = !sameEpoch
+      ? output.transition
+      : slideEntered
+        ? enter
+        : null;
 
     // Taken unconditionally: whichever branch runs, a frame left over from a
     // push that is not going to animate must not be waiting around for one
@@ -985,7 +1063,7 @@ export function OutputView({
     // Whatever this push is, it replaces the scene an earlier hold was for.
     cancelHold();
 
-    if (!shouldAnimate || sameEpoch || sameContent || !isAnimatable(output.transition)) {
+    if (!shouldAnimate || sameContent || !layerTransition || !isAnimatable(layerTransition)) {
       // Content-only refresh: same layer, same key, no animation. This is
       // what keeps navigating within a live deck/verse, a pause toggle, or
       // an overlay's own `covered` prop an instant, un-keyed swap — exactly
@@ -1019,7 +1097,7 @@ export function OutputView({
     seqRef.current += 1;
     const incoming: Layer = { seq: seqRef.current, output };
     topRef.current = incoming;
-    setTransition(output.transition);
+    setTransition(layerTransition);
     setLayers([outgoing, incoming]);
 
     // The fallback that makes `animationend` optional. It never arrives if the
@@ -1045,11 +1123,11 @@ export function OutputView({
         clearTimeout(leaveTimerRef.current);
         leaveTimerRef.current = null;
       }
-      holdRef.current = { epoch: incomingVideoEpoch, seq: outgoing.seq, durationMs: output.transition.durationMs };
+      holdRef.current = { epoch: incomingVideoEpoch, seq: outgoing.seq, durationMs: layerTransition.durationMs };
       holdTimerRef.current = setTimeout(releaseHold, VIDEO_READY_TIMEOUT_MS);
       setHeld(true);
     } else {
-      armLeaveFallback(outgoing.seq, output.transition.durationMs);
+      armLeaveFallback(outgoing.seq, layerTransition.durationMs);
     }
     // The helpers above only touch refs and state setters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
