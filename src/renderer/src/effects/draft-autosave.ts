@@ -3,7 +3,7 @@ import { onIpc } from "@renderer/lib/ipc";
 import { hasUnsavedChanges, toUpsertItems } from "@renderer/lib/actions/programs";
 import { useProgramStore } from "@renderer/stores/program.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
-import { useUiStore } from "@renderer/stores/ui.store";
+import { useUiStore, type CloseGuardReasons } from "@renderer/stores/ui.store";
 import type { ProgramDraft } from "@shared/types/program";
 
 /** Short enough that the work at risk is a keystroke or two, long enough that
@@ -61,6 +61,17 @@ function isOnAir(): boolean {
   return presentationOpen && (base !== null || overlay !== "none" || livePlates.length > 0);
 }
 
+/** Why quitting right now needs the operator's OK, or `null` when nothing is
+ *  at risk. Whatever is still debounced goes to disk first, so "close anyway"
+ *  really does mean "it will be there next time". Asked by main's
+ *  `close-requested` and by «Restart and update», which quits the same way. */
+export function quitRisks(): CloseGuardReasons | null {
+  flushDraft();
+  const unsaved = hasUnsavedChanges();
+  const onAir = isOnAir();
+  return unsaved || onAir ? { unsaved, onAir } : null;
+}
+
 /**
  * Mirrors the unsaved order of service to SQLite as the operator builds it.
  *
@@ -81,12 +92,8 @@ export function startDraftAutosave(): () => void {
   });
 
   const stopCloseListener = onIpc("close-requested", () => {
-    // Whatever is still debounced goes to disk first, so "close anyway"
-    // really does mean "it will be there next time".
-    flushDraft();
-    const unsaved = hasUnsavedChanges();
-    const onAir = isOnAir();
-    if (!unsaved && !onAir) {
+    const risks = quitRisks();
+    if (!risks) {
       void api.window.closeDecision("close");
       return;
     }
@@ -94,7 +101,7 @@ export function startDraftAutosave(): () => void {
     // window is never shut out from under a question the operator is still
     // reading — and the answer still knows whether this started as a quit.
     void api.window.closeDecision("hold");
-    useUiStore.getState().setCloseGuard({ unsaved, onAir });
+    useUiStore.getState().setCloseGuard(risks);
   });
 
   return () => {

@@ -71,6 +71,16 @@ export function holdQuitUntilAnswered(event: Event): boolean {
   return true;
 }
 
+/**
+ * Lets the updater's own quit through without asking. The control window has
+ * already put the question (`installUpdate` in the renderer), and the installer
+ * just launched kills the app within seconds whatever the answer: a second
+ * question would offer a «Cancel» that cancels nothing, with the projector on.
+ */
+export function releaseForUpdate(): void {
+  if (guarded && !guarded.isDestroyed()) cleared.add(guarded.webContents);
+}
+
 export function installCloseGuard(win: BrowserWindow): void {
   guarded = win;
   win.on("close", (event) => {

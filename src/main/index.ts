@@ -47,6 +47,7 @@ import { backfillDeckTimings } from "./slides/backfill-timings";
 import { initConversions, shutdownConversions } from "./media/conversion-service";
 import { stopDeckClips } from "./media/deck-clips";
 import { appendLogLine, installMainLog } from "./logging";
+import { initUpdates } from "./updates/updater";
 
 /** Long enough to be safely past the first paint of the control window — the
  *  prune walks a directory and is worth nothing compared to the app being on
@@ -274,6 +275,9 @@ if (gotSingleInstanceLock) {
     }, THUMB_PRUNE_DELAY_MS);
 
     mainControlWindow = openControlWindow();
+    // After the window, like every launch chore: the check itself waits ten
+    // more seconds, and a failed one only reaches `main.log`.
+    initUpdates();
 
     app.on("activate", () => {
       // Counts only windows the user can actually see: the rasterizer is a

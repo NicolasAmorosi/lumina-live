@@ -28,6 +28,10 @@ const FLAGS = [
   // language (`main/i18n/system-locale.ts`): pinned, so the suite reads the
   // same Spanish on any machine.
   "--lang=es",
+  // Against the packaged app the launch check would reach GitHub in every
+  // test. The update suite serves its own feed and asks by hand, or turns it
+  // back on with `test.use({ launchCheck: true })`.
+  "--no-update-check",
 ];
 
 /** What the renderer's global handlers log before showing the "error
@@ -57,18 +61,19 @@ export class WorshipApp {
 
   /** Starts the built app on `profile`, an empty directory for a first launch
    *  or a previous run's for a relaunch. */
-  static async launch(profile: string): Promise<WorshipApp> {
+  static async launch(profile: string, launchCheck = false): Promise<WorshipApp> {
     // `WORSHIP_E2E_EXECUTABLE` runs the suite against an INSTALLED build
     // (`release/mac-arm64/Lumina Live.app/Contents/MacOS/Lumina Live`, or
     // `Lumina Live.exe` on the church PC) instead of `electron .` on `out/`:
     // what ships resolves FFmpeg, the migrations and the bibles from the
     // package's own `resources/`, which only a packaged run exercises.
     const executable = process.env["WORSHIP_E2E_EXECUTABLE"];
+    const flags = launchCheck ? FLAGS.filter((flag) => flag !== "--no-update-check") : FLAGS;
     const app = await electron.launch({
       cwd: ROOT,
       ...(executable
-        ? { executablePath: executable, args: [`--user-data-dir=${profile}`, ...FLAGS] }
-        : { args: [ROOT, `--user-data-dir=${profile}`, ...FLAGS] }),
+        ? { executablePath: executable, args: [`--user-data-dir=${profile}`, ...flags] }
+        : { args: [ROOT, `--user-data-dir=${profile}`, ...flags] }),
       // Sends every renderer `console.*` to stderr, so the log has both sides.
       env: { ...process.env, ELECTRON_ENABLE_LOGGING: "1" },
     });
@@ -279,9 +284,11 @@ export function audioStates(page: Page) {
   );
 }
 
-type Fixtures = { app: WorshipApp; profileDir: string };
+type Fixtures = { app: WorshipApp; profileDir: string; launchCheck: boolean };
 
 export const test = base.extend<Fixtures>({
+  /** Whether `app` runs main's update check ten seconds after launch. */
+  launchCheck: [false, { option: true }],
   // A fresh profile per test, removed afterwards. Playwright requires the
   // destructuring pattern even for a fixture that needs no other fixture.
   // eslint-disable-next-line no-empty-pattern -- Playwright's fixture signature
@@ -291,8 +298,8 @@ export const test = base.extend<Fixtures>({
     fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5 });
   },
 
-  app: async ({ profileDir }, use, testInfo) => {
-    const app = await WorshipApp.launch(profileDir);
+  app: async ({ profileDir, launchCheck }, use, testInfo) => {
+    const app = await WorshipApp.launch(profileDir, launchCheck);
     await use(app);
     // Whatever app the test ended with — it may have relaunched — is the one
     // registered last; tests that relaunch call `adopt` below.
