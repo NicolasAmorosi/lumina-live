@@ -1,6 +1,7 @@
 import { useReducer, type DragEvent } from "react";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import { Badge, ThumbTile, type IconName } from "@renderer/components/ui";
+import { ModelSlide } from "@renderer/components/shared/slide-view/ModelSlide";
 import { useDeckStore } from "@renderer/stores/deck.store";
 import { useConversion } from "@renderer/stores/conversion.store";
 import { createBoundedSet, type BoundedSet } from "@renderer/lib/utils";
@@ -88,6 +89,9 @@ export function AssetTile({
     kind,
   });
 
+  // A deck drawn from its model has no thumbnail image: its first slide is drawn.
+  const modelUrl = missing ? null : (deckStatus?.modelUrl ?? null);
+
   const converting = !missing && deckEntry?.status === "converting";
   const progress = converting
     ? deckEntry.progress.total > 0
@@ -114,7 +118,7 @@ export function AssetTile({
     // not sit under a skeleton forever.
     (deckStatus === undefined ||
       converting ||
-      (deckEntry?.status === "ready" && (deckStatus?.thumbUrl ?? null) === null));
+      (deckEntry?.status === "ready" && (deckStatus?.thumbUrl ?? deckStatus?.modelUrl ?? null) === null));
 
   return (
     <ThumbTile
@@ -122,6 +126,7 @@ export function AssetTile({
       icon={ICON_BY_KIND[kind]}
       label={asset.name}
       loading={loading}
+      media={modelUrl ? <ModelSlide url={modelUrl} /> : undefined}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onDragStart={onDragStart}

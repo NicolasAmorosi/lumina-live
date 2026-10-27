@@ -15,7 +15,9 @@ function deck(assetId: number, advanceAfterMs: number): LiveDeck {
     index,
     url: `worship://deck/${assetId}/${index}`,
     thumbUrl: `worship://deck/${assetId}/${index}/thumb`,
+    modelUrl: null,
     advanceAfterMs,
+    transition: null,
   }));
   return {
     assetId,

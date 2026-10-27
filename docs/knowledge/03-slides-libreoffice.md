@@ -1,7 +1,10 @@
-# 03 — Slide pipeline (headless LibreOffice)
+# 03 — Slide pipeline (model decks, native decks, and headless LibreOffice)
 
 Completely replaces the COM/PowerShell integration with PowerPoint. There is **no** longer anything
-Windows-only: the app runs and is validated the same way on macOS, Windows and Linux.
+Windows-only: the app runs and is validated the same way on macOS, Windows and Linux. Since
+2026-10-26 neither a `.pptx` (*Model decks*, below: read and drawn by the app itself) nor a legacy
+deck made of pictures — the hymnal (*Native decks*) — goes through LibreOffice. What still does: an
+`.odp`, a legacy `.ppt`/`.pps` with text, and a `.pptx` that won't open as a presentation.
 
 ## The model change
 
@@ -21,6 +24,119 @@ currentSlide/close` — the cursor lives in the renderer's store and it is the o
 ```
 
 `soffice --convert-to png` **only exports the first slide** — hence the detour through PDF.
+
+## Model decks: a `.pptx` is drawn, not converted (2026-10-26)
+
+Any OOXML presentation (`.pptx`, `.pptm`, `.ppsx`, `.ppsm` — decided by the container,
+`containerKind === "ooxml"`, not the extension) is read into a **model of what to paint** per
+slide and drawn in the renderer by `SlideView`. No LibreOffice, no PDF, no images on disk:
+
+```
+.pptx ──slides/pptx/ (reader.ts: theme, master, layout, slide)──► SlideModel per slide ──► SQLite (deck_slides.layers)
+                                                                                              │
+SlideView (React, components/shared/slide-view/) ◄── worship://deck/<id>/<n>/model ◄──────────┘
+        └── pictures, metafiles (as SVG) and embedded fonts ◄── worship://deck/<id>/part|font/<part>, read from the .pptx
+```
+
+- **The owner's decisions** (2026-10-26): the switch is **total** — a deck is never drawn half by
+  the model and half by LibreOffice, and what the model can't draw exactly (3D bevels, artistic
+  effects, a SmartArt without its drawing) is **approximated, never refused**. The reference for
+  "right" is PowerPoint, LibreOffice second. Fidelity is measured against PowerPoint's own
+  rendering, slide by slide, and improved in place; `SLIDES_MODEL_VERSION` is bumped when the
+  reader changes what it puts in a model, so every model deck is read again.
+- **What is read** (`src/main/slides/pptx/`, entry `pptx-deck.ts`): the XML parts and relationships
+  only, through `readZipEntries`. The preset geometries and the built-in table styles come from
+  `resources/ooxml/` (`paths.ts` → `ooxmlDir`, shipped as `extraResources`). Pictures, media and
+  fonts are never read here — the model names them by part.
+- **What is stored**: a `slide_decks` row with `image_format = 'model'`, `render_width = 0`,
+  `converter_version = SLIDES_MODEL_VERSION`; one `deck_slides` row per visible slide whose `layers`
+  column is the `SlideModel` JSON (median 6.5 KB, but a slide with a big table or chart can be
+  megabytes — that is why it is served by url and never inlined in a DTO). `cache_dir` is `''`
+  unless the deck embeds sound or video, which are still extracted there exactly as for a converted
+  deck (`ponytail:` until the media engine serves them from the `.pptx` by range). Timings,
+  transitions, sound and video come from the same `readPresentationMeta` a converted deck used,
+  aligned by visible position; when the counts disagree the timings go.
+- **What is served**: `…/<n>/model` is the JSON; `…/part/<part>` is a picture as is, or an
+  EMF/WMF (or its gzipped `.emz`/`.wmz`) as the SVG `metafileToSvg` makes of it — Chromium decodes
+  neither; `…/font/<part>` is an embedded font (EOT / MicroType Express) rebuilt as TrueType by
+  `decodeEmbeddedFont`. All `immutable`, and all 410 once the source is no longer the file the model
+  was read from. A model slide's `url`/`thumbUrl` serve no image: `modelUrl` (on `DeckSlide`, the
+  `slide` output and `DeckStatusSummary`) is what draws it, and every consumer — `OutputView`, the
+  two slide grids, the library tile — checks it first.
+- **In the renderer**: `lib/slide-models.ts` fetches a model once per window and hands it out only
+  once the deck's embedded fonts are registered and its pictures decoded, so the projector never
+  shows a fallback face or a picture arriving late; `OutputView`'s preload warms the neighbours
+  through it. `ModelSlide` fits the slide into its box the way `object-contain` fitted the image.
+  Faces a deck names but this machine lacks fall back to bundled metric twins (Carlito, Caladea,
+  Liberation, `assets/fonts/slides/`).
+- **Unreadable**: a file that won't open as a presentation (or whose slides are all hidden) is
+  remembered by `(size, mtime)` and goes to LibreOffice as before.
+- **The converted copy goes**, as for a native deck (`deleteSupersededBySource`).
+- **No LibreOffice needed**, so a `.pptx` joins the legacy decks in `deckMayBeReadNatively`: the
+  renderer's gate is decided after main answers.
+
+## Native decks: a legacy deck made of pictures is read, not converted (2026-10-26)
+
+Every slide of the hymnal is an 800×600 JPEG with the lyrics drawn into it. For such a deck the
+pipeline above is skipped entirely:
+
+```
+.pps/.ppt ──ppt-binary.ts (OLE2 + PowerPoint 97 records, ~1 ms)──► layers per slide ──► SQLite
+                                                                         │
+worship://deck/<id>/<n> ◄── native-deck.ts: the JPEG as is, or an SVG ◄─┘  (read from the source, per request)
+```
+
+- **What is read** (`readBinaryDeck`): per VISIBLE slide (hidden ones are left out, as the show and
+  LibreOffice's PDF leave them out), the topmost opaque JPEG that covers the whole slide is its base,
+  and everything above it must be a picture drawn as is (the hymn's white logo, a PNG) or something
+  PowerPoint does not show: off the slide, `fHidden`, or a sound/movie with `AnimationInfoAtom.fHide`
+  — the speaker icon, which LibreOffice draws and PowerPoint hides
+  ([`libreoffice-draws-sound-icons-powerpoint-hides.md`](../../.claude/knowledge/libreoffice-draws-sound-icons-powerpoint-hides.md)).
+  Pictures carry a whitelist of properties (crop and rotation 0, no recolor, line off, and fill off
+  under a PNG), inherited flag by flag from the master shape they name
+  ([`officeart-boolean-properties-inherit-flag-by-flag.md`](../../.claude/knowledge/officeart-boolean-properties-inherit-flag-by-flag.md));
+  a master is found by its `slideId`, not a persist id
+  ([`a-slides-masteridref-is-a-slideid-not-a-persist-id.md`](../../.claude/knowledge/a-slides-masteridref-is-a-slideid-not-a-persist-id.md)).
+  **Anything else anywhere refuses the whole deck**, which then goes through LibreOffice exactly as
+  before: never half a deck each way, never a slide drawn wrong in silence. Measured on the hymnal:
+  1229 of 1231 decks read natively, in 0.3 ms each; the two refused are `394.pps` (slide 5 leaves a
+  13-unit strip uncovered) in both folders.
+- **What is stored**: a `slide_decks` row with `image_format = 'native'`, `render_width = 0`,
+  `cache_dir = ''` (it owns no folder — every path that deletes or rebases a deck's folder checks the
+  format first), `timings_source = 'binary'` and `converter_version = SLIDES_NATIVE_VERSION`; one
+  `deck_slides` row per slide whose `layers` column is the JSON `SlideLayers` (each picture's offset
+  and length inside the `Pictures` stream, and its rect in slide units). Identity is the content
+  hash, like any deck.
+- **What is served**: a slide that is one picture edge to edge in its own proportions is that JPEG,
+  byte for byte (~4 of 5 hymnal slides); otherwise an SVG placing each picture where PowerPoint does,
+  pictures as `data:` URIs (an SVG used as an image fetches nothing). The source must still be the
+  file the layers were read from — same `(size, mtime)` — or the answer is 410. `/thumb` is the base
+  picture alone: composing the SVG for every tile of a library grid cost ~800 KB of base64 each.
+- **Where it runs**: `nativeDeck()` in `deck-service.ts`, before the cache and before the queue —
+  in `prepareDeck`, in `runConversion` (a job queued before the deck could be read) and in
+  `warmBatchPdfCache` (a native deck is never handed to `soffice`). `getDeck` answers a native deck,
+  and answers nothing for a legacy deck not read yet, so the renderer never puts on screen urls of
+  a converted copy the read is about to retire.
+- **The converted copy goes** (owner's decision, 2026-10-26): reading a deck natively deletes the
+  rasterized decks of the same content hash and their folders — except one pinned to the projector,
+  which the startup sweep deletes on the next launch (`deleteSupersededBySource`).
+- **No LibreOffice needed** for these decks, so the renderer's gate for a `.ppt`/`.pps` is decided
+  after main answers (`sofficeBlocks(environment, ext, entry)`, `deckMayBeReadNatively`), never in
+  front of the deck. See *Without LibreOffice* below.
+- **The linked song** is found from the record that names it (`ExObjList` → `CString`,
+  `readBinaryExternalPaths`), not by scanning the file: the scan was most of a second per hymn
+  ([`linked-audio-hint-scan-was-hidden-behind-libreoffice.md`](../../.claude/knowledge/linked-audio-hint-scan-was-hidden-behind-libreoffice.md)).
+
+## Slide transitions (2026-10-26)
+
+Every deck now carries each slide's own way in (`DeckSlide.transition`, a `SlideTransition`): from
+`SlideShowSlideInfoAtom` (`effectType`/`effectDirection`/`speed`) in a binary, from `p:transition`
+in OOXML. Fade and «fade through black» and random bars are drawn as themselves; any other effect is
+a crossfade of its own length; a cut is `null`. Speeds are PowerPoint's: slow 1 s, medium 0.75 s,
+fast 0.5 s. Decided by the owner: they play **only when the deck moves forward** (back is a cut),
+and entering the deck keeps the scene transition from Settings. A deck converted before this read
+its transitions on its next cache hit (`readTransitionsInto`, `slide_decks.transitions_read`), with
+no reconversion. On the projector it is `ProjectionOutput.enter` (see `04-renderer-state.md`).
 
 ## A PDF enters through the middle of the pipeline
 
@@ -53,16 +169,20 @@ which also explains the case of non-embedded fonts and the new `PDF_PASSWORD` er
 ## Without LibreOffice
 
 LibreOffice isn't bundled, so a machine without it is a normal case, not an error: the app starts,
-warns, and blocks **only** what truly needs it — converting a PowerPoint that isn't cached yet. A
-PDF, an already-converted deck (projecting it is serving images) and everything that isn't a deck
-keep working the same.
+warns, and blocks **only** what truly needs it — converting a deck that isn't cached yet and that
+the app can't read itself. A PDF, an already-converted deck (projecting it is serving images), a
+`.pptx` drawn from its model, a legacy deck read natively and everything that isn't a deck keep
+working the same. Which `.pptx` or legacy `.ppt`/`.pps` still needs it is only known once main has
+read it, so for those every block below is decided by main's answer: the renderer tries, and
+`sofficeBlocks(environment, ext, entry)` blocks one only after it `failed`.
 
 **The question, on each side:**
 
 - **Main** remembers the last answer from the scan (`locateSoffice`, cached).
   `cachedSofficeError()` returns it without searching again, and `prepareDeck` uses it so that
   **background** work (visible tiles, schedule, freshly imported files, «Prepare folder») on a
-  non-PDF deck is rejected on the spot: no queue, no file hash, no progress bar on the tile. The
+  non-PDF deck is rejected on the spot: no queue, no file hash, no progress bar on the tile — after
+  the native read, which needs none of it. The
   **interactive** path (the operator opened the deck) always goes through `requireSoffice`, which
   scans again — that's how a LibreOffice installed while the app is open gets found. `runConversion`
   asks for it right before step 3 (the actual conversion): not before the content hit, which
@@ -213,7 +333,7 @@ exporter.
 
 That's why the timings are read from the **source binary**, not from the converted one:
 
-- `src/main/slides/ppt-binary-timings.ts` reads `SlideShowSlideInfoAtom` from the OLE2's
+- `src/main/slides/ppt-binary.ts` reads `SlideShowSlideInfoAtom` from the OLE2's
   `PowerPoint Document` stream, in presentation order (`Current User` → `UserEditAtom` →
   persist directory → instance-0 `SlideListWithText` → `SlidePersistAtom`). It never reads the whole
   file: images live in the `Pictures` stream, so it's ~45 KB of a 1.4 MB file, read sector by

@@ -12,7 +12,7 @@ import type {
   SlideVideo,
   VideoUnderlay,
 } from "@shared/types/projection";
-import type { TransitionStyle } from "@shared/types/transition";
+import type { SlideTransition, TransitionStyle } from "@shared/types/transition";
 import type { DeckSlide, DeckSlideVideo, DeckSoundtrack } from "@shared/types/deck";
 import type { TimerClock } from "@shared/types/timer";
 import { hasReachedZero, holdClock, resumeClock } from "@shared/timer";
@@ -84,6 +84,12 @@ export type ProjectionStoreState = {
    *  mount-time seek `VideoUnderlay.startAtSeconds` is, written by
    *  `freezeLivePositions()`. */
   slideVideoStartAt: number;
+  /** The transition the live slide entered with: its own, when the deck
+   *  moved forward onto it; `null` after a move back and at the start of a
+   *  scene, which keeps the scene's own fade (decided by the owner,
+   *  2026-10-26). Its identity in the output is `slideVideoEpoch`, which
+   *  advances with every change of slide and nothing else. */
+  slideEntry: SlideTransition | null;
 
   liveDeck: LiveDeck | null;
   autoplay: AutoplayState;
@@ -303,6 +309,7 @@ export const useProjectionStore = create<ProjectionStoreState>()(
     slideVideoPaused: false,
     slideVideoVolume: null,
     slideVideoStartAt: 0,
+    slideEntry: null,
 
     liveDeck: null,
     autoplay: "off",
@@ -323,6 +330,7 @@ export const useProjectionStore = create<ProjectionStoreState>()(
         base,
         videoPaused: false,
         videoVolume: defaultMediaVolume(),
+        slideEntry: null,
         ...freshSlideVideo(state.slideVideoEpoch),
       })),
     setOverlay: (overlay) => set({ overlay }),
@@ -379,6 +387,7 @@ export const useProjectionStore = create<ProjectionStoreState>()(
         autoplay: "off",
         autoplayMode: "synced",
         soundtrackEpoch: state.soundtrackEpoch + 1,
+        slideEntry: null,
         ...freshSlideVideo(state.slideVideoEpoch),
       })),
 
@@ -394,8 +403,11 @@ export const useProjectionStore = create<ProjectionStoreState>()(
       // The slide changed, so whatever video was on the old one is a different
       // element now — even when the new slide has none, in which case the
       // fresh identity is simply never used.
+      // Forward onto a slide plays that slide's own way in, as the file says;
+      // back is a cut — correcting a mistake mid-service must be instant.
       set((state) => ({
         base: { ...base, slideIndex: next },
+        slideEntry: next > base.slideIndex ? (liveDeck.slides[next - 1]?.transition ?? null) : null,
         ...freshSlideVideo(state.slideVideoEpoch),
       }));
     },
@@ -580,16 +592,21 @@ function selectOutputWithoutUnderlay(state: ProjectionStoreState): ProjectionOut
       }
       const index = clamp(state.base.slideIndex, 1, deck.slides.length);
       const current = deck.slides[index - 1]!;
-      const preload = [deck.slides[index]?.url, deck.slides[index - 2]?.url].filter(
+      // A slide drawn from its model is warmed through its model (which also
+      // decodes its pictures), an image slide through its image.
+      const warm = (slide: DeckSlide | undefined): string | undefined => slide?.modelUrl ?? slide?.url;
+      const preload = [warm(deck.slides[index]), warm(deck.slides[index - 2])].filter(
         (url): url is string => url !== undefined,
       );
       return {
         kind: "slide",
         deckAssetId: deck.assetId,
         url: current.url,
+        modelUrl: current.modelUrl,
         index,
         total: deck.slides.length,
         preload,
+        enter: state.slideEntry ? { ...state.slideEntry, seq: state.slideVideoEpoch } : null,
       };
     }
     case "video":
@@ -670,6 +687,7 @@ type OutputInputs = readonly [
   ProjectionStoreState["slideVideoPaused"],
   ProjectionStoreState["slideVideoVolume"],
   ProjectionStoreState["slideVideoStartAt"],
+  ProjectionStoreState["slideEntry"],
   ProjectionStoreState["liveDeck"],
   ProjectionStoreState["sceneEpoch"],
   ProjectionStoreState["transitionStyle"],
@@ -689,6 +707,7 @@ function outputInputs(state: ProjectionStoreState): OutputInputs {
     state.slideVideoPaused,
     state.slideVideoVolume,
     state.slideVideoStartAt,
+    state.slideEntry,
     state.liveDeck,
     state.sceneEpoch,
     state.transitionStyle,

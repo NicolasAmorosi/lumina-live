@@ -18,6 +18,12 @@ export const biblesDir = app.isPackaged
   ? path.join(resourcesRoot, "bibles")
   : path.join(app.getAppPath(), "resources/bibles");
 
+/** What the `.pptx` reader draws with: ECMA-376's preset shape definitions
+ *  and PowerPoint's built-in table styles (`src/main/slides/pptx/`). */
+export const ooxmlDir = app.isPackaged
+  ? path.join(resourcesRoot, "ooxml")
+  : path.join(app.getAppPath(), "resources/ooxml");
+
 /** FFmpeg + ffprobe, fetched per platform by `scripts/fetch-ffmpeg.ts` into
  *  `resources/ffmpeg/<platform>-<arch>/` and shipped as `resources/ffmpeg/`. */
 const ffmpegDir = app.isPackaged

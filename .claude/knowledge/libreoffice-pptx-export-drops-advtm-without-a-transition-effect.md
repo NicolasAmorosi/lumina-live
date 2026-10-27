@@ -4,7 +4,7 @@
 **Trigger:** a legacy `.pps`/`.ppt` deck has no auto-advance in the app but PowerPoint advances it
 fine; `timings_source` is `ooxml-converted` yet every `advance_ms` is NULL; touching
 `readMetadata`/`mergeBinaryTimings` in `src/main/slides/deck-service.ts`, or
-`ppt-binary-timings.ts` / `backfill-timings.ts`.
+`ppt-binary.ts` / `backfill-timings.ts`.
 
 - **The belief this replaces** (it was written in two entries here and in
   `docs/knowledge/03-slides-libreoffice.md`): "the `.pps → .pptx` upgrade pass preserves the
@@ -26,7 +26,7 @@ fine; `timings_source` is `ooxml-converted` yet every `advance_ms` is NULL; touc
   disagreements. The affected numbers are identical in `Himnario Nuevo Cantado` and
   `Himnario Nuevo Instrumental`: `039, 041-048, 051-064, 205, 207-209, 220, 231, 406, 424, 429,
   448, 454-455, 500-503, 505, 521-528, 531-535, 538-542, 544, 546, 549, 556-593, 595-599`.
-- **The fix reads the times out of the source OLE2 binary** (`src/main/slides/ppt-binary-timings.ts`)
+- **The fix reads the times out of the source OLE2 binary** (`src/main/slides/ppt-binary.ts`)
   and gap-fills the converted `.pptx`'s metadata in `mergeBinaryTimings`. It never overrides a value
   the `.pptx` already carries, and it **compares the two readings on every slide where both have a
   number — one disagreement past 1 s and the whole merge is abandoned**, because the two come from

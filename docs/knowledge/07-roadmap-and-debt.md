@@ -20,6 +20,19 @@ songs/lyrics with projectable sections.
   `webUtils.getPathForFile` in the preload), and the internal library→schedule drag has its
   `onDrop` (`SchedulePanel.tsx`).
 
+- **A `.pptx` drawn from its model (2026-10-26) — what was knowingly left.** The switch is total
+  and what the model can't draw exactly is approximated (see «Model decks» in
+  `03-slides-libreoffice.md`); what is still approximate or missing, measured against PowerPoint:
+  text autofit (a `normAutofit` box can overflow), a SmartArt with no saved drawing, 3D text and
+  shapes, artistic effects, connector arrowheads, WordArt warps, chart numbers not localised to the
+  system's region, Office faces with no metric twin on macOS/Linux, a few Office fonts Chromium
+  rejects (empty `prep` table), TIFF/WDP pictures (counted, not drawn) and text inside a metafile,
+  which can only use system fonts
+  ([`.claude/knowledge/an-svg-drawn-as-an-image-never-sees-the-pages-fonts.md`](../../.claude/knowledge/an-svg-drawn-as-an-image-never-sees-the-pages-fonts.md)).
+  Sound and video embedded in a `.pptx` are still extracted to the deck's folder, as for a
+  converted deck, until they can be served from the `.pptx` by range. And the slide grids mount a
+  whole `SlideView` per visible tile: fine on the decks tested, not measured on a very long deck
+  full of large pictures.
 - **Bible favorites and history UI**: the `bible_favorites` and `projection_history` tables and
   their repos exist and work (`HistoryRepo.record()` is already called on every
   `projection:show`), but there's no screen that lists them yet.

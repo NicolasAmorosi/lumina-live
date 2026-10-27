@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { SLIDES_BATCH_SIZE } from "@shared/constants";
 import type { DeckStatusSummary, PrewarmProgress } from "@shared/types/deck";
-import { slideThumbUrl } from "@shared/urls";
+import { slideModelUrl, slideThumbUrl } from "@shared/urls";
 import { broadcast } from "./broadcast";
 import { getSlidesRepo } from "./repos";
 import {
@@ -41,11 +41,16 @@ const activeBatches = new Map<string, BatchState>();
 export function deckStatuses(assetIds: readonly number[]): Record<number, DeckStatusSummary> {
   const statuses = getSlidesRepo().statusesByAsset(assetIds);
   const result: Record<number, DeckStatusSummary> = {};
-  for (const [assetId, { deckId, status }] of statuses) {
+  for (const [assetId, { deckId, status, drawnFromModel }] of statuses) {
     // A `stale` row (older converter) still has every image on disk — it is
     // reconverted for what it may be missing, not because its slides are bad.
     const hasImages = status === "ready" || status === "stale";
-    result[assetId] = { status, thumbUrl: hasImages ? slideThumbUrl(deckId, 1) : null };
+    // A deck drawn from its model has no image to point at: the tile draws
+    // its first slide's model instead (and only a current one: a stale model
+    // may not be what this build draws).
+    result[assetId] = drawnFromModel
+      ? { status, thumbUrl: null, modelUrl: status === "ready" ? slideModelUrl(deckId, 1) : null }
+      : { status, thumbUrl: hasImages ? slideThumbUrl(deckId, 1) : null, modelUrl: null };
   }
   return result;
 }

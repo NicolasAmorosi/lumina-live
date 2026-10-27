@@ -1,0 +1,148 @@
+/*
+ * Metric-compatible stand-ins for the faces Office decks are written in and
+ * macOS and Linux don't have (Calibri, Cambria, Arial, Times New Roman, Courier
+ * New): same advance widths, so a line breaks where it broke in PowerPoint.
+ * `SlideView`'s font lists name the file's face first, then these, so an
+ * installed original always wins. All SIL OFL 1.1 (licences beside the files).
+ * `block`: a slide must never be painted in a fallback face and then reflow.
+ */
+@font-face {
+  font-family: "Carlito";
+  src: url("../../../assets/fonts/slides/Carlito-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Carlito";
+  src: url("../../../assets/fonts/slides/Carlito-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Carlito";
+  src: url("../../../assets/fonts/slides/Carlito-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Carlito";
+  src: url("../../../assets/fonts/slides/Carlito-BoldItalic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Caladea";
+  src: url("../../../assets/fonts/slides/Caladea-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Caladea";
+  src: url("../../../assets/fonts/slides/Caladea-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Caladea";
+  src: url("../../../assets/fonts/slides/Caladea-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Caladea";
+  src: url("../../../assets/fonts/slides/Caladea-BoldItalic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Sans";
+  src: url("../../../assets/fonts/slides/LiberationSans-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Sans";
+  src: url("../../../assets/fonts/slides/LiberationSans-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Sans";
+  src: url("../../../assets/fonts/slides/LiberationSans-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Sans";
+  src: url("../../../assets/fonts/slides/LiberationSans-BoldItalic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Serif";
+  src: url("../../../assets/fonts/slides/LiberationSerif-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Serif";
+  src: url("../../../assets/fonts/slides/LiberationSerif-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Serif";
+  src: url("../../../assets/fonts/slides/LiberationSerif-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Serif";
+  src: url("../../../assets/fonts/slides/LiberationSerif-BoldItalic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Mono";
+  src: url("../../../assets/fonts/slides/LiberationMono-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Mono";
+  src: url("../../../assets/fonts/slides/LiberationMono-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Mono";
+  src: url("../../../assets/fonts/slides/LiberationMono-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Liberation Mono";
+  src: url("../../../assets/fonts/slides/LiberationMono-BoldItalic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: block;
+}

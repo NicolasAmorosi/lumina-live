@@ -174,10 +174,14 @@ function usePreviewOutputWithoutPlates(content: PreviewContent | null): Projecti
         kind: "slide",
         deckAssetId: content.assetId,
         url: slide.url,
+        modelUrl: slide.modelUrl,
         index: slide.index,
         total: slides.length,
         // The projector warms neighbours; a monitor has no reason to.
         preload: [],
+        // Stage one never animates (`INSTANT_TRANSITION`), a slide's own way
+        // in included.
+        enter: null,
         videoUnderlay: null,
         // Never plays here, even on a slide that carries one. Stage one of the
         // two-stage flow shows what the slide LOOKS like, and the rasterized

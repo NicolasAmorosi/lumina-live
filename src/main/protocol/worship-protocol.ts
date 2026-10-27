@@ -6,6 +6,10 @@ import type { MediaRepo } from "../db/repositories/media.repo";
 import { getSettingsRepo, getSlidesRepo, isDatabaseOpen } from "../services/repos";
 import { slidesCacheDir, slidesTempDir } from "../paths";
 import { resolveRasterPdf } from "../slides/rasterizer";
+import { renderNativeSlide } from "../slides/native-deck";
+import { decodeEmbeddedFont } from "../slides/pptx/embedded-font";
+import { metafileToSvg } from "../slides/pptx/metafile";
+import { readZipEntries } from "../slides/zip-reader";
 import { ensureThumbnail } from "../media/thumbnail-service";
 import { convertedPathFor } from "../media/conversion-service";
 
@@ -313,6 +317,21 @@ export function registerWorshipProtocolHandler(mediaRepo: MediaRepo): void {
           return serveFile(request, getSettingsRepo().get("logo.path"));
         }
         case "deck": {
+          // worship://deck/<deckId>/part/<part> and …/font/<part>: a picture
+          // or an embedded font of a deck drawn from its model, read from the
+          // source package itself.
+          if (segments[1] === "part" || segments[1] === "font") {
+            return serveDeckPart(request, Number(segments[0]), segments[1], decodeURIComponent(segments.slice(2).join("/")));
+          }
+          // worship://deck/<deckId>/<slideIndex>/model — a slide's `SlideModel`.
+          if (segments[2] === "model") {
+            const model = getSlidesRepo().getSlideModel(Number(segments[0]), Number(segments[1]));
+            if (!model || !(await sourceUnchanged(model))) return new Response("Gone", { status: 410 });
+            return new Response(request.method === "HEAD" ? null : model.json, {
+              status: 200,
+              headers: { "Cache-Control": "public, max-age=31536000, immutable", "Content-Type": "application/json" },
+            });
+          }
           // worship://deck/<deckId>/<slideIndex>[/thumb]
           const deckId = Number(segments[0]);
           const slideIndex = Number(segments[1]);
@@ -320,15 +339,32 @@ export function registerWorshipProtocolHandler(mediaRepo: MediaRepo): void {
             return new Response("Not found", { status: 404 });
           }
           const variant = segments[2] === "thumb" ? "thumb" : "full";
-          const filePath = withinCache(
-            getSlidesRepo().getSlideImagePath(deckId, slideIndex, variant),
-          );
+          const image = getSlidesRepo().getSlideImage(deckId, slideIndex, variant);
           // A (deckId, slideIndex) pair is immutable by construction: changing
           // the source file yields a different content hash and therefore a
           // different deck id. Without this header Chromium re-reads every
           // image on each <img> swap — during a live service.
-          return serveFile(request, filePath, {
-            "Cache-Control": "public, max-age=31536000, immutable",
+          const immutable = { "Cache-Control": "public, max-age=31536000, immutable" };
+          if (image?.kind !== "native") {
+            return serveFile(request, withinCache(image?.path ?? null), immutable);
+          }
+          // Built from the source itself, so it has to still BE the file the
+          // layers were read from: a deck edited in place would hand out bytes
+          // from the wrong offsets. Gone, not a guess — the deck is read again
+          // the next time it is opened.
+          const stat = await fs.promises.stat(image.sourcePath).catch(() => null);
+          if (!stat || stat.size !== image.sourceSizeBytes || Math.trunc(stat.mtimeMs) !== image.sourceMtimeMs) {
+            return new Response("Gone", { status: 410 });
+          }
+          const slide = renderNativeSlide(image.sourcePath, image.layers, image.variant);
+          if (!slide) return new Response("Gone", { status: 410 });
+          return new Response(request.method === "HEAD" ? null : new Uint8Array(slide.body), {
+            status: 200,
+            headers: {
+              ...immutable,
+              "Content-Type": slide.contentType,
+              "Content-Length": String(slide.body.length),
+            },
           });
         }
         case "deck-audio": {
@@ -390,5 +426,47 @@ export function registerWorshipProtocolHandler(mediaRepo: MediaRepo): void {
       console.error(`[worship] handler failed: ${request.url}`, error);
       return new Response("Internal error", { status: 500 });
     }
+  });
+}
+
+/** A deck read from its source hands out bytes from that file: it has to still
+ *  BE the file it was read from, or a deck edited in place would serve parts
+ *  from the wrong offsets. Gone, not a guess — it is read again on next use. */
+async function sourceUnchanged(source: { sourcePath: string; sourceSizeBytes: number; sourceMtimeMs: number }): Promise<boolean> {
+  const stat = await fs.promises.stat(source.sourcePath).catch(() => null);
+  return !!stat && stat.size === source.sourceSizeBytes && Math.trunc(stat.mtimeMs) === source.sourceMtimeMs;
+}
+
+const PART_TYPES: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", jpe: "image/jpeg", gif: "image/gif", bmp: "image/bmp",
+  svg: "image/svg+xml", webp: "image/webp", tif: "image/tiff", tiff: "image/tiff", ico: "image/x-icon",
+};
+
+/**
+ * A part of a model deck's package: a picture as is, a metafile (EMF/WMF,
+ * which Chromium can't decode) as the SVG `metafileToSvg` makes of it, a font
+ * as the TrueType `decodeEmbeddedFont` rebuilds. Immutable like everything
+ * under a deck id.
+ */
+async function serveDeckPart(request: Request, deckId: number, kind: "part" | "font", part: string): Promise<Response> {
+  const source = Number.isFinite(deckId) ? getSlidesRepo().getDeckSource(deckId) : null;
+  if (!source || !(await sourceUnchanged(source))) return new Response("Gone", { status: 410 });
+  const raw = readZipEntries(source.sourcePath, (name) => name === part)[part];
+  if (!raw) return new Response("Not found", { status: 404 });
+  const ext = part.slice(part.lastIndexOf(".") + 1).toLowerCase();
+  let body: Uint8Array | string | null = raw;
+  let type = PART_TYPES[ext] ?? "application/octet-stream";
+  if (kind === "font") {
+    body = decodeEmbeddedFont(raw);
+    type = "font/ttf";
+  } else if (ext === "emf" || ext === "wmf" || ext === "emz" || ext === "wmz") {
+    body = metafileToSvg(raw, ext.startsWith("w") ? "wmf" : "emf");
+    type = "image/svg+xml";
+  }
+  if (body === null) return new Response("Unreadable", { status: 415 });
+  const bytes = typeof body === "string" ? Buffer.from(body) : body;
+  return new Response(request.method === "HEAD" ? null : new Uint8Array(bytes), {
+    status: 200,
+    headers: { "Cache-Control": "public, max-age=31536000, immutable", "Content-Type": type, "Content-Length": String(bytes.length) },
   });
 }

@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { FIXTURES_DIR, FIXTURE_VERSION, ffmpegBinary, findSoffice } from "./paths";
 import { buildPdf } from "./pdf";
+import { buildLegacyPpt } from "../../fixtures/legacy-ppt";
 
 /**
  * Generates every file the suite projects, once, with the FFmpeg the app
@@ -17,6 +18,8 @@ import { buildPdf } from "./pdf";
  * visible transition, because LibreOffice only writes `advTm` when a slide has
  * one (`.claude/knowledge/libreoffice-pptx-export-drops-advtm-without-a-transition-effect.md`).
  * Without LibreOffice the deck tests that need it skip; the PDF ones still run.
+ * A `.pptx` is drawn from its model, never converted, so what a conversion does
+ * (its queue, cancelling it) is tested on two `.odp` exported the same way.
  */
 export default function globalSetup(): void {
   const stamp = path.join(FIXTURES_DIR, ".version");
@@ -52,23 +55,51 @@ export default function globalSetup(): void {
 
   fs.writeFileSync(out("deck.pdf"), buildPdf(["#1f4e9c", "#c0392b", "#27ae60"]));
 
+  // A legacy hymn as the real ones are: a JPEG per slide, a logo over the
+  // first and a speaker icon PowerPoint hides — read with no LibreOffice at
+  // all (`ppt-binary.ts`). The second slide fades in slowly and the third
+  // enters by vertical random bars, both as the file says.
+  const frame = (source: string, name: string) => {
+    run("-f", "lavfi", "-i", source, "-frames:v", "1", out(name));
+    const bytes = fs.readFileSync(out(name));
+    fs.rmSync(out(name));
+    return bytes;
+  };
+  const slides = ["#1f4e9c", "#c0392b", "#27ae60"].map((colour, i) => frame(`color=c=${colour}:size=800x600`, `s${i}.jpg`));
+  fs.writeFileSync(
+    out("legacy-hymn.pps"),
+    buildLegacyPpt({
+      pictures: [
+        ...slides.map((bytes) => ({ type: "jpeg" as const, bytes })),
+        { type: "png", bytes: frame("color=c=white:size=60x54", "logo.png") },
+      ],
+      slides: [
+        { shapes: [{ rect: [0, 0, 5760, 4320], pib: 1 }, { rect: [3748, 5057, 5411, 4072], pib: 4 }] },
+        { effectType: 23, speed: 0, shapes: [{ rect: [0, 0, 5760, 4320], pib: 2 }] },
+        { effectType: 8, effectDirection: 1, speed: 2, shapes: [{ rect: [0, 0, 5760, 4320], pib: 3 }] },
+      ],
+    }),
+  );
+
   const soffice = findSoffice();
   if (soffice) {
-    const toPptx = (name: string, fodpXml: string) => {
+    const toDeck = (name: string, fodpXml: string, format = "pptx") => {
       const fodp = out(`${name}.fodp`);
       fs.writeFileSync(fodp, fodpXml);
       const profile = fs.mkdtempSync(path.join(os.tmpdir(), "worship-e2e-soffice-"));
       try {
         execFileSync(soffice, [
           `-env:UserInstallation=${pathToFileURL(profile).href}`,
-          ...["--headless", "--convert-to", "pptx", "--outdir", FIXTURES_DIR, fodp],
+          ...["--headless", "--convert-to", format, "--outdir", FIXTURES_DIR, fodp],
         ]);
       } finally {
         fs.rmSync(profile, { recursive: true, force: true });
         fs.rmSync(fodp, { force: true });
       }
     };
-    toPptx("hymn", hymnFodp(3, 2));
+    toDeck("hymn", hymnFodp(3, 2));
+    toDeck("converted", hymnFodp(3, 2), "odp");
+    toDeck("queued", hymnFodp(4, 2), "odp");
 
     // A WMV embedded in a slide — what PowerPoint 2007 decks carry and Chromium
     // cannot play (`media/deck-clips.ts` converts it in place). LibreOffice only
@@ -77,7 +108,7 @@ export default function globalSetup(): void {
     // relationship, and its content type.
     const wmv = out("slide-clip.wmv");
     run(...picture("640x360", 4), "-c:v", "wmv2", wmv);
-    toPptx("clipdeck", clipDeckFodp(wmv));
+    toDeck("clipdeck", clipDeckFodp(wmv));
     embedExternalVideo(out("clipdeck.pptx"), wmv);
     fs.rmSync(wmv, { force: true });
   }

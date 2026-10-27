@@ -37,8 +37,9 @@ let the AppImage start without `--no-sandbox`, which turns off a security protec
 windows closed by themselves while a presentation was on screen, which doesn't happen on Windows or
 macOS. Test it thoroughly before relying on it in a service.
 
-- **LibreOffice** is needed for PowerPoint presentations (PDFs don't need it). If it isn't installed,
-  the app detects it and explains how to install it.
+- **LibreOffice** is needed for PowerPoint presentations, except PDFs and old `.ppt`/`.pps` decks made
+  only of pictures — like most hymnals — which open instantly without it. If it isn't installed, the
+  app detects it and explains how to install it.
 - The installers **aren't signed yet**. On Windows: «More info» → «Run anyway». On macOS: System
   Settings → Privacy & Security → «Open Anyway».
 

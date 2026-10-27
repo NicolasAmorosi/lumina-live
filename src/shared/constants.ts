@@ -48,6 +48,19 @@ export function deckRequiresSoffice(ext: string): boolean {
   return ext.replace(/^\./, "").toLowerCase() !== "pdf";
 }
 
+/**
+ * A legacy `.ppt`/`.pps` is usually read straight from its source, with no
+ * LibreOffice at all (`ppt-binary.ts`): the whole hymnal is. Usually, not
+ * always — a deck with text still needs it, and only main can tell, by reading
+ * the file. A `.pptx` and its siblings are drawn from their model
+ * (`slides/pptx/`), and only one that won't open as a presentation goes to
+ * LibreOffice. So for all of these the "install LibreOffice" gate is decided
+ * after main answers, never in front of the deck.
+ */
+export function deckMayBeReadNatively(ext: string): boolean {
+  return ["ppt", "pps", "pptx", "pptm", "ppsx", "ppsm"].includes(ext.replace(/^\./, "").toLowerCase());
+}
+
 // A `text` kind used to live here too: schema column, DTO, repo mapping,
 // preview, projector output — everything except a way to create one. It was
 // removed in 0009 rather than finished; an announcement is a PPT slide in
@@ -71,6 +84,17 @@ export type ProgramItemKind = (typeof PROGRAM_ITEM_KINDS)[number];
  *  the images and timings are still perfectly good, so only the version can
  *  say "this cache entry predates a source of content it does not know about". */
 export const SLIDES_CONVERTER_VERSION = 3;
+
+/** The same role for a deck read straight from its source (`image_format =
+ *  'native'`, `ppt-binary.ts`): bump when the rules for which pictures make up
+ *  a slide change, so every native deck is read again. Reading one costs
+ *  milliseconds and writes nothing to disk, so a bump is free. */
+export const SLIDES_NATIVE_VERSION = 1;
+
+/** The same for a deck drawn from its model (`image_format = 'model'`, a
+ *  `.pptx` read by `src/main/slides/pptx/`): bump when the reader changes what
+ *  it puts in a `SlideModel`, so every such deck is read again. */
+export const SLIDES_MODEL_VERSION = 1;
 
 /** Bump to force every non-manual `media_assets` row to re-run
  *  `resolveLinkedAudio` once, next time its deck is opened, even though a

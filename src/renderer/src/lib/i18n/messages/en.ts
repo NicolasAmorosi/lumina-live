@@ -441,8 +441,10 @@ const en: Messages = {
       recheck: "Check again",
       checking: "Looking for LibreOffice…",
       found: "LibreOffice {version} is ready",
-      strip: "Unconverted PowerPoint files can't be opened. PDFs and the ones already converted work as usual.",
-      startup: "LibreOffice isn't available, so PowerPoint presentations can't be converted. Everything else works as usual.",
+      strip:
+        "Some PowerPoint files can't be opened without converting them. Picture-only ones, PDFs and the ones already converted work as usual.",
+      startup:
+        "LibreOffice isn't available, so some PowerPoint presentations can't be converted. Picture-only ones and everything else work as usual.",
       dontWarn: "Don't show again",
       liveRefused: "“{name}” can't be projected: it needs LibreOffice to be converted.",
       stageHint: "This presentation needs LibreOffice to be converted",

@@ -443,8 +443,9 @@ const es = {
       recheck: "Comprobar de nuevo",
       checking: "Buscando LibreOffice…",
       found: "LibreOffice {version} está listo",
-      strip: "Los PowerPoint sin convertir no se pueden abrir. Los PDF y los ya convertidos funcionan normal.",
-      startup: "LibreOffice no está disponible: no se pueden convertir presentaciones de PowerPoint. Todo lo demás funciona normal.",
+      strip: "Algunos PowerPoint no se pueden abrir sin convertir. Los que son solo imágenes, los PDF y los ya convertidos funcionan normal.",
+      startup:
+        "LibreOffice no está disponible: algunas presentaciones de PowerPoint no se van a poder convertir. Las que son solo imágenes y todo lo demás funcionan normal.",
       dontWarn: "No volver a mostrar",
       liveRefused: "«{name}» no se puede proyectar: hace falta LibreOffice para convertirla.",
       stageHint: "Hace falta LibreOffice para convertir esta presentación",

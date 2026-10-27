@@ -1,4 +1,3 @@
-import { deckRequiresSoffice } from "@shared/constants";
 import { useT } from "@renderer/lib/i18n/i18n-provider";
 import {
   Badge,
@@ -16,6 +15,7 @@ import {
   thumbTileHeight,
 } from "@renderer/components/ui";
 import { PreviewMissingState } from "@renderer/components/shared/preview-missing-state";
+import { ModelSlide } from "@renderer/components/shared/slide-view/ModelSlide";
 import { DeckConversionStatus } from "@renderer/components/shared/deck-conversion-status";
 import { SofficeActions } from "@renderer/components/shared/soffice-missing";
 import { useDeck } from "@renderer/lib/hooks/use-deck";
@@ -112,17 +112,11 @@ export function DeckSlides({
   missingSince: number | null;
 }) {
   const t = useT();
-  // A PDF is handed straight to the rasterizer, so it converts and projects on
-  // a machine that has no LibreOffice at all.
-  const requiresSoffice = deckRequiresSoffice(ext);
   // A missing source file has nothing to convert — skip `useDeck`'s
   // ensure/conversion trigger entirely instead of surfacing its
   // "conversion failed" error for a file that was never going to exist.
-  const { entry, environment, markStale, reconvert } = useDeck(
-    missingSince !== null ? null : assetId,
-    requiresSoffice,
-  );
-  const blocked = sofficeBlocks(environment, ext);
+  const { entry, environment, markStale, reconvert } = useDeck(missingSince !== null ? null : assetId, ext);
+  const blocked = sofficeBlocks(environment, ext, entry);
   const base = useProjectionStore((s) => s.base);
   const previewIndex = usePreviewStore((s) => s.slideIndex);
 
@@ -232,7 +226,8 @@ export function DeckSlides({
               else void goLive();
             }}
             selected={previewIndex === slide.index}
-            src={slide.thumbUrl}
+            media={slide.modelUrl ? <ModelSlide onError={markStale} url={slide.modelUrl} /> : undefined}
+            src={slide.modelUrl ? null : slide.thumbUrl}
             tabIndex={tabIndex}
             title={t("deck.slideAlt", { index: slide.index })}
           />

@@ -28,3 +28,33 @@ export const TRANSITION_MAX_DURATION_MS = 5_000;
  *  moment: a new `epoch` for the projector, the count reaching zero for a
  *  time scene. */
 export type TransitionSpec = { style: TransitionStyle; durationMs: number };
+
+/**
+ * How one slide of a deck ENTERS, as the file itself declares it — not a
+ * setting. Its own list rather than more `TRANSITION_STYLES`: those are the
+ * scene fades the operator picks in Settings, and random bars mean nothing to a
+ * countdown. Played only when a deck moves FORWARD within itself (decided by
+ * the owner, 2026-10-26): entering the deck keeps the scene transition, and
+ * going back is a cut, which is what correcting a mistake mid-service needs.
+ *
+ * Only what the hymnal and its `.pptx` siblings actually use is drawn as
+ * itself. Any other effect a file names (push, wipe, morph…) arrives here as a
+ * crossfade of the same length — the owner's call, and closer to what the
+ * author meant than a cut.
+ */
+export const SLIDE_TRANSITION_STYLES = [
+  "crossfade",
+  "fade-through-black",
+  "random-bars-horizontal",
+  "random-bars-vertical",
+] as const;
+export type SlideTransitionStyle = (typeof SLIDE_TRANSITION_STYLES)[number];
+export type SlideTransition = { style: SlideTransitionStyle; durationMs: number };
+
+/** PowerPoint's three transition speeds. The binary format and OOXML's `spd`
+ *  store only the word; these are the lengths PowerPoint plays them at. */
+export const SLIDE_TRANSITION_SPEED_MS = { slow: 1000, medium: 750, fast: 500 } as const;
+
+export function isSlideTransitionStyle(value: unknown): value is SlideTransitionStyle {
+  return (SLIDE_TRANSITION_STYLES as readonly unknown[]).includes(value);
+}

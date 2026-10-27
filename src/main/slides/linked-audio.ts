@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { AUDIO_EXT, containerKind } from "./pptx-metadata";
 import { readZipEntries } from "./zip-reader";
+import { readBinaryExternalPaths } from "./ppt-binary";
 
 /**
  * Old church hymnal decks (`.pps`/`.ppt`) rarely embed their soundtrack —
@@ -174,6 +175,11 @@ const HINT_SCAN_OVERLAP_BYTES = 512;
  *  worth parsing for a hint this soft, so scan the raw bytes both as
  *  UTF-16LE and Windows-1252 text, in bounded chunks rather than all at once. */
 function extractHintFromBinary(filePath: string): string | null {
+  // The record that holds the link, when the file has one: milliseconds,
+  // where the scan below is most of a second for a hymn.
+  const recorded = readBinaryExternalPaths(filePath)?.find((target) => AUDIO_EXT.has(extOf(target)));
+  if (recorded) return path.win32.basename(recorded);
+
   let fd: number;
   try {
     fd = fs.openSync(filePath, "r");

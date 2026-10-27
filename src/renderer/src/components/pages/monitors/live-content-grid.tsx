@@ -12,6 +12,7 @@ import { useBibleStore } from "@renderer/stores/bible.store";
 import { useProjectionStore } from "@renderer/stores/projection.store";
 import { gotoSlide } from "@renderer/lib/actions/playback";
 import { projectVerse } from "@renderer/lib/actions/bible";
+import { ModelSlide } from "@renderer/components/shared/slide-view/ModelSlide";
 
 /**
  * Below the LIVE monitor: whatever the projector is actually showing, as the
@@ -42,7 +43,8 @@ export function LiveContentGrid() {
             live={liveSlideIndex === slide.index}
             onClick={() => gotoSlide(slide.index)}
             selected={liveSlideIndex === slide.index}
-            src={slide.thumbUrl}
+            media={slide.modelUrl ? <ModelSlide url={slide.modelUrl} /> : undefined}
+            src={slide.modelUrl ? null : slide.thumbUrl}
             tabIndex={tabIndex}
             title={t("deck.slideAlt", { index: slide.index })}
           />
