@@ -45,7 +45,12 @@ SlideView (React, components/shared/slide-view/) ◄── worship://deck/<id>/<
   rendering, slide by slide, and improved in place; `SLIDES_MODEL_VERSION` is bumped when the
   reader changes what it puts in a model, so every model deck is read again.
 - **What is read** (`src/main/slides/pptx/`, entry `pptx-deck.ts`): the XML parts and relationships
-  only, through `readZipEntries`. The preset geometries and the built-in table styles come from
+  only, through `readZipEntries`, **on a worker thread** (`pptx-worker.ts`, started with the first
+  deck through electron-vite's `?nodeWorker`). It reads the model and `readPresentationMeta`
+  together — each parses every slide again, and on a template with a 22 MB map slide the two
+  took 11 s on the thread that answers IPC and serves `worship://` — and hands back each slide's
+  `layers` already as JSON, so main only pays for copying strings. A worker that dies on a file
+  sends that deck to LibreOffice; it is never retried on main. The preset geometries and the built-in table styles come from
   `resources/ooxml/` (`paths.ts` → `ooxmlDir`, shipped as `extraResources`). Pictures, media and
   fonts are never read here — the model names them by part.
 - **What is stored**: a `slide_decks` row with `image_format = 'model'`, `render_width = 0`,
@@ -69,8 +74,20 @@ SlideView (React, components/shared/slide-view/) ◄── worship://deck/<id>/<
   through it. `ModelSlide` fits the slide into its box the way `object-contain` fitted the image.
   Faces a deck names but this machine lacks fall back to bundled metric twins (Carlito, Caladea,
   Liberation, `assets/fonts/slides/`).
+- **What the show hides stays hidden**: a sound or video set to «Hide during show» (its media node
+  in `p:timing` says `showWhenStopped="0"`) is left out of the model, as the legacy reader leaves
+  out the speaker icons `fHide` marks. PowerPoint's own PDF export still draws them: it is not the
+  reference for this.
+- **Sounds play on their own slides** (owner, 2026-10-27): each sound is placed by
+  `placeAudio` on the deck's visible slides from its media node's `numSld` — 1 when absent, which
+  is «this slide only», 999 for «play across slides»; whether it loops is that node's too, never
+  guessed. The one that plays from the first slide to the end is the deck's `soundtrack` (the
+  clock `deck-autoplay.ts` follows); every other one is in `DeckDTO.sounds` and
+  `effects/deck-sounds.ts` plays it. A converted deck's sounds are placed the same way, by page.
 - **Unreadable**: a file that won't open as a presentation (or whose slides are all hidden) is
-  remembered by `(size, mtime)` and goes to LibreOffice as before.
+  remembered by `(size, mtime)` and goes to LibreOffice as before. So does one whose slide, layout
+  or master is in the zip but won't parse: drawn, it would be an empty slide in silence. Only those
+  three parts — a `.vml` that won't parse is common (ActiveX decks) and costs one shape.
 - **The converted copy goes**, as for a native deck (`deleteSupersededBySource`).
 - **No LibreOffice needed**, so a `.pptx` joins the legacy decks in `deckMayBeReadNatively`: the
   renderer's gate is decided after main answers.

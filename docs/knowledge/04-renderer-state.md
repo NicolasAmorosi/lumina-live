@@ -116,6 +116,16 @@ Two rules keep it honest without any timer or explicit cleanup:
   chosen slide. An incrementing `navEpoch` discards any in-flight `media-status` so that a late
   response cannot overwrite the slide that was just chosen.
 
+`src/renderer/src/effects/deck-sounds.ts` plays the live deck's other sounds (`LiveDeck.sounds`:
+everything in the file but its soundtrack) on their own slides, as tracks of their own
+(`deck-sound:<deck_audio.id>`, `source: "deck"`, so BLACK/LOGO pauses them with the soundtrack).
+The rule is the pure `deckSoundChanges` (owner, 2026-10-27): a sound starts from the top when the
+live slide is one of its slides — reached in order, by a jump, or by GO LIVE — stops once the slide
+is past its last, and keeps playing when the operator goes back before its first. A new scene (a
+GO LIVE, even of the same deck) and the transport's restart start them all over. It reads the
+sounds from the deck store, not from `liveDeck`: `liveDeck` is the deck as it went live, and a WMA
+whose playable copy finishes afterwards only reaches the deck store (`deck-updated`).
+
 `src/renderer/src/effects/end-of-playback.ts` takes off the air, on its own, a video or an
 auto-advancing deck that finished playing by itself, leaving the logo scene
 (`clearBaseContent()`) — the congregation is never left staring at the last frame or the last

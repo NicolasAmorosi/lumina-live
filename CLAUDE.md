@@ -117,7 +117,8 @@ src/
 │   ├── slides/                    # libreoffice.ts (discovery+soffice), pptx-metadata.ts (OOXML),
 │   │                              # rasterizer.ts (hidden window+pdfjs), deck-service.ts (queue+cache),
 │   │                              # ppt-binary.ts + native-deck.ts (legacy decks read with no LibreOffice),
-│   │                              # pptx/ + pptx-deck.ts (a .pptx read into a SlideModel per slide)
+│   │                              # pptx/ + pptx-deck.ts (a .pptx read into a SlideModel per slide,
+│   │                              #   on the pptx-worker.ts thread)
 │   ├── media/                     # media-compat.ts (what Chromium plays: PURE, tested), ffmpeg.ts
 │   │                              #   (processes), conversion-service.ts (queue + cache of playable copies),
 │   │                              #   deck-clips.ts (video/audio embedded in a .pptx), thumbnail-service.ts
@@ -150,8 +151,8 @@ src/
         │       └── programs/   # saved programs modal
         ├── stores/          # Zustand: program, toast, preview, projection, deck, bible,
         │                    #   library, settings, audio, display, ui
-        ├── effects/         # projection-sync.ts + deck-autoplay.ts + end-of-playback.ts —
-        │                    #   the "order-dependent" logic
+        ├── effects/         # projection-sync.ts + deck-autoplay.ts + deck-sounds.ts +
+        │                    #   end-of-playback.ts — the "order-dependent" logic
         └── lib/             # api.ts, ipc.ts, i18n/, utils.ts, hooks/, actions/ (crosses stores),
                              #   utility-output.ts + bible-output.ts (the two builders shared
                              #   between selectOutput and the PREVIEW monitor)
@@ -320,7 +321,7 @@ npm install              # installs deps — better-sqlite3 ships prebuilt binar
 npm run dev               # electron-vite dev (HMR in the renderer, main restarts on watch)
 npm run typecheck          # tsc --noEmit over node (main+preload+shared) and web (renderer+shared)
 npm run lint                # eslint .
-npm run test                 # vitest run — 470 cases in two projects: `main` (Node: migrations, seed,
+npm run test                 # vitest run — 484 cases in two projects: `main` (Node: migrations, seed,
                               #   FTS5, repos and the library sweep, draft, settings and scene validators, WAL backup,
                               #   zip reader, the legacy-deck reader against an OLE2 file built in the test
                               #   (`tests/fixtures/legacy-ppt.ts`: pictures, master inheritance, what it refuses),
