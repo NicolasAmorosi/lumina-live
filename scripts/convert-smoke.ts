@@ -185,7 +185,7 @@ async function main(): Promise<void> {
         const extracted = extractAudioParts(parseSource, meta.audio, path.join(work, "audio"));
         console.log(
           `   audio: ${extracted.length} track(s) -> ${extracted
-            .map((a) => `${a.ext} ${(a.bytes / 1024).toFixed(0)}KB scope=${a.scope}${a.playable ? "" : " (NOT playable)"}`)
+            .map((a) => `${a.ext} ${(a.bytes / 1024).toFixed(0)}KB slide ${a.startSlideIndex}+${a.slides}${a.loop ? " loop" : ""}${a.playable ? "" : " (NOT playable)"}`)
             .join(", ")}`,
         );
       } else {

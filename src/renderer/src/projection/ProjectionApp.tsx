@@ -92,6 +92,7 @@ function AudioTrackElement({ registry, track }: AudioTrackElementProps) {
   return (
     <audio
       autoPlay={!track.paused}
+      loop={track.loop}
       onError={(event) =>
         reportMediaError({
           target: { kind: "audio", trackId: track.trackId },

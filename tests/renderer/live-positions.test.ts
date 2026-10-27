@@ -32,6 +32,7 @@ function track(trackId: string, epoch: number, overrides: Partial<LiveAudioTrack
     paused: false,
     startAtSeconds: 0,
     volume: 1,
+    loop: false,
     ...overrides,
   };
 }

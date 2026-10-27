@@ -35,6 +35,7 @@ import {
 import {
   containerKind,
   extractAudioParts,
+  placeAudio,
   extractVideoParts,
   readPresentationMeta,
   type PresentationMeta,
@@ -1189,18 +1190,25 @@ async function recordModelDeck(assetId: number, sourcePath: string, stat: fs.Sta
   // range once the media engine replaces `deck-clips.ts` (plan, phase 3).
   const cacheDir = deckCacheDir(contentHash, 0, "model");
   removeQuietly(cacheDir);
-  const audio: NewAudio[] = extractAudioParts(sourcePath, meta.audio, path.join(cacheDir, "audio")).map((extracted) => ({
-    audioFile: extracted.file,
-    ext: extracted.ext,
-    bytes: extracted.bytes,
-    origin: extracted.origin,
-    scope: extracted.scope,
-    startSlideIndex: extracted.startSlideIndex,
-    stopSlideIndex: null,
-    loop: extracted.loop,
-    volume: extracted.volume,
-    playable: extracted.playable,
-  }));
+  // Each sound on the slides it plays on (`placeAudio`), counted among the
+  // slides drawn — which only the timings that lined up can say.
+  const visibleOoxml = timingsUsable ? visibleMeta.map((slide) => slide.slideIndex) : null;
+  const audio: NewAudio[] = extractAudioParts(sourcePath, meta.audio, path.join(cacheDir, "audio")).flatMap((extracted) => {
+    const placed = placeAudio(extracted, visibleOoxml);
+    if (!placed) return [];
+    return [
+      {
+        audioFile: extracted.file,
+        ext: extracted.ext,
+        bytes: extracted.bytes,
+        origin: extracted.origin,
+        ...placed,
+        loop: extracted.loop,
+        volume: extracted.volume,
+        playable: extracted.playable,
+      },
+    ];
+  });
   const videos: NewVideo[] = [];
   if (meta.video.length > 0 && timingsUsable) {
     const positionByOoxml = new Map<number, number>();
@@ -1454,15 +1462,20 @@ async function runConversion(job: Job): Promise<DeckDTO> {
     const audio: NewAudio[] = [];
 
     if (meta.audio.length > 0) {
+      // Placed by the same page mapping as the videos below; when the counts
+      // disagree, every sound is the deck's music from the first page, as it
+      // always was.
+      const visibleOoxml =
+        visibleSlides.length === pages.length ? visibleSlides.map((slide) => slide.slideIndex) : null;
       for (const extracted of extractAudioParts(metaResult.parsedFrom, meta.audio, audioDir)) {
+        const placed = placeAudio(extracted, visibleOoxml);
+        if (!placed) continue;
         audio.push({
           audioFile: extracted.file,
           ext: extracted.ext,
           bytes: extracted.bytes,
           origin: extracted.origin,
-          scope: extracted.scope,
-          startSlideIndex: extracted.startSlideIndex,
-          stopSlideIndex: null,
+          ...placed,
           loop: extracted.loop,
           volume: extracted.volume,
           playable: extracted.playable,

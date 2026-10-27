@@ -9,6 +9,7 @@ import { getCachedMediaAsset } from "@renderer/lib/hooks/use-media-asset";
 import { t } from "@renderer/lib/i18n/i18n-provider";
 import { toast } from "@renderer/lib/toast";
 import { startDeckAutoplay } from "./deck-autoplay";
+import { startDeckSounds } from "./deck-sounds";
 import { startEndOfPlaybackEffects } from "./end-of-playback";
 import { startPlateAutoHide } from "./plate-auto-hide";
 import { mediaErrorKey } from "@shared/types/projection";
@@ -30,6 +31,7 @@ function toAudioTrackPush(track: LiveAudioTrack, covered: boolean): AudioTrackPu
     paused: track.paused || (track.source === "deck" && covered),
     startAtSeconds: track.startAtSeconds,
     volume: track.volume,
+    loop: track.loop,
   };
 }
 
@@ -226,6 +228,7 @@ export function startProjectionEffects(): () => void {
   });
 
   const stopAutoplay = startDeckAutoplay();
+  const stopDeckSounds = startDeckSounds();
   const stopEndOfPlayback = startEndOfPlaybackEffects();
   const stopPlateAutoHide = startPlateAutoHide();
 
@@ -244,6 +247,7 @@ export function startProjectionEffects(): () => void {
     unsubscribeDisplaysChanged();
     unsubscribeProjectorScreen();
     stopAutoplay();
+    stopDeckSounds();
     stopEndOfPlayback();
     stopPlateAutoHide();
   };

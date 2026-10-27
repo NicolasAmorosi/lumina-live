@@ -54,6 +54,7 @@ function deckOf(assetId: number, slideCount: number, videos: DeckSlideVideo[] = 
     deckId: 500,
     slides,
     soundtrack: null,
+    sounds: [],
     videos,
     cumulativeMs: buildCumulativeMs(slides),
     autoAdvance: false,

@@ -22,11 +22,16 @@ export type SlideTiming = {
 
 export type AudioRef = {
   partName: string;
+  /** 1-based, in PRESENTATION order, hidden slides included — like
+   *  `VideoRef.slideIndex`, mapped onto the deck's slides by the caller. */
   startSlideIndex: number;
   origin: "embedded" | "transition";
   loop: boolean;
   volume: number | null;
-  scope: "deck" | "slide";
+  /** How many slides it plays across, its own included: PowerPoint's «stop
+   *  playing after N slides» (`p:cMediaNode/@numSld`), 1 when the file doesn't
+   *  say — «on this slide». «Play across slides» writes 999. */
+  slides: number;
 };
 
 /** A video `p:pic` we can actually use: its bytes are inside this archive and
@@ -317,6 +322,39 @@ function mediaNodeLoops(node: XmlNode): boolean {
   return loop === "1" || loop === "true" || isIndefinite(node);
 }
 
+export type AudioPlacement = {
+  /** 1-based, among the slides the deck shows. */
+  startSlideIndex: number;
+  /** The last slide it plays on, or `null`: to the end of the deck. */
+  stopSlideIndex: number | null;
+  /** `deck` iff it plays to the end — the music `DeckDTO.soundtrack` can be. */
+  scope: "deck" | "slide";
+};
+
+/**
+ * Where a sound plays among the deck's slides, `visible` being the OOXML index
+ * of each slide the deck shows, in order — the hidden ones skipped, as the
+ * show skips them, and the `numSld` count with them. `null` for a sound on a
+ * hidden slide, which PowerPoint never plays. `visible === null` (the slides
+ * and the file don't line up) keeps it as every sound was before its place
+ * was read: the deck's music, from the first slide.
+ */
+export function placeAudio(ref: AudioRef, visible: readonly number[] | null): AudioPlacement | null {
+  if (!visible) return { startSlideIndex: 1, stopSlideIndex: null, scope: "deck" };
+  const start = visible.indexOf(ref.startSlideIndex) + 1;
+  if (start === 0) return null;
+  const stop = start + ref.slides - 1;
+  return stop >= visible.length
+    ? { startSlideIndex: start, stopSlideIndex: null, scope: "deck" }
+    : { startSlideIndex: start, stopSlideIndex: stop, scope: "slide" };
+}
+
+/** `@numSld`: how many slides the media plays across, 1 when absent. */
+function mediaNodeSlides(node: XmlNode): number {
+  const raw = Number(attr(node, "@numSld"));
+  return Number.isInteger(raw) && raw >= 1 ? raw : 1;
+}
+
 /** `@vol` is in thousandths of a percent (80000 = 80%). */
 function mediaNodeVolume(node: XmlNode): number | null {
   const raw = attr(node, "@vol");
@@ -468,8 +506,8 @@ export function readPresentationMeta(filePath: string): PresentationMeta {
     // Media playback semantics live in p:timing.
     const mediaNodes: XmlNode[] = [];
     collectMediaNodes(sld["p:timing"], mediaNodes);
-    // Slide-wide aggregate: whatever ANY media node on this slide says. Kept
-    // exactly as it was for audio, whose `scope` heuristic is built on it.
+    // Slide-wide aggregate: whatever ANY media node on this slide says — the
+    // fallback for a shape no node names.
     const anyLoop = mediaNodes.some(mediaNodeLoops);
     const volume = mediaNodes.map(mediaNodeVolume).find((v) => v !== null) ?? null;
     /** The node that is actually about one shape. Video asks by id rather than
@@ -524,17 +562,15 @@ export function readPresentationMeta(filePath: string): PresentationMeta {
       const target = rid ? slideRels.get(rid) : undefined;
       if (!target) continue;
 
+      // Asked by id, as for video: a slide with two sounds has two nodes.
+      const node = mediaNodeFor(attr(asNode(asNode(pic["p:nvPicPr"])?.["p:cNvPr"]), "@id"));
       audio.push({
         partName: target,
         startSlideIndex: slideIndex,
         origin: "embedded",
-        loop: anyLoop,
-        volume,
-        // OOXML has no single "play across slides" boolean — PowerPoint encodes
-        // it through p:cTn/@dur, p:endSync and the node's position in the main
-        // sequence. This is a documented heuristic; the raw values are kept so
-        // it can be corrected later without re-parsing.
-        scope: anyLoop ? "deck" : "slide",
+        loop: node ? mediaNodeLoops(node) : anyLoop,
+        volume: node ? mediaNodeVolume(node) : volume,
+        slides: node ? mediaNodeSlides(node) : 1,
       });
     }
 
@@ -550,7 +586,7 @@ export function readPresentationMeta(filePath: string): PresentationMeta {
           origin: "transition",
           loop: attr(stSnd, "@loop") === "1",
           volume: null,
-          scope: "slide",
+          slides: 1,
         });
       }
     }

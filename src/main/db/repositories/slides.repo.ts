@@ -6,7 +6,7 @@ import type { Db } from "../client";
 import { deckAudio, deckSlides, deckVideos, mediaAssets, slideDecks } from "../schema";
 import { slideModelUrl, slideThumbUrl, slideUrl, deckAudioUrl, deckVideoUrl, linkedAudioUrl } from "@shared/urls";
 import { SLIDES_CONVERTER_VERSION, SLIDES_NATIVE_VERSION, SLIDES_MODEL_VERSION } from "@shared/constants";
-import type { DeckDTO, DeckSlide, DeckSlideVideo, DeckStatus, SlideRect } from "@shared/types/deck";
+import type { DeckDTO, DeckSlide, DeckSlideVideo, DeckSound, DeckStatus, SlideRect } from "@shared/types/deck";
 import { isSlideTransitionStyle, type SlideTransition } from "@shared/types/transition";
 
 /** One `IN (...)` binds one parameter per id; SQLite refuses the statement
@@ -953,14 +953,25 @@ export class SlidesRepo {
     const slideRows = this.listSlides(deckRow.id);
     const audioRows = this.listAudio(deckRow.id);
 
-    // One soundtrack per deck: embedded/transition audio actually inside the
-    // file wins (the deck-scoped playable track, else the first playable
-    // one), and only when there's none of that do we fall back to a linked
-    // external file. Per-slide sound effects are recorded but not projected.
+    // The deck's music is the sound in the file that plays from the first
+    // slide to the end, else a linked external file (an old hymnal's .mp3).
+    // Every other playable sound plays on its own slides — a row written
+    // before those were read (`scope` slide, no stop) on its own slide only.
+    const playableRows = audioRows.filter((row) => row.playable === 1);
     const embeddedTrack =
-      audioRows.find((row) => row.playable === 1 && row.scope === "deck") ??
-      audioRows.find((row) => row.playable === 1) ??
-      null;
+      playableRows.find((row) => row.scope === "deck" && (row.startSlideIndex ?? 1) === 1) ?? null;
+    const sounds: DeckSound[] = playableRows
+      .filter((row) => row !== embeddedTrack)
+      .map((row) => {
+        const start = row.startSlideIndex ?? 1;
+        return {
+          id: row.id,
+          url: deckAudioUrl(row.id, row.audioFile),
+          startSlideIndex: start,
+          stopSlideIndex: row.stopSlideIndex ?? (row.scope === "slide" ? start : null),
+          loop: row.loop === 1,
+        };
+      });
 
     const soundtrack: DeckDTO["soundtrack"] = embeddedTrack
       ? {
@@ -1023,6 +1034,7 @@ export class SlidesRepo {
       slideCount: deckRow.slideCount,
       slides,
       soundtrack,
+      sounds,
       videos,
       autoAdvance: slides.some((slide) => slide.advanceAfterMs !== null),
       timingsSource: deckRow.timingsSource,

@@ -40,6 +40,18 @@ export type DeckSoundtrack = {
   name: string;
 };
 
+/** A sound inside the file other than the deck's music: it plays from its
+ *  slide to its last one, PowerPoint's «stop after N slides» — `null` being the
+ *  end of the deck. Slides are 1-based among the ones the deck shows. */
+export type DeckSound = {
+  /** `deck_audio.id`: the track's identity on the projector. */
+  id: number;
+  url: string;
+  startSlideIndex: number;
+  stopSlideIndex: number | null;
+  loop: boolean;
+};
+
 /**
  * A rectangle inside the slide, as fractions of the slide's own box (0..1:
  * left, top, width, height).
@@ -101,7 +113,11 @@ export type DeckDTO = {
   slideCount: number;
   /** Empty while converting. */
   slides: DeckSlide[];
+  /** The music under the whole deck, from its first slide: the clock a deck
+   *  that advances by itself follows (`deck-autoplay.ts`). */
   soundtrack: DeckSoundtrack | null;
+  /** Every other sound in the file, each on its own slides (`deck-sounds.ts`). */
+  sounds: DeckSound[];
   /** One entry per slide that carries a playable embedded video. Almost always
    *  empty, and never longer than `slides` — a slide with two videos keeps the
    *  first, since `ProjectionOutput` sustains one at a time. */

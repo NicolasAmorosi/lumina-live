@@ -13,7 +13,7 @@ import type {
   VideoUnderlay,
 } from "@shared/types/projection";
 import type { SlideTransition, TransitionStyle } from "@shared/types/transition";
-import type { DeckSlide, DeckSlideVideo, DeckSoundtrack } from "@shared/types/deck";
+import type { DeckSlide, DeckSlideVideo, DeckSound, DeckSoundtrack } from "@shared/types/deck";
 import type { TimerClock } from "@shared/types/timer";
 import { hasReachedZero, holdClock, resumeClock } from "@shared/timer";
 import type { UtilityScene } from "@shared/types/utility";
@@ -32,6 +32,8 @@ export type LiveDeck = {
   deckId: number;
   slides: DeckSlide[];
   soundtrack: DeckSoundtrack | null;
+  /** The file's other sounds, each on its own slides (`effects/deck-sounds.ts`). */
+  sounds: DeckSound[];
   /** The slides that carry a playable embedded video, by slide index. Almost
    *  always empty — a `.pps` hymnal deck never has one. */
   videos: DeckSlideVideo[];

@@ -24,6 +24,7 @@ function deck(assetId: number, advanceAfterMs: number): LiveDeck {
     deckId: assetId,
     slides,
     soundtrack: null,
+    sounds: [],
     videos: [],
     cumulativeMs: buildCumulativeMs(slides),
     autoAdvance: true,

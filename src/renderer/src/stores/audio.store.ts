@@ -22,6 +22,8 @@ export type LiveAudioTrack = {
    *  persisted, so nothing ever starts at a level left over from another
    *  service. */
   volume: number;
+  /** Starts over at its end: only ever a deck's sound the file says loops. */
+  loop: boolean;
 };
 
 /** Stable id for the one deck-soundtrack slot — at most one at a time,
@@ -46,6 +48,14 @@ function nextEpoch(): number {
 export function nextAssetTrack(assetId: number): { trackId: string; epoch: number } {
   const epoch = nextEpoch();
   return { trackId: `asset:${assetId}:${epoch}`, epoch };
+}
+
+/** A deck's sound on its slides (`effects/deck-sounds.ts`): `deck_audio.id`
+ *  after the prefix, one track per sound. */
+export const DECK_SOUND_TRACK_PREFIX = "deck-sound:";
+
+export function nextDeckSoundTrack(audioId: number): { trackId: string; epoch: number } {
+  return { trackId: `${DECK_SOUND_TRACK_PREFIX}${audioId}`, epoch: nextEpoch() };
 }
 
 type AudioStoreState = {

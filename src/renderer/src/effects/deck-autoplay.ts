@@ -5,6 +5,7 @@ import {
   type ProjectionStoreState,
 } from "@renderer/stores/projection.store";
 import { DECK_SOUNDTRACK_TRACK_ID, useAudioStore } from "@renderer/stores/audio.store";
+import { restartDeckSounds } from "./deck-sounds";
 import { mediaTargetKey } from "@shared/types/projection";
 import { SLIDES_MIN_ADVANCE_MS } from "@shared/constants";
 
@@ -191,6 +192,7 @@ export function restartDeck(): void {
   navEpoch += 1;
   deadline = performance.now();
   state.setSlideIndex(1);
+  restartDeckSounds();
   state.setAutoplayMode("synced");
   if (state.liveDeck?.soundtrack) {
     useAudioStore.getState().setPaused(DECK_SOUNDTRACK_TRACK_ID, false);

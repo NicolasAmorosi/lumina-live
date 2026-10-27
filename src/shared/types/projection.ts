@@ -321,6 +321,8 @@ export type AudioTrackPush = {
   startAtSeconds: number;
   /** 0..1 — see `VideoUnderlay.volume`. */
   volume: number;
+  /** Starts over at its end — a deck's sound set to loop until stopped. */
+  loop: boolean;
 };
 
 /** What the control window has selected as "base" content (before black/logo overlay). */

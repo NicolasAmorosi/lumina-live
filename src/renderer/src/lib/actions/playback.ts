@@ -57,6 +57,7 @@ function goLiveWithAudioAsset(asset: MediaAsset, startAtSeconds: number): void {
     paused: false,
     startAtSeconds,
     volume: defaultMediaVolume(),
+    loop: false,
   });
 }
 
@@ -66,6 +67,7 @@ function toLiveDeck(deck: DeckDTO): LiveDeck {
     deckId: deck.deckId,
     slides: deck.slides,
     soundtrack: deck.soundtrack,
+    sounds: deck.sounds,
     videos: deck.videos,
     cumulativeMs: buildCumulativeMs(deck.slides),
     autoAdvance: deck.autoAdvance,
@@ -137,6 +139,7 @@ async function goLiveWithDeck(assetId: number, startSlideIndex: number, intent: 
             startAtSeconds: 0,
             label: "",
             volume: defaultMediaVolume(),
+            loop: false,
           }
         : null,
     );

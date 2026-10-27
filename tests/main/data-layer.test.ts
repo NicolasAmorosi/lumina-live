@@ -36,7 +36,7 @@ import { readBinarySlideTimings } from "../../src/main/slides/ppt-binary";
 import { backfillDeckTimings } from "../../src/main/slides/backfill-timings";
 import { SNIPPET_MARK_END, SNIPPET_MARK_START, parseSnippet } from "../../src/shared/types/bible";
 import { DEFAULT_SETTINGS, SETTINGS_VALIDATORS, isSettingsKey } from "../../src/shared/types/settings";
-import { BUILTIN_BIBLE_CODE, SLIDES_CONVERTER_VERSION, SLIDES_NATIVE_VERSION } from "../../src/shared/constants";
+import { BUILTIN_BIBLE_CODE, SLIDES_CONVERTER_VERSION, SLIDES_MODEL_VERSION, SLIDES_NATIVE_VERSION } from "../../src/shared/constants";
 import { defaultUtilityScenes } from "../../src/shared/types/utility";
 import mainEs from "../../src/main/i18n/messages/es";
 import { removeUtilityScene } from "../../src/main/services/utility-scene-removal";
@@ -1304,5 +1304,68 @@ describe("Installed bibles keep the order the operator gave them", () => {
     expect(nameAfterUpgrade(BUILTIN_BIBLE_CODE, "RV60")).toBe("RV60");
     expect(nameAfterUpgrade("imported", "Reina-Valera 1960")).toBe("Reina-Valera 1960");
     fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe("a deck's sounds", () => {
+  const sound = (file: string, scope: "deck" | "slide", start: number, stop: number | null, loop = false) => ({
+    audioFile: file,
+    ext: "mp3",
+    bytes: 10,
+    origin: "embedded" as const,
+    scope,
+    startSlideIndex: start,
+    stopSlideIndex: stop,
+    loop,
+    volume: null,
+    playable: true,
+  });
+
+  function deckWith(name: string, audio: ReturnType<typeof sound>[]) {
+    const source = path.join(mediaDir, `${name}.pptx`);
+    fs.writeFileSync(source, name);
+    const asset = mediaRepo.upsertFromPath(source, "ppt", true);
+    const stat = fs.statSync(source);
+    const id = slidesRepo.insertDeck(
+      {
+        contentHash: `sounds-${name}`,
+        renderWidth: 0,
+        imageFormat: "model",
+        converterVersion: SLIDES_MODEL_VERSION,
+        mediaAssetId: asset.id,
+        sourcePath: source,
+        sourceSizeBytes: stat.size,
+        sourceMtimeMs: Math.trunc(stat.mtimeMs),
+        cacheDir: "",
+        aspectRatio: "4:3",
+        timingsSource: "ooxml",
+        bytesOnDisk: 0,
+      },
+      [],
+      audio,
+    );
+    return slidesRepo.toDTO(slidesRepo.getDeckById(id)!, asset.id);
+  }
+
+  test("the music from the first slide to the end is the soundtrack; every other sound plays on its slides", () => {
+    const dto = deckWith("liturgy", [
+      sound("1.mp3", "slide", 13, 14),
+      sound("2.mp3", "deck", 1, null),
+      sound("3.mp3", "slide", 39, 39, true),
+    ]);
+    expect(dto.soundtrack?.name).toBe("2.mp3");
+    expect(dto.sounds.map(({ startSlideIndex, stopSlideIndex, loop }) => [startSlideIndex, stopSlideIndex, loop])).toEqual([
+      [13, 14, false],
+      [39, 39, true],
+    ]);
+  });
+
+  test("music that starts later is a sound, not the soundtrack, and a row with no stop of its own keeps to its slide", () => {
+    const dto = deckWith("communion", [sound("1.mp3", "deck", 39, null), sound("2.mp3", "slide", 5, null)]);
+    expect(dto.soundtrack).toBeNull();
+    expect(dto.sounds.map(({ startSlideIndex, stopSlideIndex }) => [startSlideIndex, stopSlideIndex])).toEqual([
+      [5, 5],
+      [39, null],
+    ]);
   });
 });
