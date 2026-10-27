@@ -1,31 +1,51 @@
-import fs from "node:fs";
-import path from "node:path";
+import type { Worker } from "node:worker_threads";
 import { ooxmlDir } from "../paths";
-import { parsePresetDefinitions } from "./pptx/geometry";
-import { readPptxDeck, type PptxDeck, type PptxResources } from "./pptx/reader";
-import { parseTableStyles } from "./pptx/table-style";
+import createPptxWorker from "./pptx-worker?nodeWorker";
+import type { PptxRead, PptxReply, PptxRequest } from "./pptx-worker";
+
+export type { PptxRead } from "./pptx-worker";
 
 /**
- * The `.pptx` reader with its resources loaded once (`resources/ooxml/`: half
- * a megabyte of preset geometry and the built-in table styles, parsed on the
- * first deck — not at startup, where most sessions never open a `.pptx`).
+ * Reads a `.pptx` in `pptx-worker.ts`, one deck after another on one worker
+ * thread, started with the first deck. `null` when the file can't be read as
+ * a presentation at all — or when the worker died on it: that deck goes to
+ * LibreOffice, and is never retried here on main, where the same file would
+ * take the whole app down instead of one thread.
  */
-let resources: PptxResources | null = null;
+let worker: Worker | null = null;
+let nextId = 0;
+const waiting = new Map<number, { file: string; done: (read: PptxRead | null) => void }>();
 
-function loadResources(): PptxResources {
-  resources ??= {
-    presets: parsePresetDefinitions(fs.readFileSync(path.join(ooxmlDir, "presetShapeDefinitions.xml"), "utf8")),
-    tableStyles: parseTableStyles(fs.readFileSync(path.join(ooxmlDir, "tableStyles.xml"), "utf8")),
+function pptxWorker(): Worker {
+  if (worker) return worker;
+  const started = createPptxWorker({ workerData: { ooxmlDir } });
+  // Never what keeps the process alive: quitting doesn't wait for a read.
+  started.unref();
+  started.on("message", (reply: PptxReply) => {
+    const request = waiting.get(reply.id);
+    waiting.delete(reply.id);
+    if ("error" in reply) console.warn(`[slides] unreadable as a .pptx: ${request?.file}: ${reply.error}`);
+    request?.done("read" in reply ? reply.read : null);
+  });
+  const lost = (why: string): void => {
+    if (worker !== started) return;
+    worker = null;
+    for (const [id, request] of waiting) {
+      console.warn(`[slides] the .pptx reader stopped (${why}) while reading ${request.file}`);
+      waiting.delete(id);
+      request.done(null);
+    }
   };
-  return resources;
+  started.on("error", (error) => lost(String(error)));
+  started.on("exit", (code) => lost(`exit ${code}`));
+  worker = started;
+  return started;
 }
 
-/** `null` when the file can't be read as a presentation at all. */
-export function readPptx(sourcePath: string): PptxDeck | null {
-  try {
-    return readPptxDeck(sourcePath, loadResources());
-  } catch (error) {
-    console.warn(`[slides] unreadable as a .pptx: ${sourcePath}: ${String(error)}`);
-    return null;
-  }
+export function readPptx(sourcePath: string): Promise<PptxRead | null> {
+  return new Promise((done) => {
+    const id = ++nextId;
+    waiting.set(id, { file: sourcePath, done });
+    pptxWorker().postMessage({ id, file: sourcePath } satisfies PptxRequest);
+  });
 }

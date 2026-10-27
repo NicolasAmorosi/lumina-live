@@ -41,8 +41,7 @@ import {
 } from "./pptx-metadata";
 import { readBinaryDeck, readBinarySlideTimings, type BinaryDeck } from "./ppt-binary";
 import { encodeSlideLayers } from "./native-deck";
-import { readPptx } from "./pptx-deck";
-import type { PptxDeck } from "./pptx/reader";
+import { readPptx, type PptxRead } from "./pptx-deck";
 import { rasterizePdf, shutdownRasterizer } from "./rasterizer";
 import { hashFile } from "../media/content-hash";
 import { healDeckClips } from "../media/deck-clips";
@@ -420,6 +419,24 @@ async function pump(): Promise<void> {
  *  preemption if it already started. */
 export function prepareDeck(assetId: number, opts: PrepareOptions = {}): Promise<DeckDTO> {
   if (shuttingDown) return Promise.reject(new SlideError("CANCELED", mt("slides.shuttingDown")));
+  if (!inFlight.has(assetId)) {
+    // Before the cache and before the queue: a deck read straight from its
+    // source never waits behind a LibreOffice conversion, and never needs
+    // LibreOffice at all — this is the whole hymnal, and every `.pptx`.
+    const sourcePath = getMediaRepo().getPathById(assetId);
+    const own = sourcePath ? sourceDeck(assetId, sourcePath, opts.force ?? false) : null;
+    if (own) {
+      releaseBatchDirFor(assetId);
+      // `null`: a `.pptx` the reader couldn't open after all — LibreOffice's.
+      return own.then((dto) => dto ?? prepareConverted(assetId, opts));
+    }
+  }
+  return prepareConverted(assetId, opts);
+}
+
+/** A deck that isn't read from its source: the cache, else LibreOffice's queue. */
+function prepareConverted(assetId: number, opts: PrepareOptions): Promise<DeckDTO> {
+  if (shuttingDown) return Promise.reject(new SlideError("CANCELED", mt("slides.shuttingDown")));
   const priority = opts.priority ?? "interactive";
 
   // Checked before anything else, even before `inFlight`: a deck that's
@@ -430,14 +447,6 @@ export function prepareDeck(assetId: number, opts: PrepareOptions = {}): Promise
   if (!inFlight.has(assetId)) {
     const sourcePath = getMediaRepo().getPathById(assetId);
     if (sourcePath) {
-      // Before the cache and before the queue: a deck read straight from its
-      // source never waits behind a LibreOffice conversion, and never needs
-      // LibreOffice at all — this is the whole hymnal.
-      const native = sourceDeck(assetId, sourcePath, opts.force ?? false);
-      if (native) {
-        releaseBatchDirFor(assetId);
-        return native;
-      }
       const cacheHit = tryCacheHit(assetId, sourcePath, opts.force ?? false);
       if (cacheHit) {
         // A deck that a batch warmed a PDF for but that turned out to
@@ -1068,7 +1077,7 @@ async function recordNativeDeck(assetId: number, sourcePath: string, stat: fs.St
 const notModelStamp = new Map<string, string>();
 
 /** One read per asset at a time — see `nativeInFlight`. */
-const modelInFlight = new Map<number, Promise<DeckDTO>>();
+const modelInFlight = new Map<number, Promise<DeckDTO | null>>();
 
 function isUsableModel(row: DeckRow, stat: fs.Stats): boolean {
   return (
@@ -1082,8 +1091,10 @@ function isUsableModel(row: DeckRow, stat: fs.Stats): boolean {
 }
 
 /** The deck read straight from its source, native or model, when it is one:
- *  `null` sends the caller on to the cache and LibreOffice. */
-function sourceDeck(assetId: number, sourcePath: string, force: boolean): Promise<DeckDTO> | null {
+ *  `null` sends the caller on to the cache and LibreOffice — and so does a
+ *  promise that settles `null`, a `.pptx` the reader (on its worker thread)
+ *  turned out not to be able to open. */
+function sourceDeck(assetId: number, sourcePath: string, force: boolean): Promise<DeckDTO | null> | null {
   return nativeDeck(assetId, sourcePath, force) ?? modelDeck(assetId, sourcePath, force);
 }
 
@@ -1094,7 +1105,7 @@ function sourceDeck(assetId: number, sourcePath: string, force: boolean): Promis
  * can't draw exactly is approximated, never sent to LibreOffice. Only a file
  * it can't open as a presentation at all still goes there.
  */
-function modelDeck(assetId: number, sourcePath: string, force: boolean): Promise<DeckDTO> | null {
+function modelDeck(assetId: number, sourcePath: string, force: boolean): Promise<DeckDTO | null> | null {
   const stat = fs.statSync(sourcePath, { throwIfNoEntry: false });
   if (!stat) return null;
   const inFlightRead = modelInFlight.get(assetId);
@@ -1120,17 +1131,20 @@ function modelDeck(assetId: number, sourcePath: string, force: boolean): Promise
     }
   }
 
-  const read = readPptx(sourcePath);
-  if (!read || read.slides.every((slide) => slide.hidden)) {
-    notModelStamp.set(sourcePath, stampOf(stat));
-    return null;
-  }
-  const promise = recordModelDeck(assetId, sourcePath, stat, read).finally(() => modelInFlight.delete(assetId));
+  const promise = readPptx(sourcePath)
+    .then((read) => {
+      if (!read || read.slides.every((slide) => slide.hidden)) {
+        notModelStamp.set(sourcePath, stampOf(stat));
+        return null;
+      }
+      return recordModelDeck(assetId, sourcePath, stat, read);
+    })
+    .finally(() => modelInFlight.delete(assetId));
   modelInFlight.set(assetId, promise);
   return promise;
 }
 
-async function recordModelDeck(assetId: number, sourcePath: string, stat: fs.Stats, deck: PptxDeck): Promise<DeckDTO> {
+async function recordModelDeck(assetId: number, sourcePath: string, stat: fs.Stats, deck: PptxRead): Promise<DeckDTO> {
   const slidesRepo = getSlidesRepo();
   const mtimeMs = Math.trunc(stat.mtimeMs);
   const contentHash = await hashFile(sourcePath);
@@ -1141,12 +1155,8 @@ async function recordModelDeck(assetId: number, sourcePath: string, stat: fs.Sta
   // number slides in presentation order, hidden ones included, so the visible
   // ones line up by position — and when they don't, the timings go, as for a
   // converted deck: advancing on another slide's timing is worse than not.
-  let meta: PresentationMeta;
-  try {
-    meta = readPresentationMeta(sourcePath);
-  } catch {
-    meta = emptyMeta();
-  }
+  // Read on the worker thread with the model (`pptx-worker.ts`).
+  const meta = deck.meta ?? emptyMeta();
   const visibleModels = deck.slides.filter((slide) => !slide.hidden);
   const visibleMeta = meta.slides.filter((slide) => !slide.hidden);
   const timingsUsable = visibleMeta.length === visibleModels.length;
@@ -1170,7 +1180,7 @@ async function recordModelDeck(assetId: number, sourcePath: string, stat: fs.Sta
       hidden: false,
       title: timing?.title ?? null,
       notes: timing?.notes ?? null,
-      layers: JSON.stringify(slide.model),
+      layers: slide.layers,
     };
   });
 
@@ -1264,10 +1274,10 @@ async function runConversion(job: Job): Promise<DeckDTO> {
 
   // A job queued before this deck was read — or edited into one we read —
   // still never goes to LibreOffice for it.
-  const native = sourceDeck(assetId, sourcePath, force);
-  if (native) {
+  const own = await sourceDeck(assetId, sourcePath, force);
+  if (own) {
     releaseBatchDirFor(assetId);
-    return native;
+    return own;
   }
 
   const cacheHit = tryCacheHit(assetId, sourcePath, force);
