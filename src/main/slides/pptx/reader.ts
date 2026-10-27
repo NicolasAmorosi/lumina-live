@@ -143,6 +143,10 @@ type Placeholder = { type: string; idx: string | null; el: XmlElement };
 
 function level(pkg: PptxPackage, part: string | null): Level {
   const root = part ? pkg.xml(part) : null;
+  // A slide, layout or master that is there but won't parse would be drawn
+  // as an empty slide, in silence: the deck goes to LibreOffice instead. Only
+  // these three: a broken `.vml` or chart part is common and costs one shape.
+  if (part && !root && pkg.has(part)) throw new Error(`unparseable part: ${part}`);
   const placeholders: Placeholder[] = [];
   const collect = (tree: XmlElement | null): void => {
     for (const c of tree?.children ?? []) {
@@ -194,6 +198,8 @@ type SlideScope = DeckScope & {
   colorMap: Record<string, string>;
   levels: [Level, Level, Level];
   txStyles: XmlElement | null;
+  /** The slide's sound and video shapes set to «Hide during show», by id. */
+  hiddenMedia: ReadonlySet<string>;
 };
 
 function readSlide(pkg: PptxPackage, slidePart: string, deck: DeckScope): SlideModel {
@@ -213,7 +219,16 @@ function readSlide(pkg: PptxPackage, slidePart: string, deck: DeckScope): SlideM
     Object.assign(colorMap, { bg1: "lt1", tx1: "dk1", bg2: "lt2", tx2: "dk2" });
   }
 
-  const scope: SlideScope = { ...deck, pkg, theme, colorMap, levels, txStyles: path(master.root, "p:txStyles") };
+  // «Hide during show» lives in the timing tree, not on the shape: the media
+  // node that plays it says `showWhenStopped="0"` and names it by id. The
+  // legacy reader skips the same speaker icons (`fHide`).
+  const hiddenMedia = new Set<string>();
+  for (const node of descendants(path(slide.root, "p:timing"), "p:cMediaNode")) {
+    const spid = attr(path(node, "p:tgtEl", "p:spTgt"), "spid");
+    if (spid && !isTrue(attr(node, "showWhenStopped") ?? "1")) hiddenMedia.add(spid);
+  }
+
+  const scope: SlideScope = { ...deck, pkg, theme, colorMap, levels, txStyles: path(master.root, "p:txStyles"), hiddenMedia };
   const elements: SlideElement[] = [];
   const showMaster = (lvl: Level): boolean => attr(lvl.root, "showMasterSp") !== "0";
   if (master.root && showMaster(slide) && showMaster(layout)) elements.push(...readTree(path(master.root, "p:cSld", "p:spTree"), 2, scope));
@@ -267,6 +282,7 @@ function readTree(tree: XmlElement | null, levelIndex: number, scope: SlideScope
   for (const el of tree?.children ?? []) {
     const nv = el.children.find((c) => c.name.startsWith("p:nv"));
     if (isTrue(attr(child(nv, "p:cNvPr"), "hidden"))) continue;
+    if (levelIndex === 0 && scope.hiddenMedia.has(attr(child(nv, "p:cNvPr"), "id") ?? "")) continue;
     // A layout's or master's placeholders are templates for the slide's own,
     // not content: they never show in the slide show.
     if (levelIndex > 0 && phOf(el)) continue;

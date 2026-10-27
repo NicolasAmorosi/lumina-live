@@ -93,8 +93,9 @@ export const SLIDES_NATIVE_VERSION = 1;
 
 /** The same for a deck drawn from its model (`image_format = 'model'`, a
  *  `.pptx` read by `src/main/slides/pptx/`): bump when the reader changes what
- *  it puts in a `SlideModel`, so every such deck is read again. */
-export const SLIDES_MODEL_VERSION = 1;
+ *  it puts in a `SlideModel` or what a model deck records, so every such deck
+ *  is read again. 2: speaker icons «hidden during show» left out. */
+export const SLIDES_MODEL_VERSION = 2;
 
 /** Bump to force every non-manual `media_assets` row to re-run
  *  `resolveLinkedAudio` once, next time its deck is opened, even though a
