@@ -175,7 +175,7 @@ function mapHsl(c: Rgba, f: (h: number, s: number, l: number) => [number, number
   return { ...fromHsl(((h2 % 360) + 360) % 360, clamp01(s2), clamp01(l2)), a: c.a };
 }
 
-function toHsl({ r, g, b }: Rgba): [number, number, number] {
+export function toHsl({ r, g, b }: Rgba): [number, number, number] {
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
   const l = (max + min) / 2;
