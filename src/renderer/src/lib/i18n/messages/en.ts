@@ -600,6 +600,10 @@ const en: Messages = {
     slidesCacheMaxDesc: "How much disk space it can take up before it starts deleting the oldest presentations",
     slidesRenderWidth: "Render width",
     slidesRenderWidthDesc: "Horizontal resolution each slide is rendered at",
+    slidesFallbackFont: "Fallback font",
+    slidesFallbackFontDesc:
+      "For a PowerPoint that uses a font this computer doesn't have. A font with the same measurements is tried first (Calibri → Carlito, Arial → Liberation Sans); if there is none, this one is used.",
+    slidesFallbackFontSystem: "The system's",
     slidesImageFormat: "Image format",
     slidesImageFormatDesc: "WebP files are much smaller; PNG compression is lossless",
     slidesImageFormats: {
@@ -634,6 +638,7 @@ const en: Messages = {
       slidesCache: "Slide cache",
       slidesQuality: "Conversion quality",
       libreoffice: "LibreOffice",
+      slidesText: "Text",
       appearance: "Appearance",
       language: "Language",
       folders: "File folders",

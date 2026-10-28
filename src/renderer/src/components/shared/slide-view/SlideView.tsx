@@ -6,10 +6,11 @@ import type {
   ShapeElement,
   SlideElement,
   SlideModel,
+  SlideTextSettings,
   TableElement,
 } from "@shared/types/slide-model";
 import { useId, type CSSProperties, type ReactNode } from "react";
-import { cqw, effectFilter, ImageInBox, strokeProps, svgPaint, type PaintContext, type ResolvePart } from "./slide-paint";
+import { cqw, effectFilter, ImageInBox, SlideTextContext, strokeProps, svgPaint, type PaintContext, type ResolvePart } from "./slide-paint";
 import { SlideChart } from "./slide-chart";
 import { SlideText } from "./slide-text";
 import "./slide-fonts.css";
@@ -22,7 +23,18 @@ import "./slide-fonts.css";
  * slide — it scales with whatever box it is given and needs no measuring.
  * Geometry is SVG in the element's own EMU; text is HTML laid over it.
  */
-export function SlideView({ model, resolve, style }: { model: SlideModel; resolve: ResolvePart; style?: CSSProperties }): ReactNode {
+export function SlideView({
+  model,
+  resolve,
+  style,
+  text = NO_TEXT_SETTINGS,
+}: {
+  model: SlideModel;
+  resolve: ResolvePart;
+  style?: CSSProperties;
+  /** The face for a font this machine lacks and the language of chart numbers. */
+  text?: SlideTextSettings;
+}): ReactNode {
   const id = useId().replace(/:/g, "");
   const scope: Scope = { id, resolve, slideWidth: model.width, background: model.background, slide: { w: model.width, h: model.height } };
   // The background is painted like any fill — an SVG rect — so a picture
@@ -44,12 +56,16 @@ export function SlideView({ model, resolve, style }: { model: SlideModel; resolv
         <defs>{bg.defs}</defs>
         <rect width={model.width} height={model.height} fill={bg.paint === "none" ? "white" : bg.paint} />
       </svg>
-      {model.elements.map((el, i) => (
-        <Element key={i} el={el} place={ROOT} scope={scope} path={`${i}`} />
-      ))}
+      <SlideTextContext value={text}>
+        {model.elements.map((el, i) => (
+          <Element key={i} el={el} place={ROOT} scope={scope} path={`${i}`} />
+        ))}
+      </SlideTextContext>
     </div>
   );
 }
+
+const NO_TEXT_SETTINGS: SlideTextSettings = { fallbackFont: null, locale: "" };
 
 type Scope = { id: string; resolve: ResolvePart; slideWidth: number; background: SlideModel["background"]; slide: { w: number; h: number } };
 

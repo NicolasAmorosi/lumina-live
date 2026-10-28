@@ -167,6 +167,13 @@ export type ChartElement = {
 
 export type { ChartModel };
 
+/** What the window drawing a slide decides that the file leaves to the
+ *  machine: the face for a font it lacks (`null`: the system's sans-serif,
+ *  after the file's face and its metric twins) and the language chart
+ *  numbers are written in — the interface's, not the system's (owner,
+ *  2026-10-28). */
+export type SlideTextSettings = { fallbackFont: string | null; locale: string };
+
 export type TextBody = {
   insets: Insets;
   anchor: "t" | "ctr" | "b";

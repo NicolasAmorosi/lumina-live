@@ -1,6 +1,6 @@
 import type { Paragraph, TextBody, TextRun } from "@shared/types/slide-model";
-import { Fragment, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
-import { cqw } from "./slide-paint";
+import { Fragment, useContext, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { cqw, SlideTextContext, withFallback } from "./slide-paint";
 
 const PT = 12700;
 /** PowerPoint's single line spacing, the same 1.2 em for every face. */
@@ -107,6 +107,8 @@ function SlideParagraph({
 }): ReactNode {
   const run = firstRun(p);
   const size = run?.size ?? p.endSize;
+  const { fallbackFont } = useContext(SlideTextContext);
+  const font = run ? withFallback(run.font, fallbackFont) : undefined;
   // The strut: the smallest size in the paragraph. PowerPoint makes each line
   // as tall as its own biggest text, so a smaller line (an empty one between
   // two breaks, at the break's size) mustn't be held up to the first run's.
@@ -116,7 +118,7 @@ function SlideParagraph({
   useLayoutEffect(() => {
     if (tabbed && ref.current) placeTabs(ref.current, p, strut * PT, slideWidth);
   });
-  const [ascent, descent] = metricsOf(run?.font);
+  const [ascent, descent] = metricsOf(font);
   // PowerPoint's line geometry, measured in its own rendering for six faces at
   // 20 and 40 pt (`gen-metrics.pptx`), and the same for all of them: a single
   // line is 1.2 em; in percent spacing the first baseline sits at 0.955 em
@@ -149,7 +151,7 @@ function SlideParagraph({
     // measured with Candara: 48.4 px lines for 47.5). `placeTabs` reads its
     // size back as the px-per-EMU scale.
     fontSize: u(strut * PT),
-    fontFamily: run?.font,
+    fontFamily: font,
     ...(wrap ? null : { width: "max-content", alignSelf: p.align === "ctr" ? "center" : p.align === "r" ? "flex-end" : "flex-start" }),
   };
   return (
@@ -234,9 +236,10 @@ function Bullet({ p, size, u }: { p: Paragraph; size: number; u: (emu: number) =
 }
 
 function Run({ run, u }: { run: TextRun; u: (emu: number) => string }): ReactNode {
+  const { fallbackFont } = useContext(SlideTextContext);
   if (run.kind === "break") return <span style={{ fontSize: u(run.size * PT) }}><br /></span>;
   const style: CSSProperties = {
-    fontFamily: run.font,
+    fontFamily: withFallback(run.font, fallbackFont),
     fontSize: u(run.size * PT),
     fontWeight: run.bold ? 700 : 400,
     fontStyle: run.italic ? "italic" : "normal",

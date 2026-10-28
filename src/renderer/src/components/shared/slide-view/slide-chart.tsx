@@ -12,9 +12,9 @@ import type {
   ChartText,
   ChartTitle,
 } from "@shared/types/slide-chart";
-import type { Effects, Fill, Line } from "@shared/types/slide-model";
-import { useId, type ReactNode } from "react";
-import { strokeProps, svgPaint, type PaintContext, type ResolvePart } from "./slide-paint";
+import type { Effects, Fill, Line, SlideTextSettings } from "@shared/types/slide-model";
+import { useContext, useId, type ReactNode } from "react";
+import { SlideTextContext, strokeProps, svgPaint, type PaintContext, type ResolvePart } from "./slide-paint";
 
 type Chart = Extract<ChartModel, { kind: "chart" }>;
 type Rect = { x: number; y: number; w: number; h: number };
@@ -41,6 +41,7 @@ export function SlideChart({
   slideWidth: number;
   resolve?: ResolvePart;
 }): ReactNode {
+  slideText = useContext(SlideTextContext);
   const id = useId().replace(/:/g, "");
   if (chart.kind === "unsupported" || w <= 0 || h <= 0) return null;
   const layout = layoutChart(chart, w, h);
@@ -150,8 +151,18 @@ const TWINS: Record<string, string> = {
 
 function cssFamily(face: string): string {
   const twin = TWINS[face.toLowerCase()];
-  return [face, ...(twin ? [twin] : []), isCalibri(face) ? "Carlito" : "Liberation Sans"].map((f) => `"${f.replace(/"/g, "")}"`).join(", ") + ", sans-serif";
+  const last = isCalibri(face) ? "Carlito" : (slideText.fallbackFont ?? "Liberation Sans");
+  return [face, ...(twin ? [twin] : []), last].map((f) => `"${f.replace(/"/g, "")}"`).join(", ") + ", sans-serif";
 }
+
+/**
+ * The window's `SlideTextContext`, set by `SlideChart` as it renders, for the
+ * formatters and font lists deep in this file.
+ * ponytail: module state instead of a parameter through every formatter — a
+ * window has one value (its interface's), so two charts never disagree. Pass
+ * it down if a window ever draws slides in two languages at once.
+ */
+let slideText: SlideTextSettings = { fallbackFont: null, locale: "" };
 
 /** A block of text: lines (paragraphs, or a label broken to fit), each a
  *  list of runs. */
@@ -285,12 +296,20 @@ function label(text: string, font: ChartFont, x: number, top: number, anchor: "s
 
 // ── Number formats ──────────────────────────────────────────────────────────
 
-/** The separators of the user's locale: PowerPoint writes numbers with the
- *  system's, whatever language the file was made in. */
-const SEPARATORS = (() => {
-  const parts = new Intl.NumberFormat().formatToParts(12345.6);
-  return { decimal: parts.find((p) => p.type === "decimal")?.value ?? ".", group: parts.find((p) => p.type === "group")?.value ?? "," };
-})();
+/** The separators of the interface's language. PowerPoint writes numbers with
+ *  the system region's, whatever language the file was made in; the owner
+ *  chose the interface's (2026-10-28), which a new install takes from the
+ *  system anyway. */
+const separatorsByLocale = new Map<string, { decimal: string; group: string }>();
+function separators(): { decimal: string; group: string } {
+  let found = separatorsByLocale.get(slideText.locale);
+  if (!found) {
+    const parts = new Intl.NumberFormat(slideText.locale || undefined).formatToParts(12345.6);
+    found = { decimal: parts.find((p) => p.type === "decimal")?.value ?? ".", group: parts.find((p) => p.type === "group")?.value ?? "," };
+    separatorsByLocale.set(slideText.locale, found);
+  }
+  return found;
+}
 
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -340,10 +359,10 @@ function splitSections(code: string): string[] {
 
 function general(v: number): string {
   if (v === 0) return "0";
-  if (v >= 1e11 || v < 1e-9) return v.toExponential(5).replace(/\.?0+e/, "E").replace(".", SEPARATORS.decimal);
+  if (v >= 1e11 || v < 1e-9) return v.toExponential(5).replace(/\.?0+e/, "E").replace(".", separators().decimal);
   const digits = Math.max(0, 10 - Math.max(0, Math.floor(Math.log10(v)) + 1));
   const s = v.toFixed(Math.min(digits, 10)).replace(/\.?0+$/, "");
-  return s.replace(".", SEPARATORS.decimal);
+  return s.replace(".", separators().decimal);
 }
 
 function formatNumber(value: number, section: string, signDone: boolean): string {
@@ -414,8 +433,8 @@ function formatNumber(value: number, section: string, signDone: boolean): string
   while (f.length > minDecimals && f.endsWith("0")) f = f.slice(0, -1);
   if (i === "0" && minInt === 0) i = "";
   i = i.padStart(minInt, "0");
-  if (grouped) i = i.replace(/\B(?=(\d{3})+(?!\d))/g, SEPARATORS.group);
-  const text = (f ? `${i}${SEPARATORS.decimal}${f}` : i) + expText;
+  if (grouped) i = i.replace(/\B(?=(\d{3})+(?!\d))/g, separators().group);
+  const text = (f ? `${i}${separators().decimal}${f}` : i) + expText;
   return (neg ? "-" : "") + pieces.map((p) => ("lit" in p ? p.lit : text)).join("");
 }
 
@@ -426,8 +445,15 @@ function serialDate(serial: number, date1904: boolean): Date {
 
 /** `m/d/yy` is Excel's built-in short date (format 14): Office writes it in
  *  the system's short date, not as spelled (`05/01/2002` in en-GB). */
-const SHORT_DATE = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "numeric", year: "numeric", timeZone: "UTC" });
-const shortDate = (serial: number, date1904: boolean): string => SHORT_DATE.format(serialDate(serial, date1904));
+const shortDates = new Map<string, Intl.DateTimeFormat>();
+function shortDate(serial: number, date1904: boolean): string {
+  let format = shortDates.get(slideText.locale);
+  if (!format) {
+    format = new Intl.DateTimeFormat(slideText.locale || undefined, { day: "numeric", month: "numeric", year: "numeric", timeZone: "UTC" });
+    shortDates.set(slideText.locale, format);
+  }
+  return format.format(serialDate(serial, date1904));
+}
 
 function formatDate(serial: number, section: string, date1904: boolean): string {
   const d = serialDate(serial, date1904);
@@ -2573,7 +2599,7 @@ function percents(values: number[], format: string): number[] {
 }
 
 function labelText(l: ChartDataLabel, s: ChartSeries, i: number, chart: Chart, percent: number | null): string {
-  const sep = l.separator ?? (SEPARATORS.decimal === "," ? "; " : ", ");
+  const sep = l.separator ?? (separators().decimal === "," ? "; " : ", ");
   const parts: string[] = [];
   if (l.series) parts.push(s.name);
   // A scatter's or bubble's "category" is its X value.

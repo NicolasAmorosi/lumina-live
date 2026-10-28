@@ -18,6 +18,21 @@ export type Locale = (typeof LOCALES)[number];
 export const SLIDE_IMAGE_FORMATS = ["webp", "png"] as const;
 export type SlideImageFormat = (typeof SLIDE_IMAGE_FORMATS)[number];
 
+/** The faces a slide can fall back to when it names one this machine lacks:
+ *  the open ones Lumina ships (`assets/fonts/slides/`), so the choice looks
+ *  the same on every machine a program is opened on. */
+export const SLIDE_FALLBACK_FONTS = [
+  "Carlito",
+  "Caladea",
+  "Liberation Sans",
+  "Liberation Serif",
+  "Liberation Mono",
+  "Open Sans",
+  "Montserrat",
+  "Source Sans Pro",
+] as const;
+export type SlideFallbackFont = (typeof SLIDE_FALLBACK_FONTS)[number];
+
 export type SettingsMap = {
   "logo.path": string | null;
   /** Where the file picker opens for each kind of asset. `null` means "the
@@ -55,6 +70,11 @@ export type SettingsMap = {
    *  about it every morning. */
   "slides.warnMissingSoffice": boolean;
   "slides.imageFormat": SlideImageFormat;
+  /** The face a `.pptx` drawn from its model falls back to when it names one
+   *  this machine lacks (after its metric twins); `null` is the operating
+   *  system's own sans-serif. One for every face, serif or not (owner,
+   *  2026-10-28). */
+  "slides.fallbackFont": SlideFallbackFont | null;
   "slides.cacheMaxMb": number;
   "slides.maxRenderWidth": number;
   /** Internal escape hatch (no UI control): lets a background prewarm job be
@@ -131,6 +151,7 @@ export const DEFAULT_SETTINGS: SettingsMap = {
   "slides.profileWarmedVersion": null,
   "slides.warnMissingSoffice": true,
   "slides.imageFormat": "webp",
+  "slides.fallbackFont": null,
   "slides.cacheMaxMb": SLIDES_DEFAULT_CACHE_MB,
   "slides.maxRenderWidth": SLIDES_DEFAULT_RENDER_WIDTH,
   "slides.preemptBackground": true,
@@ -214,6 +235,7 @@ export const SETTINGS_VALIDATORS: Record<keyof SettingsMap, (value: unknown) => 
   "slides.profileWarmedVersion": isNullOr(isString),
   "slides.warnMissingSoffice": isBoolean,
   "slides.imageFormat": isOneOf(SLIDE_IMAGE_FORMATS),
+  "slides.fallbackFont": isNullOr(isOneOf(SLIDE_FALLBACK_FONTS)),
   "slides.cacheMaxMb": isNumberIn(1, 1_000_000),
   "slides.maxRenderWidth": isNumberIn(320, 16_384),
   "slides.preemptBackground": isBoolean,

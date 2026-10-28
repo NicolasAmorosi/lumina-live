@@ -160,6 +160,7 @@ function usePreviewOutputWithoutPlates(content: PreviewContent | null): Projecti
   // projector is being pushed, mirrored there by `App` — reading the setting
   // directly would let the preview lead the projector by one render.
   const bibleStyle = useProjectionStore((s) => s.bibleStyle);
+  const slideText = useProjectionStore((s) => s.slideText);
   const deckEntry = useDeckStore((s) => (content?.kind === "deck" ? s.byAssetId[content.assetId] : undefined));
   const playableUrl = usePlayableAssetUrl(content?.kind === "media" ? content.asset.id : null);
 
@@ -182,6 +183,7 @@ function usePreviewOutputWithoutPlates(content: PreviewContent | null): Projecti
         // Stage one never animates (`INSTANT_TRANSITION`), a slide's own way
         // in included.
         enter: null,
+        text: slideText,
         videoUnderlay: null,
         // Never plays here, even on a slide that carries one. Stage one of the
         // two-stage flow shows what the slide LOOKS like, and the rasterized
