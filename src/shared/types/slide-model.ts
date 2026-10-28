@@ -93,6 +93,9 @@ export type Effects = {
   glow: { color: string; radius: number } | null;
   softEdge: number | null;
   reflection: { blur: number; startAlpha: number; endAlpha: number; endPos: number; dist: number } | null;
+  /** `fillOverlay`: a second fill blended over the shape's own (a themed
+   *  texture tinted by a gradient), not over what lies under the shape. */
+  overlay: { fill: Fill; blend: "over" | "mult" | "screen" | "darken" | "lighten" } | null;
 };
 
 /** One subpath of a geometry, in the element's own box (0..w, 0..h, EMU), as

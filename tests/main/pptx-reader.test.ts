@@ -1,7 +1,8 @@
 /**
  * What the `.pptx` reader leaves out of a slide on purpose — a sound or video
- * set to «Hide during show» — and the slide it refuses to draw at all: one
- * whose XML won't parse goes to LibreOffice instead of coming out blank.
+ * set to «Hide during show» —, the slide it refuses to draw at all: one whose
+ * XML won't parse goes to LibreOffice instead of coming out blank — and what
+ * it carries for the painter: tab stops, a fill overlay.
  */
 import fs from "node:fs";
 import os from "node:os";
@@ -78,6 +79,40 @@ test("a sound shown during the show keeps its icon", () => {
   ] as const) {
     const deck = readPptxDeck(writeDeck(name, xml), resources);
     expect(deck.slides[0]!.model.elements.map((e) => e.kind), name).toEqual(["picture"]);
+  }
+});
+
+/** One rectangle with a line of text, `pPr` and extra `spPr` children as given. */
+const textBox = (pPr: string, spPr = "") =>
+  `<p:sld ${NS}><p:cSld><p:spTree><p:sp><p:nvSpPr><p:cNvPr id="2" name="T"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>
+  <p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="4000000" cy="1000000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${spPr}</p:spPr>
+  <p:txBody><a:bodyPr/><a:lstStyle/><a:p>${pPr}<a:r><a:t>1\tVerse</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld></p:sld>`;
+
+test("a paragraph carries its tab stops in order, its default tab size, and the tab itself", () => {
+  const pPr = '<a:pPr defTabSz="457200"><a:tabLst><a:tab pos="901700" algn="r"/><a:tab pos="542925" algn="l"/></a:tabLst></a:pPr>';
+  const el = readPptxDeck(writeDeck("tabs.pptx", textBox(pPr)), resources).slides[0]!.model.elements[0]!;
+  const p = el.kind === "shape" ? el.text!.paragraphs[0]! : null;
+  expect(p?.tabs).toEqual([
+    { pos: 542925, align: "l" },
+    { pos: 901700, align: "r" },
+  ]);
+  expect(p?.defaultTab).toBe(457200);
+  expect(p?.runs[0]).toMatchObject({ kind: "text", text: "1\tVerse" });
+  // With none named, PowerPoint's inch.
+  const plain = readPptxDeck(writeDeck("no-tabs.pptx", textBox("")), resources).slides[0]!.model.elements[0]!;
+  expect(plain.kind === "shape" ? plain.text!.paragraphs[0] : null).toMatchObject({ tabs: [], defaultTab: 914400 });
+});
+
+test("a fill overlay is read with its blend, and an unknown blend paints over", () => {
+  const spPr = (blend: string) =>
+    `<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill><a:effectLst><a:fillOverlay blend="${blend}"><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></a:fillOverlay></a:effectLst>`;
+  for (const [blend, expected] of [
+    ["mult", "mult"],
+    ["screen", "screen"],
+    ["burn", "over"],
+  ] as const) {
+    const el = readPptxDeck(writeDeck(`overlay-${blend}.pptx`, textBox("", spPr(blend))), resources).slides[0]!.model.elements[0]!;
+    expect(el.kind === "shape" ? el.effects.overlay : null, blend).toEqual({ fill: { kind: "solid", color: "rgb(0,255,0)" }, blend: expected });
   }
 });
 
