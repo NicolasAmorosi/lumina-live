@@ -1,5 +1,6 @@
 import type { Fill, Line } from "@shared/types/slide-model";
 import type {
+  Chart3D,
   ChartAxis,
   ChartBox,
   ChartDataLabel,
@@ -49,17 +50,15 @@ function readChartSpace(part: string, ctx: TextContext): ChartModel {
 
   const plotEls = plotArea.children.filter((c) => c.name.startsWith("c:") && c.name.endsWith("Chart"));
   if (plotEls.length === 0) return { kind: "unsupported", type: "empty" };
-  const odd = plotEls.find((p) => !DRAWN.has(p.name));
-  if (odd) return { kind: "unsupported", type: odd.name.slice(2) };
-  // One pair of axes: a combo on a secondary scale is not drawn.
-  if (new Set(plotEls.map((p) => children(p, "c:axId").map((a) => attr(a, "val")).join(","))).size > 1) {
-    return { kind: "unsupported", type: "secondaryAxis" };
-  }
+  // What is drawn only approximately: a pie or scatter combined with other
+  // plots, a log scale (drawn linear), and the plot types drawn as their
+  // nearest kin.
   const isPie = (p: XmlElement): boolean => p.name === "c:pieChart" || p.name === "c:doughnutChart";
-  if (plotEls.some(isPie) && plotEls.length > 1) return { kind: "unsupported", type: "pieCombo" };
-  if (plotEls.some((p) => p.name === "c:scatterChart") && plotEls.length > 1) return { kind: "unsupported", type: "scatterCombo" };
+  if (plotEls.some(isPie) && plotEls.length > 1) miss(ctx, "chart:pieCombo");
+  if (plotEls.some((p) => p.name === "c:scatterChart") && plotEls.length > 1) miss(ctx, "chart:scatterCombo");
   const valAxes = children(plotArea, "c:valAx");
-  if (valAxes.some((a) => child(child(a, "c:scaling"), "c:logBase"))) return { kind: "unsupported", type: "logAxis" };
+  if (valAxes.some((a) => child(child(a, "c:scaling"), "c:logBase"))) miss(ctx, "chart:logAxis");
+  for (const p of plotEls) if (!DRAWN.has(p.name)) miss(ctx, `chart:${p.name.slice(2)}`);
 
   // Drawn without: shapes drawn over the chart, trend lines, error bars, a
   // data table.
@@ -72,7 +71,7 @@ function readChartSpace(part: string, ctx: TextContext): ChartModel {
     ...withOverride(part, space, ctx),
     row: Math.floor((style - 1) / 8),
     col: (style - 1) % 8,
-    absent: !/^12\./.test(child(ctx.pkg.xml("docProps/app.xml"), "AppVersion")?.text ?? ""),
+    absent: !madeBy2007(ctx),
   };
 
   const textColor = scheme(cx.row === 5 ? "lt1" : "tx1", [], cx);
@@ -105,9 +104,23 @@ function readChartSpace(part: string, ctx: TextContext): ChartModel {
       : null;
 
   const pie = plots.every((p) => p.kind === "pie");
-  const scatter = plots.some((p) => p.kind === "scatter");
-  const catEl = child(plotArea, "c:catAx") ?? child(plotArea, "c:dateAx") ?? (scatter ? (valAxes[0] ?? null) : null);
-  const valEl = scatter ? (valAxes[1] ?? null) : (valAxes[0] ?? null);
+  const scatter = plots.some((p) => p.kind === "scatter" || p.kind === "bubble");
+  // The first plot's axes are the primary ones; a plot on any other axis is
+  // on the secondary scale (its category axis is the primary's, as Office
+  // draws a combo).
+  const axIds = (p: XmlElement): string[] => children(p, "c:axId").map((a) => attr(a, "val") ?? "");
+  const primary = new Set(axIds(plotEls[0]!));
+  // (An axis no plot names still serves, as before.)
+  const own = (els: XmlElement[], ids: Set<string>): XmlElement[] => {
+    const mine = els.filter((a) => ids.has(attr(child(a, "c:axId"), "val") ?? ""));
+    return mine.length ? mine : els;
+  };
+  const mainVal = own(valAxes, primary);
+  const catEl = own([...children(plotArea, "c:catAx"), ...children(plotArea, "c:dateAx")], primary)[0] ?? (scatter ? (mainVal[0] ?? null) : null);
+  const valEl = scatter ? (mainVal[1] ?? null) : (mainVal[0] ?? null);
+  const onSecondary = plotEls.flatMap((p, i) => (axIds(p).some((id) => !primary.has(id)) ? [i] : []));
+  const secondIds = new Set(onSecondary.length ? axIds(plotEls[onSecondary[0]!]!).filter((id) => !primary.has(id)) : []);
+  const secondEl = valAxes.find((a) => secondIds.has(attr(child(a, "c:axId"), "val") ?? ""));
   const areaOnly = plots.every((p) => p.kind === "area");
 
   return {
@@ -116,7 +129,10 @@ function readChartSpace(part: string, ctx: TextContext): ChartModel {
     font,
     title,
     legend: readLegend(child(chart, "c:legend"), font, cx),
-    plotArea: { ...box(child(plotArea, "c:spPr"), plotDefaults(cx), cx), layout: readLayout(child(plotArea, "c:layout")) },
+    plotArea: {
+      ...box(child(plotArea, "c:spPr"), plotEls.some((p) => p.name.endsWith("3DChart")) ? EMPTY_BOX : plotDefaults(cx), cx),
+      layout: readLayout(child(plotArea, "c:layout")),
+    },
     plots,
     categories,
     categoryGroups: children(
@@ -127,11 +143,49 @@ function readChartSpace(part: string, ctx: TextContext): ChartModel {
       .map((lvl) => children(lvl, "c:pt").map((pt) => ({ text: child(pt, "c:v")?.text ?? "", start: numAttr(pt, "idx", 0) }))),
     categoryAxis: pie || !catEl ? null : readAxis(catEl, scatter ? "value" : catEl.name === "c:dateAx" ? "date" : "category", font, areaOnly, cx),
     valueAxis: pie || !valEl ? null : readAxis(valEl, "value", font, areaOnly, cx),
+    secondary: !pie && secondEl ? { plots: onSecondary, axis: readAxis(secondEl, "value", font, areaOnly, cx) } : null,
     date1904: flag(child(space, "c:date1904"), false),
+    view3D: plotEls.some((p) => p.name.endsWith("3DChart") || p.name === "c:surfaceChart") ? read3D(chart, plotEls[0]!, cx) : null,
   };
 }
 
-const DRAWN = new Set(["c:barChart", "c:lineChart", "c:areaChart", "c:pieChart", "c:doughnutChart", "c:scatterChart"]);
+/** Drawn as themselves; any other plot is drawn as its nearest kin (`readPlot`). */
+const DRAWN = new Set([
+  ...["c:barChart", "c:lineChart", "c:areaChart", "c:pieChart", "c:doughnutChart", "c:scatterChart", "c:bubbleChart", "c:radarChart"],
+  ...["c:bar3DChart", "c:line3DChart", "c:area3DChart", "c:pie3DChart", "c:surfaceChart", "c:surface3DChart"],
+]);
+
+/**
+ * How a 3-D chart is seen. A rotation the file leaves out is Office's own
+ * default (15° up, 20° round; a pie tilted 30°) in a file PowerPoint 2007
+ * wrote, the schema's 0 in any other — measured: an AASCU 2007 deck's column
+ * chart with a bare `c:view3D` shows its tops and sides, the Större
+ * template's surface faces front. A contour (`surfaceChart`) is a surface
+ * seen from straight above.
+ */
+function read3D(chart: XmlElement, plot: XmlElement, ctx: ChartContext): Chart3D {
+  const v = child(chart, "c:view3D");
+  const pie = plot.name === "c:pie3DChart";
+  const contour = plot.name === "c:surfaceChart";
+  const angle = (name: string, fallback: number): number => {
+    const a = attr(child(v, name), "val");
+    return a !== null && Number.isFinite(Number(a)) ? Number(a) : ctx.absent ? 0 : fallback;
+  };
+  const shape = attr(child(plot, "c:shape"), "val");
+  const wall = (name: string): ChartBox => box(path(chart, name, "c:spPr"), plotDefaults(ctx), ctx);
+  return {
+    rotX: contour ? 90 : angle("c:rotX", pie ? 30 : 15),
+    rotY: contour ? 0 : angle("c:rotY", pie ? 0 : 20),
+    rightAngles: !pie && !contour && flag(child(v, "c:rAngAx"), ctx.absent),
+    fov: contour ? 0 : numAttr(child(v, "c:perspective"), "val", 30) / 2,
+    depth: Math.max(20, numAttr(child(v, "c:depthPercent"), "val", 100)),
+    gapDepth: numAttr(child(plot, "c:gapDepth"), "val", 150),
+    shape: shape === "cylinder" || shape === "cone" || shape === "coneToMax" || shape === "pyramid" || shape === "pyramidToMax" ? shape : "box",
+    floor: wall("c:floor"),
+    sideWall: wall("c:sideWall"),
+    backWall: wall("c:backWall"),
+  };
+}
 
 /** Office 2007's chart title is 1.2 times the chart's text size, bold. */
 const TITLE_SCALE = 1.2;
@@ -141,14 +195,26 @@ type ChartContext = TextContext & {
   row: number;
   col: number;
   /**
-   * What a missing `overlay`, `delete`, `varyColors` or `autoTitleDeleted`
-   * means: false in a file PowerPoint 2007 wrote (`AppVersion` 12), the
-   * schema's true in any other — PowerPoint reads them so (measured:
-   * `cht-legend-props` overlays its legend, the 2007 AASCU decks don't), and
-   * so does LibreOffice (`bMSO2007Doc`).
+   * What a missing `overlay`, `delete`, `varyColors`, `autoTitleDeleted` or
+   * data label part (`showVal`, …) means: false in a file PowerPoint 2007
+   * wrote, the schema's true in any other — PowerPoint reads them so
+   * (measured: `cht-legend-props` overlays its legend, the 2007 AASCU decks
+   * don't; the Större template's bare `<c:dLbls/>` shows series, category,
+   * value, percent and key), and so does LibreOffice (`bMSO2007Doc`).
    */
   absent: boolean;
 };
+
+/**
+ * PowerPoint 2007 wrote the file: `AppVersion` 12 AND an `Application` of
+ * Microsoft's, as LibreOffice tells them apart. The Större template says 12
+ * with no application, and PowerPoint reads it as a later file: its bare
+ * `c:view3D` shows a surface square on, its bare `c:dLbls` every label part.
+ */
+function madeBy2007(ctx: TextContext): boolean {
+  const app = ctx.pkg.xml("docProps/app.xml");
+  return /^12\./.test(child(app, "AppVersion")?.text ?? "") && /^microsoft/i.test(child(app, "Application")?.text ?? "");
+}
 
 /** CT_Boolean: an element with no `val` means true. */
 function flag(el: XmlElement | null, fallback: boolean): boolean {
@@ -389,6 +455,7 @@ function readPlot(el: XmlElement, font: ChartFont, ctx: ChartContext): ChartPlot
       .map(({ s }, i) => readSeries(s, i, kind, maxIndex, vary && (kind === "pie" || sers.length === 1), plotLabels, font, el, ctx));
   switch (el.name) {
     case "c:barChart":
+    case "c:bar3DChart":
       return {
         kind: "bar",
         horizontal: attr(child(el, "c:barDir"), "val") === "bar",
@@ -397,23 +464,58 @@ function readPlot(el: XmlElement, font: ChartFont, ctx: ChartContext): ChartPlot
         overlap: numAttr(child(el, "c:overlap"), "val", grouping(el, "clustered").endsWith("tacked") ? 100 : 0),
         series: read("filled"),
       };
-    case "c:lineChart":
-      return { kind: "line", grouping: grouping(el, "standard"), series: read("line") };
     case "c:areaChart":
+    case "c:area3DChart":
       return { kind: "area", grouping: grouping(el, "standard"), series: read("filled") };
     case "c:scatterChart":
       return { kind: "scatter", series: read("scatter") };
-    default:
+    case "c:bubbleChart":
+      return {
+        kind: "bubble",
+        scale: Math.max(0, numAttr(child(el, "c:bubbleScale"), "val", 100)),
+        byWidth: attr(child(el, "c:sizeRepresents"), "val") === "w",
+        negatives: flag(child(el, "c:showNegBubbles"), ctx.absent),
+        series: read("bubble"),
+      };
+    case "c:radarChart": {
+      const style = attr(child(el, "c:radarStyle"), "val");
+      return style === "filled" ? { kind: "radar", filled: true, series: read("filled") } : { kind: "radar", filled: false, series: read(style === "marker" ? "line" : "radar") };
+    }
+    case "c:surfaceChart":
+    case "c:surface3DChart": {
+      const series = read("filled");
+      const fmts = new Map(children(child(el, "c:bandFmts"), "c:bandFmt").map((b) => [numAttr(child(b, "c:idx"), "val", -1), b]));
+      // One band per major unit of the value axis, painted like series in turn.
+      const count = Math.max(SURFACE_BANDS, ...[...fmts.keys()].map((k) => k + 1));
+      return {
+        kind: "surface",
+        wireframe: flag(child(el, "c:wireframe"), false),
+        bands: Array.from({ length: count }, (_, i) => box(path(fmts.get(i) ?? null, "c:spPr"), autoFormat("filled", autoColor(i, count - 1, ctx), ctx), ctx)),
+        series,
+      };
+    }
+    case "c:pieChart":
+    case "c:pie3DChart":
+    case "c:doughnutChart":
+    case "c:ofPieChart":
       return {
         kind: "pie",
         firstSliceAngle: numAttr(child(el, "c:firstSliceAng"), "val", 0),
         holeSize: el.name === "c:doughnutChart" ? numAttr(child(el, "c:holeSize"), "val", 50) : 0,
         series: read("pie"),
       };
+    default:
+      // A line chart and its kin: 3-D lines, and stock charts (their high-low
+      // lines and up-down bars left out).
+      return { kind: "line", grouping: grouping(el, "standard"), series: read("line") };
   }
 }
 
-type SeriesKind = "filled" | "line" | "scatter" | "pie";
+/** Value bands a surface is painted in, at least. */
+const SURFACE_BANDS = 12;
+
+/** How a series is read: `radar` is a radar's line without markers. */
+type SeriesKind = "filled" | "line" | "scatter" | "pie" | "bubble" | "radar";
 
 /** Excel 2007's limit of points per series; past it a cache is cut. */
 const MAX_POINTS = 32000;
@@ -451,19 +553,21 @@ function readSeries(
   ctx: ChartContext,
 ): ChartSeries {
   const index = numAttr(child(ser, "c:idx"), "val", position);
-  const values = readValues(child(ser, kind === "scatter" ? "c:yVal" : "c:val")) ?? { values: [], format: "General" };
+  const xy = kind === "scatter" || kind === "bubble";
+  const values = readValues(child(ser, xy ? "c:yVal" : "c:val")) ?? { values: [], format: "General" };
   const count = values.values.length;
   const spPr = child(ser, "c:spPr");
 
   const color = autoColor(index, maxIndex, ctx);
-  const own = box(spPr, autoFormat(kind, color, ctx), ctx);
+  const drawn = kind === "radar" ? "line" : kind === "bubble" ? "filled" : kind;
+  const own = box(spPr, autoFormat(drawn, color, ctx), ctx);
 
   // Markers: line charts show them unless `c:marker val=0` at the plot; a
   // scatter's style says whether it has lines, markers or both.
   const scatterStyle = attr(child(plot, "c:scatterStyle"), "val") ?? "marker";
   const showMarkers =
     kind === "line" ? flag(child(plot, "c:marker"), true) : kind === "scatter" ? scatterStyle !== "line" && scatterStyle !== "smooth" : false;
-  const marker = kind === "line" || kind === "scatter" ? readMarker(child(ser, "c:marker"), showMarkers, index, color, ctx) : null;
+  const marker = drawn === "line" || kind === "scatter" ? readMarker(child(ser, "c:marker"), showMarkers, index, color, ctx) : null;
   // A scatter of markers only has no lines unless the series draws one.
   const line =
     kind === "scatter" && (scatterStyle === "marker" || scatterStyle === "none") && !path(spPr, "a:ln") ? null : own.line;
@@ -472,7 +576,7 @@ function readSeries(
   let points: ChartPoint[] | null = null;
   if (vary || dPts.size > 0) {
     points = Array.from({ length: count }, (_, i) => {
-      const pointAuto = vary ? box(spPr, autoFormat(kind, autoColor(i, count - 1, ctx), ctx), ctx) : { ...own, line };
+      const pointAuto = vary ? box(spPr, autoFormat(drawn, autoColor(i, count - 1, ctx), ctx), ctx) : { ...own, line };
       const d = dPts.get(i);
       const b = d ? box(child(d, "c:spPr"), pointAuto, ctx) : pointAuto;
       const m = d && marker ? readMarker(child(d, "c:marker"), true, index, color, ctx, marker) : marker;
@@ -481,11 +585,12 @@ function readSeries(
   }
 
   // Data labels: the plot's, then the series', then each point's.
-  const name = stringFrom(child(ser, "c:tx")) ?? `Series ${index + 1}`;
+  // Office's own name for an unnamed series has no space: "Series1".
+  const name = stringFrom(child(ser, "c:tx")) ?? `Series${index + 1}`;
   const plotBase = mergeLabels(plotLabels, defaultLabel(font), ctx);
   const serLabelsEl = child(ser, "c:dLbls");
   const serBase = mergeLabels(serLabelsEl, plotBase, ctx);
-  const shown = (l: ChartDataLabel | null): ChartDataLabel | null => (l && (l.value || l.percent || l.category || l.series || l.text) ? l : null);
+  const shown = (l: ChartDataLabel | null): ChartDataLabel | null => (l && (l.value || l.percent || l.category || l.series || l.size || l.text) ? l : null);
   const serDeleted = flag(child(serLabelsEl, "c:delete"), false) || flag(child(plotLabels, "c:delete"), false);
   const pointLabels = new Map(children(serLabelsEl, "c:dLbl").map((d) => [numAttr(child(d, "c:idx"), "val", -1), d]));
   // Office 2013's labels "from cells": their text is cached in the series.
@@ -507,8 +612,10 @@ function readSeries(
     index,
     name,
     values,
-    xValues: kind === "scatter" ? readValues(child(ser, "c:xVal")) : null,
-    fill: kind === "line" || kind === "scatter" ? null : own.fill,
+    xValues: xy ? readValues(child(ser, "c:xVal")) : null,
+    sizes: kind === "bubble" ? readValues(child(ser, "c:bubbleSize")) : null,
+    bubble3D: flag(child(ser, "c:bubble3D"), false),
+    fill: drawn === "line" || kind === "scatter" ? null : own.fill,
     line,
     effects: own.effects,
     marker,
@@ -585,6 +692,7 @@ function defaultLabel(font: ChartFont): ChartDataLabel {
     percent: false,
     category: false,
     series: false,
+    size: false,
     separator: null,
     position: null,
     format: null,
@@ -601,7 +709,7 @@ const LABEL_POSITIONS = new Set(["ctr", "inEnd", "inBase", "outEnd", "t", "b", "
 
 function mergeLabels(el: XmlElement | null, base: ChartDataLabel, ctx: ChartContext, fields: Record<string, string> = {}): ChartDataLabel {
   if (!el) return base;
-  const show = (name: string, current: boolean): boolean => flag(child(el, name), current);
+  const show = (name: string, current: boolean): boolean => flag(child(el, name), current || ctx.absent);
   const pos = attr(child(el, "c:dLblPos"), "val");
   const fmt = child(el, "c:numFmt");
   const spPr = box(child(el, "c:spPr"), { fill: base.fill, line: base.line, effects: NO_EFFECTS }, ctx);
@@ -613,6 +721,7 @@ function mergeLabels(el: XmlElement | null, base: ChartDataLabel, ctx: ChartCont
     percent: show("c:showPercent", base.percent),
     category: show("c:showCatName", base.category),
     series: show("c:showSerName", base.series),
+    size: show("c:showBubbleSize", base.size),
     separator: child(el, "c:separator")?.text ?? base.separator,
     position: pos && LABEL_POSITIONS.has(pos) ? (pos as ChartDataLabel["position"]) : base.position,
     format: fmt ? (isTrue(attr(fmt, "sourceLinked")) ? null : (attr(fmt, "formatCode") ?? null)) : base.format,
