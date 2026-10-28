@@ -259,6 +259,10 @@ const METRIC_TWINS: Record<string, string[]> = {
   "times new roman": ["Liberation Serif", "Tinos"],
   "courier new": ["Liberation Mono", "Cousine"],
   "arial narrow": ["Liberation Sans Narrow"],
+  // ChromeOS's names for the Liberation designs (Google Slides writes them).
+  arimo: ["Liberation Sans"],
+  tinos: ["Liberation Serif"],
+  cousine: ["Liberation Mono"],
 };
 
 function fontList(face: string, ea: string | null): string {

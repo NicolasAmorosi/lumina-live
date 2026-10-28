@@ -73,7 +73,10 @@ SlideView (React, components/shared/slide-view/) ◄── worship://deck/<id>/<
   shows a fallback face or a picture arriving late; `OutputView`'s preload warms the neighbours
   through it. `ModelSlide` fits the slide into its box the way `object-contain` fitted the image.
   Faces a deck names but this machine lacks fall back to bundled metric twins (Carlito, Caladea,
-  Liberation, `assets/fonts/slides/`).
+  Liberation, `assets/fonts/slides/`); the open faces PowerPoint 365 fetches as cloud fonts (Open
+  Sans, Montserrat, Source Sans Pro, with their per-weight family names) ship there as themselves.
+  Office faces with no open twin (Candara, Agency FB…) are right on a PC with Office and a fallback
+  elsewhere.
 - **What the show hides stays hidden**: a sound or video set to «Hide during show» (its media node
   in `p:timing` says `showWhenStopped="0"`) is left out of the model, as the legacy reader leaves
   out the speaker icons `fHide` marks. PowerPoint's own PDF export still draws them: it is not the
