@@ -193,6 +193,10 @@ export type Paragraph = {
   runs: TextRun[];
   /** Size of an empty paragraph's line (`endParaRPr`), in points. */
   endSize: number;
+  /** Tab stops (`a:tabLst`), in order, measured like `marginLeft` from the
+   *  text box's left edge; past the last one, a stop every `defaultTab`. */
+  tabs: { pos: number; align: "l" | "ctr" | "r" | "dec" }[];
+  defaultTab: number;
 };
 
 /** A numbered paragraph arrives as `char` with its number already counted. */
@@ -222,4 +226,6 @@ export type TextRun =
       highlight: string | null;
       effects: Effects;
     }
-  | { kind: "break" };
+  /** A line break, with the size (points) of the line it ends — an empty
+   *  line between two of them is that tall. */
+  | { kind: "break"; size: number };

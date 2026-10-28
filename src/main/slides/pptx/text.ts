@@ -147,7 +147,7 @@ function readParagraph(
   const runs: TextRun[] = [];
   for (const r of p.children) {
     if (r.name === "a:br") {
-      runs.push({ kind: "break" });
+      runs.push({ kind: "break", size: sizeOf([child(r, "a:rPr"), ...defRPrs]) * fontScale });
       continue;
     }
     if (r.name !== "a:r" && r.name !== "a:fld") continue;
@@ -171,7 +171,15 @@ function readParagraph(
     bullet: runs.some((r) => r.kind === "text") ? readBullet(chain, runs, ctx, counters, level) : null,
     runs,
     endSize,
+    tabs: children(pickChild("a:tabLst"), "a:tab")
+      .map((t) => ({ pos: numAttr(t, "pos", 0), align: tabAlign(attr(t, "algn")) }))
+      .sort((a, b) => a.pos - b.pos),
+    defaultTab: Number(pick("defTabSz") ?? 914400) || 914400,
   };
+}
+
+function tabAlign(v: string | null): Paragraph["tabs"][number]["align"] {
+  return v === "ctr" || v === "r" || v === "dec" ? v : "l";
 }
 
 function alignOf(v: string | null): Paragraph["align"] {
