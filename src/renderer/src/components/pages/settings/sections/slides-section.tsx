@@ -9,7 +9,7 @@ import { useProjectionStore } from "@renderer/stores/projection.store";
 import { api } from "@renderer/lib/api";
 import { toast } from "@renderer/lib/toast";
 import { formatBytes } from "@renderer/lib/utils";
-import { SLIDE_IMAGE_FORMATS, type SlideImageFormat } from "@shared/types/settings";
+import { SLIDE_FALLBACK_FONTS, SLIDE_IMAGE_FORMATS, type SlideFallbackFont, type SlideImageFormat } from "@shared/types/settings";
 import type { DeckCacheStats } from "@shared/types/deck";
 
 /** Offered as a list rather than a free number field: every value here is
@@ -38,6 +38,7 @@ export function SlidesSection({ active }: { active: boolean }) {
   const renderWidth = useSettingsStore((s) => s.settings["slides.maxRenderWidth"]);
   const imageFormat = useSettingsStore((s) => s.settings["slides.imageFormat"]);
   const warnMissingSoffice = useSettingsStore((s) => s.settings["slides.warnMissingSoffice"]);
+  const fallbackFont = useSettingsStore((s) => s.settings["slides.fallbackFont"]);
   const updateSettings = useSettingsStore((s) => s.update);
   const environment = useDeckStore((s) => s.environment);
   const liveDeckAssetId = useProjectionStore((s) => (s.base?.kind === "deck" ? s.base.assetId : null));
@@ -98,6 +99,23 @@ export function SlidesSection({ active }: { active: boolean }) {
           <Switch
             checked={warnMissingSoffice}
             onChange={(e) => void updateSettings({ "slides.warnMissingSoffice": e.target.checked })}
+          />
+        </FieldRow>
+      </FieldGroup>
+
+      {/* Reaches what is live at once and with no transition (`App` mirrors it
+          into every slide output), like the verse's style. */}
+      <FieldGroup title={t("settings.groups.slidesText")}>
+        <FieldRow description={t("settings.slidesFallbackFontDesc")} label={t("settings.slidesFallbackFont")}>
+          <Select
+            className="min-w-40"
+            onChange={(value) => void updateSettings({ "slides.fallbackFont": value ? (value as SlideFallbackFont) : null })}
+            options={[
+              { label: t("settings.slidesFallbackFontSystem"), value: "" },
+              ...SLIDE_FALLBACK_FONTS.map((font) => ({ label: font, value: font })),
+            ]}
+            size="md"
+            value={fallbackFont ?? ""}
           />
         </FieldRow>
       </FieldGroup>

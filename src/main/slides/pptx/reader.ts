@@ -16,6 +16,7 @@ import type {
 import { css, schemeColor, systemColor } from "./color";
 import { evaluateGeometry, geometryDef, type PresetTable } from "./geometry";
 import { readChart } from "./chart";
+import { layoutSmartArt } from "./smartart";
 import { cellStyle, parseTableStyles, tableBackground, type TableFlags, type TableStyleTable } from "./table-style";
 import { openPptx, relTarget, type PptxPackage } from "./package";
 import { fillIn, miss, NO_EFFECTS, readEffects, readImage, readLine, themeStyle, type ThemeStyles } from "./style";
@@ -526,7 +527,9 @@ function olePreview(ole: XmlElement | null, levelIndex: number, scope: SlideScop
 /**
  * SmartArt as PowerPoint last drew it: the `dsp:drawing` part it saves next to
  * the diagram, plain shapes in the frame's space. A diagram saved without one
- * (by other tools) is not laid out here.
+ * (other tools; or an empty one, which PowerPoint re-lays out too) is laid out
+ * here from its parts (`smartart.ts`), still counted as a miss: that layout is
+ * an approximation.
  */
 function readDiagram(data: XmlElement, frame: Frame, levelIndex: number, scope: SlideScope, scale: Scale): SlideElement | null {
   const part = scope.levels[levelIndex]!.part;
@@ -541,10 +544,17 @@ function readDiagram(data: XmlElement, frame: Frame, levelIndex: number, scope: 
   if (!drawingPart) {
     for (const r of rels.values()) if (r.type === "diagramDrawing" && !r.external) drawingPart = r.target;
   }
-  const tree = drawingPart ? path(scope.pkg.xml(drawingPart), "dsp:drawing", "dsp:spTree") : null;
-  if (!tree || !drawingPart) {
+  // The part's root IS `dsp:drawing`.
+  const tree = drawingPart ? path(scope.pkg.xml(drawingPart), "dsp:spTree") : null;
+  if (!tree || !drawingPart || !tree.children.some((c) => c.name !== "dsp:nvGrpSpPr" && c.name !== "dsp:grpSpPr")) {
     miss(scope, "smartart:no-drawing");
-    return null;
+    const partOf = (key: string): string | null => {
+      const rel = rels.get(attr(child(data, "dgm:relIds"), key) ?? "");
+      return rel && !rel.external ? rel.target : null;
+    };
+    const xml = (key: string): XmlElement | null => scope.pkg.xml(partOf(key) ?? "");
+    const parts = { data: xml("r:dm"), layout: xml("r:lo"), style: xml("r:qs"), colors: xml("r:cs"), dataPart: partOf("r:dm") ?? part };
+    return layoutSmartArt(parts, frame, styleCtx(scope, part), scope.presets);
   }
   // The drawing's shapes use `dsp:` names for the same structure; read them as
   // slide shapes against the drawing part's own relationships.

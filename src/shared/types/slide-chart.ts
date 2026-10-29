@@ -11,8 +11,7 @@ import type { Effects, Fill, Line } from "./slide-model";
  * Font sizes are points; line widths EMU; angles degrees, clockwise.
  */
 export type ChartModel =
-  /** A chart type we don't draw (3-D, radar, stock, bubble, …): `type` is its
-   *  element name (`bar3DChart`), for the compatibility check. */
+  /** A chart part that won't read (`type`: why), for the compatibility check. */
   | { kind: "unsupported"; type: string }
   | {
       kind: "chart";
@@ -33,9 +32,36 @@ export type ChartModel =
       /** Categories (or scatter's X values) and values. `null` for a pie. */
       categoryAxis: ChartAxis | null;
       valueAxis: ChartAxis | null;
+      /** A combo's second value scale: which plots (indices) are on it, and its axis. */
+      secondary: { plots: number[]; axis: ChartAxis } | null;
       /** `c:date1904`: serial dates count from 1904. */
       date1904: boolean;
+      /** A 3-D chart (bar, line, area, pie or surface): how it is seen. */
+      view3D: Chart3D | null;
     };
+
+/**
+ * `c:view3D`, the walls, and the 3-D plot's depth settings. Angles are
+ * degrees: `rotX` the elevation (a pie's tilt), `rotY` the turn about the
+ * vertical (a pie's first slice).
+ */
+export type Chart3D = {
+  rotX: number;
+  rotY: number;
+  /** `rAngAx`: an oblique view that keeps the front face square, no perspective. */
+  rightAngles: boolean;
+  /** The field of view, degrees (`perspective` is in half degrees); 0 = none. */
+  fov: number;
+  /** `depthPercent`: a row's depth, percent of a category's width. */
+  depth: number;
+  /** `gapDepth`: the gap between rows, percent of a bar's depth. */
+  gapDepth: number;
+  /** `c:shape` of 3-D bars. */
+  shape: "box" | "cylinder" | "cone" | "coneToMax" | "pyramid" | "pyramidToMax";
+  floor: ChartBox;
+  sideWall: ChartBox;
+  backWall: ChartBox;
+};
 
 export type ChartFont = {
   /** The face as the file names it (theme fonts resolved). */
@@ -100,6 +126,8 @@ export type ChartDataLabel = {
   font: ChartFont;
   fill: Fill | null;
   line: Line | null;
+  /** A bubble's size. */
+  size: boolean;
   /** A label the user dragged: its offset, in fractions of the chart area. */
   offset: { x: number; y: number } | null;
   /** A label whose text was typed over (or comes from cells). */
@@ -113,8 +141,11 @@ export type ChartSeries = {
   index: number;
   name: string;
   values: ChartValues;
-  /** Scatter: the X values (`null` → 1, 2, 3, …). */
+  /** Scatter and bubble: the X values (`null` → 1, 2, 3, …). */
   xValues: ChartValues | null;
+  /** Bubble: the sizes; `bubble3D` draws them as spheres. */
+  sizes: ChartValues | null;
+  bubble3D: boolean;
   fill: Fill | null;
   line: Line | null;
   effects: Effects;
@@ -136,7 +167,15 @@ export type ChartPlot =
   | { kind: "area"; grouping: ChartGrouping; series: ChartSeries[] }
   /** Pie and doughnut (`holeSize` > 0). */
   | { kind: "pie"; firstSliceAngle: number; holeSize: number; series: ChartSeries[] }
-  | { kind: "scatter"; series: ChartSeries[] };
+  | { kind: "scatter"; series: ChartSeries[] }
+  /** `scale`: the biggest bubble, percent of the default; `byWidth`: size is
+   *  the diameter (else the area); `negatives`: draw negative sizes. */
+  | { kind: "bubble"; scale: number; byWidth: boolean; negatives: boolean; series: ChartSeries[] }
+  /** Categories around a circle: lines (with markers as each series says) or filled. */
+  | { kind: "radar"; filled: boolean; series: ChartSeries[] }
+  /** A mesh over categories × series, coloured by value band (one box per
+   *  major unit of the value axis, cycling). */
+  | { kind: "surface"; wireframe: boolean; bands: ChartBox[]; series: ChartSeries[] };
 
 export type ChartTick = "out" | "in" | "cross" | "none";
 

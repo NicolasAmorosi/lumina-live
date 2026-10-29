@@ -1,6 +1,6 @@
 import type { Paragraph, TextBody, TextRun } from "@shared/types/slide-model";
-import type { CSSProperties, ReactNode } from "react";
-import { cqw } from "./slide-paint";
+import { Fragment, useContext, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
+import { cqw, SlideTextContext, withFallback } from "./slide-paint";
 
 const PT = 12700;
 /** PowerPoint's single line spacing, the same 1.2 em for every face. */
@@ -47,8 +47,9 @@ export function SlideText({
 }): ReactNode {
   const u = (emu: number): string => cqw(emu, slideWidth);
   const vertical = body.vertical !== "horz";
+  // Positioned either way: tab stops are measured from this box (`placeTabs`).
   const placed: CSSProperties = flow
-    ? {}
+    ? { position: "relative" }
     : {
         position: "absolute",
         left: u(box.x + body.insets.l),
@@ -72,7 +73,7 @@ export function SlideText({
   return (
     <div style={style}>
       {body.paragraphs.map((p, i) => (
-        <SlideParagraph key={i} p={p} u={u} wrap={body.wrap} first={i === 0} />
+        <SlideParagraph key={i} p={p} u={u} wrap={body.wrap} first={i === 0} slideWidth={slideWidth} />
       ))}
     </div>
   );
@@ -91,10 +92,33 @@ function firstRun(p: Paragraph): Extract<TextRun, { kind: "text" }> | undefined 
   return run?.kind === "text" ? run : undefined;
 }
 
-function SlideParagraph({ p, u, wrap, first }: { p: Paragraph; u: (emu: number) => string; wrap: boolean; first: boolean }): ReactNode {
+function SlideParagraph({
+  p,
+  u,
+  wrap,
+  first,
+  slideWidth,
+}: {
+  p: Paragraph;
+  u: (emu: number) => string;
+  wrap: boolean;
+  first: boolean;
+  slideWidth: number;
+}): ReactNode {
   const run = firstRun(p);
   const size = run?.size ?? p.endSize;
-  const [ascent, descent] = metricsOf(run?.font);
+  const { fallbackFont } = useContext(SlideTextContext);
+  const font = run ? withFallback(run.font, fallbackFont) : undefined;
+  // The strut: the smallest size in the paragraph. PowerPoint makes each line
+  // as tall as its own biggest text, so a smaller line (an empty one between
+  // two breaks, at the break's size) mustn't be held up to the first run's.
+  const strut = Math.min(size, ...p.runs.map((r) => r.size));
+  const ref = useRef<HTMLDivElement>(null);
+  const tabbed = p.runs.some((r) => r.kind === "text" && r.text.includes("\t"));
+  useLayoutEffect(() => {
+    if (tabbed && ref.current) placeTabs(ref.current, p, strut * PT, slideWidth);
+  });
+  const [ascent, descent] = metricsOf(font);
   // PowerPoint's line geometry, measured in its own rendering for six faces at
   // 20 and 40 pt (`gen-metrics.pptx`), and the same for all of them: a single
   // line is 1.2 em; in percent spacing the first baseline sits at 0.955 em
@@ -121,21 +145,72 @@ function SlideParagraph({ p, u, wrap, first }: { p: Paragraph; u: (emu: number) 
     lineHeight,
     ...(baselineShift ? { position: "relative", top: u(baselineShift * size * PT) } : null),
     direction: p.rtl ? "rtl" : undefined,
-    // The paragraph's own size and face set the strut, so an empty line is as
-    // tall as its end mark, and a line isn't made taller than its line-height
-    // by a default face whose ascent:descent differs from the text's (the two
-    // boxes align on the baseline and their union grows — measured with
-    // Candara: 48.4 px lines for 47.5).
-    fontSize: u(size * PT),
-    fontFamily: run?.font,
+    // The paragraph's own face sets the strut, so a line isn't made taller
+    // than its line-height by a default face whose ascent:descent differs from
+    // the text's (the two boxes align on the baseline and their union grows —
+    // measured with Candara: 48.4 px lines for 47.5). `placeTabs` reads its
+    // size back as the px-per-EMU scale.
+    fontSize: u(strut * PT),
+    fontFamily: font,
     ...(wrap ? null : { width: "max-content", alignSelf: p.align === "ctr" ? "center" : p.align === "r" ? "flex-end" : "flex-start" }),
   };
   return (
-    <div style={style}>
+    <div ref={ref} style={style}>
       {p.bullet ? <Bullet p={p} size={size} u={u} /> : null}
       {empty ? <span style={{ fontSize: u(p.endSize * PT) }}>{"​"}</span> : p.runs.map((r, i) => <Run key={i} run={r} u={u} />)}
+      {tabbed ? <span data-tab-end="" /> : null}
     </div>
   );
+}
+
+/**
+ * Tab stops, which CSS doesn't have (only a fixed `tab-size`): every `\t` is
+ * an empty inline-block (`Run`), widened here one by one, in order, to reach
+ * its stop — measured where the browser actually put it, so it follows the
+ * real text widths and line breaks. Widths are written in `cqw`, so the slide
+ * still scales with no measuring. Offsets, not client rects: a rotated shape
+ * would skew the latter.
+ */
+function placeTabs(para: HTMLElement, p: Paragraph, sizeEmu: number, slideWidth: number): void {
+  const marks = [...para.querySelectorAll<HTMLElement>("[data-tab]")];
+  for (const m of marks) m.style.width = "0px";
+  const box = para.parentElement;
+  const pxPerEmu = parseFloat(getComputedStyle(para).fontSize) / sizeEmu;
+  // ponytail: right-to-left tabs stay collapsed; measure from the right edge if one shows up.
+  if (!box || p.rtl || !(pxPerEmu > 0)) return;
+  const end = para.querySelector<HTMLElement>("[data-tab-end]");
+  const at = (el: HTMLElement): number => leftWithin(el, box) / pxPerEmu;
+  // Offsets are whole pixels: a tab already sitting on a stop must not take
+  // that same stop again.
+  const slack = 1.5 / pxPerEmu;
+  const stops = p.indent < 0 ? [...p.tabs, { pos: p.marginLeft, align: "l" as const }].sort((a, b) => a.pos - b.pos) : p.tabs;
+  marks.forEach((mark, i) => {
+    const x = at(mark);
+    if (!Number.isFinite(x)) return;
+    const stop = stops.find((s) => s.pos > x + slack) ?? {
+      pos: (Math.floor((x + slack) / p.defaultTab) + 1) * p.defaultTab,
+      align: "l" as const,
+    };
+    // A right or centred stop aligns the text up to the next tab (or the end).
+    const next = marks[i + 1] ?? end;
+    const segment = stop.align === "l" || !next ? 0 : Math.max(0, at(next) - x);
+    // ponytail: a decimal stop aligns the whole segment's end, not its decimal point.
+    const width = stop.pos - x - (stop.align === "ctr" ? segment / 2 : segment);
+    // Never wider than the slide: a wrong scale once made tabs millions of
+    // pixels wide, and Chromium stopped painting the slide at all.
+    mark.style.width = cqw(Math.min(slideWidth, Math.max(0, width)), slideWidth);
+  });
+}
+
+/** `el`'s left edge in `box`'s padding box, through the offset parents. */
+function leftWithin(el: HTMLElement, box: HTMLElement): number {
+  let x = 0;
+  let e: HTMLElement | null = el;
+  while (e && e !== box) {
+    x += e.offsetLeft;
+    e = e.offsetParent as HTMLElement | null;
+  }
+  return e === box ? x : NaN;
 }
 
 function Bullet({ p, size, u }: { p: Paragraph; size: number; u: (emu: number) => string }): ReactNode {
@@ -161,9 +236,10 @@ function Bullet({ p, size, u }: { p: Paragraph; size: number; u: (emu: number) =
 }
 
 function Run({ run, u }: { run: TextRun; u: (emu: number) => string }): ReactNode {
-  if (run.kind === "break") return <br />;
+  const { fallbackFont } = useContext(SlideTextContext);
+  if (run.kind === "break") return <span style={{ fontSize: u(run.size * PT) }}><br /></span>;
   const style: CSSProperties = {
-    fontFamily: run.font,
+    fontFamily: withFallback(run.font, fallbackFont),
     fontSize: u(run.size * PT),
     fontWeight: run.bold ? 700 : 400,
     fontStyle: run.italic ? "italic" : "normal",
@@ -196,5 +272,20 @@ function Run({ run, u }: { run: TextRun; u: (emu: number) => string }): ReactNod
   const glow = run.effects.glow;
   if (glow) for (const k of [0.25, 0.5, 1]) shadows.push(`0 0 ${u(glow.radius * k)} ${glow.color}`);
   if (shadows.length) style.textShadow = shadows.join(", ");
-  return <span style={style}>{run.text}</span>;
+  const parts = run.text.split("\t");
+  return (
+    <span style={style}>
+      {parts.length === 1
+        ? run.text
+        : parts.map((t, i) => (
+            <Fragment key={i}>
+              {i > 0 ? <span data-tab="" style={TAB} /> : null}
+              {t}
+            </Fragment>
+          ))}
+    </span>
+  );
 }
+
+/** A tab's box; `placeTabs` sets its width. */
+const TAB: CSSProperties = { display: "inline-block" };

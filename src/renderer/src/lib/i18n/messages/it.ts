@@ -609,6 +609,10 @@ const it: Messages = {
       "Quanto spazio su disco può occupare prima di iniziare a eliminare le presentazioni meno recenti",
     slidesRenderWidth: "Larghezza di rendering",
     slidesRenderWidthDesc: "Risoluzione orizzontale a cui viene rasterizzata ogni diapositiva",
+    slidesFallbackFont: "Font sostitutivo",
+    slidesFallbackFontDesc:
+      "Per un PowerPoint che usa un font che questo computer non ha. Prima si prova un font con le stesse misure (Calibri → Carlito, Arial → Liberation Sans); se non c'è, si usa questo.",
+    slidesFallbackFontSystem: "Quello di sistema",
     slidesImageFormat: "Formato immagine",
     slidesImageFormatDesc: "WebP pesa molto meno; PNG comprime senza perdita",
     slidesImageFormats: {
@@ -643,6 +647,7 @@ const it: Messages = {
       slidesCache: "Cache delle diapositive",
       slidesQuality: "Qualità di conversione",
       libreoffice: "LibreOffice",
+      slidesText: "Testo",
       appearance: "Aspetto",
       language: "Lingua",
       folders: "Cartelle dei file",

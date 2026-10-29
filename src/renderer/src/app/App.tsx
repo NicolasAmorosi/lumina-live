@@ -85,6 +85,9 @@ export function App() {
   );
   const bibleStyle = useSettingsStore((s) => s.settings["bible.style"]);
   const setBibleStyle = useProjectionStore((s) => s.setBibleStyle);
+  const fallbackFont = useSettingsStore((s) => s.settings["slides.fallbackFont"]);
+  const locale = useSettingsStore((s) => s.settings["ui.locale"]);
+  const setSlideText = useProjectionStore((s) => s.setSlideText);
 
   useGlobalShortcuts(useAnyModalOpen());
 
@@ -181,6 +184,12 @@ export function App() {
   useEffect(() => {
     setBibleStyle(bibleStyle);
   }, [bibleStyle, setBibleStyle]);
+
+  // What a model slide leaves to the machine (the face for a missing font,
+  // the language of chart numbers): same route, same in-place restyle.
+  useEffect(() => {
+    setSlideText({ fallbackFont, locale });
+  }, [fallbackFont, locale, setSlideText]);
 
   return (
     <>

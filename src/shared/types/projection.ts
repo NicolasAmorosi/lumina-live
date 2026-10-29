@@ -8,6 +8,7 @@ import type { BibleStyle } from "./bible-style";
 import type { SlideRect } from "./deck";
 import type { PlateKind, PlatePosition, PlateStyle } from "./overlay";
 import type { SceneStyle } from "./scene-style";
+import type { SlideTextSettings } from "./slide-model";
 import type { TimerClock, TimerFormat } from "./timer";
 import type { SlideTransition, TransitionSpec } from "./transition";
 import type { UtilityScene } from "./utility";
@@ -136,6 +137,11 @@ export type ProjectionOutputKind =
        *  identity: a push that re-sends the same slide (a plate going up, a
        *  volume change) carries the same one and animates nothing. */
       enter: SlideEnter | null;
+      /** What a model slide's text leaves to the machine, resolved from the
+       *  settings here because the projector has none: the face for a font
+       *  it lacks, and the language chart numbers are written in. Changing
+       *  either restyles the live slide in place, with no transition. */
+      text: SlideTextSettings;
     }
   /**
    * A generated time scene: a countdown, the wall clock or a stopwatch.

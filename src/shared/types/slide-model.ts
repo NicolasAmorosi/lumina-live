@@ -93,6 +93,9 @@ export type Effects = {
   glow: { color: string; radius: number } | null;
   softEdge: number | null;
   reflection: { blur: number; startAlpha: number; endAlpha: number; endPos: number; dist: number } | null;
+  /** `fillOverlay`: a second fill blended over the shape's own (a themed
+   *  texture tinted by a gradient), not over what lies under the shape. */
+  overlay: { fill: Fill; blend: "over" | "mult" | "screen" | "darken" | "lighten" } | null;
 };
 
 /** One subpath of a geometry, in the element's own box (0..w, 0..h, EMU), as
@@ -164,6 +167,13 @@ export type ChartElement = {
 
 export type { ChartModel };
 
+/** What the window drawing a slide decides that the file leaves to the
+ *  machine: the face for a font it lacks (`null`: the system's sans-serif,
+ *  after the file's face and its metric twins) and the language chart
+ *  numbers are written in — the interface's, not the system's (owner,
+ *  2026-10-28). */
+export type SlideTextSettings = { fallbackFont: string | null; locale: string };
+
 export type TextBody = {
   insets: Insets;
   anchor: "t" | "ctr" | "b";
@@ -193,6 +203,10 @@ export type Paragraph = {
   runs: TextRun[];
   /** Size of an empty paragraph's line (`endParaRPr`), in points. */
   endSize: number;
+  /** Tab stops (`a:tabLst`), in order, measured like `marginLeft` from the
+   *  text box's left edge; past the last one, a stop every `defaultTab`. */
+  tabs: { pos: number; align: "l" | "ctr" | "r" | "dec" }[];
+  defaultTab: number;
 };
 
 /** A numbered paragraph arrives as `char` with its number already counted. */
@@ -222,4 +236,6 @@ export type TextRun =
       highlight: string | null;
       effects: Effects;
     }
-  | { kind: "break" };
+  /** A line break, with the size (points) of the line it ends — an empty
+   *  line between two of them is that tall. */
+  | { kind: "break"; size: number };

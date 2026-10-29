@@ -523,7 +523,7 @@ function OutputScene({ frozenFrame, mode, onImageError, output, posterUrl }: Out
           `seq`, see `OutputView`) on slide navigation is what avoids the
           white flash between slides. */}
       {output.kind === "slide" && output.modelUrl ? (
-        <ModelSlide onError={() => onImageError?.(output.modelUrl ?? output.url)} url={output.modelUrl} />
+        <ModelSlide onError={() => onImageError?.(output.modelUrl ?? output.url)} text={output.text} url={output.modelUrl} />
       ) : null}
       {output.kind === "slide" && !output.modelUrl ? (
         <img

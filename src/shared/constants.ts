@@ -95,8 +95,10 @@ export const SLIDES_NATIVE_VERSION = 1;
  *  `.pptx` read by `src/main/slides/pptx/`): bump when the reader changes what
  *  it puts in a `SlideModel` or what a model deck records, so every such deck
  *  is read again. 2: speaker icons «hidden during show» left out, and each
- *  sound placed on its own slides. */
-export const SLIDES_MODEL_VERSION = 2;
+ *  sound placed on its own slides. 3: tab stops, sized line breaks, fill
+ *  overlays, SmartArt (cached drawings found, the rest laid out) and the
+ *  charts that were refused. */
+export const SLIDES_MODEL_VERSION = 3;
 
 /** Bump to force every non-manual `media_assets` row to re-run
  *  `resolveLinkedAudio` once, next time its deck is opened, even though a

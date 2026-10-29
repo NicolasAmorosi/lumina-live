@@ -6,10 +6,11 @@ import type {
   ShapeElement,
   SlideElement,
   SlideModel,
+  SlideTextSettings,
   TableElement,
 } from "@shared/types/slide-model";
 import { useId, type CSSProperties, type ReactNode } from "react";
-import { cqw, effectFilter, ImageInBox, strokeProps, svgPaint, type PaintContext, type ResolvePart } from "./slide-paint";
+import { cqw, effectFilter, ImageInBox, SlideTextContext, strokeProps, svgPaint, type PaintContext, type ResolvePart } from "./slide-paint";
 import { SlideChart } from "./slide-chart";
 import { SlideText } from "./slide-text";
 import "./slide-fonts.css";
@@ -22,7 +23,18 @@ import "./slide-fonts.css";
  * slide — it scales with whatever box it is given and needs no measuring.
  * Geometry is SVG in the element's own EMU; text is HTML laid over it.
  */
-export function SlideView({ model, resolve, style }: { model: SlideModel; resolve: ResolvePart; style?: CSSProperties }): ReactNode {
+export function SlideView({
+  model,
+  resolve,
+  style,
+  text = NO_TEXT_SETTINGS,
+}: {
+  model: SlideModel;
+  resolve: ResolvePart;
+  style?: CSSProperties;
+  /** The face for a font this machine lacks and the language of chart numbers. */
+  text?: SlideTextSettings;
+}): ReactNode {
   const id = useId().replace(/:/g, "");
   const scope: Scope = { id, resolve, slideWidth: model.width, background: model.background, slide: { w: model.width, h: model.height } };
   // The background is painted like any fill — an SVG rect — so a picture
@@ -44,12 +56,16 @@ export function SlideView({ model, resolve, style }: { model: SlideModel; resolv
         <defs>{bg.defs}</defs>
         <rect width={model.width} height={model.height} fill={bg.paint === "none" ? "white" : bg.paint} />
       </svg>
-      {model.elements.map((el, i) => (
-        <Element key={i} el={el} place={ROOT} scope={scope} path={`${i}`} />
-      ))}
+      <SlideTextContext value={text}>
+        {model.elements.map((el, i) => (
+          <Element key={i} el={el} place={ROOT} scope={scope} path={`${i}`} />
+        ))}
+      </SlideTextContext>
     </div>
   );
 }
+
+const NO_TEXT_SETTINGS: SlideTextSettings = { fallbackFont: null, locale: "" };
 
 type Scope = { id: string; resolve: ResolvePart; slideWidth: number; background: SlideModel["background"]; slide: { w: number; h: number } };
 
@@ -141,10 +157,17 @@ function Shape({ el, place, scope, path }: { el: ShapeElement; place: Place; sco
   const stroke = svgPaint(el.line?.fill ?? null, `${scope.id}-${path}-s`, ctx, { w, h });
   const strokeAttrs = strokeProps(el.line, stroke.paint);
   const markers = lineMarkers(el, stroke.paint, `${scope.id}-${path}`);
+  const overlay = el.effects.overlay && el.fill ? svgPaint(el.effects.overlay.fill, `${scope.id}-${path}-o`, ctx, { w, h }) : null;
   const textBox = { x: el.textRect.l, y: el.textRect.t, w: el.textRect.r - el.textRect.l, h: el.textRect.b - el.textRect.t };
+  // A soft edge eats the shape from its outline in (`SoftEdge`): past half its
+  // short side nothing is left to draw, glow included. Short of that, the glow
+  // is the whole outline's, behind the faded shape — not the faded shape's.
+  const soft = el.effects.softEdge;
+  const gone = soft !== null && soft * SOFT_ERODE >= Math.min(w, h) / 2;
+  const softGlow = soft && el.effects.glow ? el.effects.glow : null;
   return (
     <div style={frameStyle(el.frame, place, scope)}>
-      {el.paths.length > 0 && (el.fill || el.line) ? (
+      {el.paths.length > 0 && (el.fill || el.line) && !gone ? (
         // The viewport reaches past the box by `pad` on every side: a straight
         // line's box has no height, and an SVG of height 0 scales its stroke
         // to nothing. The viewBox grows by the same amount, so the scale stays
@@ -159,39 +182,67 @@ function Shape({ el, place, scope, path }: { el: ShapeElement; place: Place; sco
             top: cqw(-pad, scope.slideWidth),
             width: cqw(w + 2 * pad, scope.slideWidth),
             height: cqw(h + 2 * pad, scope.slideWidth),
-            filter: effectFilter(el.effects, scope.slideWidth),
+            filter: effectFilter(softGlow ? { ...el.effects, glow: null } : el.effects, scope.slideWidth),
           }}
         >
           <defs>
             {stretched ? null : fill.defs}
             {stroke.defs}
             {markers.defs}
+            {overlay?.defs}
+            {softGlow ? (
+              // The same blur as `effectFilter`'s glow (a drop-shadow of radius/2 is σ = radius/4).
+              <filter id={`${scope.id}-${path}-gl`} x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation={softGlow.radius / 4} />
+              </filter>
+            ) : null}
             {stretched ? (
               <clipPath id={`${scope.id}-${path}-c`}>
                 {el.paths.filter((p) => p.fill !== "none").map((p, i) => <path key={i} d={p.d} />)}
               </clipPath>
             ) : null}
           </defs>
+          {softGlow ? (
+            <g fill={softGlow.color} filter={`url(#${scope.id}-${path}-gl)`}>
+              {el.paths.map((p, i) => (
+                <path key={i} d={p.d} />
+              ))}
+            </g>
+          ) : null}
           <SoftEdge id={`${scope.id}-${path}-e`} radius={el.effects.softEdge} outline={el.paths.map((p, i) => <path key={i} d={p.d} />)}>
-            {stretched ? (
-              // A stretched picture fill is the picture clipped by the outline
-              // (a pattern tile the size of the box is the same thing, slower).
-              <g clipPath={`url(#${scope.id}-${path}-c)`}>
-                <ImageInBox id={`${scope.id}-${path}-i`} image={stretched.image} w={w} h={h} resolve={scope.resolve} />
-              </g>
-            ) : null}
-            {el.paths.map((p, i) => (
-              <g key={i}>
-                {p.fill !== "none" && !stretched ? <path d={p.d} fill={fill.paint} stroke="none" /> : null}
-                {p.fill !== "none" && p.fill !== "norm" && el.fill ? <path d={p.d} fill={SHADE[p.fill]} stroke="none" /> : null}
-                {p.stroke ? <path d={p.d} fill="none" {...strokeAttrs} markerStart={markers.start} markerEnd={markers.end} /> : null}
-              </g>
-            ))}
+            {/* Isolated, so an overlay blends with the shape's fill only. */}
+            <g style={overlay ? { isolation: "isolate" } : undefined}>
+              {stretched ? (
+                // A stretched picture fill is the picture clipped by the outline
+                // (a pattern tile the size of the box is the same thing, slower).
+                <g clipPath={`url(#${scope.id}-${path}-c)`}>
+                  <ImageInBox id={`${scope.id}-${path}-i`} image={stretched.image} w={w} h={h} resolve={scope.resolve} />
+                </g>
+              ) : null}
+              {el.paths.map((p, i) => (
+                <g key={i}>
+                  {p.fill !== "none" && !stretched ? <path d={p.d} fill={fill.paint} stroke="none" /> : null}
+                  {p.fill !== "none" && p.fill !== "norm" && el.fill ? <path d={p.d} fill={SHADE[p.fill]} stroke="none" /> : null}
+                  {p.fill !== "none" && overlay ? (
+                    <path d={p.d} fill={overlay.paint} stroke="none" style={{ mixBlendMode: BLEND[el.effects.overlay!.blend] }} />
+                  ) : null}
+                  {p.stroke ? <path d={p.d} fill="none" {...strokeAttrs} markerStart={markers.start} markerEnd={markers.end} /> : null}
+                </g>
+              ))}
+            </g>
           </SoftEdge>
         </svg>
       ) : null}
       {el.text ? (
-        <div style={{ position: "absolute", inset: 0, transform: textTransform(el.frame) }}>
+        // A shape that paints nothing casts its shadow and glow from its text.
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            transform: textTransform(el.frame),
+            filter: el.fill || el.line?.fill ? undefined : effectFilter(el.effects, scope.slideWidth),
+          }}
+        >
           <SlideText body={el.text} box={textBox} slideWidth={scope.slideWidth} />
         </div>
       ) : null}
@@ -200,19 +251,24 @@ function Shape({ el, place, scope, path }: { el: ShapeElement; place: Place; sco
 }
 
 /**
- * `softEdge`: the shape fades to transparent over `radius` from its outline
- * inwards, in a straight ramp. A mask of the outline shrunk by half the radius
- * and blurred by 0.4 of it has that ramp's slope at its middle (a Gaussian's
- * peak density 0.399/σ = 1/radius). In the SVG's own EMU, so it scales.
+ * `softEdge`: PowerPoint eats the shape from its outline in. Measured on red
+ * rectangles from 6 to 100 pt (`gen-softedge.pptx`): the 50% contour sits at
+ * 0.92 of the radius inside the outline and the 10–90% ramp is 0.8 of it wide,
+ * the same at every radius — the outline shrunk by 0.92·r and blurred by
+ * σ = 0.31·r. A radius past half the short side leaves nothing. In the SVG's
+ * own EMU, so it scales.
  */
+const SOFT_ERODE = 0.92;
+const SOFT_BLUR = 0.31;
+
 function SoftEdge({ id, radius, outline, children }: { id: string; radius: number | null; outline: ReactNode; children: ReactNode }): ReactNode {
   if (!radius) return children;
   return (
     <>
       <defs>
         <filter id={`${id}-f`} x="-50%" y="-50%" width="200%" height="200%" colorInterpolationFilters="sRGB">
-          <feMorphology operator="erode" radius={radius / 2} />
-          <feGaussianBlur stdDeviation={radius * 0.4} />
+          <feMorphology operator="erode" radius={radius * SOFT_ERODE} />
+          <feGaussianBlur stdDeviation={radius * SOFT_BLUR} />
         </filter>
         <mask id={`${id}-m`} maskUnits="userSpaceOnUse" x="-100%" y="-100%" width="300%" height="300%">
           <g fill="white" filter={`url(#${id}-f)`}>
@@ -231,6 +287,14 @@ const SHADE: Record<string, string> = {
   darkenLess: "rgba(0,0,0,0.2)",
   lighten: "rgba(255,255,255,0.4)",
   lightenLess: "rgba(255,255,255,0.2)",
+};
+
+const BLEND: Record<NonNullable<ShapeElement["effects"]["overlay"]>["blend"], CSSProperties["mixBlendMode"]> = {
+  over: "normal",
+  mult: "multiply",
+  screen: "screen",
+  darken: "darken",
+  lighten: "lighten",
 };
 
 const END_SIZE = { sm: 2, med: 3, lg: 5 } as const;
@@ -272,6 +336,7 @@ function Picture({ el, place, scope, path }: { el: PictureElement; place: Place;
   const ctx = paintContext(scope, place, x, y);
   const stroke = svgPaint(el.line?.fill ?? null, `${scope.id}-${path}-s`, ctx, { w, h });
   const fill = svgPaint(el.fill, `${scope.id}-${path}-f`, ctx, { w, h });
+  const overlay = el.effects.overlay ? svgPaint(el.effects.overlay.fill, `${scope.id}-${path}-o`, ctx, { w, h }) : null;
   return (
     <div style={frameStyle(el.frame, place, scope)}>
       <svg
@@ -288,15 +353,17 @@ function Picture({ el, place, scope, path }: { el: PictureElement; place: Place;
             {el.clip ? el.clip.filter((p) => p.fill !== "none").map((p, i) => <path key={i} d={p.d} />) : <rect width={w} height={h} />}
           </clipPath>
           {stroke.defs}
+          {overlay?.defs}
         </defs>
         <SoftEdge
           id={`${scope.id}-${path}-e`}
           radius={el.effects.softEdge}
           outline={el.clip ? el.clip.map((p, i) => <path key={i} d={p.d} />) : <rect width={w} height={h} />}
         >
-          <g clipPath={`url(#${clipId})`}>
+          <g clipPath={`url(#${clipId})`} style={overlay ? { isolation: "isolate" } : undefined}>
             {el.fill ? <rect width={w} height={h} fill={fill.paint} /> : null}
             <ImageInBox id={`${scope.id}-${path}-i`} image={el.image} w={w} h={h} resolve={scope.resolve} />
+            {overlay ? <rect width={w} height={h} fill={overlay.paint} style={{ mixBlendMode: BLEND[el.effects.overlay!.blend] }} /> : null}
           </g>
         </SoftEdge>
         {el.line ? (

@@ -602,6 +602,10 @@ const es = {
     slidesCacheMaxDesc: "Cuánto disco puede ocupar antes de empezar a borrar las presentaciones más viejas",
     slidesRenderWidth: "Ancho de render",
     slidesRenderWidthDesc: "Resolución horizontal a la que se rasteriza cada diapositiva",
+    slidesFallbackFont: "Fuente de reemplazo",
+    slidesFallbackFontDesc:
+      "Para un PowerPoint que usa una fuente que esta PC no tiene. Antes se prueba una con las mismas medidas (Calibri → Carlito, Arial → Liberation Sans); si no hay, se usa esta.",
+    slidesFallbackFontSystem: "La del sistema",
     slidesImageFormat: "Formato de imagen",
     slidesImageFormatDesc: "WebP pesa bastante menos; PNG no comprime con pérdida",
     slidesImageFormats: {
@@ -636,6 +640,7 @@ const es = {
       slidesCache: "Caché de diapositivas",
       slidesQuality: "Calidad de conversión",
       libreoffice: "LibreOffice",
+      slidesText: "Texto",
       appearance: "Apariencia",
       language: "Idioma",
       folders: "Carpetas de archivos",

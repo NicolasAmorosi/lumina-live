@@ -251,7 +251,7 @@ function lineEnd(el: XmlElement | null, base: LineEnd | null): LineEnd | null {
   };
 }
 
-export const NO_EFFECTS: Effects = { shadow: null, glow: null, softEdge: null, reflection: null };
+export const NO_EFFECTS: Effects = { shadow: null, glow: null, softEdge: null, reflection: null, overlay: null };
 
 /** `a:effectLst` — or the base when the element names none. An empty
  *  `<a:effectLst/>` clears an inherited one. */
@@ -298,6 +298,12 @@ export function readEffects(el: XmlElement | null | undefined, ctx: StyleContext
           dist: numAttr(e, "dist", 0),
         };
         break;
+      case "a:fillOverlay": {
+        const fill = e.children[0] ? readFill(e.children[0], ctx) : null;
+        const blend = attr(e, "blend");
+        if (fill) out.overlay = { fill, blend: blend === "mult" || blend === "screen" || blend === "darken" || blend === "lighten" ? blend : "over" };
+        break;
+      }
       default:
         miss(ctx, `effect:${e.name}`);
     }

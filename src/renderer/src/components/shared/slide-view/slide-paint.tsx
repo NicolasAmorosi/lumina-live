@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components -- paint helpers that return SVG elements, next to the one component they use; nothing here keeps state a fast refresh would preserve. */
-import type { Effects, Fill, GradientStop, ImageRef, Line } from "@shared/types/slide-model";
-import type { ReactNode } from "react";
+import type { Effects, Fill, GradientStop, ImageRef, Line, SlideTextSettings } from "@shared/types/slide-model";
+import { createContext, type ReactNode } from "react";
 
 /**
  * Turning model fills, lines and effects into SVG paint. Everything here is
@@ -10,6 +10,17 @@ import type { ReactNode } from "react";
  */
 
 export type ResolvePart = (part: string) => string;
+
+/** What the window drawing a slide decides for its text (`SlideView`'s
+ *  `text`), read by the text and the charts under it. With none — the
+ *  regression harness — the system's own face and language. */
+export const SlideTextContext = createContext<SlideTextSettings>({ fallbackFont: null, locale: "" });
+
+/** A run's family list with the chosen fallback face before the generic one:
+ *  after the file's face and its metric twins, never instead of them. */
+export function withFallback(fonts: string, fallback: string | null): string {
+  return fallback ? fonts.replace(/sans-serif$/, `"${fallback}", sans-serif`) : fonts;
+}
 
 /** What a paint may need beyond the fill itself. */
 export type PaintContext = {

@@ -20,6 +20,7 @@ import type { UtilityScene } from "@shared/types/utility";
 import { PLATE_KINDS, platesCollide, type Plate } from "@shared/types/overlay";
 import { assetUrl } from "@shared/urls";
 import { DEFAULT_BIBLE_STYLE, type BibleStyle } from "@shared/types/bible-style";
+import type { SlideTextSettings } from "@shared/types/slide-model";
 import { bibleOutputFor } from "@renderer/lib/bible-output";
 import { timerOutputFor } from "@renderer/lib/utility-output";
 import { plateOutputFor } from "@renderer/lib/plate-output";
@@ -139,6 +140,9 @@ export type ProjectionStoreState = {
    * falls out of the epoch discipline for free.
    */
   bibleStyle: BibleStyle;
+  /** `slides.fallbackFont` and `ui.locale`, mirrored by `App` like `bibleStyle`
+   *  and carried by every `slide` output: the projector has no settings. */
+  slideText: SlideTextSettings;
   /**
    * The overlay plates the operator has put up — RESOLVED copies, none
    * colliding with another (`platesCollide`), in `PLATE_KINDS` order so the projector's DOM order never
@@ -232,6 +236,7 @@ export type ProjectionStoreState = {
   beginScene: () => void;
   setTransitionSettings: (style: TransitionStyle, durationMs: number) => void;
   setBibleStyle: (style: BibleStyle) => void;
+  setSlideText: (text: SlideTextSettings) => void;
   /** Puts a plate up, taking down whichever plate it collides with (`platesCollide`). */
   showPlate: (plate: Plate) => void;
   hidePlate: (id: number) => void;
@@ -324,6 +329,7 @@ export const useProjectionStore = create<ProjectionStoreState>()(
     transitionStyle: "crossfade",
     transitionDurationMs: 300,
     bibleStyle: DEFAULT_BIBLE_STYLE,
+    slideText: { fallbackFont: null, locale: "es" },
     livePlates: [],
     plateHideClocks: {},
 
@@ -469,6 +475,7 @@ export const useProjectionStore = create<ProjectionStoreState>()(
     setTransitionSettings: (transitionStyle, transitionDurationMs) =>
       set({ transitionStyle, transitionDurationMs }),
     setBibleStyle: (bibleStyle) => set({ bibleStyle }),
+    setSlideText: (slideText) => set({ slideText }),
     showPlate: (plate) =>
       set((state) => {
         const livePlates = orderedPlates([...state.livePlates.filter((p) => !platesCollide(p, plate)), plate]);
@@ -609,6 +616,7 @@ function selectOutputWithoutUnderlay(state: ProjectionStoreState): ProjectionOut
         total: deck.slides.length,
         preload,
         enter: state.slideEntry ? { ...state.slideEntry, seq: state.slideVideoEpoch } : null,
+        text: state.slideText,
       };
     }
     case "video":
@@ -695,6 +703,7 @@ type OutputInputs = readonly [
   ProjectionStoreState["transitionStyle"],
   ProjectionStoreState["transitionDurationMs"],
   ProjectionStoreState["bibleStyle"],
+  ProjectionStoreState["slideText"],
   ProjectionStoreState["livePlates"],
 ];
 
@@ -715,6 +724,7 @@ function outputInputs(state: ProjectionStoreState): OutputInputs {
     state.transitionStyle,
     state.transitionDurationMs,
     state.bibleStyle,
+    state.slideText,
     state.livePlates,
   ];
 }

@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
+import type { SlideTextSettings } from "@shared/types/slide-model";
 import { partResolver, useSlideModel } from "@renderer/lib/slide-models";
+import { useProjectionStore } from "@renderer/stores/projection.store";
 import { SlideView } from "./SlideView";
 
 /**
@@ -8,9 +10,14 @@ import { SlideView } from "./SlideView";
  * letterboxed. The box is a size container of its own because the views it
  * sits in (`OutputView`) are `inline-size` containers, where `cqh` resolves
  * against something else entirely.
+ *
+ * `text` is the output's on a monitor and on the projector, which has no
+ * settings; a grid or a library tile takes the control window's own, the
+ * same value `App` mirrors into every output.
  */
-export function ModelSlide({ onError, url }: { onError?: () => void; url: string }): ReactNode {
+export function ModelSlide({ onError, text, url }: { onError?: () => void; text?: SlideTextSettings; url: string }): ReactNode {
   const shown = useSlideModel(url, onError);
+  const mirrored = useProjectionStore((s) => s.slideText);
   if (!shown) return null;
   const ratio = shown.model.width / shown.model.height;
   return (
@@ -29,7 +36,7 @@ export function ModelSlide({ onError, url }: { onError?: () => void; url: string
             EMU) was repainted only up to x ≈ 8.39M EMU — 2^23 — and the rest
             of the previous slide stayed on the projector. See
             .claude/knowledge/a-slide-svg-in-emu-repaints-only-below-2-23-so-a-new-slide-must-be-a-new-tree.md */}
-        <SlideView key={shown.url} model={shown.model} resolve={partResolver(shown.url)} />
+        <SlideView key={shown.url} model={shown.model} resolve={partResolver(shown.url)} text={text ?? mirrored} />
       </div>
     </div>
   );

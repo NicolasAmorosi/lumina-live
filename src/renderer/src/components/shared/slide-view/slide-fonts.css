@@ -146,3 +146,361 @@
   font-style: italic;
   font-display: block;
 }
+
+/*
+ * Open faces PowerPoint 365 fetches as cloud fonts and decks name without
+ * embedding them (Open Sans, Montserrat, Source Sans), the same on every
+ * platform. Variable files; a family named after one weight ("Montserrat
+ * SemiBold", as Google Slides writes them) is the same file from that weight
+ * up, so its bold run is still bolder. All SIL OFL 1.1 (licences beside the files).
+ */
+@font-face {
+  font-family: "Open Sans";
+  src: url("../../../assets/fonts/slides/OpenSans.ttf") format("truetype");
+  font-weight: 300 800;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Open Sans";
+  src: url("../../../assets/fonts/slides/OpenSans-Italic.ttf") format("truetype");
+  font-weight: 300 800;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Open Sans Light";
+  src: url("../../../assets/fonts/slides/OpenSans.ttf") format("truetype");
+  font-weight: 300 800;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Open Sans Light";
+  src: url("../../../assets/fonts/slides/OpenSans-Italic.ttf") format("truetype");
+  font-weight: 300 800;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Open Sans Medium";
+  src: url("../../../assets/fonts/slides/OpenSans.ttf") format("truetype");
+  font-weight: 500 800;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Open Sans Medium";
+  src: url("../../../assets/fonts/slides/OpenSans-Italic.ttf") format("truetype");
+  font-weight: 500 800;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Open Sans SemiBold";
+  src: url("../../../assets/fonts/slides/OpenSans.ttf") format("truetype");
+  font-weight: 600 800;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Open Sans SemiBold";
+  src: url("../../../assets/fonts/slides/OpenSans-Italic.ttf") format("truetype");
+  font-weight: 600 800;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Open Sans ExtraBold";
+  src: url("../../../assets/fonts/slides/OpenSans.ttf") format("truetype");
+  font-weight: 800 800;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Open Sans ExtraBold";
+  src: url("../../../assets/fonts/slides/OpenSans-Italic.ttf") format("truetype");
+  font-weight: 800 800;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Montserrat";
+  src: url("../../../assets/fonts/slides/Montserrat.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Montserrat";
+  src: url("../../../assets/fonts/slides/Montserrat-Italic.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Montserrat Thin";
+  src: url("../../../assets/fonts/slides/Montserrat.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Montserrat Thin";
+  src: url("../../../assets/fonts/slides/Montserrat-Italic.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Montserrat ExtraLight";
+  src: url("../../../assets/fonts/slides/Montserrat.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Montserrat ExtraLight";
+  src: url("../../../assets/fonts/slides/Montserrat-Italic.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Montserrat Light";
+  src: url("../../../assets/fonts/slides/Montserrat.ttf") format("truetype");
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Montserrat Light";
+  src: url("../../../assets/fonts/slides/Montserrat-Italic.ttf") format("truetype");
+  font-weight: 300 900;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Montserrat Medium";
+  src: url("../../../assets/fonts/slides/Montserrat.ttf") format("truetype");
+  font-weight: 500 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Montserrat Medium";
+  src: url("../../../assets/fonts/slides/Montserrat-Italic.ttf") format("truetype");
+  font-weight: 500 900;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Montserrat SemiBold";
+  src: url("../../../assets/fonts/slides/Montserrat.ttf") format("truetype");
+  font-weight: 600 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Montserrat SemiBold";
+  src: url("../../../assets/fonts/slides/Montserrat-Italic.ttf") format("truetype");
+  font-weight: 600 900;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Montserrat ExtraBold";
+  src: url("../../../assets/fonts/slides/Montserrat.ttf") format("truetype");
+  font-weight: 800 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Montserrat ExtraBold";
+  src: url("../../../assets/fonts/slides/Montserrat-Italic.ttf") format("truetype");
+  font-weight: 800 900;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Montserrat Black";
+  src: url("../../../assets/fonts/slides/Montserrat.ttf") format("truetype");
+  font-weight: 900 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Montserrat Black";
+  src: url("../../../assets/fonts/slides/Montserrat-Italic.ttf") format("truetype");
+  font-weight: 900 900;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans Pro";
+  src: url("../../../assets/fonts/slides/SourceSans3.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans Pro";
+  src: url("../../../assets/fonts/slides/SourceSans3-Italic.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans Pro ExtraLight";
+  src: url("../../../assets/fonts/slides/SourceSans3.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans Pro ExtraLight";
+  src: url("../../../assets/fonts/slides/SourceSans3-Italic.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans Pro Light";
+  src: url("../../../assets/fonts/slides/SourceSans3.ttf") format("truetype");
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans Pro Light";
+  src: url("../../../assets/fonts/slides/SourceSans3-Italic.ttf") format("truetype");
+  font-weight: 300 900;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans Pro Medium";
+  src: url("../../../assets/fonts/slides/SourceSans3.ttf") format("truetype");
+  font-weight: 500 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans Pro Medium";
+  src: url("../../../assets/fonts/slides/SourceSans3-Italic.ttf") format("truetype");
+  font-weight: 500 900;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans Pro SemiBold";
+  src: url("../../../assets/fonts/slides/SourceSans3.ttf") format("truetype");
+  font-weight: 600 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans Pro SemiBold";
+  src: url("../../../assets/fonts/slides/SourceSans3-Italic.ttf") format("truetype");
+  font-weight: 600 900;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans Pro Black";
+  src: url("../../../assets/fonts/slides/SourceSans3.ttf") format("truetype");
+  font-weight: 900 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans Pro Black";
+  src: url("../../../assets/fonts/slides/SourceSans3-Italic.ttf") format("truetype");
+  font-weight: 900 900;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans 3";
+  src: url("../../../assets/fonts/slides/SourceSans3.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans 3";
+  src: url("../../../assets/fonts/slides/SourceSans3-Italic.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans 3 ExtraLight";
+  src: url("../../../assets/fonts/slides/SourceSans3.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans 3 ExtraLight";
+  src: url("../../../assets/fonts/slides/SourceSans3-Italic.ttf") format("truetype");
+  font-weight: 200 900;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans 3 Light";
+  src: url("../../../assets/fonts/slides/SourceSans3.ttf") format("truetype");
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans 3 Light";
+  src: url("../../../assets/fonts/slides/SourceSans3-Italic.ttf") format("truetype");
+  font-weight: 300 900;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans 3 Medium";
+  src: url("../../../assets/fonts/slides/SourceSans3.ttf") format("truetype");
+  font-weight: 500 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans 3 Medium";
+  src: url("../../../assets/fonts/slides/SourceSans3-Italic.ttf") format("truetype");
+  font-weight: 500 900;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans 3 SemiBold";
+  src: url("../../../assets/fonts/slides/SourceSans3.ttf") format("truetype");
+  font-weight: 600 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans 3 SemiBold";
+  src: url("../../../assets/fonts/slides/SourceSans3-Italic.ttf") format("truetype");
+  font-weight: 600 900;
+  font-style: italic;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans 3 Black";
+  src: url("../../../assets/fonts/slides/SourceSans3.ttf") format("truetype");
+  font-weight: 900 900;
+  font-style: normal;
+  font-display: block;
+}
+@font-face {
+  font-family: "Source Sans 3 Black";
+  src: url("../../../assets/fonts/slides/SourceSans3-Italic.ttf") format("truetype");
+  font-weight: 900 900;
+  font-style: italic;
+  font-display: block;
+}

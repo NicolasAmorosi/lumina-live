@@ -195,6 +195,17 @@ describe("each kind of base content", () => {
     });
   });
 
+  test("a deck slide carries the fallback face and the interface language; changing them is no new scene", () => {
+    const store = useProjectionStore.getState();
+    store.setLiveDeck(deckOf(9, 5));
+    store.setBase({ kind: "deck", assetId: 9, slideIndex: 2 });
+    const epoch = useProjectionStore.getState().sceneEpoch;
+    store.setSlideText({ fallbackFont: "Carlito", locale: "it" });
+    expect(output()).toMatchObject({ kind: "slide", index: 2, text: { fallbackFont: "Carlito", locale: "it" } });
+    // Restyled in place, like the verse: no fade into a copy of itself.
+    expect(useProjectionStore.getState().sceneEpoch).toBe(epoch);
+  });
+
   test("the slide index is clamped to the deck", () => {
     const store = useProjectionStore.getState();
     store.setLiveDeck(deckOf(9, 3));

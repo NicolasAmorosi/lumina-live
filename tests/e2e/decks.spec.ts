@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { Page } from "@playwright/test";
 import Database from "better-sqlite3";
+import { strToU8, zipSync } from "fflate";
 import type { MediaAsset } from "../../src/shared/types/media";
 import { SLIDES_CONVERTER_VERSION } from "../../src/shared/constants";
 import { fixture } from "./support/paths";
@@ -312,6 +313,56 @@ test("without LibreOffice, a .pptx is drawn from its model and projected", async
   await expect(again.previewColumn().getByText("Hace falta LibreOffice para convertir esta presentación")).toHaveCount(0);
   await again.goLive();
   await expect.poll(async () => projectedSlide(await again.projector())).toBe(1);
+});
+
+/** A one-slide `.pptx` whose only text names a face no machine has. */
+function missingFaceDeck(file: string): void {
+  const ns =
+    'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"';
+  const rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  const pkg = "http://schemas.openxmlformats.org/package/2006/relationships";
+  fs.writeFileSync(
+    file,
+    zipSync({
+      "[Content_Types].xml": strToU8(
+        `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/><Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/></Types>`,
+      ),
+      "_rels/.rels": strToU8(`<Relationships xmlns="${pkg}"><Relationship Id="rId1" Type="${rel}/officeDocument" Target="ppt/presentation.xml"/></Relationships>`),
+      "ppt/presentation.xml": strToU8(
+        `<p:presentation ${ns}><p:sldIdLst><p:sldId id="256" r:id="rId1"/></p:sldIdLst><p:sldSz cx="9144000" cy="6858000"/></p:presentation>`,
+      ),
+      "ppt/_rels/presentation.xml.rels": strToU8(`<Relationships xmlns="${pkg}"><Relationship Id="rId1" Type="${rel}/slide" Target="slides/slide1.xml"/></Relationships>`),
+      "ppt/slides/slide1.xml": strToU8(
+        `<p:sld ${ns}><p:cSld><p:spTree><p:sp><p:nvSpPr><p:cNvPr id="2" name="T"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="457200" y="457200"/><a:ext cx="8229600" cy="1828800"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>` +
+          `<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr sz="4000"><a:latin typeface="Lumina Missing Face"/></a:rPr><a:t>Sublime gracia</a:t></a:r></a:p></p:txBody></p:sp>` +
+          `</p:spTree></p:cSld></p:sld>`,
+      ),
+    }),
+  );
+}
+
+test("the fallback face chosen in Ajustes reaches a live model slide at once", async ({ app }) => {
+  const deck = path.join(app.profile, "fallback.pptx");
+  missingFaceDeck(deck);
+  await app.invoke("library:add", { kind: "ppt", paths: [deck] });
+  await app.previewFile("Presentaciones", "fallback");
+  await expect(slideTile(app, 1)).toBeVisible({ timeout: 30_000 });
+  await app.goLive();
+  const projector = await app.projector();
+  const projectedFamily = () => projector.getByText("Sublime gracia").evaluate((el) => getComputedStyle(el).fontFamily);
+  await expect.poll(projectedFamily).toContain("Lumina Missing Face");
+  expect(await projectedFamily()).not.toContain("Montserrat");
+
+  await app.control.getByRole("button", { name: "Configuración" }).click();
+  const settings = app.control.getByRole("dialog", { name: "Configuración" });
+  await settings.getByRole("tab", { name: "Diapositivas" }).click();
+  await settings.getByRole("group", { name: "Fuente de reemplazo" }).getByRole("combobox").click();
+  await app.control.getByRole("option", { name: "Montserrat", exact: true }).click();
+
+  // After the file's own face, never instead of it, and with no relaunch.
+  // (Chromium writes a one-word family back unquoted.)
+  await expect.poll(projectedFamily).toMatch(/"Lumina Missing Face".*\bMontserrat"?, sans-serif$/);
 });
 
 test("without LibreOffice: warned at launch, a PowerPoint is gated, a PDF still projects", async ({ app }) => {
