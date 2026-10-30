@@ -126,7 +126,6 @@ test("a projector closed from outside pauses the engine, and «Reabrir» goes on
 });
 
 test("an engine that dies is reported and left to the operator", async ({ app }) => {
-  test.skip(process.platform === "win32", "finds the engine with pgrep");
   const [avi] = await app.addMedia("video", "long-xvid.avi");
   if (!avi) throw new Error("import failed");
   await waitEngine(app, avi);
@@ -136,9 +135,15 @@ test("an engine that dies is reported and left to the operator", async ({ app })
   await expect.poll(() => moving(projector, "video:")).toBe(true);
 
   // The live engine and the spare behind it: only the live one has a file.
-  const pid = app.electron.process().pid;
-  for (const engine of execFileSync("pgrep", ["-P", String(pid), "-f", "media-engine"], { encoding: "utf8" }).split("\n")) {
-    if (engine.trim()) process.kill(Number(engine), "SIGKILL");
+  // On Windows by name, which is safe with one worker; that is also the path
+  // where the next engine has to close the dead one's textures.
+  if (process.platform === "win32") {
+    execFileSync("taskkill", ["/F", "/IM", "media-engine.exe"]);
+  } else {
+    const pid = app.electron.process().pid;
+    for (const engine of execFileSync("pgrep", ["-P", String(pid), "-f", "media-engine"], { encoding: "utf8" }).split("\n")) {
+      if (engine.trim()) process.kill(Number(engine), "SIGKILL");
+    }
   }
   await expect(app.control.getByText("No se pudo reproducir «long-xvid» en el proyector")).toBeVisible();
   await expect(app.liveColumn().getByText("No se pudo reproducir", { exact: true })).toBeVisible();
