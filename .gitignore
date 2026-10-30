@@ -15,3 +15,7 @@ resources/ffmpeg/
 # module (better-sqlite3) plus an Electron binary whose Chromium decodes the
 # operator's own media. An installer built twice has to be the same installer.
 .DS_Store
+
+# Built by native/build.sh (and, once published, fetched like FFmpeg).
+resources/engine/
+native/.build/
