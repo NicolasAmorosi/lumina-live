@@ -81,6 +81,7 @@ export const api = {
     reportDecoders: (support: DecoderSupport) => invoke("conversion:reportDecoders", support),
     prioritize: (id: number) => invoke("conversion:prioritize", { id }),
     retry: (id: number) => invoke("conversion:retry", { id }),
+    duration: (id: number) => invoke("conversion:duration", { id }),
   },
   library: {
     list: (kind: AssetKind) => invoke("library:list", { kind }),

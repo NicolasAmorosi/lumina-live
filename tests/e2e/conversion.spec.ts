@@ -12,28 +12,11 @@ import { audioStates, engineStates, expect, relaunch, test, videoStates, type Wo
  * `src/main/media/media-compat.ts` — and each must end up playing on the
  * projector anyway, without the operator doing anything but importing it.
  *
- * A video like that is played by the media engine (`media/engine-sessions.ts`,
- * since 2026-10-30), with no copy made; an audio file is still converted.
+ * A file like that is played by the media engine (`media/engine-sessions.ts`:
+ * video since 2026-10-30, audio since the same day's step 1.2), with no copy made.
  */
 
 const conversions = (app: WorshipApp) => app.invoke<MediaConversionUpdate[]>("conversion:list");
-/** Assets that cannot play yet. A converted one stays listed, with its copy's
- *  `version` and no state. */
-const pending = async (app: WorshipApp) => (await conversions(app)).filter((c) => c.state !== null);
-
-/** Main logs `[convert] <source> → <output> in N s` once a copy is in place
- *  (`conversion-service.ts`). The list alone cannot say it: an asset that was
- *  not queued YET is absent from it too. */
-const convertedLines = (app: WorshipApp, asset: MediaAsset) =>
-  app.log.filter((line) => line.includes("[convert]") && line.includes(`${asset.path} →`));
-
-async function waitConverted(app: WorshipApp, asset: MediaAsset) {
-  await expect.poll(() => convertedLines(app, asset).length, { timeout: 90_000 }).toBe(1);
-  // Playable now, through its copy.
-  const entry = (await conversions(app)).find((c) => c.assetId === asset.id);
-  expect(entry?.state ?? null).toBeNull();
-  expect(entry?.version).toBeTruthy();
-}
 
 async function waitEngine(app: WorshipApp, asset: MediaAsset) {
   await expect
@@ -167,14 +150,38 @@ test("an MP4 that played sound over a black picture now shows its picture", asyn
   await expect.poll(() => moving(projector, "video:")).toBe(true);
 });
 
-test("a WMA converts and plays", async ({ app }) => {
+test("a WMA plays through the media engine: background music NEGRO leaves alone, paused with the projector", async ({ app }) => {
   const [wma] = await app.addMedia("audio", "song.wma");
   if (!wma) throw new Error("import failed");
-  await waitConverted(app, wma);
+  await waitEngine(app, wma);
   await app.previewFile("Audios", "song");
+  // No element here can open it, so its length comes from main's probe: PREVIEW still picks where it starts.
+  await expect(app.previewColumn().getByRole("slider", { name: "Posición de song" })).toHaveAttribute("aria-valuemax", "30");
+
   await app.goLive();
   const projector = await app.projector();
-  await expect.poll(async () => (await audioStates(projector))[0]?.currentTime ?? 0).toBeGreaterThan(0.5);
+  const position = app.liveColumn().getByRole("slider", { name: "Posición de song" });
+  const at = async () => Number(await position.getAttribute("aria-valuenow"));
+  await expect.poll(at).toBeGreaterThan(0);
+  expect(await audioStates(projector)).toEqual([]);
+  noCopies(app);
+
+  // A standalone audio is background music, not projector content: NEGRO does not pause it.
+  await app.control.locator("body").press("b");
+  const coveredAt = await at();
+  await expect.poll(at).toBeGreaterThan(coveredAt + 1);
+  await app.control.locator("body").press("b");
+
+  // Closing the projector silences it where it is, as it silenced an `<audio>` in that window.
+  await projector.close();
+  const notice = app.control.getByRole("status").filter({ hasText: "Se cerró la ventana de proyección" });
+  await expect(notice).toBeVisible();
+  const closedAt = await at();
+  await app.control.waitForTimeout(1500);
+  expect(await at()).toBeLessThanOrEqual(closedAt + 1);
+  await notice.getByRole("button", { name: "Reabrir" }).click();
+  await app.projector();
+  await expect.poll(at).toBeGreaterThan(closedAt + 1);
 });
 
 test("a file that already plays is never converted", async ({ app }) => {
@@ -187,26 +194,6 @@ test("a file that already plays is never converted", async ({ app }) => {
   expect(app.log.filter((line) => line.includes("[convert]") && line.includes("→"))).toEqual([]);
   const dir = path.join(app.profile, "converted-media");
   expect(fs.existsSync(dir) ? fs.readdirSync(dir) : []).toEqual([]);
-});
-
-test("a conversion is done once and survives a restart", async ({ app }) => {
-  const [wma] = await app.addMedia("audio", "song.wma");
-  if (!wma) throw new Error("import failed");
-  await waitConverted(app, wma);
-  // On a PC with no console, main's own log is the only record of it.
-  expect(fs.readFileSync(path.join(app.profile, "main.log"), "utf8")).toContain(`${wma.path} →`);
-  await app.quit();
-
-  const again = await relaunch(app);
-  await again.control.waitForTimeout(3000);
-  expect(await pending(again)).toEqual([]);
-  expect((await conversions(again)).find((c) => c.assetId === wma.id)?.version).toBeTruthy();
-  // Not converted a second time.
-  expect(again.log.filter((line) => line.includes("[convert]") && line.includes("→"))).toEqual([]);
-  await again.previewFile("Audios", "song");
-  await again.goLive();
-  const projector = await again.projector();
-  await expect.poll(async () => (await audioStates(projector))[0]?.currentTime ?? 0).toBeGreaterThan(0.5);
 });
 
 test("a video replaced in place is probed again, and plays as it now is", async ({ app }) => {

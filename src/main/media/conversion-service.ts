@@ -65,7 +65,7 @@ let decoders: DecoderSupport | null = null;
 const states = new Map<number, MediaConversionState>();
 /** The playable copy of each converted asset — the token its url carries. */
 const versions = new Map<number, string>();
-/** The videos the media engine plays instead (`engineAssetUrl`): nothing to convert. */
+/** The videos and audios the media engine plays instead (`engineAssetUrl`): nothing to convert. */
 const engineAssets = new Set<number>();
 const queue: number[] = [];
 /** Asked for by the operator before it was even queued (the PREVIEW of a file
@@ -178,8 +178,8 @@ function consider(c: ConversionCandidate, caps: DecoderSupport): void {
   }
   // Played by the media engine instead (plan §6, step 1), even when an earlier build left a copy:
   // one path from now on (owner, 2026-10-30). The copy stays on disk until the conversion goes.
-  // Audio is still converted, and so is everything on a build with no engine.
-  if (c.kind === "video" && engineAvailable()) {
+  // Everything is still converted on a build with no engine.
+  if (engineAvailable()) {
     update(c.id, { state: null, version: null, engine: true });
     return;
   }
@@ -433,6 +433,12 @@ export function listConversions(): MediaConversionUpdate[] {
     version: versions.get(assetId) ?? null,
     engine: engineAssets.has(assetId),
   }));
+}
+
+/** Seconds, from the stored probe. */
+export function probedDuration(assetId: number): number | null {
+  const c = getConversionsRepo().candidates(assetId)[0];
+  return (c && storedProbe(c)?.durationSec) ?? null;
 }
 
 /** The operator is looking at it: it goes next — or, if it is still waiting

@@ -1,18 +1,18 @@
 import type { WebContents } from "electron";
 import { engineAssetIdOfUrl, liveEngineFrameKey, previewEngineFrameKey } from "@shared/urls";
-import type { MediaCommand, PreviewEngineVideo } from "@shared/types/projection";
+import type { MediaCommand, MediaTarget, PreviewEngineVideo } from "@shared/types/projection";
 import { getMediaRepo } from "../services/repos";
 import { broadcast, controlWindows } from "../services/broadcast";
 import { projectionState } from "../services/projection-state";
 import { takeEngine, type EngineEvents, type MediaEngine } from "./media-engine";
-import { liveEngineState } from "./live-engine-state";
+import { liveEngineAudio, liveEngineState } from "./live-engine-state";
 
 /**
- * The media engine's two sessions: the live video, and the PREVIEW monitor's. Plan
- * `2026-10-25-reproduccion-instantanea`, §6 «Contrato del motor para el paso 1».
+ * The media engine's sessions: the live video, each live audio track, and the PREVIEW monitor's video.
+ * Plan `2026-10-25-reproduccion-instantanea`, §6 «Contrato del motor para el paso 1».
  *
- * The live one follows the last `ProjectionOutput`, the very value `projectionState` replays into a
- * rebuilt projector, so main keeps no record of its own of what is live
+ * The live ones follow the last `ProjectionOutput` and `AudioTrackPush[]`, the very values
+ * `projectionState` replays into a rebuilt projector, so main keeps no record of its own of what is live
  * (`.claude/knowledge/main-cannot-know-what-is-live-under-an-overlay.md`). A new epoch is a new file in
  * a new engine; the same one only pauses, resumes or changes its level. The session does not live in
  * the projection window, so rebuilding that window neither restarts the video nor needs its position
@@ -23,11 +23,13 @@ import { liveEngineState } from "./live-engine-state";
  * 2026-10-30).
  */
 
-type Session = { engine: MediaEngine | null; url: string; epoch: number; paused: boolean; volume: number };
+type Session = { engine: MediaEngine | null; url: string; epoch: number; paused: boolean; volume: number; loop: boolean };
 
 const VIDEO = { kind: "video" } as const;
 
 let live: Session | null = null;
+/** By `trackId`. Audio has no picture, so no window is shown its frames. */
+const audio = new Map<string, Session>();
 let preview: Session | null = null;
 
 /** `session.engine` playing `session.url`, or none when the url names no file — then `events.error`
@@ -46,15 +48,67 @@ function start(
   }
   session.engine = takeEngine();
   session.engine.load(
-    { file, startAtSeconds: opts.startAtSeconds, paused: session.paused, volume: session.volume, loop: false, audio: opts.audio },
+    { file, startAtSeconds: opts.startAtSeconds, paused: session.paused, volume: session.volume, loop: session.loop, audio: opts.audio },
     frameKey,
     events,
   );
 }
 
-/** Called whenever the output or the projector window changes. */
+/** The live sessions' `media-status` and `media-error`, as the projector's own elements report them. */
+function liveEvents(session: Session, target: MediaTarget, isCurrent: () => boolean): EngineEvents {
+  return {
+    status: (status) =>
+      broadcast("media-status", {
+        target,
+        epoch: session.epoch,
+        currentTimeSeconds: status.time,
+        durationSeconds: status.duration,
+        paused: status.paused,
+        ended: status.ended,
+      }),
+    error: (error) => {
+      if (!isCurrent()) return;
+      console.warn("[engine] live", target.kind, error.code, error.detail);
+      broadcast("media-error", { target, url: session.url, code: null });
+    },
+  };
+}
+
+/** A live session already playing its file: only what can change without a new epoch. */
+function apply(session: Session, want: { paused: boolean; volume: number; loop?: boolean }): void {
+  if (want.paused !== session.paused) session.engine?.setPaused(want.paused);
+  if (want.volume !== session.volume) session.engine?.setVolume(want.volume);
+  if (want.loop !== undefined && want.loop !== session.loop) session.engine?.setLoop(want.loop);
+  session.paused = want.paused;
+  session.volume = want.volume;
+  session.loop = want.loop ?? session.loop;
+}
+
+function syncAudio(projectorOpen: boolean): void {
+  const want = new Map(liveEngineAudio(projectionState.getSnapshot().audioTracks, projectorOpen).map((t) => [t.trackId, t]));
+  for (const [trackId, session] of audio) {
+    const track = want.get(trackId);
+    if (track && track.epoch === session.epoch && track.url === session.url) continue;
+    session.engine?.quit();
+    audio.delete(trackId);
+  }
+  for (const track of want.values()) {
+    const existing = audio.get(track.trackId);
+    if (existing) {
+      apply(existing, track);
+      continue;
+    }
+    const session: Session = { engine: null, url: track.url, epoch: track.epoch, paused: track.paused, volume: track.volume, loop: track.loop };
+    audio.set(track.trackId, session);
+    const target = { kind: "audio", trackId: track.trackId } as const;
+    start(session, { startAtSeconds: track.startAtSeconds, audio: true }, "", liveEvents(session, target, () => audio.get(track.trackId) === session));
+  }
+}
+
+/** Called whenever the output, the audio tracks or the projector window change. */
 export function syncLiveEngine(): void {
   const projector = projectionState.getWindow();
+  syncAudio(projector !== null);
   const want = liveEngineState(projectionState.getSnapshot().output, projector !== null);
   if (live && (!want || want.epoch !== live.epoch || want.url !== live.url)) {
     live.engine?.quit();
@@ -63,39 +117,23 @@ export function syncLiveEngine(): void {
   if (!want) return;
 
   if (!live) {
-    const session: Session = { engine: null, url: want.url, epoch: want.epoch, paused: want.paused, volume: want.volume };
+    const session: Session = { engine: null, url: want.url, epoch: want.epoch, paused: want.paused, volume: want.volume, loop: false };
     live = session;
-    start(session, { startAtSeconds: want.startAtSeconds, audio: true }, liveEngineFrameKey(want.epoch), {
-      status: (status) =>
-        broadcast("media-status", {
-          target: VIDEO,
-          epoch: session.epoch,
-          currentTimeSeconds: status.time,
-          durationSeconds: status.duration,
-          paused: status.paused,
-          ended: status.ended,
-        }),
-      error: (error) => {
-        if (live !== session) return;
-        console.warn("[engine] live video", error.code, error.detail);
-        broadcast("media-error", { target: VIDEO, url: session.url, code: null });
-      },
-    });
+    start(session, { startAtSeconds: want.startAtSeconds, audio: true }, liveEngineFrameKey(want.epoch), liveEvents(session, VIDEO, () => live === session));
   } else {
-    if (want.paused !== live.paused) live.engine?.setPaused(want.paused);
-    if (want.volume !== live.volume) live.engine?.setVolume(want.volume);
-    live.paused = want.paused;
-    live.volume = want.volume;
+    apply(live, want);
   }
   // The projector, and the control window's LIVE monitor: one decode, the same frame on both.
   for (const win of [projector, ...controlWindows()]) if (win) live.engine?.show(win.webContents);
 }
 
-/** A seek from the media panel, when the live video is the engine's. `restart` is a seek to 0 as
- *  well: whether the video plays is the output's declarative `paused`, never a command's. */
+/** A seek from the media panel, when its target is one of the engine's. `restart` is a seek to 0 as
+ *  well: whether it plays is the declarative `paused`, never a command's (`restartDeck` sets both). */
 export function commandLiveEngine(command: MediaCommand): boolean {
-  if (command.target.kind !== "video" || !live) return false;
-  live.engine?.seek(command.action === "seek" ? command.timeSeconds : 0);
+  const { target } = command;
+  const session = target.kind === "video" ? live : target.kind === "audio" ? audio.get(target.trackId) : undefined;
+  if (!session) return false;
+  session.engine?.seek(command.action === "seek" ? command.timeSeconds : 0);
   return true;
 }
 
@@ -111,7 +149,7 @@ export function setPreviewVideo(video: PreviewEngineVideo | null, contents: WebC
     return;
   }
   // Muted, and with its audio not even decoded: only the projector is ever audible.
-  const session: Session = { engine: null, url: video.url, epoch: 0, paused: video.paused, volume: 0 };
+  const session: Session = { engine: null, url: video.url, epoch: 0, paused: video.paused, volume: 0, loop: false };
   preview = session;
   start(session, { startAtSeconds: video.startAtSeconds, audio: false }, previewEngineFrameKey(video.url), {
     status: (status) =>

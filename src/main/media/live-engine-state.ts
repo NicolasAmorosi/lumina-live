@@ -1,5 +1,5 @@
 import { engineAssetIdOfUrl } from "@shared/urls";
-import type { ProjectionOutput } from "@shared/types/projection";
+import type { AudioTrackPush, ProjectionOutput } from "@shared/types/projection";
 
 /** What the live engine session has to be right now (`engine-sessions.ts`). */
 export type LiveEngineState = {
@@ -29,4 +29,17 @@ export function liveEngineState(output: ProjectionOutput | null, projectorOpen: 
     paused: video.paused || output.kind !== "video" || !projectorOpen,
     volume: video.volume,
   };
+}
+
+/**
+ * The live audio tracks the engine plays, from the last `AudioTrackPush[]`: only those with an engine
+ * url, each paused as well while there is no projector. The control window already folded BLACK/LOGO
+ * into the deck soundtrack's `paused`, and a standalone track ignores them on purpose
+ * (`projection-sync.ts`); closing the projector silenced every `<audio>` with its window, and the
+ * engine's tracks do the same (owner, 2026-10-30).
+ */
+export function liveEngineAudio(tracks: AudioTrackPush[], projectorOpen: boolean): AudioTrackPush[] {
+  return tracks
+    .filter((track) => engineAssetIdOfUrl(track.url) !== null)
+    .map((track) => ({ ...track, paused: track.paused || !projectorOpen }));
 }

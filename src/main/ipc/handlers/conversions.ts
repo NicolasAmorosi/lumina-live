@@ -3,6 +3,7 @@ import { IpcError } from "@shared/ipc/result";
 import {
   listConversions,
   prioritizeConversion,
+  probedDuration,
   retryConversion,
   setDecoderSupport,
 } from "../../media/conversion-service";
@@ -14,7 +15,7 @@ function assetId(req: { id: number }): number {
 
 export const conversionsHandlers: Pick<
   Handlers,
-  "conversion:list" | "conversion:reportDecoders" | "conversion:prioritize" | "conversion:retry"
+  "conversion:list" | "conversion:reportDecoders" | "conversion:prioritize" | "conversion:retry" | "conversion:duration"
 > = {
   "conversion:list": () => listConversions(),
   "conversion:reportDecoders": (req) => {
@@ -25,4 +26,5 @@ export const conversionsHandlers: Pick<
   },
   "conversion:prioritize": (req) => prioritizeConversion(assetId(req)),
   "conversion:retry": (req) => retryConversion(assetId(req)),
+  "conversion:duration": (req) => probedDuration(assetId(req)),
 };

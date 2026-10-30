@@ -128,6 +128,7 @@ export const projectionHandlers: Pick<
 
   "projection:setAudioTracks": (tracks) => {
     projectionState.setAudioTracks(tracks);
+    syncLiveEngine();
   },
 
   "projection:wantVideoFrame": (req) => {

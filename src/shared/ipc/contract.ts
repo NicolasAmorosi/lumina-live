@@ -218,6 +218,9 @@ export type IpcContract = {
   /** The operator is looking at it: it converts next. */
   "conversion:prioritize": { req: { id: number }; res: void };
   "conversion:retry": { req: { id: number }; res: void };
+  /** A file's length as ffprobe read it, for an audio the media engine plays: no `<audio>` in the
+   *  control window can open it to ask (`useMediaDuration`). `null` while it has not been probed. */
+  "conversion:duration": { req: { id: number }; res: number | null };
 
   "programs:list": { req: void; res: ProgramSummary[] };
   /** ADOPTS the program: main starts attributing `projection_history` to it and
