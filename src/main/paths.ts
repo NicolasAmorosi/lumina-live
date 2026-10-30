@@ -33,6 +33,13 @@ const exe = process.platform === "win32" ? ".exe" : "";
 export const ffmpegPath = path.join(ffmpegDir, `ffmpeg${exe}`);
 export const ffprobePath = path.join(ffmpegDir, `ffprobe${exe}`);
 
+/** The media engine (`native/`): built by `native/build.sh` into `resources/engine/<platform>-<arch>/`
+ *  and shipped as `resources/engine/`, next to its libmpv where the app carries one. */
+export const engineDir = app.isPackaged
+  ? path.join(resourcesRoot, "engine")
+  : path.join(app.getAppPath(), "resources/engine", `${process.platform}-${process.arch}`);
+export const enginePath = path.join(engineDir, `media-engine${exe}`);
+
 export const userDataDir = app.getPath("userData");
 export const dbPath = path.join(userDataDir, "worship.db");
 export const dbBackupDir = path.join(userDataDir, "backups");
