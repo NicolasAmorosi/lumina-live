@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { assetUrl } from "@shared/urls";
+import { assetUrl, engineAssetUrl } from "@shared/urls";
 import type { MediaConversionState, MediaConversionUpdate } from "@shared/types/media";
 
 /**
@@ -13,6 +13,8 @@ type ConversionStoreState = {
   /** The playable copy of each converted asset, by the token main serves it
    *  under (`playableAssetUrl`). Absent = the original plays. */
   versions: Record<number, string>;
+  /** The videos the media engine plays (`engineAssetUrl`) — never converted. */
+  engine: Record<number, true>;
   apply: (update: MediaConversionUpdate) => void;
   /** Main's full list, which supersedes every event that arrived before it. */
   reset: (updates: MediaConversionUpdate[]) => void;
@@ -21,13 +23,16 @@ type ConversionStoreState = {
 export const useConversionStore = create<ConversionStoreState>((set) => ({
   byAssetId: {},
   versions: {},
-  apply: ({ assetId, state, version }) =>
+  engine: {},
+  apply: ({ assetId, state, version, engine }) =>
     set((s) => {
       const { [assetId]: _state, ...otherStates } = s.byAssetId;
       const { [assetId]: _version, ...otherVersions } = s.versions;
+      const { [assetId]: _engine, ...otherEngine } = s.engine;
       return {
         byAssetId: state ? { ...otherStates, [assetId]: state } : otherStates,
         versions: version ? { ...otherVersions, [assetId]: version } : otherVersions,
+        engine: engine ? { ...otherEngine, [assetId]: true } : otherEngine,
       };
     }),
   reset: (updates) =>
@@ -38,6 +43,7 @@ export const useConversionStore = create<ConversionStoreState>((set) => ({
       versions: Object.fromEntries(
         updates.flatMap(({ assetId, version }) => (version ? [[assetId, version] as const] : [])),
       ),
+      engine: Object.fromEntries(updates.flatMap(({ assetId, engine }) => (engine ? [[assetId, true] as const] : []))),
     }),
 }));
 
@@ -61,10 +67,15 @@ export function useConversion(assetId: number | null): MediaConversionState | un
  *   went live before its probe finished) must keep getting the original's
  *   bytes on its next Range request, not the copy's in the middle of a song.
  *
+ * A video the media engine plays gets its `engineAssetUrl` instead, which is
+ * what tells every view to draw the engine's frames rather than mount a
+ * `<video>`.
+ *
  * Only for video and audio: an image is never converted.
  */
 export function playableAssetUrl(assetId: number): string {
-  return withVersion(assetId, useConversionStore.getState().versions[assetId]);
+  const { engine, versions } = useConversionStore.getState();
+  return engine[assetId] ? engineAssetUrl(assetId) : withVersion(assetId, versions[assetId]);
 }
 
 /** The same url, for a component that must re-render when it changes. */
@@ -72,7 +83,9 @@ export function usePlayableAssetUrl(assetId: number): string;
 export function usePlayableAssetUrl(assetId: number | null): string | null;
 export function usePlayableAssetUrl(assetId: number | null): string | null {
   const version = useConversionStore((s) => (assetId === null ? undefined : s.versions[assetId]));
-  return assetId === null ? null : withVersion(assetId, version);
+  const engine = useConversionStore((s) => assetId !== null && s.engine[assetId] === true);
+  if (assetId === null) return null;
+  return engine ? engineAssetUrl(assetId) : withVersion(assetId, version);
 }
 
 function withVersion(assetId: number, version: string | undefined): string {

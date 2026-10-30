@@ -121,7 +121,8 @@ src/
 │   │                              #   on the pptx-worker.ts thread)
 │   ├── media/                     # media-compat.ts (what Chromium plays: PURE, tested), ffmpeg.ts
 │   │                              #   (processes), conversion-service.ts (queue + cache of playable copies),
-│   │                              #   deck-clips.ts (video/audio embedded in a .pptx), thumbnail-service.ts
+│   │                              #   deck-clips.ts (video/audio embedded in a .pptx), thumbnail-service.ts,
+│   │                              #   media-engine.ts (one libmpv process per file) + engine-sessions.ts (live, PREVIEW)
 │   ├── windows/projector-screen.ts # the projector bound to its screen: anti-sleep and reconnection
 │   ├── updates/                   # updater.ts (owns UpdateStatus, wraps electron-updater), mac-dmg.ts
 │   │                              #   (macOS without Squirrel), update-status.ts (PURE, tested)
@@ -590,7 +591,14 @@ npm run package:win|mac|linux  # build + electron-builder for that platform
   change the string has to change), and an element that started with the original can't receive the
   copy's bytes in the middle of a song. That's why the video URL travels resolved in `BaseContent`. A
   `.pptx`'s clips carry their file (`?f=`) for the same reason.
-  GO LIVE on something that's still being converted is refused with a warning. Diagnoses in
+  GO LIVE on something that's still being converted is refused with a warning. **Since 2026-10-30 a
+  library VIDEO is not converted: the media engine plays it** (libmpv in its own process,
+  `native/engine/`). `conversion-service` marks it `engine`, `playableAssetUrl` gives
+  `worship://engine/<id>`, and `OutputView` draws the engine's frames in a canvas instead of a
+  `<video>` — the same frame in the projector and the monitors. Main drives the live session from the
+  `ProjectionOutput` it already forwards (`media/engine-sessions.ts`), never from a record of its own;
+  PREVIEW has a muted engine of its own (`preview:setVideo`). Audio, a deck's clips and a build with no
+  engine are still converted. Diagnoses in
   [`.claude/knowledge/chromium-plays-sound-over-black-for-a-codec-it-cannot-decode.md`](.claude/knowledge/chromium-plays-sound-over-black-for-a-codec-it-cannot-decode.md)
   and
   [`.claude/knowledge/chromium-reuses-a-media-urls-data-across-elements-so-changed-bytes-need-a-changed-url.md`](.claude/knowledge/chromium-reuses-a-media-urls-data-across-elements-so-changed-bytes-need-a-changed-url.md).

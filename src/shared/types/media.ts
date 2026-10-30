@@ -83,11 +83,14 @@ export type MediaConversionError =
 /** `state: null` means "playable now": the conversion finished, or the asset
  *  turned out not to need one. `version` names the playable copy when there is
  *  one — the token a url must carry to be served it (`playableAssetUrl`);
- *  `null` means the original plays as it is. */
+ *  `null` means the original plays as it is. `engine` means neither: Chromium
+ *  cannot decode it and the media engine plays it (`engineAssetUrl`), with no
+ *  copy at all. */
 export type MediaConversionUpdate = {
   assetId: number;
   state: MediaConversionState | null;
   version: string | null;
+  engine: boolean;
 };
 
 /** What only Chromium itself can say about this machine, reported by the

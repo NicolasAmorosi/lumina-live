@@ -4,6 +4,7 @@ import type { InternalsPage } from "@shared/types/system";
 import type {
   AudioTrackPush,
   MediaCommand,
+  PreviewEngineVideo,
   ProjectionMediaError,
   ProjectionOutput,
 } from "@shared/types/projection";
@@ -34,6 +35,11 @@ export const api = {
     setAudioTracks: (tracks: AudioTrackPush[]) => invoke("projection:setAudioTracks", tracks),
     getSnapshot: () => invoke("projection:getSnapshot", undefined),
     reportMediaError: (error: ProjectionMediaError) => invoke("projection:reportMediaError", error),
+    wantVideoFrame: (key: string) => invoke("projection:wantVideoFrame", { key }),
+  },
+  preview: {
+    setVideo: (video: PreviewEngineVideo | null) => invoke("preview:setVideo", video),
+    seekVideo: (seconds: number) => invoke("preview:seekVideo", { seconds }),
   },
   files: {
     pick: (kind: AssetKind | "all", multiple: boolean) => invoke("files:pick", { kind, multiple }),

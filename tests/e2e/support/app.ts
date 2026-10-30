@@ -272,6 +272,27 @@ export function videoStates(page: Page) {
   );
 }
 
+/** The media engine's canvases of a window (`EngineVideo`), by the key their
+ *  frames come under: the size the last frame gave them, and a sample of their
+ *  pixels, which moves while the video plays and stands still while it does not. */
+export function engineStates(page: Page) {
+  return page.evaluate(() =>
+    [...document.querySelectorAll<HTMLCanvasElement>("canvas[data-frame-key]")].map((canvas) => {
+      let sample = 0;
+      if (canvas.width > 0) {
+        const pixels = canvas.getContext("2d")?.getImageData(0, 0, canvas.width, canvas.height).data ?? [];
+        for (let i = 0; i < pixels.length; i += 4099) sample += pixels[i] ?? 0;
+      }
+      return {
+        key: canvas.dataset.frameKey ?? "",
+        width: canvas.width,
+        sample,
+        opacity: Number(getComputedStyle(canvas).opacity),
+      };
+    }),
+  );
+}
+
 export function audioStates(page: Page) {
   return page.evaluate(() =>
     [...document.querySelectorAll("audio")].map((audio) => ({

@@ -304,6 +304,16 @@ export type MediaStatus = {
   ended: boolean;
 };
 
+/** What the PREVIEW monitor shows through the media engine (`preview:setVideo`),
+ *  muted: a library video only the engine plays. `paused` is declarative, like
+ *  `VideoUnderlay.paused`; `startAtSeconds` only applies to a new `url`. */
+export type PreviewEngineVideo = { url: string; paused: boolean; startAtSeconds: number };
+
+/** The PREVIEW engine's `MediaStatus`. Its own event and not a `MediaTarget`,
+ *  for the reason `use-preview-media-status.ts` gives: the preview's clock must
+ *  never land in the live media status. */
+export type PreviewVideoStatus = Omit<MediaStatus, "target" | "epoch"> & { url: string };
+
 /**
  * One audio element the projection window should keep mounted, independent of
  * `ProjectionOutput` — a deck's soundtrack and any number of standalone audio

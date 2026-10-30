@@ -13,6 +13,7 @@ import { overlaysHandlers } from "./handlers/overlays";
 import { systemHandlers } from "./handlers/system";
 import { conversionsHandlers } from "./handlers/conversions";
 import { updatesHandlers } from "./handlers/updates";
+import { previewHandlers } from "./handlers/preview";
 
 /**
  * Assembling the object literal AS `Handlers` is what makes a missing or
@@ -35,6 +36,7 @@ export function registerAllIpcHandlers(): void {
     ...systemHandlers,
     ...conversionsHandlers,
     ...updatesHandlers,
+    ...previewHandlers,
   };
   registerHandlers(handlers);
 }

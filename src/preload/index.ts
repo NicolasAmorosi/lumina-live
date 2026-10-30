@@ -20,7 +20,8 @@ import { contextBridge, ipcRenderer, sharedTexture, webUtils, type IpcRendererEv
  * `onVideoFrame` is the second one, for the same reason: a frame of the media
  * engine (src/main/media/media-engine.ts) is a GPU texture, and it only
  * arrives through Electron's shared-texture receiver, which lives here. Main
- * sends each frame with the key of what it shows ("video", "preview", …).
+ * sends each frame with the key of what it shows (`liveEngineFrameKey`,
+ * `previewEngineFrameKey` in `shared/urls.ts`).
  * The callback gets its own `VideoFrame` and must `close()` it once drawn —
  * synchronously: the engine reuses the texture as soon as it is released.
  */

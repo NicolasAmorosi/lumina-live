@@ -7,6 +7,7 @@ import { getConversionsRepo } from "../services/repos";
 import { broadcast } from "../services/broadcast";
 import type { ConversionCandidate } from "../db/repositories/conversions.repo";
 import { FfmpegError, encoderThreads, ffmpegAvailable, killAllFfmpeg, probeMedia, runFfmpeg } from "./ffmpeg";
+import { engineAvailable } from "./media-engine";
 import {
   MEDIA_PROBE_VERSION,
   conversionArgs,
@@ -64,6 +65,8 @@ let decoders: DecoderSupport | null = null;
 const states = new Map<number, MediaConversionState>();
 /** The playable copy of each converted asset — the token its url carries. */
 const versions = new Map<number, string>();
+/** The videos the media engine plays instead (`engineAssetUrl`): nothing to convert. */
+const engineAssets = new Set<number>();
 const queue: number[] = [];
 /** Asked for by the operator before it was even queued (the PREVIEW of a file
  *  still waiting for its probe): goes to the front once it is. */
@@ -82,13 +85,14 @@ function publish(assetId: number): void {
     assetId,
     state: states.get(assetId) ?? null,
     version: versions.get(assetId) ?? null,
+    engine: engineAssets.has(assetId),
   });
 }
 
 /** `undefined` leaves that half as it is. Broadcasts only a real change. */
 function update(
   assetId: number,
-  next: { state?: MediaConversionState | null; version?: string | null },
+  next: { state?: MediaConversionState | null; version?: string | null; engine?: boolean },
 ): void {
   let changed = false;
   if (next.state !== undefined) {
@@ -102,6 +106,11 @@ function update(
   if (next.version !== undefined && (versions.get(assetId) ?? null) !== next.version) {
     if (next.version === null) versions.delete(assetId);
     else versions.set(assetId, next.version);
+    changed = true;
+  }
+  if (next.engine !== undefined && engineAssets.has(assetId) !== next.engine) {
+    if (next.engine) engineAssets.add(assetId);
+    else engineAssets.delete(assetId);
     changed = true;
   }
   if (changed) publish(assetId);
@@ -153,7 +162,7 @@ function consider(c: ConversionCandidate, caps: DecoderSupport): void {
   // ffprobe could not read it. Converting cannot help either, and the
   // projector already reports a file it cannot open.
   if (!probe) {
-    if (current?.assetId !== c.id) update(c.id, { state: null, version: null });
+    if (current?.assetId !== c.id) update(c.id, { state: null, version: null, engine: false });
     return;
   }
   const plan = planPlayback(probe, c.kind, caps);
@@ -164,7 +173,14 @@ function consider(c: ConversionCandidate, caps: DecoderSupport): void {
       getConversionsRepo().setOutput(c.id, null);
       void fsp.rm(path.join(convertedMediaDir, c.conversion.outputFile), { force: true }).catch(() => undefined);
     }
-    update(c.id, { state: null, version: null });
+    update(c.id, { state: null, version: null, engine: false });
+    return;
+  }
+  // Played by the media engine instead (plan §6, step 1), even when an earlier build left a copy:
+  // one path from now on (owner, 2026-10-30). The copy stays on disk until the conversion goes.
+  // Audio is still converted, and so is everything on a build with no engine.
+  if (c.kind === "video" && engineAvailable()) {
+    update(c.id, { state: null, version: null, engine: true });
     return;
   }
   if (outputExists(c.conversion?.outputFile)) {
@@ -213,8 +229,8 @@ async function reconcileOnce(caps: DecoderSupport): Promise<void> {
   // Removed or gone missing since the last pass.
   const present = new Set(candidates.map((c) => c.id));
   for (const id of [...queue]) if (!present.has(id)) dequeue(id);
-  for (const id of new Set([...states.keys(), ...versions.keys()])) {
-    if (!present.has(id) && current?.assetId !== id) update(id, { state: null, version: null });
+  for (const id of new Set([...states.keys(), ...versions.keys(), ...engineAssets])) {
+    if (!present.has(id) && current?.assetId !== id) update(id, { state: null, version: null, engine: false });
   }
 
   if (!ffmpegAvailable()) {
@@ -408,12 +424,14 @@ export function notifyMediaChanged(): void {
   scheduleReconcile();
 }
 
-/** Every asset that cannot play yet, and every one that plays through a copy. */
+/** Every asset that cannot play yet, every one that plays through a copy, and every one the engine
+ *  plays. */
 export function listConversions(): MediaConversionUpdate[] {
-  return [...new Set([...states.keys(), ...versions.keys()])].map((assetId) => ({
+  return [...new Set([...states.keys(), ...versions.keys(), ...engineAssets])].map((assetId) => ({
     assetId,
     state: states.get(assetId) ?? null,
     version: versions.get(assetId) ?? null,
+    engine: engineAssets.has(assetId),
   }));
 }
 
@@ -450,7 +468,7 @@ export function forgetConversion(assetId: number): void {
   dequeue(assetId);
   prioritized.delete(assetId);
   if (current?.assetId === assetId) current.abort.abort();
-  update(assetId, { state: null, version: null });
+  update(assetId, { state: null, version: null, engine: false });
 }
 
 /** What `worship://asset/<id>` serves to a url that carries a copy's version:

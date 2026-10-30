@@ -9,6 +9,34 @@ export function assetUrl(mediaAssetId: number): string {
 }
 
 /**
+ * A library video played by the media engine (`main/media/engine-sessions.ts`)
+ * instead of a `<video>`: one Chromium cannot decode, which used to be
+ * converted. Nothing fetches it — main resolves it to the file and sends the
+ * engine's frames, and a view that sees one mounts a canvas for them. Its own
+ * host, so it can never be mistaken for the original or a copy of it.
+ */
+export function engineAssetUrl(mediaAssetId: number): string {
+  return `worship://engine/${mediaAssetId}`;
+}
+
+/** The asset an `engineAssetUrl` names, or null for any other url. */
+export function engineAssetIdOfUrl(url: string): number | null {
+  const match = /^worship:\/\/engine\/(\d+)$/.exec(url);
+  return match ? Number(match[1]) : null;
+}
+
+/** The key main sends the live video's frames under: by epoch, so a frame of
+ *  the previous video still in flight never lands on the next one's canvas. */
+export function liveEngineFrameKey(epoch: number): string {
+  return `video:${epoch}`;
+}
+
+/** The PREVIEW monitor's: by url, for the same reason — its epoch never moves. */
+export function previewEngineFrameKey(url: string): string {
+  return `preview:${url}`;
+}
+
+/**
  * A small, cached thumbnail of an image or video asset, generated on demand by
  * `main/media/thumbnail-service.ts`. 404 when there is none (an audio file, an
  * unsupported platform, a broken decode) so the renderer paints its own

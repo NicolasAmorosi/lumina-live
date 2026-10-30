@@ -65,6 +65,12 @@ function handles<T extends MacHandles | LinuxHandles>(): T {
   return handlesAddon as T;
 }
 
+/** 0..1, as `HTMLMediaElement.volume` takes it (linear amplitude) → mpv's `volume`, which it cubes
+ *  (`player/audio.c`): sent as it was, the panel's 30% played at 2.7% of full scale. */
+function mpvVolume(volume: number): number {
+  return Math.round(Math.cbrt(Math.min(1, Math.max(0, volume))) * 100);
+}
+
 /** A ring texture as `sharedTexture` imports it. */
 function pointerBuffer(value: string): Buffer {
   const b = Buffer.alloc(8);
@@ -80,8 +86,11 @@ let spare: MediaEngine | null = null;
 
 const STDERR_TAIL_BYTES = 4096;
 
+let available: boolean | null = null;
+/** Whether this build carries an engine for this machine. Asked once: the binary does not come and go. */
 export function engineAvailable(): boolean {
-  return fs.existsSync(enginePath);
+  available ??= fs.existsSync(enginePath);
+  return available;
 }
 
 /** An engine ready for `load()`, and the next one starting behind it. */
@@ -119,6 +128,7 @@ export class MediaEngine {
   private readonly targets = new Map<WebContents, { busy: boolean }>();
   private targetKey = "";
   private loadedOnce = false;
+  private lastStatus: EngineStatus | null = null;
 
   constructor() {
     const args = ["--max-width", "1920", "--max-height", "1080"];
@@ -153,7 +163,7 @@ export class MediaEngine {
     this.loadedOnce = true;
     this.targetKey = target;
     this.events = events;
-    const volume = Math.round(Math.min(1, Math.max(0, opts.volume)) * 100);
+    const volume = mpvVolume(opts.volume);
     const flag = (b: boolean) => (b ? "1" : "0");
     this.write(
       `load ${Math.max(0, opts.startAtSeconds)} ${flag(opts.paused)} ${volume} ${flag(opts.loop)} ${flag(opts.audio)} ${opts.file}`,
@@ -173,7 +183,7 @@ export class MediaEngine {
   }
 
   setVolume(volume: number): void {
-    this.write(`volume ${Math.round(Math.min(1, Math.max(0, volume)) * 100)}`);
+    this.write(`volume ${mpvVolume(volume)}`);
   }
 
   setLoop(loop: boolean): void {
@@ -182,6 +192,13 @@ export class MediaEngine {
 
   seek(toSeconds: number, exact = true): void {
     this.write(`seek ${Math.max(0, toSeconds)} ${exact ? "exact" : "keyframes"}`);
+  }
+
+  /** A paused engine sends no frames, so a window that starts showing it (a projector rebuilt, a
+   *  monitor remounted) would stay black until play: seeking to where it stands draws that frame
+   *  again, for every window. A playing one needs nothing. */
+  redraw(): void {
+    if (this.lastStatus?.paused) this.seek(this.lastStatus.time);
   }
 
   /** Asks it to finish; it closes its textures in this process on the way out (Windows). */
@@ -226,6 +243,7 @@ export class MediaEngine {
       case "frame":
         return this.onFrame(event.slot);
       case "status":
+        this.lastStatus = event;
         return this.events.status?.(event);
       case "error":
         return this.fail(event);
@@ -263,7 +281,8 @@ export class MediaEngine {
   private onFrame(slot: number): void {
     const give = () => this.write(`release ${slot}`);
     const handle = this.ring?.handles[slot];
-    const ready = [...this.targets].filter(([contents, t]) => !contents.isDestroyed() && !t.busy);
+    for (const contents of this.targets.keys()) if (contents.isDestroyed()) this.targets.delete(contents);
+    const ready = [...this.targets].filter(([, t]) => !t.busy);
     if (!this.ring || !handle || !ready.length) return give();
     const { width, height } = this.ring;
     let imported: Electron.SharedTextureImported;

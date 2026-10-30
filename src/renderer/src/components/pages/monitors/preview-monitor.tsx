@@ -8,6 +8,7 @@ import { useConversion } from "@renderer/stores/conversion.store";
 import { sofficeBlocks, useDeckStore } from "@renderer/stores/deck.store";
 import { usePreviewContent, usePreviewOutput } from "@renderer/lib/hooks/use-preview";
 import { usePreviewMediaStatus } from "@renderer/lib/hooks/use-preview-media-status";
+import { usePreviewEngineVideo } from "@renderer/lib/hooks/use-preview-engine-video";
 import { attachPreviewVideo } from "@renderer/lib/actions/preview-playback";
 
 /** Stage one of the two-stage flow: what the operator has queued up, never on
@@ -25,6 +26,7 @@ export function PreviewMonitor() {
   const output = usePreviewOutput(content);
   const [videoElement, setVideoElement] = useState<HTMLVideoElement | null>(null);
   usePreviewMediaStatus(videoElement);
+  const engineFailedUrl = usePreviewEngineVideo(output);
 
   const handleVideoRef = useCallback((element: HTMLVideoElement | null) => {
     setVideoElement(element);
@@ -61,13 +63,15 @@ export function PreviewMonitor() {
       {mediaAsset && conversion ? (
         <MediaConversionStatus assetId={mediaAsset.id} kind={mediaAsset.kind} state={conversion} surface="stage" />
       ) : output ? (
-        // No `reportedErrorUrls`: the preview's own elements ARE the ones being
-        // checked here, which is the point — a file the operator queues up is
-        // exercised in this window before it ever reaches the projector.
+        // The preview's own elements ARE the ones being checked here, which is
+        // the point — a file the operator queues up is exercised in this window
+        // before it ever reaches the projector. A video the engine plays has no
+        // element, so the engine's own failure is passed in.
         <OutputView
           errorLabel={t("media.loadError")}
           mode="preview"
           output={output}
+          reportedErrorUrls={engineFailedUrl ? [engineFailedUrl] : []}
           videoRef={handleVideoRef}
         />
       ) : sofficeMissing ? (

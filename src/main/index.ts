@@ -45,6 +45,7 @@ import { pruneThumbCache } from "./media/thumbnail-service";
 import { backfillContentHashes } from "./media/content-hash";
 import { backfillDeckTimings } from "./slides/backfill-timings";
 import { initConversions, shutdownConversions } from "./media/conversion-service";
+import { engineAvailable, killAllEngines, prewarmEngine } from "./media/media-engine";
 import { stopDeckClips } from "./media/deck-clips";
 import { appendLogLine, installMainLog } from "./logging";
 import { initUpdates } from "./updates/updater";
@@ -229,6 +230,9 @@ if (gotSingleInstanceLock) {
     // Sweeps leftovers only. Converting waits for the control window to report
     // what this machine decodes (`conversion:reportDecoders`).
     initConversions();
+    // A media engine started ahead of time, so the first video it plays does not pay for the
+    // process (150–650 ms).
+    if (engineAvailable()) prewarmEngine();
 
     // The other half of the legacy import (`media_library.json`). Off the
     // startup path: it is a whole library's worth of files, and the rows it
@@ -304,6 +308,7 @@ app.on("before-quit", (event) => {
   shutdownSlides();
   stopDeckClips();
   shutdownConversions();
+  killAllEngines();
 });
 
 // `will-quit`, not `before-quit`, for two reasons. It runs after every window

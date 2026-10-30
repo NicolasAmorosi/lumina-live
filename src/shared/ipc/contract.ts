@@ -18,6 +18,8 @@ import type {
   AudioTrackPush,
   MediaCommand,
   MediaStatus,
+  PreviewEngineVideo,
+  PreviewVideoStatus,
   ProjectionMediaError,
   ProjectionOutput,
 } from "../types/projection";
@@ -79,6 +81,17 @@ export type IpcContract = {
    *  (the congregation must not see one); it reports, and the control window
    *  is what tells the operator. */
   "projection:reportMediaError": { req: ProjectionMediaError; res: void };
+  /** A canvas for the media engine's frames (`liveEngineFrameKey`,
+   *  `previewEngineFrameKey`) just mounted. A paused engine sends no frames, so
+   *  main has it draw the current one again — a projector rebuilt onto another
+   *  screen, or a monitor remounted, would otherwise stay black until play. */
+  "projection:wantVideoFrame": { req: { key: string }; res: void };
+
+  /** The PREVIEW monitor's video when the media engine plays it, or `null`
+   *  when it shows anything else. Declarative: main loads a new url, and only
+   *  pauses or resumes the same one. */
+  "preview:setVideo": { req: PreviewEngineVideo | null; res: void };
+  "preview:seekVideo": { req: { seconds: number }; res: void };
 
   /** `kind: "all"` combines every `AssetKind`'s extensions into one filter, for
    *  a single file dialog that accepts any supported media at once — the
@@ -350,6 +363,9 @@ export type IpcEvents = {
   "projector-screen": { connected: boolean };
   "media-status": MediaStatus;
   "media-error": ProjectionMediaError;
+  /** The PREVIEW monitor's engine (`preview:setVideo`), ~4/s. */
+  "preview-video-status": PreviewVideoStatus;
+  "preview-video-error": { url: string };
   "deck-progress": DeckProgress;
   "prewarm-progress": PrewarmProgress;
   /** What `deck:statuses` would answer changed for reasons that are not a
