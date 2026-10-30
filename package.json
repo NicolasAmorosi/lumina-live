@@ -123,6 +123,10 @@
             "**/*",
             "!.stamp"
           ]
+        },
+        {
+          "from": "resources/engine/win32-${arch}",
+          "to": "engine"
         }
       ]
     },
@@ -138,6 +142,10 @@
             "**/*",
             "!.stamp"
           ]
+        },
+        {
+          "from": "resources/engine/darwin-${arch}",
+          "to": "engine"
         }
       ]
     },
@@ -171,6 +179,10 @@
             "**/*",
             "!.stamp"
           ]
+        },
+        {
+          "from": "resources/engine/linux-${arch}",
+          "to": "engine"
         }
       ]
     },
